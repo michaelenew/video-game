@@ -594,7 +594,7 @@ fn every_class_climbs_the_great_tree_s_stair() {
     let atlas = sim::atlas::valley();
     let path = stair(&atlas.trees[0], atlas.trees[0].pads[0].at[1]);
     let mut failed = Vec::new();
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         for (n, pair) in path.windows(2).enumerate() {
             // A fresh world each hop: a stone the Elementalist's jump brought
             // up last time is not on this limb.
@@ -727,7 +727,7 @@ fn every_broadleaf_has_a_roof_its_hanging_root_climbs_to() {
         over.min = V3::new(lip.x.sub(h), cm(rim.at[1] - 100), lip.z.sub(h));
         over.max = V3::new(lip.x.add(h), cm(rim.at[1]), lip.z.add(h));
         route.push(over);
-        for class in sim::class::ALL_CLASSES {
+        for class in sim::class::MOVERS {
             let mut w = World::arrive([class, class], open_journey(), ArenaId::WOOD, Some(0), 1);
             for (n, pair) in route.windows(2).enumerate() {
                 let (a, b) = (pilot::local(&w, pair[0]), pilot::local(&w, pair[1]));

@@ -897,7 +897,7 @@ const REQUIRED: &[(&str, i32, i32)] = &[
 
 #[test]
 fn every_class_can_make_the_hops_nobody_can_go_round() {
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let path = sim::envelope::off_the_edge(class, sim::envelope::Extra::Nothing);
         let apex = sim::envelope::path_apex(&path);
         for (what, gap, rise) in REQUIRED {
@@ -1021,7 +1021,7 @@ fn every_class_climbs_a_crag() {
     top.max.x = face.add(Fx::from_int(2));
     route.push(top);
     let mut failed = Vec::new();
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let mut w = World::arrive(
             [class, class],
             valley::Journey::default(),

@@ -170,6 +170,12 @@ clips! {
     LedgeClimb,      "ledge_climb",     Air, "ledge", Length::LedgeClimb, false,
         "The slow way up: a pull-up, a press to straight arms with a knee brought up on to the top, a crouch on the lip, and standing. As long as the climb is.";
 
+    // -- On a wall (2026-10-20, `sim::state::Player::sliding`) ----------------
+    WallSlide,       "wall_slide",      Air, "wall", Length::Fixed(12), true,
+        "Sliding down a wall on her left, side-on with her back turned to it: the near hand and foot pressed flat on the face and dragging, the far leg braced under her. The hand and foot stick and slip -- a judder, so it reads as friction and not as falling. Mirrored for a wall on her right.";
+    WallKick,        "wall_kick",       Air, "wall", Length::Fixed(14), false,
+        "Kicking off a wall on her left: coiled against it, both legs driving out from the face, then gathered and turned away into the flight. Indexed by how far off the face she has got, not by time.";
+
     // -- Dodging -----------------------------------------------------------
     DodgeForward,    "dodge_forward",   Dodge, "dodge", Length::Dodge, false,
         "A committed dive forward. Invulnerable early, vulnerable late -- and the two halves must look different.";

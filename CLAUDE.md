@@ -189,6 +189,21 @@ its material and shape, built inside its box. The town's buildings and props
 are tables in `sim::arena::hearth` that its collision is made from and
 `game::town` draws from; a building is never a box drawn by its material.
 
+## The Bulwark is not a mover: no movement section is built for it
+
+**The Bulwark is not to be considered for any mobility section** (the owner,
+2026-10-20): it is by far the least developed class and its movement is poor,
+so no jump, gully, climb, wall-jump run or course is sized to its jump, and no
+test asks it to finish one. A movement section is built for
+`sim::class::MOVERS` -- the other five -- and a test that walks a route "with
+every class" walks it with `MOVERS`, never `ALL_CLASSES`. Do not narrow a gap,
+lower a ledge or add a catch so the Bulwark can make it, and do not add the
+Bulwark back to a traversal test; where an older document says "inside the
+Bulwark's catch", that is history, not a constraint. Its own fights, kit and
+everything that is not movement are unchanged. Enforced by the traversal tests
+themselves (`tests/waterfall.rs`, `heights.rs`, `spire.rs`, `deep.rs`,
+`wood.rs`, `valley.rs`), which loop over `MOVERS`.
+
 ## Tuning: every magnitude is a knob in the Oven
 
 Feel numbers live in the Oven (`crates/sim/src/oven.rs`), are edited in the

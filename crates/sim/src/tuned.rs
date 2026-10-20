@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 712] = [
+pub const SCALARS: [i32; 716] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -625,20 +625,24 @@ pub const SCALARS: [i32; 712] = [
             6554, // champion.hammer_slam_from_the_air,_cone_round_straight_down_(turns) = 0.1
            32768, // movement.step,_walked_up_onto_(m) = 0.5
           131072, // match.third_and_fourth_fighters,_beside_a_mark_(m) = 2
-           45875, // air.wall_slide,_gravity_(x) = 0.7
-           45875, // air.wall_slide,_terminal_velocity_(x) = 0.7
+           22938, // air.wall_slide,_gravity_(x) = 0.35
+           13107, // air.wall_slide,_terminal_velocity_(x) = 0.2
            65536, // air.wall_slide,_held_to_the_wall_at_(m/s) = 1
            39322, // air.wall_jump,_rise_(x_takeoff) = 0.6
           458752, // air.wall_jump,_pushed_off_at_(m/s) = 7
            45875, // air.wall_jump,_each_one_after_(x) = 0.7
-               4, // air.wall_jump,_still_off_a_wall_left = 4
+               8, // air.wall_jump,_still_off_a_wall_left = 8
            58982, // air.wall_jump,_same_wall_within_(cos) = 0.9
            49152, // air.wall_jump,_same_wall_within_(m) = 0.75
            65536, // air.wall_jump,_same_wall_again_once_this_far_below_(m) = 1
            46341, // air.walls,_into_or_away_within_(cos) = 0.707
                8, // air.wall_slide,_on_or_off_no_faster_than = 8
-          131072, // air.wall_slide,_steered_along_at_(m/s) = 2
+          327680, // air.wall_slide,_steered_along_at_(m/s) = 5
            13107, // air.wall_slide,_steering_arrives_per_frame_(x) = 0.2
+           64881, // air.wall_slide,_keeps_of_its_speed_along,_a_frame_(x) = 0.99
+           19661, // air.wall_slide,_grabs_of_a_faster_fall,_a_frame_(x) = 0.3
+          393216, // air.wall_jump,_along_where_the_stick_points_at_(m/s) = 6
+               6, // air.wall_jump,_pressed_before_the_wall_and_kept = 6
           131072, // ledge.caught_moving_away_from_it_at_up_to_(m/s) = 2
               20, // ledge.held_into_the_wall_from_the_catch,_climbs_after = 20
            98304, // ledge.caught,_top_over_the_feet_from_(m) = 1.5

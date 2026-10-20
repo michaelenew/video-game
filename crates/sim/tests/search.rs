@@ -38,23 +38,26 @@ fn lines(text: &str) -> impl Iterator<Item = (Vec<&str>, Program)> {
 fn every_envelope_line_lands_across_its_gap() {
     let text = include_str!("fixtures/envelope.txt");
     let mut n = 0;
+    let mut wrong = Vec::new();
     for (head, prog) in lines(text) {
         let class = class_named(head[0]);
         let lane: usize = head[1].parse().unwrap();
         let gap: i32 = head[3].parse().unwrap();
         let o = search::run(&Stage::lane(class, lane), &prog);
-        assert!(
-            o.landed,
-            "{} lane {lane}: {prog} no longer lands",
-            class.name()
-        );
-        assert!(
-            sim::envelope::to_cm(o.gap) >= gap - 1,
-            "{} lane {lane}: {prog} crosses {} cm, not the {gap} claimed",
-            class.name(),
-            sim::envelope::to_cm(o.gap)
-        );
+        if !o.landed {
+            wrong.push(format!(
+                "{} lane {lane}: {prog} no longer lands",
+                class.name()
+            ));
+        } else if sim::envelope::to_cm(o.gap) < gap - 1 {
+            wrong.push(format!(
+                "{} lane {lane}: {prog} crosses {} cm, not the {gap} claimed",
+                class.name(),
+                sim::envelope::to_cm(o.gap)
+            ));
+        }
         n += 1;
     }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     assert!(n > 50, "only {n} envelope fixtures");
 }

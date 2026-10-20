@@ -21,9 +21,10 @@
 //! top is not a ledge to go along instead.
 //!
 //! **How it is played**: run along one side of the takeoff, jump, drift into
-//! the wall beside you, and press jump as you touch it; the push carries you
-//! to the other wall, and you press again. Holding the stick *into* a wall is
-//! a wall slide, and a slide bleeds the run away -- forward is the stick.
+//! the wall beside you, and press jump as you touch it (or just before: the
+//! press is kept for the wall); the push carries you to the other wall, and
+//! you press again. Hold forward: since 2026-10-20 a slide keeps the run and
+//! a kick goes the way the stick points along the wall.
 //!
 //! What is here is the shape; where a gully goes is its route's.
 

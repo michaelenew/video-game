@@ -9239,6 +9239,139 @@ whatever is going on, and rests you (health back) only out of a fight** -- so it
 not a place to stand and heal against the bird
 (`ranges::the_needles_top_cairn_counts_while_the_roost_is_awake`, which fails on the old rule).
 
+### 2026-10-20 — the wall jump, overhauled
+
+From the owner: "It's really hard to stick to a wall, really hard to get a wall jump, and
+even when I do it's really hard to have any momentum forward while jumping, so all the
+sections with horizontal wall jumps are barely possible and really frustrating (actually I just
+jump over them with class abilities because every real class can just do that). ... More
+obvious feedback when you're wall sliding, slower slide speed, easier to get into a slide, and
+easier to manipulate or keep forward momentum (meaning momentum non-orthogonal to the wall)
+while jumping."
+**Changed**, each against one of those:
+
+- *Slower slide.* `Wall slide, gravity` ×0.7 → ×0.35, `Wall slide, terminal velocity` ×0.7 →
+  ×0.2 (12.6 m/s → 3.6 m/s). And a fall faster than that is **grabbed** down to it, 0.3 of the
+  excess a frame (`Wall slide, grabs of a faster fall, a frame`, new) -- under a third of a full
+  fall's speed within twelve frames -- rather than snapped or left at speed.
+- *Easier into a slide.* Touching a wall while falling is a slide unless the stick pushes away
+  from it: along the wall and let go start one now, where only into it did since the 16th.
+- *Easier to get the jump.* The grace after leaving a wall 4 → 8 frames, and a press up to 6
+  frames *before* the wall is kept and becomes the wall jump the frame the wall is there (`Wall
+  jump, pressed before the wall and kept`, new; a new `Player::wall_press`). A press the air
+  spent on the Dual mage's wing beat is not kept.
+- *Momentum along the wall.* The slide keeps the run it brought (×0.99 a frame, `Wall slide,
+  keeps of its speed along, a frame`, new) where it used to bleed it to the stick's 2 m/s within
+  a few frames; the stick along the wall steers up to 5 m/s (was 2) and never brakes a faster
+  run. The jump carries the body the way the stick points along the wall at least 6 m/s,
+  scaled by the stick's share along the face (`Wall jump, along where the stick points at`,
+  new): along a gully with forward held, every kick goes out *and* forward.
+- *Feedback*: drawn and heard, in the same change (the slide's pose, dust at the hands and
+  feet, a scrape; a kick off the wall).
+
+Unchanged: the rise (0.6 of a takeoff), the push (7 m/s), the same-wall drop (1 m) and the
+falloff (×0.7) -- the two ladder rules stand as they were.
+**Why the old numbers failed**, as far as reading them goes: a slide at ×0.7 is 12.6 m/s, so
+a wall reached at speed is passed in a few frames; the stick had to be *into* the wall, so a
+player steering forward along a gully touched it and fell past; and the slide's grip took the
+forward speed away, so the kick that followed went straight across. The gully's own doc said
+as much ("a slide bleeds the run away -- forward is the stick").
+**Tests**: `tests/wall_jump.rs` -- the slide is under 0.35 of a fall but over 2 m/s (it was
+"a little slower, no slower than half"), a fast fall is grabbed, along and let go start a
+slide and away does not, a slide keeps the run, the jump goes the stick's way, and a press
+before the wall is kept.
+**Verdict** open -- unplayed. To feel for: whether 3.6 m/s is now a perch in practice (it
+never stops, but a tall wall is a long time to think), whether "touching is enough" catches
+people brushing past a pillar who did not mean to slide (away is the way off), and whether 6 m/s
+along is too much carry out of an inside corner.
+
+### 2026-10-20 — jump sections at the Sky Road's difficulty, and two past it
+
+**Changed** The owner: "There's a section from the needle over to the high meadow that's the
+only thing resembling challenging. I want more jump sections to be closer to that difficulty,
+and a few that are more difficult still than that. It's an actually fun challenge because
+there's variety in the jumps and it forces you to learn class's mobility tools." With the
+Bulwark no longer a mover, nothing is sized to its catch any more:
+
+- **The Hanging Stones' column**: fifty identical stones 4.2 m apart round a six-metre square
+  → forty hops round a square west of the foot, 41 → 203 m: plain catches 3–5.5 m out at
+  +3 to +5 (the Champion's and the Blood mage's catch, landed by the best jumpers), twelve
+  precision stones a metre across, a drop, five **high** hops of +9 m and two **long** ones
+  of 12–13 m, each with a rest and a cairn in front of it.
+- **The span**: four stretches of identical steps and four gullies → twenty-eight hops and three
+  gullies: long hops of 14, 17 and 15 m rising 2 to 5, a zig-zag of precision stones, three
+  high hops up the mountainside where the land rises a metre for a metre, rests between.
+- **The Waterfall** (the main road): tops 3–4 m along the face → 2.3–2.7 m, gaps 1.5–4.7 m →
+  2–6.4 m, every one still inside every mover's plain catch with half a metre to spare.
+- **New, harder than the Sky Road**: **the Crown**, fourteen hops off the High Plane's floor to
+  an island fifty metres over it (15–22 m onto one- and two-metre stones, two of +10, one
+  rest); **the High Line**, a shortcut of seven 19–22 m hops across the Sky Road's middle on
+  one- and two-metre stones.
+- Every route but the Sky Road is a table of hops that says what each asks
+  (`heights::Need`): plain, held to every mover's plain catch on paper and jumped by the
+  stand-in player, or a tool's, held past every plain jump with its airdodge and inside the
+  measured tools' reach (`tests/heights.rs`).
+
+**Why** The Sky Road is fun because no two hops are alike and the long ones need a tool. A
+column of fifty identical catches is neither. The tool hops come in two shapes so different
+tools answer them: *high* (the Elementalist's stone, the Champion's vault, the Dual mage's
+second jump, the Reaver's Gallows, the Blood mage's wings) and *long* (the second jump, the
+vault, the Reaver's and the Blood mage's reach). The Waterfall stays plain because it is the
+main road. The Needle's stair and the Deep's shafts were left alone: the stair is how
+somebody without a tool yet reaches the Sky Road, and a shaft is the way out of a dungeon.
+
+**Verdict** Unplayed. Every difficulty is a guess. `sim::envelope` measures only the Dual
+mage's second jump, the Champion's vault and the Elementalist's straight-up stone; the Reaver's
+and the Blood mage's tools are taken on the owner's word, so whether *they* make each tool hop
+is the first thing to play. Things to watch: the +9 hops ask the Champion's vault for all but
+30 cm of its height; the Crown's +10s are past the vault, so by the numbers they are the
+Elementalist's and the Dual mage's; the precision
+stones are a metre across, which the stand-in player lands but a person on a camera might not.
+
+### 2026-10-20 — the wall slide seen and heard
+
+From the owner: "It's really hard to stick to a wall ... More obvious feedback when you're wall
+sliding." Nothing at all was drawn or played for a slide or a wall jump: nothing outside `sim`
+read `sliding`, `wall_since` or `wall_jumps`, so a body on a slide looked exactly like one falling
+past a wall, and there was no way to tell whether the stick had done anything.
+
+**Changed** no gameplay number; the slide itself is being changed separately (slower, easier to
+start). What is new is what shows it:
+
+- **Two clips** (`crates/anim/src/clips/wall.rs`), chosen by `view::play::on_the_wall` off a new
+  `interp::OnWall`, only while `sliding` is set -- falling past a wall without the slide gets
+  none of it, on purpose. `wall_slide` (12 frames) is the body side-on to the wall and turned a
+  little back to it, the near hand flat on the face at the shoulder and the near foot on it, the
+  far leg braced and the far arm out; the hand and foot **stick and slip**, riding up the body for
+  seven frames as it slides on under them and letting go in two. It loops on the simulation's
+  frame and is blended in from its still frame by speed down the wall (full at 4 m/s), so a
+  slide held nearly still is a still press. `wall_kick` (14 frames) is indexed by **distance off
+  the face** over 1.2 m (`play::KICK_REACH`) and blends into the flight as it runs out. Both cut
+  for a wall on her left, mirrored for the right.
+- **The drawn body turns** side-on to the wall (`OnWall::turn`), eased by `Crossfade::turn` over
+  about a tenth of a second; which way round is the way she is going along the wall, else the
+  way she is looking, else one fixed by the wall so it cannot flick. The camera, the aim and the
+  facing never turn.
+- **Dust** (`game::scrape`) off the hand and the foot, in the face's colour ground pale
+  (`look::Palette::dust`), up to 25 motes a second a contact, hanging where it was left as the body
+  goes on down; a burst of fourteen off a kick. It first came out in the shade's blue and vanished
+  into a shaded face, so it gives off a little of its own colour.
+- **Sound** (`sound::cue::wall`): a light slap of the hand on to the face as the slide starts,
+  then a `Scrape` grain every few frames -- the face's own band broken into stick-and-slip
+  catches, brighter, quicker and louder the faster -- and a hard foot on the face and a short
+  swing on a kick. The face's material is the solid there (`Terrain::material_of_face`, a new
+  read-only query), rock on the land's own walls.
+
+Captured with `SHOT_AT=20,6.55,7.5 SHOT_FALL=1 SHOT_PRESS=A:600 SHOT_FRAME=24 DEMO=1`, `--arena
+range`: the slide pose on the tower's north face with dust off the hand and foot. In that capture
+the body was falling at 14.5 m/s on the slide, near full gravity, which is the other change's
+business.
+**Not done** the kick's dust cannot be seen in a still capture (it lives 0.6 s of real time and the
+frozen frame lays no more), and none of it has been played with a stick. The slide's judder full
+size (4 m/s) and the scrape's (6 m/s) were picked against today's fall cap; once the slower slide
+lands they may want bringing down to it.
+**Verdict** open -- unplayed.
+
 ### 2026-10-20 — the camera keeps out of large things only
 
 **Changed** The camera used to keep out of every box: the drawn arm pulled in, and the

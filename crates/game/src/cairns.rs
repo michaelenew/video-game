@@ -214,6 +214,8 @@ fn route_of(top: sim::V3) -> Option<(&'static str, sim::arena::ArenaId)> {
         Some(("Sky Road", ArenaId::SPIRE))
     } else if heights::LADDER.iter().chain(heights::SPAN.iter()).any(at) {
         Some(("Hanging Stones", ArenaId::BANK))
+    } else if heights::CROWN.iter().any(at) {
+        Some(("Crown", ArenaId::HIGH_PLANE))
     } else {
         None
     }

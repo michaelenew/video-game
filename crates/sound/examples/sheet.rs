@@ -17,7 +17,7 @@
 
 use look::sheet::{text, write};
 use sound::patch::{
-    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Step, Strike, Wet, Whoosh,
+    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Scrape, Step, Strike, Wet, Whoosh,
 };
 use sound::{spectrum, wav};
 
@@ -185,6 +185,51 @@ fn rows() -> Vec<(&'static str, Vec<Patch>)> {
                     })
                 })
                 .collect(),
+        ),
+        (
+            "a wall slide's scrape on stone, by speed down it",
+            [0.5, 1.5, 3.0, 4.5, 6.0, 9.0]
+                .iter()
+                .map(|v| {
+                    Patch::Scrape(Scrape {
+                        speed: *v,
+                        material: Material::Stone,
+                        frames: 8,
+                        seed: 1,
+                    })
+                })
+                .collect(),
+        ),
+        (
+            "a scrape by face; a kick off stone and wood",
+            vec![
+                Patch::Scrape(Scrape {
+                    speed: 4.0,
+                    material: Material::Rock,
+                    frames: 8,
+                    seed: 1,
+                }),
+                Patch::Scrape(Scrape {
+                    speed: 4.0,
+                    material: Material::Wood,
+                    frames: 8,
+                    seed: 1,
+                }),
+                Patch::Scrape(Scrape {
+                    speed: 4.0,
+                    material: Material::Earth,
+                    frames: 8,
+                    seed: 1,
+                }),
+                Patch::Scrape(Scrape {
+                    speed: 4.0,
+                    material: Material::Snow,
+                    frames: 8,
+                    seed: 1,
+                }),
+                step(0.75, Material::Stone),
+                step(0.75, Material::Wood),
+            ],
         ),
         (
             "parry; stone up; stone broken; fire; blood; wind",

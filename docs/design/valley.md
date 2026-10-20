@@ -329,16 +329,22 @@ and asked whether that should be a table mountain or islands in the sky,
   now and then: the mechanic and expert bands, "treacherous" as asked. A
   cairn on every big island. Its stretch over the mountains is a place of
   its own, **the Sky Road**, so its cairns belong somewhere.
-- **The Hanging Stones** climb from the Bank's road (rebuilt 2026-10-16,
-  when their vines went): **a column of fifty stones** round a six-metre
-  square, each 4.2 m over the last -- past every class's landing but the
-  best jumpers', inside the Bulwark's catch -- every tenth wider with a
-  cairn; then **the span** north over the mountains, four stretches of four
-  stones stepping up 2.5 m with 4.2 m gaps, **each ending in a gully** (§3),
-  and seven steeper stones to the plane's edge, the last two standing on the
-  land the plane's rim holds up. `tests/heights.rs` climbs it with every
-  class from the road to the plane -- each gully off its walls, five kicks
-  apiece -- and checks no class's plain jump crosses a gully.
+- **The Hanging Stones** climb from the Bank's road -- rebuilt 2026-10-16,
+  when their vines went, and again **2026-10-20, to the Sky Road's
+  difficulty** (§3): **a column of forty hops** round a square west of the
+  foot, 41 m to 203 m, and **the span** of twenty-eight north over the
+  mountains to the plane's edge, broken by three gullies. Until then it was
+  fifty identical stones 4.2 m apart and a span of identical steps, sized
+  for the Bulwark's catch. `tests/heights.rs` jumps every plain hop and
+  kicks across every gully with every mover, and holds every tool hop to
+  the envelope.
+- **Harder than the Sky Road**, both optional (2026-10-20, "a few that are
+  more difficult still than that"): **the Crown**, a climb off the plane's
+  floor to a turf island fifty metres over it, 354 m up -- the highest place
+  in the valley, a cairn on it -- and **the High Line**, a shortcut across
+  the Sky Road's middle on six stones a metre or two across, nineteen to
+  twenty-two metres apart, bowed out to the north-west of the road it skips
+  (§3).
 
 ![The High Plane, looking back at the Needle's dome and the Sky Road](gallery/valley-plane-view.jpg)
 
@@ -451,11 +457,16 @@ with the falls down its middle, and goes on from the top to the third
 waystone. **It is the one stretch of the main route that is jumped, not
 walked**: out of the pool on three column tops, up the right of the falls,
 three level leaps behind the falling water, up the left to the lip -- a cairn
-at the foot and on each of its two shelves, and one on the top. Every hop is
-inside the Bulwark's plain jump caught at the hands (a third wider along the
-face since 2026-10-16: the leaps behind the falls are 4.7 m), so every class
-can do it; the height and the
-water (which pushes down, so the curtain is no way up) are what make it hard.
+at the foot and on each of its two shelves, and one on the top. **Since
+2026-10-20 it is sized for the five movers, not the Bulwark**: the ledges and
+column tops are 2.3 to 2.7 m along the face where they were 3 to 4, and the gaps
+between them longer -- 4.3 to 6 m on the way up the sides at +1.5 to +2.1,
+6 and 6.4 m behind the falls -- every one inside the Champion's and the
+Blood mage's plain catch (the shortest jumpers: 6.7 m at +2) with half a
+metre or more to spare, and landed by the Dual mage. It is still a plain
+climb, because it is the main road; the height, the small tops and the
+water (which pushes down, so the curtain is no way up) are what make it
+hard.
 It is one table (`sim::arena::waterfall`) and the same cliff is a jump course
 of its own, `--arena waterfall`; [courses.md](courses.md) §1c has the hops.
 `tests/waterfall.rs` jumps every hop with every class in the valley and checks
@@ -498,7 +509,61 @@ time you touch one, *holding forward*, because the stick into a wall is a
 slide and a slide bleeds the run away. Measured on the bench's gully lanes
 (`--arena bench`): five kicks carry everybody over 12 m; the Bulwark tops out
 there, the rest of the roster makes 15 to 18. The Hanging Stones' span has
-four; nothing on the road needs one.
+three (four until 2026-10-20); nothing on the road needs one.
+
+**The routes up to the plane, at the Sky Road's difficulty and past it**
+(2026-10-20). The owner: "There's a section from the needle over to the
+high meadow that's the only thing resembling challenging. I want more jump
+sections to be closer to that difficulty, and a few that are more difficult
+still than that. It's an actually fun challenge because there's variety in
+the jumps and it forces you to learn class's mobility tools." The Sky Road
+is the benchmark: gaps of six to twenty-one metres, mostly falling one and a
+half to four, a rise of three onto a stone a metre and a half across, and
+eighteen metres and two up. Off the road the routes are now built to it, as
+tables of hops (`sim::arena::heights`) that each say what they ask: **a
+plain hop** every mover makes -- most of them at the very edge of the
+shortest jumpers' catch -- or **a tool hop**, past every mover's plain jump
+with its airdodge thrown at its best:
+
+| Rise | Champion | Blood mage | Reaver | Elementalist | Dual mage |
+| --- | --- | --- | --- | --- | --- |
+| level | 7.5 / 8.9 m | 7.7 / 9.0 | 8.7 / 9.8 | 9.1 / 9.9 | 10.1 / 10.5 |
+| +2 m | 6.7 / 8.1 | 6.8 / 8.3 | 7.9 / 9.3 | 8.1 / 9.4 | 9.2 / 10.0 |
+| +4 m | 5.9 / 7.0 | 6.0 / 7.2 | 7.1 / 8.4 | 7.3 / 8.6 | 8.2 / 9.5 |
+| +6 m | 4.4 / 4.9 | 4.5 / 5.1 | 6.0 / 7.1 | 6.1 / 7.2 | 7.2 / 8.5 |
+
+*(The widest gap caught at the hands, plain / with the airdodge, off
+`envelope::off_the_edge`. The tools `sim::envelope` measures: the Dual
+mage's second jump catches 24 m level and 18 m at +6; the Champion's vault
+peaks at 7.2 m and carries 24; the Elementalist's one-stone jump peaks at
+26. The Reaver's dash jump carries 7.4 m past where she dashed to, the
+Blood mage's tools are not measured, and nor is the Elementalist's reach
+along the flat.)*
+
+| Section | Where | Hops | Tools it is meant for | Main road? |
+| --- | --- | --- | --- | --- |
+| **The column** | the Bank's road, 41 → 203 m | 40: plain catches 3--5.5 m out at +3 to +5; twelve precision stones a metre across; a drop; five **high** hops of 9 m up and 2.5--3 m out, two of them back to back; two **long** hops, of 13 m level and 12 m at +2; a rest with a cairn before each tool hop | high: the Elementalist's stone, the Champion's vault, the Dual mage's second jump, the Reaver's Gallows, the Blood mage's wings; long: the second jump, the vault, the Reaver's and the Blood mage's | no |
+| **The span** | north over the mountains, 203 → 305 m | 28: three gullies (wall jumps); long hops of 14, 17 and 15 m rising 2 to 5; a zig-zag of precision stones; up the mountainside three high hops of 9 m; rests | the same | no |
+| **The Crown** | on the High Plane, 304 → 354 m | 14: long hops of 15--22 m, level to +4, onto stones one and two metres across; two high hops of 10 m, past the Champion's vault; plain hops at the edge of the catch; one rest | the Dual mage's second jump and the Elementalist's stone for the high ones; the second jump and the vault for the long ones; the Reaver's and the Blood mage's, unmeasured | no: a summit, a cairn, a view |
+| **The High Line** | across the Sky Road's middle | 7, every one a tool's: 19--22 m, two of them rising two, onto stones one and two metres across | the Dual mage's second jump, the Champion's vault (by the numbers), and whatever carries the others over the Sky Road's longest | no: a shortcut past seven of the Sky Road's stones |
+| **The Waterfall** | the main road, the Pinewood's head | 14, all plain: smaller tops, gaps of 4.3--6.4 m | none: every mover's plain jump | **yes** |
+
+`tests/heights.rs` holds each hop to its table: every plain hop is inside
+every mover's plain catch on paper and jumped by the stand-in player, every
+gully is kicked across, and every tool hop is past every plain jump and
+inside the reach of at least two of the measured tools on the Hanging
+Stones (one on the Crown and the High Line). The Crown's hardest hop and
+the High Line on the whole leave the Dual mage's second jump less room than
+the Sky Road does, on smaller stones. **Every difficulty here is a guess,
+unplayed.** The tools that are not measured -- the Reaver's, the Blood
+mage's, the Elementalist's along the flat -- were taken on the owner's
+word that every class has one; whether each class can actually make each
+tool hop wants a person to try it.
+
+The Needle's stair and the Deep's shafts are left a plain climb: the stair
+is the one way to the Sky Road for anybody who has not learned a tool yet
+(the corkscrew round it is the mechanic band), and a shaft is the way back
+out of a dungeon, which should not trap a class.
 
 **The mountains are the edge**: ground steeper than `terrain_steepest` is a
 wall you slide back down, so the valley needs no boxes to keep you in it
@@ -546,18 +611,32 @@ for a pair who does not.** The five reaches are 974 m end to end with about
 
 1. **Nobody has played it.** Every height, gap and hold is a first guess
    sized against the jump envelope. Record a pair's run (`Y`) and judge it.
-2. **The Bulwark sets the gaps.** Every required hop is within its plain
-   jump, which makes them easy for everyone else -- the Waterfall's too,
-   which is near the Bulwark's edge and nobody else's. The mechanics are the
-   shortcuts (a stone, a shadow, a Grasp over a bluff), but the gaps are not
-   yet wide enough to *need* one anywhere. Whether some climbs should have
-   only the slow way for some classes is the next tuning question.
-3. **The Siegeshell does not come to you.** World.md §3 wanted the bells to
+2. ~~**The Bulwark sets the gaps.**~~ **Not since 2026-10-20**: the Bulwark
+   is not considered for any movement section (the owner: it "is by far the
+   least developed class and has really poor mobility"). Until then every
+   required hop was within its plain jump, which made them easy for
+   everyone else. The gaps are now sized for the other five
+   (`sim::class::MOVERS`), and the hard sections are sized to *need* a
+   class's tools (§3, the Sky Road and after). **Done for the Hanging
+   Stones, the Waterfall, the Crown and the High Line on 2026-10-20**; the
+   Needle's stair, the chimney, the Deep's shafts, the crags and the Great
+   Wood's stairs are still the old plain catches, sized for the Bulwark --
+   the stair and the shafts on purpose (§3), the rest because nobody has
+   got to them.
+3. **Whether each class makes each tool hop.** `sim::envelope` measures the
+   Dual mage's second jump, the Champion's vault and the Elementalist's
+   stone; the Hanging Stones', the Crown's and the High Line's tool hops are
+   held to those and to the owner's word for the rest. The Reaver's Gallows
+   and dash, the Blood mage's wings and chain and the Elementalist's reach
+   along the flat have no measure, so a hop one of them cannot make would
+   not show. Play each route with each class -- and if a hop proves to belong
+   to one class, it is a hard route's to have, not the Hanging Stones'.
+4. **The Siegeshell does not come to you.** World.md §3 wanted the bells to
    ring in Hearth when the Shrine's waystone lights. It is walked to, by the
    fifth waystone, from either end.
-4. **The armoury, the bot's corner and the hunter's notes** in Hearth are
+5. **The armoury, the bot's corner and the hunter's notes** in Hearth are
    solids with nothing in them yet.
-5. **The seam hold** is gone with the teleports (2026-10-09), and its knob
+6. **The seam hold** is gone with the teleports (2026-10-09), and its knob
    with it.
-6. **One map**: everything [atlas.md](atlas.md) §Open lists -- how the joins
+7. **One map**: everything [atlas.md](atlas.md) §Open lists -- how the joins
    read, the sky changing at a doorway, the Long Valley's loop.

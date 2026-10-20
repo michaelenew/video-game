@@ -206,7 +206,7 @@ fn every_class_climbs_to_the_ruins_by_the_stair() {
         shape: Shape::Box,
     });
     let mut failed = Vec::new();
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let j = valley::Journey {
             beaten: u32::MAX,
             ..valley::Journey::default()
