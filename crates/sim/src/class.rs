@@ -528,20 +528,30 @@ pub struct Fury {
     /// The shoulder has landed, or been blocked, this Rush. Once a run.
     pub shouldered: bool,
     /// The three weapon buttons as they were held last frame, as bits in
-    /// button order -- so a press can be told from a hold. See `beat`.
+    /// button order -- so a press can be told from a hold.
     pub clicks: u8,
-    /// **The Beat** (C2): the weapon pressed inside the impact freeze of a
-    /// chain link that landed, as `clicks` bits; zero for none. It is held for
-    /// him until the next link comes out, and that link is a true link.
-    pub beat: u8,
+    /// **The Beat** (2026-10-20, from play): a weapon was pressed in this gap
+    /// between links before its sweet spot -- the press that throws the next
+    /// link on the beat has to be the first of the gap, so mashing never
+    /// finds it. Cleared as each link begins. See `state::on_the_beat`.
+    pub early: bool,
+    /// The gap's first press fell in its sweet spot: the link it throws is a
+    /// true link. Cleared as each link begins.
+    pub on_beat: bool,
     /// The move running now is a true link: it hits harder and sticks longer.
     pub true_link: bool,
-    /// Weapon buttons pressed and still down since, as `clicks` bits: a press
-    /// not yet spent on a move. A link whose button is in here when it starts
-    /// may be held; one thrown by a button held over from the link before it
-    /// may not, so holding a button down still runs the string as it always
-    /// did. See `state::find_the_beat`.
+    /// Weapon buttons pressed and not yet spent on a move, as `clicks` bits.
+    /// **Only a press throws a move** (2026-10-20, from play): a button held
+    /// down throws the one link it was pressed for and nothing after it, so
+    /// the string is three presses, in rhythm, and never a held button
+    /// running itself. A press is kept for `fresh_left` frames after it --
+    /// one made a little before the next link may start comes out when it
+    /// may -- and a link whose button is in here when it starts may be held
+    /// to its finisher. See `state::find_the_beat`.
     pub fresh: u8,
+    /// Frames the presses in `fresh` are kept for: `tuning::press_kept` from
+    /// the latest one, and when it runs out they are forgotten.
+    pub fresh_left: u8,
     /// The link running now was started by a fresh press of its button, and
     /// so held, it is that weapon's finisher.
     pub may_hold: bool,
@@ -565,6 +575,9 @@ pub struct Fury {
     /// The weapon of the last hit that landed, plus one, for the swap's
     /// extra; zero for none yet.
     pub last_weapon: u8,
+    /// Which places of the string now running landed, as bits: the first hit
+    /// is bit 0. What the tempo bar's three pips read.
+    pub landed: u8,
 }
 
 impl Fury {

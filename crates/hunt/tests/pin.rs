@@ -52,17 +52,22 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // 10 frames: nothing hangs. The Dual mage's and the Reaver's again when the
 // ledge became one catch rule (a walk off an edge is no longer caught): no
 // hunter in any of these catches a ledge now.
+// The Champion's moved 2026-10-20, deliberately: only a press throws a
+// link, kept a few frames, so a weapon the plan holds throws one move rather
+// than a string; and his tempo bar's clocks are in `Fury`, so in the hash.
+// And again the same day: the Beat moved off the freeze to a third of the way
+// along a window counted from when he may act, which runs on past the third.
 //
 // Every hunt but the Blood mage's moved 2026-10-20, deliberately: the wall
-// jump's overhaul. Counted over each hunt: no hunter wall jumps; the
+// jump's overhaul (the Champion's merged with his Beat, above). Counted over each hunt: no hunter wall jumps; the
 // Bulwark, the Dual mage and the Reaver slide for 6, 14 and 7 frames (touching
 // a wall is a slide now, and the slide is slower); the Champion's two and the
 // Elementalist's do not slide at all, and moved only for the hash -- a jump
 // pressed in the air is kept for a wall (`Player::wall_press`), which
 // `state_checksum` holds while it is not nought.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x505c4067fadcf210),
-    (Class::Champion, 7, 0x8cef5fd88c364510),
+    (Class::Champion, 0x2545_F491, 0x9600a3bf8fd2bcb9),
+    (Class::Champion, 7, 0x8ff13d2a62ee205e),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed

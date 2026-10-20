@@ -1592,9 +1592,8 @@ pub fn shoulder_freeze() -> u16 {
 }
 
 /// **The Beat** (exploration 0015, C2): what a true link -- the next link
-/// pressed inside the freeze of one that landed -- adds to its damage, as a
-/// percentage, and to its freeze, in frames. The window is the freeze itself,
-/// so it is the weapon's weight: wide on the hammer, tight on the sword.
+/// pressed on the beat, see [`beat_from`] -- adds to its damage, as a
+/// percentage, and to its freeze, in frames.
 pub fn true_link_damage() -> u16 {
     oven::scalar(Scalar::TrueLinkDamage).max(0) as u16
 }
@@ -1849,9 +1848,42 @@ pub fn thrust_extend() -> Fx {
 /// string is something you commit to rather than something you can leave lying
 /// around. Parked at full for as long as a link is actually running, so a slow
 /// finisher cannot time its own chain out from under itself -- see
-/// `state::step_mechanic`.
+/// `state::step_mechanic`. **Counted from the moment he may act again**
+/// (2026-10-20): a landed link's earliest cancel, a whiffed one's end -- so
+/// it is the same window for every weapon, and the Beat sits in it.
 pub fn chain_grace() -> u16 {
     oven::scalar(Scalar::ChainGrace) as u16
+}
+
+/// **Only a press throws a link** (2026-10-20, from play): how long a weapon
+/// press is kept for, waiting for the link it asked for to be allowed out.
+/// A press made this close before the recovery may be cut comes out on the
+/// frame it may; one made earlier than that is lost. A held button is one
+/// press, never a string.
+pub fn press_kept() -> u16 {
+    oven::scalar(Scalar::PressKept).clamp(0, u8::MAX as i32) as u16
+}
+
+/// **The Beat is a rhythm, not a race** (2026-10-20, from play). The window
+/// for the next hit -- [`chain_grace`] frames, counted from the moment he may
+/// act again -- has a sweet spot `Beat, falls at` of the way along it, and
+/// `Beat, lasts` wide: the frames since he could act that it runs from and
+/// to (exclusive). The same frames for every weapon, so a slow weapon is slow
+/// by its swing and never by its beat. It was the impact freeze, which is as
+/// soon as possible, and mashing found it. Never the window's first frame.
+pub fn beat_from() -> u16 {
+    let lasts = beat_lasts();
+    let middle = chain_grace() as i32 * oven::scalar(Scalar::BeatAt).clamp(0, 100) / 100;
+    (middle - lasts as i32 / 2).clamp(1, chain_grace().max(1) as i32) as u16
+}
+
+/// The end of the Beat, exclusive. See [`beat_from`].
+pub fn beat_to() -> u16 {
+    (beat_from() + beat_lasts()).min(chain_grace())
+}
+
+fn beat_lasts() -> u16 {
+    oven::scalar(Scalar::BeatLasts).clamp(1, u8::MAX as i32) as u16
 }
 
 /// How much of a connected link's recovery you serve before the next link may

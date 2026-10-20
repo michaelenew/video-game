@@ -1197,6 +1197,15 @@ scalars! {
     // full tally plays. Presentation that lives in the snapshot, because its
     // clock has to survive a rollback.
     ReapingLife,          "Reaver",   "Cash-in, the Reaping plays for",                       Frames, 20, 180;
+    // **Only a press throws a link** (2026-10-20): a held weapon button no
+    // longer runs the string. A press made a little before the next link may
+    // start is kept this long and comes out when it may.
+    PressKept,            "Champion", "Chain, a press waits for its link",                    Frames, 0, 30;
+    // **The Beat is a rhythm** (2026-10-20, from play): its sweet spot is a
+    // stretch of the window counted from the moment he may act again, the
+    // same place for every weapon, never as soon as possible.
+    BeatAt,               "Champion", "Beat, falls at (% of the window)",                     Percent, 0, 100;
+    BeatLasts,            "Champion", "Beat, lasts",                                          Frames, 1, 30;
 }
 
 // ---------------------------------------------------------------------------

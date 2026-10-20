@@ -243,6 +243,14 @@ The window *is* the weapon's mass: the hammer's 13-frame freeze is an easy beat 
 sword's 3 frames a hard one. Heavy is forgiving, fast is precise. And it is the DMC lesson:
 **the same number of presses, played in time, hits harder.**
 
+> **Moved off the freeze, 2026-10-20, from play.** The freeze is as soon as possible, and a
+> press anywhere in it counted, so clicking as fast as you could found it: a test of mashing,
+> not of rhythm. The sweet spot is now a third of the way along the window counted from the
+> moment he may act again, the same frames for every weapon, judged on the gap's first press
+> -- one before it spends it -- and it carries through the third hit into the next string's
+> first. See the kit's [rework list](../kits/champion.md#the-rework----2026-10-12) and the
+> feel log.
+
 The Beat lives inside a string that is landing. The Hold (C3) lives everywhere else. They do
 not compete.
 
