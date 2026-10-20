@@ -9267,3 +9267,39 @@ each lane keeps whichever line crosses further.
 the open question. Worth watching: whether ten frames of kept press makes clicking early
 feel like it "works anyway" so the Beat stops being learned (lower the knob), or whether the
 red stretch shows up often enough to feel like a trap (raise it).
+
+### 2026-10-20 — the Champion: the Beat is a rhythm, not a race
+
+**Changed**
+- **The sweet spot moved off the impact freeze** to a fixed stretch of the window for the next
+  hit: `Beat, falls at` 33 % of the window, `Beat, lasts` 6 frames -- with the window at 26
+  frames, frames 5 to 10 after he may act again. The same frames for every weapon.
+- **The window counts from the moment he may act again** -- a landed link's earliest cancel
+  (the different-weapon one), a whiffed link's end -- rather than from the end of the
+  recovery. Before, a landed hammer link left 18 frames of recovery plus the 26, so the
+  window was a different length for every weapon; now it is 26 for all of them, and a bar
+  of it means the same thing whatever is in his hands. The cost: a landed link's string now
+  dies sooner if you wait, by whatever recovery was left after its cancel.
+- **Only the gap's first press counts**, judged when it is made: a press before the sweet
+  spot spends it (`Fury::early`), so the link it throws -- or the next one if it was lost --
+  is ordinary. The press made in the sweet spot is a true link even if its link comes out a
+  frame or two later (a repeated weapon may still owe a few frames of recovery).
+- **It carries through the third.** The window runs on after the third hit; a press throws
+  the next string's first hit, and on the beat that first hit is a true link. The tempo bar
+  drains in the first hit's colour there.
+- The press held through the freeze for him (`hold_the_beat`) is gone with the freeze beat.
+
+**Why** From play: "is the sweet spot just 'as soon as possible'? I think that's less of a
+rhythm challenge and more of a spamming challenge." It was: any press inside the freeze
+counted and earlier ones cost nothing, so clicking every four frames found the sword's three
+frames three times in four, and the hammer's every time. The owner's rules: the sweet spot
+about a third of the way through the timer; one rhythm for the class, counted from when he
+may act, not one per weapon -- "a hammer is slower by virtue of the swing being slower"; and
+the tempo kept through the third hit into the next first. Measured: pressing two frames into
+the sweet spot every gap throws a true link on every hit after the opener for all three
+weapons, the next string's first included; mashing every 2 to 5 frames and pressing as soon
+as possible throw none (`champion_rework.rs`).
+
+**Verdict** open -- to be played. Watch whether 5 to 10 frames after he may act is a beat a
+hand finds, and whether the shorter window for landed links is felt.
+

@@ -36,9 +36,19 @@ what was built, in one place:
   link. A third hit that lands **refunds** the Rush. The Rush stab carries what
   it catches along the rest of the run. (`state::brace_the_rush`,
   `World::shoulder`.)
-- **The Beat**: a weapon pressed inside the impact freeze of a link that landed
-  makes the next link a **true link** -- 20% more damage, 4 more frames of
-  freeze. The press is held for him until the link comes out. (`find_the_beat`.)
+- **The Beat** (a rhythm since 2026-10-20, from play): the next link pressed
+  in the **sweet spot** of the window is a **true link** -- 20% more damage, 4
+  more frames of freeze. The window is the chain's 26 frames counted from the
+  moment he may act again (a landed link's earliest cancel, a whiffed one's
+  end), and the sweet spot is `Beat, falls at` a third of the way along it,
+  `Beat, lasts` 6 frames wide -- **the same frames for every weapon**: a slow
+  weapon is slow by its swing, never by its beat. Only the gap's first press
+  counts: a press before the sweet spot spends it, so mashing never finds it,
+  and as soon as possible is an ordinary link. **It carries through the
+  third**: after the third hit the window runs on, a press throws the next
+  string's first hit, and on the beat that first hit is a true link too. It
+  used to be a press inside the last link's impact freeze -- as soon as
+  possible, which mashing found. (`find_the_beat`, `beat_clock`.)
 - **Tap to combo, hold to finish** (2026-10-13): any link whose button was
   pressed for it and is held for 12 frames from the press -- about a wind-up --
   is that weapon's **finisher** (`moves::Charge::Heft`), at any place in the
@@ -86,15 +96,18 @@ what was built, in one place:
   still down, and comes out on the first frame its link may; a tap made
   earlier than that is lost. (`Fury::fresh`, `state::champion_weapon`.)
 - **The tempo bar** (2026-10-20, a training aid): under the momentum bar and
-  the same size, the time left to throw the next hit, emptying from the left,
-  with two ticks round the Beat -- the sweet spot. It is one colour, the
-  colour of the hit the next press throws: dull for the first, warmer for the
-  second, vivid for the third. Under it, *Hit:* and three pips in those same
-  three colours, empty until that hit lands -- so landing a hit moves the
-  colour off the bar into its pip. It gives no early or late feedback; that is
-  for the swing and the sound to reward, later. Every mark is read off the
-  rule it draws (`state::tempo`). And the three hits look different: each swing's trail is bigger than the last's and
-  the third's is gold, with a gold flare at the weapon's head while it comes.
+  the same size, the window for the next hit, emptying from the left from the
+  moment he may act again, with two ticks round the Beat's sweet spot a third
+  of the way along. It is one colour, the colour of the hit the next press
+  throws: dull for the first, warmer for the second, vivid for the third --
+  and after the third it drains in the first's colour, since the beat runs on
+  into the next string. Under it, *Hit:* and three pips in those same three
+  colours, empty until that hit lands -- so landing a hit moves the colour off
+  the bar into its pip. It gives no early or late feedback; that is for the
+  swing and the sound to reward, later. Every mark is read off the rule it
+  draws (`state::tempo`). And the three hits look different: each swing's
+  trail is bigger than the last's and the third's is gold, with a gold flare
+  at the weapon's head while it comes.
 - **The Rush goes toward the crosshair** (2026-10-13): flat along the floor
   toward the spot the crosshair is on (`aim::racing_path` from his feet), not
   where the stick is held.
@@ -216,8 +229,9 @@ close nothing at all.
 Live numbers: `cargo run -p sim --bin frametable`, which prints the step, the knock-up,
 how far a clean hit shoves somebody in metres and how long it freezes beside the frames.
 
-**A string dies** if you stop swinging for about half a second, if you are hit, if you
-block, if you dodge, or if you leave the floor. It survives a Rush, which is worth knowing:
+**A string dies** if you stop swinging for about half a second -- counted, since
+2026-10-20, from the moment you may act again, and running on past the third hit into the
+next string's first -- if you are hit, if you block, or if you dodge. It survives a Rush, which is worth knowing:
 one charge buys you a reposition in the middle of a string, and the grace window keeps
 running while you dash.
 

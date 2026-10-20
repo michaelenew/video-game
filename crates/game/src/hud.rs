@@ -915,15 +915,16 @@ pub type Beat = (f32, f32);
 
 /// What the tempo bar draws: where now is, as a share of the window -- the
 /// time left fills from there to the end -- the Beat's two edges as shares
-/// of the track, and the colour: the hit the next press throws. `None` when there is no window to time: no string
-/// running, or its third hit or a finisher swinging.
+/// of the track, and the colour: the hit the next press throws. `None`
+/// when there is no window to time: no string running, or a finisher
+/// swinging.
 pub fn tempo_bar(t: &sim::state::Tempo) -> Option<(f32, Option<Beat>, Color)> {
     if t.finishing || t.end == 0 {
         return None;
     }
     let at = |f: u16| 100.0 * f.min(t.end) as f32 / t.end as f32;
-    let beat = (t.beat > 0).then(|| (at(0), at(t.beat)));
-    Some((at(t.now), beat, hit_colour(t.thrown)))
+    let beat = (t.beat_to > t.beat_from).then(|| (at(t.beat_from), at(t.beat_to)));
+    Some((at(t.now), beat, hit_colour(t.next)))
 }
 
 /// The tempo bars: shown for a Champion, the time left in the colour of the
@@ -1881,12 +1882,12 @@ mod tests {
             let n = (0..3)
                 .position(|n| hit_colour(n) == colour)
                 .expect("a hit's colour");
-            assert_eq!(n as u8, t.thrown, "{t:?}");
+            assert_eq!(n as u8, t.next, "{t:?}");
             seen[n] = true;
         }
         assert!(
-            seen[1] && seen[2],
-            "the windows into the second and third: {seen:?}"
+            seen.iter().all(|s| *s),
+            "the windows into each hit: {seen:?}"
         );
     }
 

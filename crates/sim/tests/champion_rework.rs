@@ -82,33 +82,25 @@ fn engaged() -> World {
     w
 }
 
-/// Open with the sword, then press the sword again either inside the
-/// opener's freeze or after it. What the second hit dealt.
-fn second_hit(on_the_beat: bool) -> (i32, bool) {
+/// Open with `button`, let it land, and press it once more `at` frames into
+/// the window -- the tempo bar's clock, counted from the moment he may act
+/// again. What the second hit dealt, and whether it was a true link.
+fn second_hit(button: u16, at: u16) -> (i32, bool) {
     let mut w = engaged();
-    step(&mut w, Input::LEFT);
+    step(&mut w, button);
     let mut f = 0;
-    while w.players[0].frozen == 0 {
+    while sim::state::tempo(&w.players[0]).unwrap().now < at {
         step(&mut w, 0);
         f += 1;
-        assert!(f < 30, "the opener never landed");
+        assert!(
+            f < 90,
+            "the opener never landed, or the window never reached {at}"
+        );
     }
-    // Late, the button is held down the way a person holds it, until the
-    // chain takes it. On the beat it is a single frame's press: the beat is
-    // held for him (`hold_the_beat`).
-    let held = if on_the_beat {
-        1
-    } else {
-        while w.players[0].frozen > 0 {
-            step(&mut w, 0);
-        }
-        step(&mut w, 0);
-        15
-    };
     let before = w.players[1].health;
     let mut true_link = false;
-    for f in 0..40 {
-        step(&mut w, if f < held { Input::LEFT } else { 0 });
+    for f in 0..60 {
+        step(&mut w, if f == 0 { button } else { 0 });
         if let Mechanic::Forms { fury, .. } = w.players[0].mechanic {
             true_link |= fury.true_link;
         }
@@ -117,21 +109,115 @@ fn second_hit(on_the_beat: bool) -> (i32, bool) {
 }
 
 #[test]
-fn a_link_pressed_in_the_freeze_is_a_true_link() {
-    let (late, late_true) = second_hit(false);
-    let (beat, beat_true) = second_hit(true);
+fn a_link_pressed_on_the_beat_is_a_true_link() {
+    // The Beat is a rhythm, not a race (2026-10-20): as soon as possible is
+    // an ordinary link, and so is late; the sweet spot a third of the way
+    // along the window is a true one.
+    let from = sim::tuning::beat_from();
+    let to = sim::tuning::beat_to();
+    let (soon, soon_true) = second_hit(Input::LEFT, 1);
+    let (beat, beat_true) = second_hit(Input::LEFT, from + 1);
+    let (_, late_true) = second_hit(Input::LEFT, to + 1);
+    assert!(!soon_true, "as soon as possible is an ordinary link");
+    assert!(beat_true, "a link pressed in the sweet spot is a true link");
     assert!(
         !late_true,
-        "a link pressed after the freeze is an ordinary link"
+        "a link pressed after the sweet spot is ordinary"
     );
-    assert!(beat_true, "a link pressed inside the freeze is a true link");
-    // Both landed off the same opener, so the same momentum is in both: the
-    // difference is the beat's alone.
-    let want = late * (100 + sim::tuning::true_link_damage() as i32) / 100;
+    // Both landed off the same opener, so the same momentum is in both
+    // (nearly: the later one waited a little longer for its meter).
+    let want = soon * (100 + sim::tuning::true_link_damage() as i32) / 100;
     assert!(
-        (beat - want).abs() <= 1,
-        "the true one hits harder: {beat} against {late}, {want} wanted"
+        (beat - want).abs() <= 3,
+        "the true one hits harder: {beat} against {soon}, {want} wanted"
     );
+}
+
+#[test]
+fn the_beat_is_the_same_place_for_every_weapon() {
+    // Counted from the moment he may act again, so a slow weapon is slow by
+    // its swing and never by its beat.
+    let from = sim::tuning::beat_from();
+    assert!(from > 1, "the beat is never the window's first frame");
+    for button in [Input::LEFT, Input::MIDDLE, Input::RIGHT] {
+        assert!(second_hit(button, from).1, "{button:#x} on the beat");
+        assert!(!second_hit(button, from - 1).1, "{button:#x} a frame early");
+    }
+}
+
+#[test]
+fn mashing_never_finds_the_beat() {
+    // A press before the sweet spot spends it for the gap, so clicking as
+    // fast as a hand can throws the string and never a true link.
+    for button in [Input::LEFT, Input::MIDDLE, Input::RIGHT] {
+        for period in 2..6 {
+            let mut w = engaged();
+            for f in 0..300 {
+                step(&mut w, if f % period == 0 { button } else { 0 });
+                if let Mechanic::Forms { fury, .. } = w.players[0].mechanic {
+                    assert!(
+                        !fury.true_link,
+                        "{button:#x} every {period} frames found it"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn the_beat_carries_through_the_third_into_the_next_string() {
+    // Pressed on the beat every time, the string runs first, second, third,
+    // first again -- every one after the opener a true link, the next
+    // string's first included -- and the window after the third is the next
+    // first hit's.
+    let mut w = engaged();
+    let from = sim::tuning::beat_from();
+    let mut thrown = Vec::new();
+    let mut pressed = false;
+    let mut after_the_third = false;
+    for f in 0..600 {
+        let t = sim::state::tempo(&w.players[0]).unwrap();
+        if t.now == 0 {
+            pressed = false;
+        }
+        if t.end > 0 && t.now > 0 && thrown.len() >= 3 && t.next == 0 {
+            after_the_third = true;
+        }
+        let press = if f == 0 {
+            true
+        } else if t.end > 0 && t.now == from + 1 && !pressed {
+            pressed = true;
+            true
+        } else {
+            false
+        };
+        step(&mut w, if press { Input::LEFT } else { 0 });
+        if let (Action::Startup { kind, left }, Mechanic::Forms { fury, .. }) =
+            (w.players[0].action, w.players[0].mechanic)
+        {
+            if left + 1 == sim::moves::get(Class::Champion, kind).startup {
+                thrown.push((kind, fury.true_link));
+            }
+        }
+        if thrown.len() >= 5 {
+            break;
+        }
+    }
+    let kinds: Vec<u8> = thrown.iter().map(|(k, _)| *k).collect();
+    assert_eq!(
+        kinds,
+        [
+            c::SWORD_GROUND,
+            c::BACKCUT,
+            c::UPCUT,
+            c::SWORD_GROUND,
+            c::BACKCUT
+        ],
+        "{thrown:?}"
+    );
+    assert!(thrown[1..].iter().all(|(_, t)| *t), "{thrown:?}");
+    assert!(after_the_third, "no window after the third was the first's");
 }
 
 /// Press a weapon fresh and keep it down for `frames`, then let go and let
@@ -877,21 +963,22 @@ fn a_held_button_throws_one_move_and_no_more() {
 }
 
 /// Open with the sword and let it land; then one frame's press of the sword
-/// `early` frames before the first frame the second link may start. Whether
-/// the second link came out, and the frame it did, counted from the press.
-fn pressed_early(early: u16) -> Option<u32> {
+/// `early` frames before the window opens. Whether the second link came
+/// out, and the frame it did, counted from the press.
+fn pressed_early(early: u32) -> Option<u32> {
+    // How long after the opener's press the window opens.
     let mut w = engaged();
     step(&mut w, Input::LEFT);
-    // Run to the frame the tempo bar says the same weapon may come out on.
-    let mut f = 0;
-    loop {
-        let t = sim::state::tempo(&w.players[0]).unwrap();
-        if !t.swinging && t.end > 0 && t.now + early >= t.repeat {
-            break;
-        }
+    let mut opens = 1;
+    while sim::state::tempo(&w.players[0]).unwrap().now == 0 {
         step(&mut w, 0);
-        f += 1;
-        assert!(f < 60, "the opener never landed");
+        opens += 1;
+        assert!(opens < 90, "the opener never landed");
+    }
+    let mut w = engaged();
+    step(&mut w, Input::LEFT);
+    for _ in 1..opens - early {
+        step(&mut w, 0);
     }
     step(&mut w, Input::LEFT);
     for f in 0..60 {
@@ -907,22 +994,19 @@ fn pressed_early(early: u16) -> Option<u32> {
 fn a_press_a_little_early_comes_out_when_it_may() {
     // A tap let go before the recovery may be cut is kept, and comes out on
     // the frame it may.
-    let kept = sim::tuning::press_kept();
+    let kept = sim::tuning::press_kept() as u32;
     assert!(kept > 2, "the knob keeps a press for {kept} frames");
     let at = pressed_early(kept - 2).expect("a press a little early was lost");
-    assert!(at <= kept as u32, "it came out {at} frames after the press");
+    assert!(at <= kept, "it came out {at} frames after the press");
 }
 
 #[test]
 fn a_press_far_too_early_is_lost() {
     // Whiffed, the sword owes its whole recovery; a tap made in its wind-up
-    // is forgotten before the recovery ends, so it throws nothing -- it was
-    // made before the tempo bar's lost stretch was even over.
+    // is forgotten before the recovery ends, so it throws nothing.
     let mut w = World::with_classes([Class::Champion, Class::Bulwark]);
     step(&mut w, Input::LEFT);
     step(&mut w, 0);
-    let t = sim::state::tempo(&w.players[0]).unwrap();
-    assert!(t.swinging && t.lost > t.now, "{t:?}");
     let m = sim::moves::get(Class::Champion, c::SWORD_GROUND);
     assert!(m.startup + m.active + m.recovery > 2 + sim::tuning::press_kept());
     step(&mut w, Input::LEFT);
@@ -939,64 +1023,33 @@ fn a_press_far_too_early_is_lost() {
 }
 
 #[test]
-fn the_tempo_bars_marks_are_where_the_chain_opens() {
-    // The bar draws the rule, never beside it: with the press held from the
-    // landing on, the second link starts on the frame the bar's mark for
-    // that weapon says it may -- swapped and repeated both.
-    for (second, kind) in [(Input::LEFT, c::BACKCUT), (Input::RIGHT, c::SKEWER)] {
-        let mut w = engaged();
-        step(&mut w, Input::LEFT);
-        let mut mark = None;
-        for f in 0..80 {
-            let t = sim::state::tempo(&w.players[0]).unwrap();
-            // Pressed fresh the frame after the freeze, so it is no beat.
-            let landed_and_thawed = !t.swinging && t.end > 0 && t.now >= t.beat;
-            if landed_and_thawed && mark.is_none() {
-                mark = Some(if second == Input::LEFT {
-                    t.repeat
-                } else {
-                    t.swap
-                });
-            }
-            let press = landed_and_thawed && (f % 3 == 0);
-            step(&mut w, if press { second } else { 0 });
-            if w.players[0].action.attack_kind() == Some(kind) {
-                break;
-            }
-            let after = sim::state::tempo(&w.players[0]).unwrap();
-            if after.end > 0 {
-                if let Some(m) = mark {
-                    assert!(
-                        after.now <= m,
-                        "the link was late: now {} past mark {m}",
-                        after.now
-                    );
-                }
-            }
-        }
-        assert_eq!(w.players[0].action.attack_kind(), Some(kind));
+fn the_window_opens_when_he_may_act() {
+    // The bar's clock starts on the first frame a press throws the next
+    // link at once: a different weapon pressed on that frame comes out.
+    let mut w = engaged();
+    step(&mut w, Input::LEFT);
+    let mut f = 0;
+    while sim::state::tempo(&w.players[0]).unwrap().now == 0 {
+        step(&mut w, 0);
+        f += 1;
+        assert!(f < 60, "the opener never landed");
     }
+    step(&mut w, Input::RIGHT);
+    assert_eq!(w.players[0].action.attack_kind(), Some(c::SKEWER));
 }
 
 #[test]
 fn the_tempo_bar_counts_the_string() {
+    // The colour the bar wears is the next hit's: second, third, then the
+    // next string's first while the third's window runs.
     let mut w = engaged();
     let mut seen = Vec::new();
-    for f in 0..90 {
+    for f in 0..120 {
         step(&mut w, if f % 4 == 0 { Input::LEFT } else { 0 });
         let t = sim::state::tempo(&w.players[0]).unwrap();
-        if seen.last() != Some(&t.thrown) {
-            seen.push(t.thrown);
-        }
-        if t.thrown == 3 {
-            assert!(
-                t.finishing || !w.players[0].action.attack_kind().is_some(),
-                "{t:?}"
-            );
+        if t.end > 0 && seen.last() != Some(&t.next) {
+            seen.push(t.next);
         }
     }
-    assert!(
-        seen.starts_with(&[0, 1, 2, 3]) || seen.starts_with(&[1, 2, 3]),
-        "{seen:?}"
-    );
+    assert!(seen.starts_with(&[1, 2, 0, 1]), "{seen:?}");
 }

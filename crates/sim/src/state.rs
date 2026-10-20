@@ -5839,33 +5839,19 @@ fn weapon_bits(input: Input) -> u8 {
         | (input.has(Input::RIGHT) as u8) << 2
 }
 
-/// **The Beat** (exploration 0015, C2): a weapon pressed -- not held over --
-/// inside the impact freeze of a chain link that landed makes the next link a
-/// true link. Read off the raw input, before the freeze swallows it.
-///
-/// The window is the freeze itself, so it is the weapon's mass: the hammer's
-/// is wide and forgiving, the sword's three frames are precise. Nothing about
-/// how many buttons are pressed changes; when they are pressed does.
+/// Read the weapon buttons: the presses kept for him (`Fury::fresh`), a hold
+/// let go, and a press made before the Beat. Off the raw input, before an
+/// impact freeze swallows it.
 fn find_the_beat(p: &mut Player, input: Input) {
-    let frozen = p.frozen > 0;
-    let p_frozen = p.frozen;
-    let swinging = match p.action {
-        // Its last frame is `left: 0`, so one more than it says.
-        Action::Active { left, .. } => (left + 1).min(u8::MAX as u16) as u8,
-        _ => 0,
-    };
-    let in_a_link = p
-        .action
-        .attack_kind()
-        .is_some_and(moves::champion::in_string);
     let winding = match p.action {
         Action::Startup { kind, .. } | Action::Channel { kind, .. } => Some(kind),
         _ => None,
     };
-    let Mechanic::Forms {
-        chain_hit, fury, ..
-    } = &mut p.mechanic
-    else {
+    let clock = beat_clock(p);
+    let in_string = champion_chain(p).0 > 0;
+    let early = in_string && clock < t::beat_from();
+    let on_beat = in_string && clock >= t::beat_from() && clock < t::beat_to();
+    let Mechanic::Forms { fury, .. } = &mut p.mechanic else {
         return;
     };
     let now = weapon_bits(input);
@@ -5893,36 +5879,36 @@ fn find_the_beat(p: &mut Player, input: Input) {
             fury.may_hold = false;
         }
     }
-    if frozen && fresh != 0 && *chain_hit && in_a_link {
-        fury.beat = fresh;
+    // **The Beat is judged on the click**, the one thing the player times:
+    // the gap's first press in the sweet spot makes the link it throws a
+    // true link, even if that link comes out a frame or two after. A press
+    // before it spends it for the gap -- the link it throws, or the next if
+    // it was lost, is ordinary -- so mashing never finds it.
+    if fresh != 0 && early {
+        fury.early = true;
     }
-    // How long the Beat's window is, for the tempo bar: the freeze, at its
-    // longest, of the link that landed.
-    if frozen && *chain_hit && in_a_link {
-        fury.beat_len = fury.beat_len.max(p_frozen);
-        fury.tail = swinging;
+    if fresh != 0 && on_beat && !fury.early {
+        fury.on_beat = true;
     }
 }
 
-/// The weapon pressed on the beat, held down for him until the link it asked
-/// for comes out: a press inside a three-frame freeze is over before the
-/// chain will take it, and the beat is the whole of the skill -- it should
-/// not also have to be held. Any other input is passed through.
-fn hold_the_beat(p: &Player, input: Input) -> Input {
-    let Mechanic::Forms { fury, .. } = p.mechanic else {
-        return input;
-    };
-    let mut bits = input.bits;
-    if fury.beat & 1 != 0 {
-        bits |= Input::LEFT;
+/// **The Beat's clock** (2026-10-20, from play): frames since he could act
+/// again in the gap between two links of his string -- nought while a link
+/// is still running and owes its recovery, then counting up. The string's
+/// window counts down on the same frames (`tuning::chain_grace`), so this is
+/// how far along it he is. Nought outside a string.
+///
+/// **The Beat** (exploration 0015, C2; a rhythm since 2026-10-20): the
+/// gap's first press, made `tuning::beat_from` to `beat_to` frames along --
+/// the same frames for every weapon -- throws a **true link**: it hits
+/// harder and sticks longer. It used to be a press inside the last link's
+/// impact freeze, which is as soon as possible, and mashing found it.
+/// Carried through the third hit into the next string's first.
+fn beat_clock(p: &Player) -> u16 {
+    match champion_chain(p) {
+        (0, _) => 0,
+        (_, left) => t::chain_grace().saturating_sub(left),
     }
-    if fury.beat & 2 != 0 {
-        bits |= Input::MIDDLE;
-    }
-    if fury.beat & 4 != 0 {
-        bits |= Input::RIGHT;
-    }
-    Input { bits, ..input }
 }
 
 /// Drive a Champion `reach` along `dir` at `speed`, on the Rush's own
@@ -6152,7 +6138,6 @@ fn step_player(
     scene: &Scene,
     carrying: bool,
 ) {
-    let input = hold_the_beat(p, input);
     // The repeat lockouts run down first, and above the rider branch so they
     // run exactly once a frame on either tick. Before the input is read rather
     // than after, so a lockout of `n` costs `n` frames and not `n + 1`.
@@ -8233,8 +8218,7 @@ pub fn carrying(p: &Player) -> Force {
 ///
 /// **A press, not a button that is down** (2026-10-20, from play): only a
 /// weapon pressed and not yet spent asks for anything -- `Fury::fresh`, kept
-/// a few frames -- or one pressed on the Beat, which is kept until its link
-/// comes out. Holding the button used to run the string by itself, sword
+/// a few frames. Holding the button used to run the string by itself, sword
 /// after sword, and the rhythm the three hits are built on was something a
 /// held button did for you rather than something you played. The press is
 /// read off `Fury`, where `find_the_beat` put it this frame, so one already
@@ -8244,7 +8228,7 @@ fn champion_weapon(p: &Player) -> Option<u8> {
     let Mechanic::Forms { fury, .. } = p.mechanic else {
         return None;
     };
-    let pressed = fury.fresh | fury.beat;
+    let pressed = fury.fresh;
     if pressed & 1 != 0 {
         Some(c::SWORD)
     } else if pressed & 2 != 0 {
@@ -8325,7 +8309,7 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
         // often, 187 times against 258 across 24 hunts.
         return Some(c::IN_THE_AIR + weapon);
     }
-    Some(c::link(champion_chain(p).0, weapon))
+    Some(c::link(string_stage(p), weapon))
 }
 
 /// How deep the grounded chain is, and how long it has left to live.
@@ -8338,6 +8322,17 @@ fn champion_chain(p: &Player) -> (u8, u16) {
             chain, chain_left, ..
         } => (chain, chain_left),
         _ => (0, 0),
+    }
+}
+
+/// How many hits of the string are behind the next one: 0, 1 or 2. Past the
+/// third the window runs on into the next string (2026-10-20, from play:
+/// keeping the beat is rewarded through the third), and the next hit is
+/// that string's first.
+fn string_stage(p: &Player) -> u8 {
+    match champion_chain(p).0 {
+        c if c >= moves::champion::DEPTH => 0,
+        c => c,
     }
 }
 
@@ -8531,131 +8526,76 @@ fn chain_cancel(p: &mut Player) {
     p.action = Action::Free;
 }
 
-/// **The Champion's tempo** (2026-10-20, from play): where he stands in the
-/// beat between one hit of his string and the next, as the HUD's tempo bar
-/// draws it. A read of the state, never a second statement of a rule: the
-/// marks come from [`recovery_owed`], `tuning::press_kept` and
-/// `tuning::chain_grace`, which are what the chain itself obeys.
-///
-/// The bar is one timeline per link, in frames, starting where the link
-/// lands -- its first active frame, if it has not:
+/// **The Champion's tempo** (2026-10-20, from play): the window for the next
+/// hit of his string and its sweet spot, as the HUD's tempo bar draws it. A
+/// read of the state, never a second statement of a rule: the window is the
+/// chain's own clock (`tuning::chain_grace`, counted from the moment he may
+/// act again) and the sweet spot is the Beat's (`tuning::beat_from`).
 ///
 /// ```text
-///   0 ── beat ─────── lost ── swap ── repeat ─────────────── end
-///   │ the Beat │ the  │ a press │ a different │ the same │ open, until the
-///   │ (a true  │ rest │ here is │ weapon may  │ weapon   │ string dies
-///   │  link)   │      │ lost    │ come out    │ may too  │
+///   0 ───── beat_from ── beat_to ────────────────── end
+///   │ he may act │ the Beat │ the string still lives │ over
 /// ```
-///
-/// A link that whiffed or was blocked has no Beat and owes its whole
-/// recovery, so its marks all sit at its end -- which is the bar telling you
-/// why the next hit came out late.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Tempo {
-    /// Hits of the string thrown so far, 0 to 3.
-    pub thrown: u8,
-    /// Which of them landed, as bits: the first hit is bit 0.
+    /// The hit the next press throws: 0, 1 or 2 for the first, second and
+    /// third -- after the third, the next string's first.
+    pub next: u8,
+    /// Which hits of the string landed, as bits: the first hit is bit 0.
     pub landed: u8,
-    /// The string's third hit, or a finisher, is running now: there is no
-    /// next link to time, and this is the one that pays.
+    /// A finisher is running: the string is over, there is no window.
     pub finishing: bool,
-    /// The latest hit thrown is still winding up or swinging and has not
-    /// landed: not a miss yet. On the timeline `now` waits at nought.
-    pub swinging: bool,
-    /// A weapon was pressed on the Beat: the next link is a true link.
-    pub on_the_beat: bool,
-    /// The timeline, in frames from where the link landed. `end` is zero
-    /// when there is no next link to time.
-    pub beat: u16,
-    pub lost: u16,
-    pub swap: u16,
-    pub repeat: u16,
+    /// The window, in frames since he could act again: its sweet spot, its
+    /// end, and now. `end` is zero outside a string; `now` is nought while
+    /// a link still runs.
+    pub beat_from: u16,
+    pub beat_to: u16,
     pub end: u16,
     pub now: u16,
 }
 
 /// The Champion's [`Tempo`]; `None` for every other class.
 pub fn tempo(p: &Player) -> Option<Tempo> {
+    let Mechanic::Forms { chain, fury, .. } = p.mechanic else {
+        return None;
+    };
+    let finishing = p.action.attack_kind().is_some_and(moves::champion::is_full);
+    if chain == 0 {
+        return Some(Tempo {
+            finishing,
+            ..Tempo::default()
+        });
+    }
+    Some(Tempo {
+        next: string_stage(p),
+        landed: fury.landed,
+        finishing,
+        beat_from: t::beat_from(),
+        beat_to: t::beat_to(),
+        end: t::chain_grace(),
+        now: beat_clock(p),
+    })
+}
+
+/// Has the link running now reached the frame the next one may cut its
+/// recovery at? The rule [`chain_cancel`] cuts on, asked of the earliest
+/// weapon -- a different one -- and never of the third, which has no next.
+fn may_cancel(p: &Player) -> bool {
     use moves::champion as c;
+    let Action::Recovery { kind, left } = p.action else {
+        return false;
+    };
     let Mechanic::Forms {
         chain,
-        chain_left,
-        chain_hit,
-        fury,
+        chain_hit: true,
         ..
     } = p.mechanic
     else {
-        return None;
+        return false;
     };
-    let running = p
-        .action
-        .attack_kind()
-        .filter(|k| c::in_string(*k) || c::is_full(*k));
-    let mut out = Tempo {
-        thrown: chain.min(c::DEPTH),
-        landed: fury.landed,
-        on_the_beat: fury.beat != 0,
-        ..Tempo::default()
-    };
-    if chain == 0 {
-        out.landed = 0;
-        out.finishing = running.is_some_and(c::is_full);
-        return Some(out);
-    }
-    if chain >= c::DEPTH || running.is_some_and(c::is_full) {
-        out.finishing = running.is_some();
-        out.swinging = !chain_hit
-            && matches!(
-                p.action,
-                Action::Startup { .. } | Action::Channel { .. } | Action::Active { .. }
-            );
-        return Some(out);
-    }
-    let kind = fury.link;
-    let m = moves::get(Class::Champion, kind);
-    let recovery = m.recovery;
-    // The freeze is counted down before the hit that set it is read back,
-    // so on its first frame it is longer than what `beat_len` has seen.
-    let beat = match chain_hit {
-        true if p.frozen > 0 => fury.beat_len.max(p.frozen) as u16,
-        true => fury.beat_len as u16,
-        false => 0,
-    };
-    let owed = |swapped| {
-        if chain_hit {
-            recovery_owed(kind, swapped)
-        } else {
-            recovery
-        }
-    };
-    // What is left of the swing after it lands, or all of it.
-    // Counted to and including the active frame at `left: 0`. On the
-    // frame it lands `find_the_beat` has not seen the freeze yet.
-    let tail = match p.action {
-        _ if !chain_hit => m.active + 1,
-        Action::Active { kind: k, left } if k == kind && p.frozen > 0 => left + 1,
-        _ => fury.tail as u16,
-    };
-    let rest = beat + tail;
-    out.beat = beat;
-    out.swap = rest + owed(true);
-    out.repeat = rest + owed(false);
-    out.lost = out.repeat.saturating_sub(t::press_kept()).max(beat);
-    out.end = rest + recovery + t::chain_grace();
-    out.now = match p.action {
-        _ if p.frozen > 0 && chain_hit => beat.saturating_sub(p.frozen as u16),
-        Action::Recovery { kind: k, left } if k == kind => rest + recovery.saturating_sub(left),
-        Action::Active { kind: k, left } if k == kind => {
-            out.swinging = !chain_hit;
-            rest.saturating_sub(left + 1)
-        }
-        Action::Startup { kind: k, .. } | Action::Channel { kind: k, .. } if k == kind => {
-            out.swinging = true;
-            0
-        }
-        _ => out.end.saturating_sub(chain_left),
-    };
-    Some(out)
+    c::in_string(kind)
+        && chain < c::DEPTH
+        && moves::get(p.class, kind).recovery.saturating_sub(left) >= recovery_owed(kind, true)
 }
 
 /// How much of a connected link's recovery is served before the next link may
@@ -8771,7 +8711,7 @@ fn advance_chain(p: &mut Player, kind: u8) {
     use moves::champion as c;
     let stage = match c::link_of(kind) {
         Some(link) => link + 1,
-        None if c::in_string(kind) => (champion_chain(p).0 + 1).min(c::DEPTH),
+        None if c::in_string(kind) => (string_stage(p) + 1).min(c::DEPTH),
         None => 0,
     };
     if let Mechanic::Forms {
@@ -8831,10 +8771,11 @@ fn begin_champion(p: &mut Player, kind: u8) {
     // beat on nothing. See `find_the_beat`.
     // Where in the string this move stands: a link's own place, or for an
     // aerial or a takeoff the hits already behind it.
-    let place = c::link_of(kind).unwrap_or(champion_chain(p).0.min(c::DEPTH - 1));
+    let place = c::link_of(kind).unwrap_or(string_stage(p));
     if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
-        fury.true_link = fury.beat != 0 && c::in_string(kind) && place > 0;
-        fury.beat = 0;
+        fury.true_link = c::in_string(kind) && fury.on_beat;
+        fury.on_beat = false;
+        fury.early = false;
         if c::in_string(kind) {
             fury.place = place;
         }
@@ -8846,11 +8787,6 @@ fn begin_champion(p: &mut Player, kind: u8) {
         let bit = 1u8 << c::weapon(kind);
         fury.may_hold = c::holdable(kind) && fury.fresh & fury.clicks & bit != 0;
         fury.fresh &= !bit;
-        fury.beat_len = 0;
-        fury.tail = 0;
-        if c::in_string(kind) {
-            fury.link = kind;
-        }
     }
     p.channelled = Fx::ZERO;
     // The chain moves on, or ends, depending on what this move was.
@@ -10527,6 +10463,11 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
             // Free, on the floor or off it: a jump no longer ends a string
             // (2026-10-13), since a jump is how the next hit of one arrives.
             let standing = p.action.actionable();
+            // **The window opens when he may act again** (2026-10-20): at a
+            // landed link's earliest cancel, still in its recovery, so it is
+            // the same window -- and the Beat the same place in it -- for
+            // every weapon.
+            let cancellable = may_cancel(p);
             let stunned = p.action.stunned();
             let charging = winding_a_hold(p);
             if let Mechanic::Forms {
@@ -10543,22 +10484,25 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 *rush = if stunned { 0 } else { rush.saturating_sub(1) };
                 *recharge = recharge.saturating_sub(1);
                 *takeoff = takeoff.saturating_sub(1);
-                if live {
+                if *chain == 0 {
+                    *chain_left = 0;
+                } else if live && !cancellable {
                     *chain_left = t::chain_grace();
-                } else if standing && *chain < moves::champion::DEPTH {
+                } else if standing || cancellable {
+                    // Past the third, too (2026-10-20, from play): the
+                    // window runs on, and the next string's first hit keeps
+                    // the beat. A press throws that first hit.
                     *chain_left = chain_left.saturating_sub(1);
                 } else {
-                    // Either the fighter is doing something a string does not
-                    // survive, or the string has spent its third hit. There is
-                    // no fourth: a chain that has finished is over on the frame
-                    // its finisher stops running, and the next press opens a
-                    // new one.
+                    // The fighter is doing something a string does not
+                    // survive.
                     *chain_left = 0;
                 }
                 if *chain_left == 0 {
                     *chain = 0;
                     *chain_hit = false;
-                    fury.beat = 0;
+                    fury.early = false;
+                    fury.on_beat = false;
                 }
                 if !live {
                     fury.true_link = false;
@@ -10884,7 +10828,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                     | (fury.shouldered as u32) << 1
                     | (fury.true_link as u32) << 3
                     | (fury.clicks as u32) << 8
-                    | (fury.beat as u32) << 16
+                    | (fury.early as u32) << 16
+                    | (fury.on_beat as u32) << 17
                     | (fury.fresh as u32) << 20
                     | (fury.may_hold as u32) << 24
                     | (fury.place as u32) << 25,
@@ -10893,13 +10838,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(
                 fury.last_weapon as u32 | (fury.spent as u32) << 8 | (fury.clash_by as u32) << 16,
             );
-            h.write_u32(
-                fury.fresh_left as u32
-                    | (fury.beat_len as u32) << 8
-                    | (fury.landed as u32) << 16
-                    | (fury.link as u32) << 24,
-            );
-            h.write_u32(fury.tail as u32);
+            h.write_u32(fury.fresh_left as u32 | (fury.landed as u32) << 16);
             h.write_u32(liquid.raw());
         }
         Mechanic::Shadow(shadow) => {
