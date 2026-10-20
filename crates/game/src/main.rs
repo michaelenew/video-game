@@ -22,6 +22,7 @@ mod arenas;
 mod bag;
 mod bake;
 mod beast;
+mod cairns;
 mod claimed;
 mod critters;
 mod crosshair;
@@ -59,6 +60,7 @@ mod valley;
 mod veil;
 mod warm;
 mod wash;
+mod window;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -218,6 +220,7 @@ fn main() {
         .init_resource::<Sim>()
         .init_resource::<arenas::Drawn>()
         .init_resource::<stream::Stream>()
+        .init_resource::<window::Windows>()
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
@@ -244,6 +247,7 @@ fn main() {
         })
         .insert_resource(settings::Settings::load())
         .insert_resource(trophies::Trophies::load())
+        .insert_resource(cairns::Cairns::load())
         .init_resource::<InsideOwnHead>()
         .init_resource::<beast::Boom>()
         .init_resource::<Scripted>()
@@ -384,7 +388,7 @@ fn main() {
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
-                menu::draw,
+                (menu::notice_cairns, menu::draw).chain(),
                 // What you carry and your morph (`sim::keep`).
                 (
                     heel::follow,
@@ -399,6 +403,9 @@ fn main() {
                 .after(beast::signs)
                 .before(palette::toggle),
         )
+        // The window through what the camera passes through, on to where
+        // the camera has just been put.
+        .add_systems(Update, window::follow.after(drive_camera))
         // The bag's key, before anything asks who owns the mouse: opening
         // it is what frees the cursor.
         .add_systems(Update, keep::toggle_bag.before(palette::sample_focus))

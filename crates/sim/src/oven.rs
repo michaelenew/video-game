@@ -1323,6 +1323,16 @@ view_knobs! {
     EyeBubble,      "Eye bubble, kept off the floor (m)", Fixed, 0, fx(4,1);
     EyeBubbleSoft,  "Eye bubble, soft edge (m)",          Fixed, fx(1,10), fx(6,1);
     EyeBubbleRate,  "Eye bubble, most it opens a frame (m)", Fixed, fx(1,100), fx(2,1);
+    // **What holds the camera off** (2026-10-20), appended for the same
+    // reason. A box keeps the eye out of it -- the drawn arm pulled in, the
+    // aimed-from eye held under it -- only if it is both this thick on its
+    // thinnest side and this broad on its middle one: a wall, a crag, a
+    // terrace. A platform, a post, a rail, a branch is passed through and
+    // drawn see-through round the line to the fighter instead, because a
+    // camera shoved about by every small thing it passes jerks. See
+    // `arena::Solid::holds_the_camera`.
+    CameraHeldThick, "Camera held off by a box this thick (m)", Fixed, 0, fx(8,1);
+    CameraHeldBroad, "Camera held off by a box this broad (m)", Fixed, 0, fx(20,1);
 }
 
 /// Counted from the table rather than written down, the same way

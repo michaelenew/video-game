@@ -325,6 +325,20 @@ mod host {
         write_to(&p, text, "trophies");
     }
 
+    /// The cairns this player has touched ([`crate::cairns`]), for fast
+    /// travel: a file beside the trophies, and like them, delete it to
+    /// start again.
+    pub fn load_cairns() -> Option<String> {
+        read_from(&path("cairns.conf", "ARENA_CAIRNS")?)
+    }
+
+    pub fn save_cairns(text: &str) {
+        let Some(p) = path("cairns.conf", "ARENA_CAIRNS") else {
+            return;
+        };
+        write_to(&p, text, "cairns");
+    }
+
     /// A replay (`sim::replay`), as a file in a folder beside the settings:
     /// `~/.config/arena/replays/<name>`, or the folder `ARENA_REPLAYS` names.
     /// Returns where it went, for the menu and the terminal.
@@ -455,6 +469,19 @@ mod host {
         if let Some(store) = storage() {
             // As above: a full store loses the record, not the match.
             let _ = store.set_item(TROPHY_KEY, text);
+        }
+    }
+
+    /// The cairns touched, beside the trophies.
+    const CAIRN_KEY: &str = "arena.cairns";
+
+    pub fn load_cairns() -> Option<String> {
+        storage()?.get_item(CAIRN_KEY).ok()?
+    }
+
+    pub fn save_cairns(text: &str) {
+        if let Some(store) = storage() {
+            let _ = store.set_item(CAIRN_KEY, text);
         }
     }
 
@@ -595,8 +622,9 @@ mod host {
 
 use host::read_options;
 pub use host::{
-    announce, load_replay, load_settings, load_trophies, log, one_move_an_event, page_url,
-    pointer_lock_lost, report_panics, save_replay, save_settings, save_trophies, say, show_room,
+    announce, load_cairns, load_replay, load_settings, load_trophies, log, one_move_an_event,
+    page_url, pointer_lock_lost, report_panics, save_cairns, save_replay, save_settings,
+    save_trophies, say, show_room,
 };
 
 // ---------------------------------------------------------------------------

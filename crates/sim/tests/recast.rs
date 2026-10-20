@@ -47,13 +47,25 @@ fn no_two_kinds_of_trip_share_a_byte() {
             _ => {}
         }
     }
+    // A cairn: seven, with its number in the high byte -- every number.
+    for b in 0..=u16::MAX {
+        if let Some(Destination::Cairn(k)) = Travel(b).destination() {
+            assert_eq!(Travel::cairn(k), Travel(b), "word {b:#06x}");
+        }
+    }
+    for k in 0..=u8::MAX {
+        assert_eq!(Travel::cairn(k).destination(), Some(Destination::Cairn(k)));
+    }
     // A high byte on anything else asks for nothing: a byte that meant a
     // trip still means exactly that trip, and nothing else.
     for b in 0..=255u16 {
         if Travel(b).destination().is_some_and(|d| {
             !matches!(
                 d,
-                Destination::Class { .. } | Destination::Feed(_) | Destination::Credit(_)
+                Destination::Class { .. }
+                    | Destination::Feed(_)
+                    | Destination::Credit(_)
+                    | Destination::Cairn(_)
             )
         }) {
             assert_eq!(
