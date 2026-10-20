@@ -769,3 +769,31 @@ fn nobody_else_carries_a_scythe() {
         );
     }
 }
+
+/// The trail behind her blade is drawn out to where the swing hits: past the
+/// iron by the volume's radius with no grey open, and further the more grey
+/// she carries -- reach and width both -- so what her grey buys is seen.
+#[test]
+fn the_scythe_trail_reaches_as_far_as_the_swing_hits() {
+    let mut p = sim::state::Player::new(sim::Class::BloodMage);
+    p.action = sim::state::Action::Active {
+        kind: sim::moves::blood::SWEEP,
+        left: 2,
+    };
+    let m = sim::moves::get(p.class, sim::moves::blood::SWEEP);
+    let share_at = |p: &sim::state::Player| {
+        let hits = sim::state::live_reach(p, &m).to_f32_for_render()
+            + sim::state::live_radius(p, &m).to_f32_for_render();
+        (
+            view::scythe::reach_share(p),
+            hits / m.reach.to_f32_for_render(),
+        )
+    };
+    p.grey = 0;
+    let (none, hits) = share_at(&p);
+    assert!((none - hits).abs() < 1e-4 && none >= 1.0);
+    p.grey = p.full_health();
+    let (full, hits) = share_at(&p);
+    assert!((full - hits).abs() < 1e-4);
+    assert!(full > none * 1.2, "grey buys reach: {none} -> {full}");
+}

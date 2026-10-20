@@ -47,12 +47,16 @@
 //! [`trail`] is the arc of the cut, re-asked of the hit test for each active
 //! frame so far: a band across the outer part of the capsule, per frame, fading
 //! through the first frames of the recovery. It is what replaced the rod.
+//! [`ribbon`] joins those frames with a curve and cuts it fine, so the arc is
+//! drawn as one smooth strip rather than a box a frame; how it is painted is
+//! `game::swing` and its shader.
 //!
 //! Everything here is a pure function of simulation state plus the drawn hand
 //! and torso positions, allocation-free, so `tests/arms.rs` can hold it to the
 //! hit test without a renderer.
 
 use crate::math::{self, Quat, V3};
+use crate::trail;
 use sim::class::{Form, Mechanic, Quicksilver};
 use sim::moves::champion::{self, HAMMER, SPEAR, SWORD};
 use sim::state::{self, Action, Player};
@@ -81,11 +85,12 @@ pub const MELT: u16 = 80;
 /// The weapons, in button order: [`SWORD`], [`HAMMER`], [`SPEAR`].
 pub const WEAPONS: usize = 3;
 
-/// How many active frames of a swing the trail remembers.
-pub const TRAIL: usize = 10;
+pub use crate::trail::{FOLLOW, TRAIL_GHOST, ghost};
 
-/// How many recovery frames the trail lingers for, fading.
-pub const TRAIL_GHOST: u16 = 7;
+/// How many frames back along the blade's path the arc reaches. A sword's cut
+/// is three; this is the cut and the wind-up's last stretch into it, and it
+/// is what wears the arc away behind the weapon once the cut is done.
+pub const WINDOW: f32 = 6.0;
 
 /// What a piece is shaped like. The renderer holds one unit mesh of each.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -405,6 +410,22 @@ pub fn in_hand(p: &Player) -> Option<u8> {
 /// simulation does not. They decide where the weapon is held and where the
 /// coil winds, never how far a swing reaches.
 pub fn champion_arms(p: &Player, left: V3, right: V3, torso: &Torso) -> Option<Arms> {
+    champion_arms_between(p, p, 1.0, left, right, torso)
+}
+
+/// [`champion_arms`], drawn `alpha` of the way from the last simulated frame
+/// `prev` to the current one `p`, the way the body is. While the volume is out
+/// the weapon points at its far end, which the simulation moves once a frame;
+/// between pictures it turns from where it pointed on the frame before, so a
+/// cut sweeps rather than ticking round in three jumps.
+pub fn champion_arms_between(
+    prev: &Player,
+    p: &Player,
+    alpha: f32,
+    left: V3,
+    right: V3,
+    torso: &Torso,
+) -> Option<Arms> {
     let liquid = liquid(p)?;
     let held = liquid.weapon;
     let weight = liquid.weights();
@@ -419,7 +440,13 @@ pub fn champion_arms(p: &Player, left: V3, right: V3, torso: &Torso) -> Option<A
     }; WEAPONS];
     for (which, w) in weapons.iter_mut().enumerate() {
         if weight[which] > 0.0 || which == held as usize {
-            *w = in_the_hands(p, which as u8, left, right, facing);
+            let now = in_the_hands(p, which as u8, left, right, facing, reach_of(p));
+            *w = if alpha < 1.0 && p.action.attack_kind().is_some() {
+                let then = in_the_hands(p, which as u8, left, right, facing, reach_of(prev));
+                turn_between(&then, &now, right, alpha)
+            } else {
+                now
+            };
         }
     }
     let mut arms = Arms {
@@ -577,18 +604,22 @@ fn in_weapon(w: &Weapon, which: u8, t: f32) -> Piece {
 }
 
 /// The weapon in her hands.
-fn in_the_hands(p: &Player, which: u8, left: V3, right: V3, facing: V3) -> Weapon {
+///
+/// While the volume is out, the tip is its far end, `target`, and the weapon
+/// points at it from the leading hand.
+fn in_the_hands(
+    p: &Player,
+    which: u8,
+    left: V3,
+    right: V3,
+    facing: V3,
+    target: Option<(V3, V3)>,
+) -> Weapon {
     if p.action.attack_kind().is_none() {
         return carried(p, which, right, facing);
     }
     let apart = math::length(math::sub(right, left));
     let hands = math::normalize_or(math::sub(right, left), facing);
-    // While the volume is out, the tip is its far end and the weapon points at
-    // it from the leading hand. A volume that is a disc has no far end to
-    // point at, and the weapon stays in the hands.
-    let target = state::hitbox(p)
-        .map(|hb| (fx3(hb.from), fx3(hb.to)))
-        .filter(|(from, to)| math::length(math::sub(*to, *from)) > 0.05);
     let (butt, tip) = match which {
         SWORD => {
             let (axis, reach) = match target {
@@ -624,6 +655,29 @@ fn in_the_hands(p: &Player, which: u8, left: V3, right: V3, facing: V3) -> Weapo
     let axis = math::normalize_or(math::sub(tip, butt), facing);
     let flat = held_flat(p, which, axis, facing);
     Weapon { butt, tip, flat }
+}
+
+/// The ends of the volume a weapon points along, if it is out. A volume that
+/// is a disc has no far end to point at, and the weapon stays in the hands.
+fn reach_of(p: &Player) -> Option<(V3, V3)> {
+    state::hitbox(p)
+        .map(|hb| (fx3(hb.from), fx3(hb.to)))
+        .filter(|(from, to)| math::length(math::sub(*to, *from)) > 0.05)
+}
+
+/// A weapon `alpha` of the way from `then` to `now`, turned about the hand
+/// rather than slid: each end keeps its distance from the hand, so the
+/// weapon does not shorten as it sweeps.
+fn turn_between(then: &Weapon, now: &Weapon, hand: V3, alpha: f32) -> Weapon {
+    let flat = math::add(
+        math::scale(then.flat, 1.0 - alpha),
+        math::scale(now.flat, alpha),
+    );
+    Weapon {
+        butt: math::turn_about(then.butt, now.butt, hand, alpha),
+        tip: math::turn_about(then.tip, now.tip, hand, alpha),
+        flat: math::normalize_or(flat, now.flat),
+    }
 }
 
 /// The weapon in her hand between moves, for the seconds it keeps its shape.
@@ -892,39 +946,54 @@ fn spear(w: &Weapon, out: &mut [Piece; PIECES]) {
     );
 }
 
-/// The arc of a swing: the outer part of the hit capsule on each active frame
-/// so far, oldest first, and how solid to draw it.
+/// **A cut being drawn**: which weapon, and how bright the arc is where the
+/// blade is now -- nothing through the wind-up (the arc's lead-in, so it
+/// starts from nothing rather than a hard edge), all of it while the volume is
+/// out, and running to nothing over the follow-through.
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Trail {
-    /// Which weapon threw it, for its colour.
+pub struct Cut {
     pub which: u8,
     /// Where in the string the swing stands: 0, 1 or 2 for its first, second
     /// and third hit, [`FINISHER`] for a finisher. Each is drawn bigger than
     /// the one before, and the third in gold (2026-10-20, from play): a
     /// player counting to three should see the count, not only feel it.
     pub place: u8,
-    /// The inner and outer edge of the band on each remembered frame.
-    pub inner: [V3; TRAIL],
-    pub outer: [V3; TRAIL],
-    /// How many of the entries are real.
-    pub count: usize,
-    /// One while the volume is out, running to nothing over the first
-    /// [`TRAIL_GHOST`] frames of the recovery.
-    pub fade: f32,
+    pub glow: f32,
 }
 
-/// How far out along the capsule the trail's band starts, per weapon: a broad
-/// crescent for the sword, a short heavy one at the head of the hammer, and a
-/// streak at the spear's point.
+/// The cut the Champion is in, `alpha` of the way on to the next frame, if
+/// the arc is being drawn from her blade.
+pub fn cut(p: &Player, alpha: f32) -> Option<Cut> {
+    if p.class != sim::Class::Champion {
+        return None;
+    }
+    let (kind, glow) = trail::strike(p, alpha)?;
+    // A move with no volume (the vault) leaves no arc.
+    if sim::moves::get(p.class, kind).active == 0 || kind == champion::POLE_VAULT {
+        return None;
+    }
+    let place = place_in_string(p, kind);
+    // The first hit's never quite solid.
+    let most = if place == 0 { 0.7 } else { 1.0 };
+    Some(Cut {
+        which: champion::weapon(kind),
+        place,
+        glow: glow * most,
+    })
+}
+
+/// How far out along the weapon, butt to tip, the arc's band starts: a broad
+/// crescent off the sword's blade, a short heavy one at the head of the
+/// hammer, and a streak at the spear's point.
 pub const fn band(which: u8) -> f32 {
     match which {
-        SWORD => 0.42,
-        HAMMER => 0.62,
-        _ => 0.82,
+        SWORD => 0.45,
+        HAMMER => 0.72,
+        _ => 0.84,
     }
 }
 
-/// [`Trail::place`] for a finisher.
+/// [`Cut::place`] for a finisher.
 pub const FINISHER: u8 = 3;
 
 /// The band at a place in the string: the first hit's is the outer half of
@@ -955,56 +1024,18 @@ pub fn place_in_string(p: &Player, kind: u8) -> u8 {
     }
 }
 
-/// The trail of the Champion's swing this frame, if there is one to draw.
-pub fn trail(p: &Player) -> Option<Trail> {
-    if p.class != sim::Class::Champion {
-        return None;
+/// Where `arms`' weapon is drawn now, as a place on the arc behind it.
+pub fn sample(arms: &Arms, cut: &Cut, at: f32) -> trail::Sample {
+    let w = &arms.weapons[cut.which as usize];
+    trail::Sample {
+        inner: math::add(
+            w.butt,
+            math::scale(math::sub(w.tip, w.butt), band_at(cut.which, cut.place)),
+        ),
+        outer: w.tip,
+        at,
+        glow: cut.glow,
     }
-    let (kind, now, fade) = match p.action {
-        Action::Active { kind, left } => (kind, left, 1.0),
-        Action::Recovery { kind, left } => {
-            let m = sim::moves::get(p.class, kind);
-            let gone = m.recovery.saturating_sub(left);
-            if gone >= TRAIL_GHOST {
-                return None;
-            }
-            (kind, 1, 1.0 - gone as f32 / TRAIL_GHOST as f32)
-        }
-        _ => return None,
-    };
-    let m = sim::moves::get(p.class, kind);
-    let which = champion::weapon(kind);
-    let place = place_in_string(p, kind);
-    let k = band_at(which, place);
-    let mut t = Trail {
-        which,
-        place,
-        inner: [math::ZERO; TRAIL],
-        outer: [math::ZERO; TRAIL],
-        count: 0,
-        fade,
-    };
-    // Active frames count `left` down from `m.active` to one. The newest
-    // `TRAIL` of those already thrown, oldest first.
-    let first = m.active.min(now.saturating_add(TRAIL as u16 - 1));
-    let mut left = first;
-    while left >= now.max(1) && t.count < TRAIL {
-        let mut then = *p;
-        then.action = Action::Active { kind, left };
-        if let Some(hb) = state::hitbox(&then) {
-            let (from, to) = (fx3(hb.from), fx3(hb.to));
-            if math::length(math::sub(to, from)) > 0.05 {
-                t.inner[t.count] = math::add(from, math::scale(math::sub(to, from), k));
-                t.outer[t.count] = to;
-                t.count += 1;
-            }
-        }
-        if left == 0 {
-            break;
-        }
-        left -= 1;
-    }
-    (t.count >= 2).then_some(t)
 }
 
 /// The part of `v` square to `axis`, unit, or `None` if there is none.

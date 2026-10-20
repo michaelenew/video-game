@@ -154,3 +154,13 @@ pub fn deg(v: f32) -> f32 {
 pub fn to_deg(v: f32) -> f32 {
     v * (180.0 / std::f32::consts::PI)
 }
+
+/// `alpha` of the way from `a` to `b`, turned about `pivot` rather than slid:
+/// the distance from the pivot runs from the one's to the other's, so a
+/// weapon swung about a hand does not shorten as it sweeps between frames.
+pub fn turn_about(a: V3, b: V3, pivot: V3, alpha: f32) -> V3 {
+    let (a, b) = (sub(a, pivot), sub(b, pivot));
+    let reach = length(a) + (length(b) - length(a)) * alpha;
+    let way = normalize_or(add(scale(a, 1.0 - alpha), scale(b, alpha)), b);
+    add(pivot, scale(way, reach))
+}

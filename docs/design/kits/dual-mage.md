@@ -124,8 +124,10 @@ opening, the two forces wound round her hands.
   is on the line, and breaks it -- a burst the size of the disk, which hurts what is in it.
   **A jump in the run's last `flurry dash, a jump this near the end` (6) frames keeps the run**
   (`bank_the_flurry_jump`, the Reaver's dash jump): thrown on arrival with `the jump keeps`
-  (0.8) of its speed, for crossing the valley. Drawn, she runs through the blows' trails and
-  they scatter off her. 5/23/8.
+  (0.8) of its speed, for crossing the valley. Drawn, each blow leaves a streak along its bow
+  that stands through the dash, the oldest faintest, and she runs through them as they fade
+  (2026-10-20: they were balls that scattered off her; the streaks are `game::swing`'s trails,
+  which fade rather than scatter). 5/23/8.
 
 **Phase and the Equinox rise and carry** (from the owner: the middle click's jump attacks are
 her mobility, and the balanced ones). Phase leaves her moving `phase, keeps this speed` (9 m/s)
