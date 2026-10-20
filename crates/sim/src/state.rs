@@ -494,8 +494,13 @@ pub struct Player {
     /// How many wall jumps this airtime, for `tuning::wall_jump_falloff`.
     /// Reset on landing.
     pub wall_jumps: u8,
+    /// **A press of jump kept for a wall** (`tuning::wall_jump_buffer`):
+    /// frames it has left, or zero. Set by a press in the air that did
+    /// nothing else, spent by the wall jump it becomes.
+    pub wall_press: u8,
     /// **On a wall slide**, as the stick last left it (`keep_sliding`):
-    /// started by pushing into the wall, ended by pushing away from it.
+    /// started by touching a wall while falling with the stick anywhere but
+    /// away from it, ended by pushing away from it.
     pub sliding: bool,
     /// Frames before the slide may start or end again
     /// (`tuning::wall_slide_flip`).
@@ -1493,6 +1498,7 @@ impl Default for Player {
             wall_since: u8::MAX,
             wall_jumped: Wall::NONE,
             wall_jumps: 0,
+            wall_press: 0,
             sliding: false,
             slide_flip: 0,
             ledge: Ledge::NONE,
@@ -6197,6 +6203,7 @@ fn step_player(
         p.wall_since = u8::MAX;
         p.wall_jumped = Wall::NONE;
         p.wall_jumps = 0;
+        p.wall_press = 0;
         p.sliding = false;
         p.slide_flip = 0;
         p.ledge_regrab = 0;
@@ -6895,15 +6902,24 @@ fn step_player(
     // second jump is ahead of the takeoff: one press, one jump. Against a
     // wall, or a few frames off one, a press is a jump off it rather than
     // the class's own thing in the air. See `cling_to_the_wall`.
-    let wall_jump = pressed_space
+    //
+    // **A press kept for the wall** (`tuning::wall_jump_buffer`, 2026-10-20):
+    // a press in the air that did nothing else waits that many frames for a
+    // wall, and is a wall jump the first frame one is under the hand. With
+    // the grace after leaving one, the press has a window round the touch
+    // both ways, rather than the frame of it.
+    let kept = p.wall_press > 0 && on_wall;
+    p.wall_press = p.wall_press.saturating_sub(1);
+    let wall_jump = (pressed_space && near_wall || kept)
         && !p.grounded
-        && near_wall
         && !carrying
         && p.action.actionable()
         && may_wall_jump(p);
     if wall_jump {
-        jump_off_the_wall(p, mob.jump);
+        jump_off_the_wall(p, mob.jump, input);
+        p.wall_press = 0;
     }
+    let mut beat = false;
     if pressed_space
         && !wall_jump
         && !p.grounded
@@ -6913,6 +6929,10 @@ fn step_player(
         p.vel.y = t::jump_speed().mul(mob.jump).mul(t::second_jump());
         p.jump_hold = 0;
         dual::spend_wing_beat(p);
+        beat = true;
+    }
+    if pressed_space && !wall_jump && !beat && !p.grounded {
+        p.wall_press = t::wall_jump_buffer();
     }
 
     // Not on the frame a banked dash jump fires: the dash jump below is that
@@ -7055,7 +7075,15 @@ fn step_player(
                 floor = floor.max(Fx::ZERO.sub(t::sail_fall()));
             }
             if p.vel.y.raw() < floor.raw() {
-                p.vel.y = floor;
+                // **The wall's grab** (`tuning::wall_slide_catch`): a fall
+                // faster than the slide is brought down to it over a few
+                // frames, not in one.
+                p.vel.y = if sliding {
+                    let over = p.vel.y.sub(floor);
+                    floor.add(over.mul(Fx::ONE.sub(t::wall_slide_catch())))
+                } else {
+                    floor
+                };
             }
         }
     }
@@ -7167,15 +7195,19 @@ fn step_player(
 /// side of a solid in the air gets from it, and the record of which wall.
 ///
 /// ```text
-///   against a wall, falling   the slide: gravity and terminal velocity a
-///                             little lower (`wall_slide_gravity`,
-///                             `wall_slide_fall`), held to the wall at
-///                             `wall_stick` unless steering away, for as far
-///                             as the wall goes. Footing for the fall rule:
-///                             a fall is measured from where it let go.
-///   space, on one or just off  the wall jump: `wall_jump_rise` of a takeoff
-///                             straight up, `wall_jump_push` away from it.
-///                             Off the same wall again only from
+///   against a wall, falling   the slide, unless the stick is away: gravity
+///                             and terminal velocity much lower
+///                             (`wall_slide_gravity`, `wall_slide_fall`), a
+///                             faster fall grabbed down to it
+///                             (`wall_slide_catch`), held to the wall at
+///                             `wall_stick`, the run along it kept
+///                             (`wall_slide_keep`), for as far as the wall
+///                             goes. Footing for the fall rule: a fall is
+///                             measured from where it let go.
+///   space, on one, just off   the wall jump: `wall_jump_rise` of a takeoff
+///   or just before one        straight up, `wall_jump_push` away from it,
+///                             and `wall_jump_carry` the way the stick points
+///                             along it. Off the same wall again only from
 ///                             `wall_jump_drop` below the last, and each one
 ///                             in an airtime worth `wall_jump_falloff` of
 ///                             the one before.
@@ -7183,8 +7215,9 @@ fn step_player(
 ///
 /// **A wall is reached, not given.** The slide is a partial recovery -- some
 /// control back, and the fall's height reset to where you let go, so a wall
-/// slid all the way down costs nothing to land from -- and it is only a
-/// little slower than falling, so a wall is never a perch. The jump does not
+/// slid all the way down costs nothing to land from -- and it never stops,
+/// so a wall is never a perch. (Until 2026-10-20 it was only a little slower
+/// than a fall; the owner found it barely felt, and asked for it slower.) The jump does not
 /// give back the airdodge, the jump attack or anything else an airtime
 /// spends: it is height and a direction, and nothing more.
 ///
@@ -7217,10 +7250,12 @@ fn slides(p: &Player) -> bool {
     p.vel.y.raw() <= 0 && !p.action.stunned() && p.slam.raw() <= 0
 }
 
-/// **On the slide or off it, by the stick** (2026-10-16): pushing into the
-/// wall a body is falling beside starts a slide, pushing away from it ends
-/// one, and anything else keeps whichever it is -- nothing pressed hangs on to
-/// the slide, as it hangs on to a ledge. Neither change comes faster than
+/// **On the slide or off it, by the stick** (2026-10-16): a body falling
+/// against a wall is on a slide unless the stick pushes away from it, and
+/// pushing away ends one. Since 2026-10-20 (the owner: "easier to get into a
+/// slide") the stick along the wall, or let go, starts one too, where until
+/// then only into it did: touching a wall is enough, and the only way to
+/// fall past one is to mean to. Neither change comes faster than
 /// `tuning::wall_slide_flip` after the last (see there for why). A wall gone,
 /// a rise, a throw or the floor ends a slide outright, with no debounce: that
 /// is the world deciding, not the stick.
@@ -7231,11 +7266,7 @@ fn keep_sliding(p: &mut Player, on_wall: bool, input: Input) -> bool {
         return false;
     }
     if p.slide_flip == 0 {
-        let want = match lean_against(input, p.wall.normal) {
-            Lean::Into => true,
-            Lean::Away => false,
-            Lean::Still | Lean::Along(_) => p.sliding,
-        };
+        let want = lean_against(input, p.wall.normal) != Lean::Away;
         if want != p.sliding {
             p.sliding = want;
             p.slide_flip = t::wall_slide_flip();
@@ -7245,20 +7276,36 @@ fn keep_sliding(p: &mut Player, on_wall: bool, input: Input) -> bool {
 }
 
 /// Hold a sliding body to its wall: its speed into the wall becomes
-/// `tuning::wall_stick`, and along it the stick steers a little
-/// (`tuning::wall_slide_steer`, arrived at by `wall_slide_grip` a frame), so
-/// whatever it carried on to the wall bleeds away. Into the wall does nothing
-/// more than hold it; away from it, until the slide ends (`keep_sliding`),
-/// holds it too.
+/// `tuning::wall_stick`, and **what it carried along the wall is kept**
+/// (2026-10-20), losing `tuning::wall_slide_keep`'s share a frame to
+/// friction. The stick along the wall steers it toward
+/// `tuning::wall_slide_steer` that way, arrived at by `wall_slide_grip` a
+/// frame -- but only ever up to it: speed already going the stick's way
+/// faster is the run, and the stick does not brake it. Into the wall, let go,
+/// or away from it until the slide ends (`keep_sliding`), only holds it.
+///
+/// Until 2026-10-20 the slide bled the run down to the steer within a few
+/// frames, so a jump off a wall run into at an angle went straight out of it.
 fn hold_to_the_wall(p: &mut Player, input: Input) {
     let n = p.wall.normal;
     let across = V3::new(n.z.neg(), Fx::ZERO, n.x);
-    let along = p.vel.x.mul(across.x).add(p.vel.z.mul(across.z));
-    let want = match lean_against(input, n) {
-        Lean::Along(dir) => dir.dot(across).mul(t::wall_slide_steer()),
-        _ => Fx::ZERO,
-    };
-    let along = along.add(want.sub(along).mul(t::wall_slide_grip()));
+    let mut along = p
+        .vel
+        .x
+        .mul(across.x)
+        .add(p.vel.z.mul(across.z))
+        .mul(t::wall_slide_keep());
+    if let Lean::Along(dir) = lean_against(input, n) {
+        let want = dir.dot(across).mul(t::wall_slide_steer());
+        let beyond = if want.raw() >= 0 {
+            along.raw() >= want.raw()
+        } else {
+            along.raw() <= want.raw()
+        };
+        if !beyond {
+            along = along.add(want.sub(along).mul(t::wall_slide_grip()));
+        }
+    }
     let into = t::wall_stick().neg();
     p.vel.x = across.x.mul(along).add(n.x.mul(into));
     p.vel.z = across.z.mul(along).add(n.z.mul(into));
@@ -7505,7 +7552,14 @@ fn may_wall_jump(p: &Player) -> bool {
 /// **Jump off the wall**: a fresh rise, never less than the body already
 /// has, and a push away from the face, keeping the speed along it. `jump` is
 /// the class's takeoff multiplier.
-fn jump_off_the_wall(p: &mut Player, jump: Fx) {
+///
+/// **And the way the stick points along the wall** (2026-10-20): the body is
+/// carried that way at least `tuning::wall_jump_carry`, scaled by how much of
+/// the stick is along the face -- so a jump off a wall goes out *and
+/// forward*, where the player is steering, and a run carried on to the wall
+/// faster than that keeps its own speed. The stick straight away from the
+/// wall, into it or let go carries nothing more than the run.
+fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input) {
     let mut rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
     for _ in 0..p.wall_jumps {
         rise = rise.mul(t::wall_jump_falloff());
@@ -7516,6 +7570,29 @@ fn jump_off_the_wall(p: &mut Player, jump: Fx) {
     let off = t::wall_jump_push().sub(away.min(Fx::ZERO));
     p.vel.x = p.vel.x.add(n.x.mul(off));
     p.vel.z = p.vel.z.add(n.z.mul(off));
+    let (ax, az) = input.move_axis();
+    if ax != 0 || az != 0 {
+        let stick = move_dir(input.aim_turns(), ax, az);
+        let out = stick.x.mul(n.x).add(stick.z.mul(n.z));
+        // The stick less its part through the face: along it, as long as
+        // the sine of its angle from the normal.
+        let side = V3::new(
+            stick.x.sub(n.x.mul(out)),
+            Fx::ZERO,
+            stick.z.sub(n.z.mul(out)),
+        );
+        let share = side.flat_len();
+        if share.raw() > 0 {
+            let way = side.normalized();
+            let carried = p.vel.x.mul(way.x).add(p.vel.z.mul(way.z));
+            let least = t::wall_jump_carry().mul(share);
+            if carried.raw() < least.raw() {
+                let more = least.sub(carried);
+                p.vel.x = p.vel.x.add(way.x.mul(more));
+                p.vel.z = p.vel.z.add(way.z.mul(more));
+            }
+        }
+    }
     p.jump_hold = 0;
     p.wall_jumped = Wall {
         at: p.pos,
@@ -11008,6 +11085,10 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.air_stalls as u32);
     // Only once a wall has been touched: a fight that never meets one
     // hashes as it did before there were wall jumps.
+    if p.wall_press != 0 {
+        h.write_u32(0x3A12);
+        h.write_u32(p.wall_press as u32);
+    }
     if p.wall.is_some() || p.wall_jumped.is_some() || p.wall_jumps != 0 {
         h.write_u32(0x3A11);
         hash_v3(h, &p.wall.at);

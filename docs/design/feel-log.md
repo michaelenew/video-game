@@ -9238,3 +9238,49 @@ stood the fighter back up on the cairn 240 m up the stair. **Now a cairn is your
 whatever is going on, and rests you (health back) only out of a fight** -- so it is still
 not a place to stand and heal against the bird
 (`ranges::the_needles_top_cairn_counts_while_the_roost_is_awake`, which fails on the old rule).
+
+### 2026-10-20 — the wall jump, overhauled
+
+From the owner: "It's really hard to stick to a wall, really hard to get a wall jump, and
+even when I do it's really hard to have any momentum forward while jumping, so all the
+sections with horizontal wall jumps are barely possible and really frustrating (actually I just
+jump over them with class abilities because every real class can just do that). ... More
+obvious feedback when you're wall sliding, slower slide speed, easier to get into a slide, and
+easier to manipulate or keep forward momentum (meaning momentum non-orthogonal to the wall)
+while jumping."
+**Changed**, each against one of those:
+
+- *Slower slide.* `Wall slide, gravity` ×0.7 → ×0.35, `Wall slide, terminal velocity` ×0.7 →
+  ×0.2 (12.6 m/s → 3.6 m/s). And a fall faster than that is **grabbed** down to it, 0.3 of the
+  excess a frame (`Wall slide, grabs of a faster fall, a frame`, new) -- under a third of a full
+  fall's speed within twelve frames -- rather than snapped or left at speed.
+- *Easier into a slide.* Touching a wall while falling is a slide unless the stick pushes away
+  from it: along the wall and let go start one now, where only into it did since the 16th.
+- *Easier to get the jump.* The grace after leaving a wall 4 → 8 frames, and a press up to 6
+  frames *before* the wall is kept and becomes the wall jump the frame the wall is there (`Wall
+  jump, pressed before the wall and kept`, new; a new `Player::wall_press`). A press the air
+  spent on the Dual mage's wing beat is not kept.
+- *Momentum along the wall.* The slide keeps the run it brought (×0.99 a frame, `Wall slide,
+  keeps of its speed along, a frame`, new) where it used to bleed it to the stick's 2 m/s within
+  a few frames; the stick along the wall steers up to 5 m/s (was 2) and never brakes a faster
+  run. The jump carries the body the way the stick points along the wall at least 6 m/s,
+  scaled by the stick's share along the face (`Wall jump, along where the stick points at`,
+  new): along a gully with forward held, every kick goes out *and* forward.
+- *Feedback*: drawn and heard, in the same change (the slide's pose, dust at the hands and
+  feet, a scrape; a kick off the wall).
+
+Unchanged: the rise (0.6 of a takeoff), the push (7 m/s), the same-wall drop (1 m) and the
+falloff (×0.7) -- the two ladder rules stand as they were.
+**Why the old numbers failed**, as far as reading them goes: a slide at ×0.7 is 12.6 m/s, so
+a wall reached at speed is passed in a few frames; the stick had to be *into* the wall, so a
+player steering forward along a gully touched it and fell past; and the slide's grip took the
+forward speed away, so the kick that followed went straight across. The gully's own doc said
+as much ("a slide bleeds the run away -- forward is the stick").
+**Tests**: `tests/wall_jump.rs` -- the slide is under 0.35 of a fall but over 2 m/s (it was
+"a little slower, no slower than half"), a fast fall is grabbed, along and let go start a
+slide and away does not, a slide keeps the run, the jump goes the stick's way, and a press
+before the wall is kept.
+**Verdict** open -- unplayed. To feel for: whether 3.6 m/s is now a perch in practice (it
+never stops, but a tall wall is a long time to think), whether "touching is enough" catches
+people brushing past a pillar who did not mean to slide (away is the way off), and whether 6 m/s
+along is too much carry out of an inside corner.

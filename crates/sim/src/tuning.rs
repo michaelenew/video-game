@@ -572,12 +572,15 @@ pub fn air_stall_falloff() -> Fx {
 
 /// What gravity is multiplied by while sliding down a wall.
 ///
-/// **A little slower than a fall, not a ledge.** The slide is a partial
+/// **Plainly slower than a fall, never a ledge.** The slide is a partial
 /// recovery -- reaching a wall buys some control back and the fall rule's
-/// footing (`state::cling_to_the_wall`) -- so it has to be felt, but a slide
-/// slow enough to be a perch would make every wall a place to wait. Gravity
-/// and the cap are both scaled because a short fall never reaches the cap,
-/// and a slide that only changed the cap would do nothing on one.
+/// footing (`state::cling_to_the_wall`) -- so it has to be felt, and since
+/// 2026-10-20 it is felt hard (the owner: "slower slide speed"): a third of
+/// gravity and a fifth of the fall cap, a slide of a few metres a second.
+/// It still never stops, so a wall is a place to choose a jump from, not a
+/// place to wait. Gravity and the cap are both scaled because a short fall
+/// never reaches the cap, and a slide that only changed the cap would do
+/// nothing on one.
 pub fn wall_slide_gravity() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideGravity))
 }
@@ -689,6 +692,48 @@ pub fn wall_slide_steer() -> Fx {
 /// away rather than stopping dead.
 pub fn wall_slide_grip() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideGrip))
+}
+
+/// **What a slide keeps of its speed along the wall, a frame** (2026-10-20).
+///
+/// Until then a slide bled whatever it carried along the wall down to the
+/// stick's little steer within a few frames, so a run into a wall stopped
+/// dead on it and the jump off it went straight out -- the owner's "really
+/// hard to have any momentum forward". Now the run is kept, losing this
+/// share a frame to friction, and the stick only ever adds to it
+/// (`state::hold_to_the_wall`).
+pub fn wall_slide_keep() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideKeep))
+}
+
+/// **How much of a fall faster than the slide's cap the wall takes off, a
+/// frame** (2026-10-20). A body arriving at a wall at full fall speed is
+/// caught by it over a few frames rather than snapped to the slide's speed
+/// in one, or left to fall past at the old one: the grab is the first thing
+/// that says "you are on the wall".
+pub fn wall_slide_catch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideCatch))
+}
+
+/// **How fast a wall jump carries the body along the wall the way the stick
+/// points**, at least, in metres a second (2026-10-20).
+///
+/// Scaled by how much of the stick is along the wall: straight away from it
+/// carries nothing, along it the whole of this, between the two its share.
+/// Speed already going that way faster is kept. So the jump goes where the
+/// stick says, out and forward, rather than straight out of the face.
+pub fn wall_jump_carry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallJumpCarry))
+}
+
+/// **How many frames a press of jump in the air is kept for a wall**
+/// (2026-10-20): pressed this soon before the body reaches one, it is a wall
+/// jump the frame the wall is there. With the grace after
+/// ([`wall_jump_grace`]) the press has a window round the touch both ways.
+/// A press the air spent on something else -- the Dual mage's wing beat --
+/// is not kept.
+pub fn wall_jump_buffer() -> u8 {
+    oven::scalar(Scalar::WallJumpBuffer).clamp(0, 200) as u8
 }
 
 /// **How fast a body may be moving away from an edge and still catch it**,

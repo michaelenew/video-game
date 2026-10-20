@@ -708,10 +708,14 @@ would let a whiffed aerial stay safe by simply remaining out of reach.
 
 ### Walls slide, and can be jumped off — added 2026-10-16
 
-**Falling beside the side of a solid and pushing into it is a slide.** Gravity and terminal
-velocity are both a little lower while you are on it (`Wall slide, gravity` and `Wall slide,
-terminal velocity` in the Oven, ×0.7 each) — not so much slower than a fall that a wall is a
-perch, but enough that reaching one is worth something. Both are scaled because a short fall
+**Falling against the side of a solid is a slide, unless the stick pushes away from it**
+(2026-10-20; until then only pushing into the wall started one). Gravity and terminal velocity
+are both much lower while you are on it (`Wall slide, gravity` ×0.35 and `Wall slide, terminal
+velocity` ×0.2 in the Oven, since 2026-10-20; ×0.7 each before, which the owner found barely
+felt) — a slide of under four metres a second, never a stop, so a wall is somewhere to choose a
+jump from but not somewhere to wait. **The wall grabs you**: a fall faster than the slide is
+brought down to it over a few frames (`Wall slide, grabs of a faster fall, a frame`, 0.3 of the
+excess a frame), which is the first thing that says you are on it. Both are scaled because a short fall
 never reaches the cap, and a slide that only lowered the cap would do nothing on one. You are
 held to the wall (`Wall slide, held to the wall at`) and slide for as far as the wall goes. A
 body being thrown — in a stun, or spiked toward the floor — is not slowed by a wall it goes
@@ -726,8 +730,13 @@ within`, the cosine). On a slide:
 | --- | --- |
 | Into the wall | Starts a slide, falling beside one; on one, nothing more |
 | Away from it | Ends the slide |
-| Along it | Steers the slide a little (`Wall slide, steered along at`, 2 m/s) |
-| Nothing | Keeps whichever it is: on the slide, or falling past |
+| Along it | Starts a slide; on one, steers it along up to `Wall slide, steered along at` (5 m/s) — never brakes a run going that way faster |
+| Nothing | Starts a slide, touching a wall; on one, keeps it |
+
+**A slide keeps the run you brought to it** (2026-10-20): speed along the wall loses only
+`Wall slide, keeps of its speed along, a frame` (×0.99) a frame to friction, where until then it
+was bled down to the stick's 2 m/s within a few frames — so a wall run into at an angle is slid
+along, not stopped on.
 
 **Neither starting nor ending comes within `Wall slide, on or off no faster than` (8 frames) of
 the last.** The two answers meet at a line, and without the debounce a stick wobbling across it
@@ -741,10 +750,16 @@ is reset to where you are, the way a ledge's hang resets it. A wall slid all the
 costs nothing to land from; one let go partway costs only the drop from where you let go.
 That is the recovery: a wall reached is a fall cancelled or shortened.
 
-**Space on a wall, or a few frames off one (`Wall jump, still off a wall left`, 4), jumps off
-it**: a fresh rise of `Wall jump, rise` (0.6 of the class's takeoff — about a metre on the
-Champion), never less than the rise you already had, and a push of `Wall jump, pushed off at`
-(7 m/s, a walk) away from the face, keeping your speed along it. There is no sustain: the
+**Space on a wall, a few frames off one (`Wall jump, still off a wall left`, 8 since
+2026-10-20, 4 before), or a few frames before reaching one (`Wall jump, pressed before the wall
+and kept`, 6), jumps off it**: a fresh rise of `Wall jump, rise` (0.6 of the class's takeoff —
+about a metre on the Champion), never less than the rise you already had, and a push of `Wall
+jump, pushed off at` (7 m/s, a walk) away from the face, keeping your speed along it. **And it
+goes where the stick points** (2026-10-20): the stick's share along the wall carries you that
+way at least `Wall jump, along where the stick points at` (6 m/s) — the whole of it with the
+stick along the wall, none with it straight out — and a run already going that way faster is
+kept. Holding forward along a gully, every kick goes out and forward. A press kept for the wall
+is one the air spent on nothing else: the Dual mage's wing beat is not kept. There is no sustain: the
 height is the wall's to give, not the button's. **It gives nothing back** — not the jump
 attack, not the airdodge, not the aerial hangs. It is height and a direction.
 
