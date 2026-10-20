@@ -61,7 +61,15 @@ pub const GHOST: u16 = 8;
 /// The hit test's own capsule on an active frame, and its last shape fading
 /// through the first frames of recovery. Nothing during the wind-up, because
 /// nothing is out.
+///
+/// **Hers only.** A move is a number within its class, and `blood::scythe`
+/// asks of the number: unasked of the class, the Reaver's Plunge and Gallows
+/// came out as a scythe's capsule round her, in the pools' violet -- the
+/// "purple cylinder" (2026-10-20).
 pub fn swing_volume(p: &Player) -> Option<Volume> {
+    if p.class != sim::Class::BloodMage {
+        return None;
+    }
     match p.action {
         sim::state::Action::Active { kind, .. } if sim::moves::blood::scythe(kind) => {
             let hb = state::hitbox(p)?;

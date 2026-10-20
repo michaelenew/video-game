@@ -2277,6 +2277,7 @@ struct EffectLook {
     shard: Handle<Mesh>,
     crescent: Handle<Mesh>,
     steel: Handle<StandardMaterial>,
+    forged: Handle<StandardMaterial>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2646,6 +2647,7 @@ fn setup(
         shard: meshes.add(blades::shard()),
         crescent: meshes.add(blades::crescent()),
         steel: materials.add(blades::steel()),
+        forged: materials.add(blades::forged()),
         sun: materials.add(StandardMaterial {
             base_color: Color::srgba(1.0, 0.9, 0.62, 0.62),
             emissive: LinearRgba::rgb(4.2, 3.3, 1.6),
@@ -4825,6 +4827,8 @@ enum Skin {
     Stone,
     /// The Reaver's blades: dark violet steel, her violet at the edges.
     Steel,
+    /// The same steel, solid: what stands -- a shard, a crescent.
+    Forged,
     /// Moving air: the beam's pale, barely-there material, so a draft or a
     /// ring of air is seen without hiding what is in it.
     Air,
@@ -4865,6 +4869,7 @@ impl EffectLook {
             Skin::Stone => self.stone.clone(),
             Skin::Air => self.beam.clone(),
             Skin::Steel => self.steel.clone(),
+            Skin::Forged => self.forged.clone(),
         }
     }
 }
@@ -5528,11 +5533,11 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let at = fx3(effect.ring_piece(part));
             let seed = (part as f32 * 2.399).sin() * 0.5 + 0.5;
             let rise = (effect.age as f32 / 4.0).min(1.0);
-            let tall = width * (2.2 + 1.6 * seed) * rise;
+            let tall = width * (1.5 + 1.1 * seed) * rise;
             let out = (at - fx3(effect.pos)).with_y(0.0).normalize_or(Vec3::X);
             Some(Piece {
                 shape: Shape::Shard,
-                skin: Skin::Steel,
+                skin: Skin::Forged,
                 at,
                 scale: Vec3::new(width * 1.6, tall, width * 1.6),
                 turn: Quat::from_rotation_arc(
@@ -6123,7 +6128,7 @@ fn reaping_cut(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         facing.cross(Vec3::Y).normalize_or(Vec3::X),
         Vec3::new((0.6 + 0.6 * open) * tall / 1.8, tall * 0.55 * open, 1.0),
     );
-    cut.skin = Skin::Steel;
+    cut.skin = Skin::Forged;
     Some(cut)
 }
 

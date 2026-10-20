@@ -21,7 +21,7 @@ use bevy::render::mesh::{Indices, PrimitiveTopology};
 use bevy::render::render_asset::RenderAssetUsages;
 
 /// Dark steel with violet in it, and her violet at the keen edges.
-const STEEL: [f32; 4] = [0.10, 0.07, 0.16, 1.0];
+const STEEL: [f32; 4] = [0.022, 0.015, 0.04, 1.0];
 const EDGE: [f32; 4] = [0.75, 0.45, 1.0, 1.0];
 /// The ring a spinning blade's points blur into: her violet, faint.
 const BLUR: [f32; 4] = [0.55, 0.30, 1.0, 0.22];
@@ -190,13 +190,31 @@ pub fn crescent() -> Mesh {
     b.mesh()
 }
 
-/// What the blades are made of: dark steel lit at the edges by her violet,
+/// What the blades that stand are made of -- the Plunge's shards, the
+/// Reaping's crescent: the same steel, solid. Blended, a shard the size of a
+/// body read as violet glass, and showed the shards behind it through it.
+pub fn forged() -> StandardMaterial {
+    // Less of a mirror than a thrown blade: a standing shard the size of a
+    // body, mirroring the sky, was a lavender slab.
+    StandardMaterial {
+        alpha_mode: AlphaMode::Opaque,
+        metallic: 0.2,
+        perceptual_roughness: 0.5,
+        reflectance: 0.25,
+        // No glow of its own: on a face this big it was all that showed,
+        // a flat lavender with no light and shade on it.
+        emissive: LinearRgba::BLACK,
+        ..steel()
+    }
+}
+
+/// What the thrown blades are made of: dark steel lit at the edges by her violet,
 /// which the vertex colours carry, and a glow of its own so a blade crossing
 /// the floor in shade still reads.
 pub fn steel() -> StandardMaterial {
     StandardMaterial {
         base_color: Color::WHITE,
-        emissive: LinearRgba::rgb(0.10, 0.04, 0.24),
+        emissive: LinearRgba::rgb(0.025, 0.01, 0.06),
         metallic: 0.6,
         perceptual_roughness: 0.35,
         reflectance: 0.4,

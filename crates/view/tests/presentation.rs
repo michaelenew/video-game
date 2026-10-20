@@ -1581,3 +1581,23 @@ fn the_climb_is_as_long_as_the_simulation_says() {
         sim::tuning::ledge_climb() as u16
     );
 }
+
+/// A scythe's volume is drawn for the Blood mage and nobody else. Move
+/// numbers are per class, so asking `blood::scythe` of the number alone drew
+/// a scythe's capsule round the Reaver on her Plunge and Gallows -- the
+/// "purple cylinder" (2026-10-20).
+#[test]
+fn only_the_blood_mage_swings_a_scythe() {
+    use sim::moves::reaver;
+    use sim::state::Action;
+    for kind in [reaver::PLUNGE, reaver::GALLOWS] {
+        let mut p = sim::state::Player::new(sim::Class::ShadowReaver);
+        p.action = Action::Active { kind, left: 1 };
+        assert!(view::scythe::swing_volume(&p).is_none(), "active {kind}");
+        p.action = Action::Recovery { kind, left: 15 };
+        assert!(
+            view::scythe::swing_volume(&p).is_none(),
+            "recovering {kind}"
+        );
+    }
+}
