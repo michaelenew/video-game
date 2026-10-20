@@ -9284,3 +9284,46 @@ before the wall is kept.
 never stops, but a tall wall is a long time to think), whether "touching is enough" catches
 people brushing past a pillar who did not mean to slide (away is the way off), and whether 6 m/s
 along is too much carry out of an inside corner.
+
+### 2026-10-20 — jump sections at the Sky Road's difficulty, and two past it
+
+**Changed** The owner: "There's a section from the needle over to the high meadow that's the
+only thing resembling challenging. I want more jump sections to be closer to that difficulty,
+and a few that are more difficult still than that. It's an actually fun challenge because
+there's variety in the jumps and it forces you to learn class's mobility tools." With the
+Bulwark no longer a mover, nothing is sized to its catch any more:
+
+- **The Hanging Stones' column**: fifty identical stones 4.2 m apart round a six-metre square
+  → forty hops round a square west of the foot, 41 → 203 m: plain catches 3–5.5 m out at
+  +3 to +5 (the Champion's and the Blood mage's catch, landed by the best jumpers), twelve
+  precision stones a metre across, a drop, five **high** hops of +9 m and two **long** ones
+  of 12–13 m, each with a rest and a cairn in front of it.
+- **The span**: four stretches of identical steps and four gullies → twenty-eight hops and three
+  gullies: long hops of 14, 17 and 15 m rising 2 to 5, a zig-zag of precision stones, three
+  high hops up the mountainside where the land rises a metre for a metre, rests between.
+- **The Waterfall** (the main road): tops 3–4 m along the face → 2.3–2.7 m, gaps 1.5–4.7 m →
+  2–6.4 m, every one still inside every mover's plain catch with half a metre to spare.
+- **New, harder than the Sky Road**: **the Crown**, fourteen hops off the High Plane's floor to
+  an island fifty metres over it (15–22 m onto one- and two-metre stones, two of +10, one
+  rest); **the High Line**, a shortcut of seven 19–22 m hops across the Sky Road's middle on
+  one- and two-metre stones.
+- Every route but the Sky Road is a table of hops that says what each asks
+  (`heights::Need`): plain, held to every mover's plain catch on paper and jumped by the
+  stand-in player, or a tool's, held past every plain jump with its airdodge and inside the
+  measured tools' reach (`tests/heights.rs`).
+
+**Why** The Sky Road is fun because no two hops are alike and the long ones need a tool. A
+column of fifty identical catches is neither. The tool hops come in two shapes so different
+tools answer them: *high* (the Elementalist's stone, the Champion's vault, the Dual mage's
+second jump, the Reaver's Gallows, the Blood mage's wings) and *long* (the second jump, the
+vault, the Reaver's and the Blood mage's reach). The Waterfall stays plain because it is the
+main road. The Needle's stair and the Deep's shafts were left alone: the stair is how
+somebody without a tool yet reaches the Sky Road, and a shaft is the way out of a dungeon.
+
+**Verdict** Unplayed. Every difficulty is a guess. `sim::envelope` measures only the Dual
+mage's second jump, the Champion's vault and the Elementalist's straight-up stone; the Reaver's
+and the Blood mage's tools are taken on the owner's word, so whether *they* make each tool hop
+is the first thing to play. Things to watch: the +9 hops ask the Champion's vault for all but
+30 cm of its height; the Crown's +10s are past the vault, so by the numbers they are the
+Elementalist's and the Dual mage's; the precision
+stones are a metre across, which the stand-in player lands but a person on a camera might not.
