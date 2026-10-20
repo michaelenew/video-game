@@ -66,7 +66,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --bot <level>",
-                "Start against the sparring bot: easy, normal or hard. 5, 6 and 7 switch to it in game.",
+                "Start against the sparring bot: beginner, easy, normal, hard or expert. 5, 6 and 7 switch to it in game; the Esc menu has all five.",
             ),
             e(
                 "cargo run -p game -- --record",
@@ -165,7 +165,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?bot=<level>",
-                "Start against the sparring bot: easy, normal or hard.",
+                "Start against the sparring bot: beginner, easy, normal, hard or expert.",
             ),
             e(
                 "?dev",
@@ -666,7 +666,7 @@ pub const SECTIONS: &[Section] = &[
             e("4", "Dummy is a second player on the keys above."),
             e(
                 "5 6 7",
-                "Dummy is a sparring bot -- easy, normal, hard. It sees late, aims imperfectly, and picks a new personality every time you press one.",
+                "Dummy is a sparring bot -- easy, normal, hard. It sees late, aims imperfectly, and picks a new personality every time you press one. Beginner and expert are in the Esc menu's Training dummy section.",
             ),
             e(
                 "Tab",

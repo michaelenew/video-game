@@ -264,3 +264,128 @@ fn the_bot_reads_the_walls_off_the_arena() {
         }
     }
 }
+
+/// **The levels climb.** Each sees, notices, punishes, aims and turns at least
+/// as well as the one below it -- and none of them reacts under fifteen
+/// frames, which is about as quick as a person waiting for something.
+#[test]
+fn the_levels_climb() {
+    for pair in Level::ALL.windows(2) {
+        let (lo, hi) = (pair[0].skill(), pair[1].skill());
+        let names = (pair[0].name(), pair[1].name());
+        assert!(
+            hi.react_min <= lo.react_min && hi.react_max <= lo.react_max,
+            "{names:?}"
+        );
+        assert!(
+            hi.notice >= lo.notice && hi.punish >= lo.punish,
+            "{names:?}"
+        );
+        assert!(hi.aim_error.raw() <= lo.aim_error.raw(), "{names:?}");
+        assert!(hi.turn.raw() >= lo.turn.raw(), "{names:?}");
+        assert!(
+            hi.think_max <= lo.think_max && hi.slop <= lo.slop,
+            "{names:?}"
+        );
+        assert!(hi.lead >= lo.lead, "{names:?}");
+    }
+    for level in Level::ALL {
+        assert!(
+            level.skill().react_min >= 15,
+            "{} reacts too fast",
+            level.name()
+        );
+    }
+}
+
+/// **It knows what hurts.** The Elementalist's two pushes go straight through
+/// a body (2026-10-02), so measured on somebody they take nothing, and the
+/// pillar takes plenty. Thrown things -- the Shuriken, the Thorn lash, which
+/// have no damage of their own in the move table -- are measured at what the
+/// thing they throw does.
+#[test]
+fn it_knows_what_hurts() {
+    use hunt::duel::Kit;
+    use sim::moves::elementalist::keys;
+    let kit = Kit::measure(Class::Elementalist);
+    let on = |bits: u16| kit.iter().find(|t| t.bits == bits).unwrap();
+    assert_eq!(on(keys::WEAK_PUSH).hurt, 0);
+    assert_eq!(on(keys::STRONG_PUSH).hurt, 0);
+    assert!(on(keys::FIRE).hurt > 100, "{kit:?}");
+    let reaver = Kit::measure(Class::ShadowReaver);
+    let shuriken = reaver
+        .iter()
+        .find(|t| t.kind == sim::moves::reaver::SHURIKEN)
+        .unwrap();
+    assert!(shuriken.hurt > 0 && shuriken.far.raw() >= sim::Fx::from_int(6).raw());
+    let blood = Kit::measure(Class::BloodMage);
+    let lash = blood
+        .iter()
+        .find(|t| t.kind == sim::moves::blood::THORN_LASH)
+        .unwrap();
+    assert!(lash.hurt > 0, "{blood:?}");
+}
+
+/// **It does not push at nobody.** The Elementalist's pushes go through a
+/// body, so she throws them to kick one of her stones into somebody: over
+/// three minutes against a Champion, nearly every push she throws has a stone
+/// of hers near the line between them. Until 2026-10-20 she threw them all
+/// fight with nothing to push, and did nothing with them.
+///
+/// Near rather than on the line, by two metres: what she aims at is where she
+/// saw him a reaction ago, and he has moved since.
+#[test]
+fn the_elementalist_pushes_stones() {
+    use sim::class::Mechanic;
+    use sim::moves::elementalist::keys;
+    let kit = hunt::duel::Kit::measure(Class::Elementalist);
+    let pushes: Vec<u8> = kit
+        .iter()
+        .filter(|t| t.bits == keys::WEAK_PUSH || t.bits == keys::STRONG_PUSH)
+        .map(|t| t.kind)
+        .collect();
+    let (mut aimed, mut blind) = (0u32, 0u32);
+    let mut was = None;
+    spar_traced(
+        [Class::Elementalist, Class::Champion],
+        [Level::Normal; 2],
+        3 * MINUTE,
+        8,
+        |w, _| {
+            let (me, them) = (w.players[0], w.players[1]);
+            let now = match me.action {
+                sim::state::Action::Startup { kind, .. } => Some(kind),
+                _ => None,
+            };
+            if let Some(k) = now
+                && now != was
+                && pushes.contains(&k)
+            {
+                let line = them.pos.sub(me.pos);
+                let (dist, dir) = (line.flat_len(), line.normalized());
+                let Mechanic::Structures(stones) = me.mechanic else {
+                    unreachable!()
+                };
+                let near = stones.iter().flatten().any(|s| {
+                    let rel = s.at.sub(me.pos);
+                    let along = rel.dot(dir);
+                    let off = rel.sub(dir.scale(along)).flat_len();
+                    along.raw() > 0
+                        && along.raw() < dist.raw()
+                        && off.raw() < sim::Fx::from_int(2).raw()
+                });
+                if near {
+                    aimed += 1;
+                } else {
+                    blind += 1;
+                }
+            }
+            was = now;
+        },
+    );
+    assert!(aimed >= 10, "she pushed a stone at him only {aimed} times");
+    assert!(
+        blind * 3 < aimed,
+        "{blind} pushes with no stone near the line, {aimed} with one"
+    );
+}
