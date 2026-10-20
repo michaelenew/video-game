@@ -380,8 +380,10 @@ hashes as it did.
   pair's journey is the union of both players' trophies: the note's "the
   more travelled of the two", and world.md §5's "a locked place is locked to
   the lone player, not to the pair".
-- **A cairn** is a snow top. Touch one and you are rested (health back) and
-  it is your checkpoint.
+- **A cairn** is a snow top. Touch one and it is your checkpoint, and out of
+  a fight you are rested (health back) -- in one it rests nobody, but it
+  still counts: the Needle's top cairn is on the roost, which is awake by the
+  time anybody reaches it (2026-10-20).
 - **Nobody dies in a reach.** A fighter whose health runs out — a fall
   costs what the fall rule says, free to 9 m and 25 a metre past it — is
   stood on their last cairn, or on the place's arrival marks if they have

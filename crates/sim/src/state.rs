@@ -2189,7 +2189,8 @@ impl World {
         }
         let place = crate::valley::place(self.arena)?;
         let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
-        if self.peaceful() {
+        let peaceful = self.peaceful();
+        if peaceful {
             // **A fighter nobody plays is not in the valley**: kept under the
             // middle of the place's floor, where nothing reaches it and
             // nothing draws it in view -- rather than a body lying at every
@@ -2197,15 +2198,24 @@ impl World {
             // dummy or the bot there), and a hunt takes an absent hunter out
             // as it always has.
             self.park_absent();
-            let atlas = crate::atlas::valley();
-            let origin = self.map_origin();
             for i in 0..seats {
                 if self.players[i].health <= 0 {
                     self.stand_back(i, place);
                 }
-                let feet = self.players[i].pos.add(origin);
-                if let Some(k) = crate::valley::cairn_at(atlas, feet) {
-                    self.valley.cairn[i] = k as u16 + 1;
+            }
+        }
+        // **A cairn is a checkpoint in a fight too**; it only rests you out
+        // of one. The cairn on the Needle's top is on the roost, and stepping
+        // onto the ruins wakes the Galewing: kept to peace, it never counted,
+        // and a fall off the dome stood you back up a hundred metres down the
+        // stair (2026-10-20, from play).
+        let atlas = crate::atlas::valley();
+        let origin = self.map_origin();
+        for i in 0..seats {
+            let feet = self.players[i].pos.add(origin);
+            if let Some(k) = crate::valley::cairn_at(atlas, feet) {
+                self.valley.cairn[i] = k as u16 + 1;
+                if peaceful {
                     let p = &mut self.players[i];
                     p.health = p.health.max(t::health_of(p.class));
                 }

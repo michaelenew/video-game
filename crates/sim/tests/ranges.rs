@@ -390,3 +390,54 @@ fn a_roused_range_fights() {
     }
     assert!(quiet.is_empty(), "never fought: {quiet:?}");
 }
+
+/// **A cairn is a checkpoint in a fight too.** The Needle's top cairn is on
+/// the roost, which wakes as you step onto the ruins: kept to peace, it never
+/// counted, and a fall off the dome stood you back up a hundred metres down
+/// the stair (2026-10-20, from play). It counts now -- and rests nobody while
+/// the fight is on, so it is not a place to heal against the Galewing.
+#[test]
+fn the_needles_top_cairn_counts_while_the_roost_is_awake() {
+    let r = RANGES
+        .iter()
+        .find(|r| r.name == "Roost")
+        .expect("the roost");
+    let atlas = sim::atlas::valley();
+    let (x, z) = (cm(r.at.0), cm(r.at.1));
+    let reach = cm(sim::arena::spire::RIM);
+    let (k, top) = atlas
+        .near((x.sub(reach), z.sub(reach)), (x.add(reach), z.add(reach)))
+        .map(|i| (i as usize, atlas.solids[i as usize]))
+        .filter(|(_, s)| s.material == sim::arena::Material::Snow)
+        .max_by_key(|(_, s)| s.max.y.raw())
+        .expect("a cairn on the dome");
+    let at = (
+        Fx::from_raw(top.min.x.raw() / 2 + top.max.x.raw() / 2),
+        top.max.y,
+        Fx::from_raw(top.min.z.raw() / 2 + top.max.z.raw() / 2),
+    );
+    // On the ruins first, so the Galewing is awake -- as it is by the time
+    // anybody climbing out of the chimney reaches the cairn.
+    let mut w = walked_in(r);
+    assert_eq!(w.arena, r.arena, "on the roost");
+    assert!(w.hunting(), "the roost is awake");
+    let before = w.valley.cairn[0];
+    assert_ne!(before, k as u16 + 1, "already on the top cairn");
+    w.players[0].pos = V3::new(at.0, at.1, at.2).sub(w.map_origin());
+    w.players[0].vel = V3::ZERO;
+    for _ in 0..3 {
+        w.advance([Input::new(0), Input::new(0)]);
+    }
+    assert!(w.hunting(), "the roost is still awake");
+    assert_eq!(
+        w.valley.cairn[0],
+        k as u16 + 1,
+        "the top cairn did not count"
+    );
+    w.players[0].health = 100;
+    w.advance([Input::new(0), Input::new(0)]);
+    assert!(
+        w.players[0].health <= 100,
+        "a cairn rested somebody mid-fight"
+    );
+}
