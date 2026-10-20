@@ -2186,14 +2186,30 @@ fn a_cash_in_lands_on_the_creature_too() {
         run(&mut w, 2, L, down(89));
         for _ in 0..30 {
             if beast_health(&w) < full {
-                return (full - beast_health(&w), w.monster().copied().unwrap().marks);
+                return (
+                    full - beast_health(&w),
+                    w.monster().copied().unwrap().marks,
+                    reaping(&w),
+                );
             }
             run(&mut w, 1, 0, down(89));
         }
-        (0, marks)
+        (0, marks, None)
     };
-    let (plain, _) = first_blow_on_it(0);
-    let (cashed, left) = first_blow_on_it(t::mark_cap());
+    let (plain, _, none) = first_blow_on_it(0);
+    assert!(none.is_none(), "a plain hit on the creature was reaped");
+    let (cashed, left, reap) = first_blow_on_it(t::mark_cap());
+    // The Reaping is where the blow met the part, over the floor, as thick
+    // as the part: what the copies grow to and stand round.
+    let reap = reap.expect("a full tally cashed on the creature was not reaped");
+    assert!(
+        reap.home.y <= reap.pos.y,
+        "the Reaping's floor is above the blow"
+    );
+    assert!(
+        reap.reach > Fx::ZERO,
+        "the Reaping does not know how thick the part is"
+    );
     assert!(plain > 0, "fixture: she never reached the creature");
     assert!(
         cashed > plain * 2,

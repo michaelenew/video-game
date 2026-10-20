@@ -225,6 +225,7 @@ fn main() {
         .init_resource::<hub::Hub>()
         .init_resource::<Fades>()
         .init_resource::<ShadowFades>()
+        .init_resource::<CopyLooks>()
         .init_resource::<ShieldHands>()
         .init_resource::<Hands>()
         .init_resource::<Torsos>()
@@ -316,7 +317,7 @@ fn main() {
                     .chain(),
                 // One entry, so the chain stays under twenty: the balls go
                 // where the poses just put the joints.
-                (apply_poses, pose_balls).chain(),
+                (apply_poses, pose_balls, place_copies).chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -943,14 +944,72 @@ fn shot_blood(w: &mut World) {
 /// `SHOT_REAP=1` starts with player two six metres in front of player one
 /// and **the Reaping** just begun on him -- the picture of a Reaver's cash-in
 /// at a full tally -- so a capture can look at it without playing a whole
-/// tally up. `SHOT_FRAME` picks the moment (it lives `reaping_life`); pair it
-/// with `DEMO=0`. Read once at start.
+/// tally up. In a hunt, `SHOT_REAP=leg` and `SHOT_REAP=back` start it on the
+/// creature instead: on a leg (the first part named one), or on top of its
+/// back (the first named ridge, back, barrel or plateau). `SHOT_FRAME` picks the
+/// moment (it lives `reaping_life`); pair it with `DEMO=0`. Read once at
+/// start.
 fn shot_reap(w: &mut World) {
     use sim::effects::{Effect, EffectKind};
-    if platform::env("SHOT_REAP").is_none() {
+    let Some(how) = platform::env("SHOT_REAP") else {
+        return;
+    };
+    let p = w.players[0];
+    if let ("leg" | "back", Some(beast)) = (how.as_str(), w.monster_mut()) {
+        let names: &[&str] = if how == "leg" {
+            &["leg", "shin", "thigh"]
+        } else {
+            &["ridge", "back", "barrel", "plateau"]
+        };
+        let sp = beast.sp();
+        let Some(part) = names
+            .iter()
+            .find_map(|n| sp.parts.iter().position(|q| q.name.contains(n)))
+        else {
+            return;
+        };
+        let sh = sp.shape(part);
+        let half = sim::Fx::from_int(2);
+        let mid = |lo: sim::Fx, hi: sim::Fx| lo.add(hi).div(half);
+        let up = if how == "back" {
+            sh.max.y
+        } else {
+            mid(sh.min.y, sh.max.y)
+        };
+        let at = sim::V3::new(mid(sh.min.x, sh.max.x), up, mid(sh.min.z, sh.max.z));
+        // The creature put so the place sits in front of the camera, which
+        // starts looking along +x, holding still, as far off as it takes to
+        // see the whole of them: further the higher the place.
+        beast.yaw = sim::Fx::ZERO;
+        beast.pos = p.pos;
+        let near = beast.world_of(part, at);
+        let high = near.y.sub(p.pos.y);
+        let off = sim::Fx::from_int(8).add(high.mul(sim::Fx::from_int(4)));
+        beast.pos = sim::V3::new(
+            p.pos.x.add(off).sub(near.x.sub(p.pos.x)),
+            p.pos.y,
+            p.pos.z.sub(near.z.sub(p.pos.z)),
+        );
+        beast.brain.think_left = u16::MAX;
+        let met = beast.world_of(part, at);
+        let thick = beast.part_reach_from(part, met);
+        // Her blow along +x, from where she stands toward it.
+        let dir = sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO);
+        let mut reaping = Effect::cast(
+            EffectKind::Reaping,
+            0,
+            sim::Class::ShadowReaver,
+            0,
+            met,
+            dir,
+            thick,
+        );
+        reaping.home = sim::V3::new(met.x, p.pos.y, met.z);
+        if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
+            *slot = Some(reaping);
+        }
         return;
     }
-    let p = w.players[0];
     let six = sim::Fx::from_int(6);
     let at = sim::V3::new(
         p.pos.x.add(p.facing.x.mul(six)),
@@ -960,15 +1019,17 @@ fn shot_reap(w: &mut World) {
     w.players[1].pos = at;
     w.players[1].facing = sim::V3::ZERO.sub(p.facing);
     let dir = sim::V3::new(p.facing.x, sim::Fx::ZERO, p.facing.z).normalized();
-    let reaping = Effect::cast(
+    // As the sim puts one on a fighter: at his middle, a body thick.
+    let mut reaping = Effect::cast(
         EffectKind::Reaping,
         0,
         sim::Class::ShadowReaver,
         0,
-        at,
+        sim::aim::origin(at),
         dir,
-        sim::Fx::ZERO,
+        sim::tuning::body_radius(),
     );
+    reaping.home = at;
     if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
         *slot = Some(reaping);
     }
@@ -1773,6 +1834,29 @@ struct ShadowPart {
 #[derive(Component)]
 struct ShadowRoot(usize);
 
+/// **Five of her** (2026-10-19): one of the copies of her shadow body the
+/// Reaping throws round the one a full tally was cashed on. A pool per
+/// Reaver, hidden until a Reaping of hers is in the world, for the reason
+/// the shadow is a pool. See [`place_copies`].
+#[derive(Component)]
+struct CopyRoot {
+    owner: usize,
+    copy: usize,
+}
+
+/// A piece of one of those copies: a limb, or (`ball`) the ball at a joint.
+#[derive(Component)]
+struct CopyPart {
+    owner: usize,
+    copy: usize,
+    joint: Joint,
+    ball: bool,
+}
+
+/// Each copy's own material, so each can fade on its own clock.
+#[derive(Resource, Default)]
+struct CopyLooks(Vec<[Handle<StandardMaterial>; REAP_COPIES]>);
+
 #[derive(Component)]
 struct MainCamera;
 
@@ -2106,12 +2190,6 @@ struct EffectLook {
     /// Her Black vines: barbed black you can see through.
     vines: Handle<StandardMaterial>,
     shade: Handle<StandardMaterial>,
-    /// The Reaper of a full tally's cash-in (`EffectKind::Reaping`): her
-    /// shadow's own grey see-through, at a step of solidity from faint to
-    /// the shadow's own, so it can come up out of the floor and thin away;
-    /// and the two cold points it looks out of its hood with.
-    wraith: [Handle<StandardMaterial>; WRAITH_STEPS],
-    wraith_eye: Handle<StandardMaterial>,
     /// A pool of essence, from faint to nearly solid: the more essence is
     /// left in it, the more solid the figure.
     essence: [Handle<StandardMaterial>; ESSENCE_STEPS],
@@ -2172,6 +2250,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut skins: ResMut<Assets<still::SkinMaterial>>,
+    mut copies: ResMut<CopyLooks>,
 ) {
     let eye = commands
         .spawn((
@@ -2318,6 +2397,57 @@ fn setup(
                 }
             });
 
+        // Five of her, for the Reaping: the shadow's body again, each copy in
+        // a material of its own so it can fade on its own clock.
+        let copy_looks: [Handle<StandardMaterial>; REAP_COPIES] = std::array::from_fn(|_| {
+            materials.add(StandardMaterial {
+                base_color: Color::srgba(COPY_GREY[0], COPY_GREY[1], COPY_GREY[2], 0.0),
+                emissive: LinearRgba::rgb(0.05, 0.04, 0.12),
+                perceptual_roughness: 0.9,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            })
+        });
+        for (copy, look) in copy_looks.iter().enumerate() {
+            commands
+                .spawn((
+                    CopyRoot { owner, copy },
+                    Transform::default(),
+                    Visibility::Hidden,
+                ))
+                .with_children(|root| {
+                    for joint in JOINTS {
+                        root.spawn((
+                            Mesh3d(meshes.add(limb_form(joint))),
+                            MeshMaterial3d(look.clone()),
+                            Transform::default(),
+                            bevy::pbr::NotShadowCaster,
+                            CopyPart {
+                                owner,
+                                copy,
+                                joint,
+                                ball: false,
+                            },
+                        ));
+                    }
+                    for joint in BALLS {
+                        root.spawn((
+                            Mesh3d(meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap())),
+                            MeshMaterial3d(look.clone()),
+                            Transform::default(),
+                            bevy::pbr::NotShadowCaster,
+                            CopyPart {
+                                owner,
+                                copy,
+                                joint,
+                                ball: true,
+                            },
+                        ));
+                    }
+                });
+        }
+        copies.0.push(copy_looks);
+
         // The shield is a separate object because its position is independent
         // of the character -- that is the whole mechanic. See bulwark.md.
         const SHIELD: Vec3 = Vec3::new(0.75, 0.9, 0.14);
@@ -2382,26 +2512,6 @@ fn setup(
             base_color: Color::srgba(0.10, 0.09, 0.16, 0.80),
             emissive: LinearRgba::rgb(0.12, 0.10, 0.30),
             perceptual_roughness: 0.85,
-            alpha_mode: AlphaMode::Blend,
-            ..default()
-        }),
-        wraith: std::array::from_fn(|step| {
-            // The shadow body's grey (`ShadowRoot`'s material) at its
-            // solidity on the last step, and lit from inside with the violet
-            // her shadow-work glows: the same thing as the shadow, grown.
-            let solid = 0.12 + 0.48 * step as f32 / (WRAITH_STEPS - 1) as f32;
-            materials.add(StandardMaterial {
-                base_color: Color::srgba(0.20, 0.21, 0.26, solid),
-                emissive: LinearRgba::rgb(0.10 * solid, 0.08 * solid, 0.26 * solid),
-                perceptual_roughness: 0.9,
-                alpha_mode: AlphaMode::Blend,
-                ..default()
-            })
-        }),
-        wraith_eye: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.80, 0.75, 1.0, 0.9),
-            emissive: LinearRgba::rgb(2.2, 1.6, 4.0),
-            unlit: true,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
@@ -4507,11 +4617,6 @@ enum Skin {
     /// The Reaver's shadow-work: near black, and lit from inside just enough to
     /// be visible against the floor it is usually crossing.
     Shade,
-    /// The Reaper (`EffectKind::Reaping`): the shadow's grey see-through, at
-    /// a step of solidity from faint to the shadow's own.
-    Wraith(u8),
-    /// The Reaper's eyes.
-    WraithEye,
     /// A pool of essence, at a step of solidity from faint to nearly solid.
     Essence(u8),
     /// The Dual mage's two forces, and the only pair of skins in the game that
@@ -4559,8 +4664,6 @@ impl EffectLook {
             Skin::Vines => self.vines.clone(),
             Skin::Heart => self.heart.clone(),
             Skin::Shade => self.shade.clone(),
-            Skin::Wraith(step) => self.wraith[(step as usize).min(WRAITH_STEPS - 1)].clone(),
-            Skin::WraithEye => self.wraith_eye.clone(),
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
@@ -5284,7 +5387,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
             Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
         }
-        EffectKind::Reaping => reaping_piece(effect, part),
+        EffectKind::Reaping => reaping_cut(effect, part),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             turn: Quat::IDENTITY,
             shape: Shape::Column,
@@ -5665,268 +5768,255 @@ fn framed(shape: Shape, centre: Vec3, up: Vec3, ahead: Vec3, size: Vec3) -> Piec
     }
 }
 
-/// How many steps of solidity the Reaper fades through.
-const WRAITH_STEPS: usize = 5;
+/// **Five of her** (2026-10-19): how many copies of her the Reaping throws
+/// round him -- one a mark, at most.
+const REAP_COPIES: usize = 5;
 
-/// How many of the marks the Reaping drives home, at most: one blade each.
-const REAP_MARKS: usize = 6;
+/// How far from his middle each copy stands, in metres, round a fighter: a
+/// step inside the Executioner's reach, so the overhead comes down on him.
+/// Round anything thicker, the same step out from its skin.
+const COPY_RING: f32 = 1.4;
 
-/// The Reaper's height, as a share of a fighter's: it towers over the one it
-/// stands behind.
-const REAPER_TALL: f32 = 1.9;
+/// The most times her size a copy grows to: enough for the crown of a
+/// forty-metre colossus.
+const COPY_GROWS: f32 = 25.0;
 
-/// How far behind the one it cuts the Reaper stands, in metres: far enough
-/// that its blade, swung, comes down through him.
-const REAPER_BEHIND: f32 = 2.1;
+/// The copies' clock, in frames since the cash-in. They step in out of the
+/// air over `COPY_IN`, play her Executioner squeezed so it strikes at
+/// `COPY_STRIKE` and is active for `COPY_ACTIVE`, recover until
+/// `COPY_SETTLED`, and then fold back into her one at a time, the first at
+/// `COPY_FOLD` and each `COPY_FOLD_EVERY` after, each fold `COPY_FOLDING`
+/// long.
+const COPY_IN: f32 = 6.0;
+const COPY_STRIKE: f32 = 14.0;
+const COPY_ACTIVE: f32 = 4.0;
+const COPY_SETTLED: f32 = 32.0;
+const COPY_FOLD: f32 = 30.0;
+const COPY_FOLD_EVERY: f32 = 4.0;
+const COPY_FOLDING: f32 = 12.0;
 
-/// The Reaping's beats, as shares of its life: the marks are driven home by
-/// `REAP_DRIVEN`, the Reaper has stood up by `REAP_RISEN`, winds back until
-/// `REAP_SWING`, has cut through him by `REAP_CUT`, and starts to thin away
-/// at `REAP_FADE`.
-const REAP_DRIVEN: f32 = 0.2;
-const REAP_RISEN: f32 = 0.3;
-const REAP_SWING: f32 = 0.42;
-const REAP_CUT: f32 = 0.5;
-const REAP_FADE: f32 = 0.6;
+/// The shadow body's own grey and see-through (`ShadowRoot`'s material):
+/// the copies are the shadow, five times.
+const COPY_GREY: [f32; 3] = [0.20, 0.21, 0.26];
+const COPY_SOLID: f32 = 0.45;
 
-/// 0 below `a`, 1 above `b`, and smooth between.
-fn smooth(a: f32, b: f32, x: f32) -> f32 {
-    let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+/// How many copies a Reaping throws.
+fn copies() -> usize {
+    (sim::tuning::mark_cap() as usize).min(REAP_COPIES)
 }
 
-/// **The Reaping** (2026-10-19): the picture of a cash-in at a full tally
-/// (`EffectKind::Reaping`). Nothing in it is a hit test -- the blow that spent
-/// the marks did all of that -- so every number here is presentation.
-///
-/// Three things, one after the other, all in her shadow's own see-through:
-///
-/// - **The marks driven home.** The pips that were over his head come back as
-///   blades of shadow and plunge into his chest: the tally, spent, seen.
-/// - **The Reaper.** Her shadow stands up out of the floor behind him, hooded
-///   and twice his height, a scythe raised. It winds back and cuts down
-///   through him on a slant, and the cut is left hanging in the air as a
-///   violet slash while shadow thorns break out of the floor round him.
-/// - **The thinning.** It fades back to nothing as he gets his feet back.
-///
-/// The Reaper faces back along `dir` -- toward her -- so from behind her
-/// shoulder it is seen from the front, over the one it is cutting.
-fn reaping_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
-    let u = effect.age as f32 / effect.life.max(1) as f32;
-    let feet = fx3(effect.pos);
-    let tall = sim::tuning::body_height().to_f32_for_render();
-    let fwd = {
+/// **How big the copies are** (2026-10-19): as big as it takes for their
+/// overhead to come down where the blow met. The sim keeps where it met
+/// (`pos`), the floor under that (`home`) and how far the thing cut reaches
+/// out from there (`reach`): a fighter is cut at his middle, a fighter's
+/// height off the floor, and they are her size; a creature's leg cut at the
+/// knee wants them a little bigger, and its back four metres up wants giants
+/// standing on the ground round the whole animal. Never smaller than her.
+fn copy_size(effect: &sim::effects::Effect) -> f32 {
+    let meets = sim::tuning::cast_height().to_f32_for_render().max(0.1);
+    let high = (fx3(effect.pos).y - fx3(effect.home).y) / meets;
+    high.clamp(1.0, COPY_GROWS)
+}
+
+/// Where copy `copy` of a Reaping stands -- its feet, on the floor under
+/// where the blow met -- and the way it faces: on a ring round that place,
+/// outside all of whatever was cut, spaced so that with her they
+/// are six round it and none of them stands where she came from, every one
+/// looking in.
+fn copy_spot(effect: &sim::effects::Effect, copy: usize) -> (Vec3, Vec3) {
+    let met = fx3(effect.pos);
+    let floor = fx3(effect.home).y;
+    let to_her = {
         let d = fx3(effect.dir);
-        let flat = Vec3::new(d.x, 0.0, d.z);
-        flat.try_normalize().unwrap_or(Vec3::Z)
+        -Vec3::new(d.x, 0.0, d.z).try_normalize().unwrap_or(Vec3::Z)
     };
-    // The Reaper's own frame: it looks back at her, over him.
-    let ahead = -fwd;
-    let side = Vec3::Y.cross(ahead).normalize_or(Vec3::X);
-    let chest = feet + Vec3::Y * tall * 0.6;
+    let body = sim::tuning::body_radius().to_f32_for_render();
+    let ring = effect.reach.to_f32_for_render() + (COPY_RING - body) * copy_size(effect);
+    let turn = (copy + 1) as f32 / (copies() + 1) as f32 * std::f32::consts::TAU;
+    let out = Quat::from_rotation_y(turn) * to_her;
+    (Vec3::new(met.x, floor, met.z) + out * ring, -out)
+}
 
-    // How solid it is: up out of the floor, held, thinned away.
-    let risen = smooth(0.0, REAP_RISEN, u);
-    let left = 1.0 - smooth(REAP_FADE, 1.0, u);
-    let solid = risen.min(left);
-    let wraith = Skin::Wraith((solid * (WRAITH_STEPS - 1) as f32).round() as u8);
-
-    let marks = (sim::tuning::mark_cap() as usize).min(REAP_MARKS);
-    if part < REAP_MARKS {
-        // Each mark, from the ring the pips were drawn in, turning, and then
-        // down into him all at once -- slow to start and fast to land.
-        if part >= marks || u >= REAP_DRIVEN {
-            return None;
+/// What copy `copy` is doing `t` frames into a Reaping: her Executioner,
+/// squeezed onto the copies' clock, held at its last frame of recovery
+/// until it folds back into her.
+fn copy_action(t: f32) -> sim::state::Action {
+    use sim::state::Action;
+    let kind = sim::moves::reaver::EXECUTIONER;
+    let m = sim::moves::get(sim::Class::ShadowReaver, kind);
+    // Frames left of a phase `frames` long, `t` of the way from `from` to
+    // `to` on the copies' clock.
+    let left = |from: f32, to: f32, frames: u16| {
+        let gone = ((t - from) / (to - from)).clamp(0.0, 1.0);
+        ((frames as f32 * (1.0 - gone)).ceil() as u16).clamp(1, frames.max(1))
+    };
+    if t < COPY_STRIKE {
+        Action::Startup {
+            kind,
+            left: left(0.0, COPY_STRIKE, m.startup),
         }
-        let k = u / REAP_DRIVEN;
-        let turn = part as f32 / marks as f32 * std::f32::consts::TAU + k * 2.0;
-        let from = feet + Vec3::Y * (tall + 0.9) + Vec3::new(turn.cos(), 0.0, turn.sin()) * 0.75;
-        let tip = from.lerp(chest, k * k);
-        let back = (from - chest).normalize_or(Vec3::Y);
-        let mut blade = limb(Shape::Spike, tip + back * 0.75, tip, 0.16, side);
-        blade.skin = Skin::Shade;
-        return Some(blade);
+    } else if t < COPY_STRIKE + COPY_ACTIVE {
+        Action::Active {
+            kind,
+            left: left(COPY_STRIKE, COPY_STRIKE + COPY_ACTIVE, m.active),
+        }
+    } else {
+        Action::Recovery {
+            kind,
+            left: left(COPY_STRIKE + COPY_ACTIVE, COPY_SETTLED, m.recovery),
+        }
     }
-    let part = part - REAP_MARKS;
+}
 
-    // The Reaper, standing behind him and rising out of the floor.
-    let h = tall * REAPER_TALL;
-    let base = feet + fwd * REAPER_BEHIND - Vec3::Y * (1.0 - risen) * h * 0.9
-        + Vec3::Y * smooth(REAP_FADE, 1.0, u) * h * 0.25;
-    let at = |a: f32, s: f32, y: f32| base + ahead * a * h + side * s * h + Vec3::Y * y * h;
+/// How far copy `copy` has folded back into her `t` frames in: 0 standing
+/// on its spot, 1 gone into her.
+fn copy_folded(t: f32, copy: usize) -> f32 {
+    let from = COPY_FOLD + copy as f32 * COPY_FOLD_EVERY;
+    ((t - from) / COPY_FOLDING).clamp(0.0, 1.0)
+}
 
-    // The scythe turns about the hands in a plane through its line of sight
-    // to him, slanted across its body: raised high to one side, wound back,
-    // then cut down and across through him.
-    let slant = (side * 0.65 + Vec3::Y * 0.76).normalize();
-    let raised = 1.9;
-    let wound = 2.25;
-    let through = -0.75;
-    let angle_at = |u: f32| {
-        if u < REAP_SWING {
-            raised + (wound - raised) * smooth(REAP_RISEN * 0.5, REAP_SWING, u)
+/// How solid copy `copy` is `t` frames in: stepping in out of the air, the
+/// shadow's own see-through while it strikes, and thinning as it reaches her.
+fn copy_solid(t: f32, copy: usize) -> f32 {
+    let arrived = (t / COPY_IN).clamp(0.0, 1.0);
+    let folded = copy_folded(t, copy);
+    COPY_SOLID * arrived * (1.0 - folded * folded)
+}
+
+/// The cuts the copies leave in him: one dark blade of shadow a copy,
+/// across his middle on the line it struck from, flashing open on the frames
+/// the overheads land and closing again. Presentation: the Reaping hits
+/// nothing.
+fn reaping_cut(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    if part >= copies() {
+        return None;
+    }
+    let t = effect.age as f32;
+    let open = ((t - COPY_STRIKE + 1.0) / 2.0).clamp(0.0, 1.0)
+        * (1.0 - ((t - COPY_STRIKE - COPY_ACTIVE) / 8.0).clamp(0.0, 1.0));
+    if open <= 0.0 {
+        return None;
+    }
+    let (_, facing) = copy_spot(effect, part);
+    let tall = sim::tuning::body_height().to_f32_for_render() * copy_size(effect);
+    // At the place the blow met, a little toward the copy's side, down the
+    // line its overhead fell along.
+    let at = fx3(effect.pos) - facing * 0.15 * copy_size(effect);
+    let down = (Vec3::Y * 1.0 - facing * 0.35).normalize();
+    let mut cut = framed(
+        Shape::Block,
+        at,
+        down,
+        facing.cross(Vec3::Y).normalize_or(Vec3::X),
+        Vec3::new((0.05 + 0.1 * open) * tall / 1.8, tall * 0.5 * open, 0.04),
+    );
+    cut.skin = Skin::Shade;
+    Some(cut)
+}
+
+/// **Put the five copies of her where the Reaping says they are** (2026-10-19).
+///
+/// Posed the way her shadow is -- the same skeleton, the same solver, the
+/// same pure pose function -- holding her Executioner on the copies' own
+/// clock, which is the Reaping's age: in the snapshot, so a rollback puts
+/// them back exactly where they were. Folding home, each slides into her
+/// live position and thins away.
+#[allow(clippy::type_complexity)]
+fn place_copies(
+    sim: Res<Sim>,
+    looks: Res<CopyLooks>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut roots: Query<(&CopyRoot, &mut Transform, &mut Visibility), Without<CopyPart>>,
+    mut parts: Query<(&CopyPart, &mut Transform), Without<CopyRoot>>,
+) {
+    let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    let alpha = sim.clock.alpha();
+    let skeleton = skeleton_for(sim::Class::ShadowReaver);
+    // Each Reaver's youngest Reaping, if she has one going.
+    let mut reaping: [Option<sim::effects::Effect>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    for e in sim.cur.effects.iter().flatten() {
+        if e.kind != sim::effects::EffectKind::Reaping {
+            continue;
+        }
+        let slot = &mut reaping[(e.owner as usize).min(MAX_PLAYERS - 1)];
+        if slot.is_none_or(|old| e.age < old.age) {
+            *slot = Some(*e);
+        }
+    }
+    let mut skins: [[Option<view::skeleton::Skin>; REAP_COPIES]; MAX_PLAYERS] =
+        [[None; REAP_COPIES]; MAX_PLAYERS];
+    for (root, mut tf, mut seen) in roots.iter_mut() {
+        let (owner, copy) = (root.owner, root.copy);
+        let shown = reaping[owner].filter(|_| copy < copies()).and_then(|e| {
+            let t = (e.age as f32 + alpha).min(e.life as f32);
+            let solid = copy_solid(t, copy);
+            (solid > 0.01).then_some((e, t, solid))
+        });
+        let Some((effect, t, solid)) = shown else {
+            if *seen != Visibility::Hidden {
+                *seen = Visibility::Hidden;
+            }
+            continue;
+        };
+        *seen = Visibility::Inherited;
+        let (spot, facing) = copy_spot(&effect, copy);
+        let size = copy_size(&effect);
+        // Stepping in from a little further out, and folding home to her --
+        // wherever she is, a creature's back included -- down to her size.
+        let arrived = (t / COPY_IN).clamp(0.0, 1.0);
+        let spot = spot - facing * 0.6 * size * (1.0 - arrived) * (1.0 - arrived);
+        let her = Vec3::from(frame.players[owner].pos);
+        let fold = copy_folded(t, copy);
+        let fold = fold * fold;
+        tf.translation = spot.lerp(her, fold);
+        tf.rotation = Quat::from_rotation_y(facing.x.atan2(facing.z));
+        tf.scale = Vec3::splat(size + (0.7 - size) * fold);
+        if let Some(look) = looks.0.get(owner).map(|l| &l[copy]) {
+            let want = solid;
+            if materials
+                .get(look)
+                .is_some_and(|m| (m.base_color.alpha() - want).abs() > 0.01)
+            {
+                if let Some(m) = materials.get_mut(look) {
+                    m.base_color = Color::srgba(COPY_GREY[0], COPY_GREY[1], COPY_GREY[2], want);
+                }
+            }
+        }
+        let mut input = PoseInput::of(&frame.players[owner], sim::Class::ShadowReaver, &frame);
+        input.action = copy_action(t);
+        input.grounded = true;
+        input.crouching = false;
+        input.floating = false;
+        input.speed = 0.0;
+        input.travel = [0.0, 0.0];
+        input.eased_speed = 0.0;
+        input.eased_travel = [0.0, 0.0];
+        input.rise = 0.0;
+        input.turn_rate = 0.0;
+        input.aim_pitch = 0.0;
+        input.shudder = 0.0;
+        input.ledge = None;
+        input.bind_pose = sim.bind_pose;
+        skins[owner][copy] = Some(view::skeleton::solve(
+            &skeleton,
+            &view::play::pose_for(input),
+        ));
+    }
+    for (part, mut tf) in parts.iter_mut() {
+        let Some(skin) = skins[part.owner][part.copy].as_ref() else {
+            continue;
+        };
+        if part.ball {
+            let at = skin.origin[part.joint.index()];
+            tf.translation = Vec3::new(at[0], at[1], at[2]);
+            tf.scale = Vec3::splat(ball_width(&skeleton, part.joint));
         } else {
-            let k = smooth(REAP_SWING, REAP_CUT, u);
-            let k = 1.0 - (1.0 - k) * (1.0 - k);
-            wound + (through - wound) * k
+            let (centre, rot) = skin.box_of(&skeleton, part.joint);
+            let size = view::pose::part_size(&skeleton, part.joint);
+            tf.translation = Vec3::new(centre[0], centre[1], centre[2]);
+            tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
+            tf.scale = Vec3::new(size[0], size[1], size[2]);
         }
-    };
-    let pivot = at(0.22, 0.1, 0.5);
-    let length = h * 0.85;
-    let snath = |angle: f32| ahead * angle.cos() + slant * angle.sin();
-    // The blade leaves the top of the snath at a right angle, on the side
-    // the cut is going, and curls back toward the hands.
-    let edge = |angle: f32, k: f32| {
-        let d = snath(angle);
-        let top = pivot + d * length * 0.7;
-        let lead = -(ahead * -angle.sin() + slant * angle.cos());
-        let curl = k * 1.9;
-        top + (lead * curl.sin() - d * (1.0 - curl.cos())) * h * 0.4
-    };
-    let angle = angle_at(u);
-    let d = snath(angle);
-    let grip_low = pivot - d * length * 0.05;
-    let grip_high = pivot + d * length * 0.2;
-
-    let body = |mut p: Piece| {
-        p.skin = wraith;
-        (solid > 0.02).then_some(p)
-    };
-    const BLADE: usize = 6;
-    const FIGURE: usize = 9;
-    match part {
-        // A robe, hanging from the shoulders to the floor.
-        0 => body(standing(
-            Shape::Spike,
-            wraith,
-            base,
-            h * 0.25,
-            0.0,
-            h * 0.82,
-        )),
-        1 => body(framed(
-            Shape::Block,
-            at(0.0, 0.0, 0.7),
-            Vec3::Y,
-            ahead,
-            Vec3::new(h * 0.38, h * 0.13, h * 0.17),
-        )),
-        // The hood, and the point it falls back to.
-        2 => body(framed(
-            Shape::Head,
-            at(0.02, 0.0, 0.84),
-            Vec3::Y,
-            ahead,
-            Vec3::new(h * 0.15, h * 0.17, h * 0.17),
-        )),
-        3 => body(limb(
-            Shape::Spike,
-            at(-0.03, 0.0, 0.87),
-            at(-0.2, 0.0, 0.95),
-            h * 0.13,
-            ahead,
-        )),
-        // Two cold points looking out of it.
-        4 | 5 => {
-            let s = if part == 4 { -0.035 } else { 0.035 };
-            (solid > 0.3).then(|| floating_in(Skin::WraithEye, at(0.095, s, 0.845), h * 0.016))
-        }
-        // The arms, to the two hands on the snath.
-        6 => body(limb(
-            Shape::Limb,
-            at(0.0, -0.17, 0.71),
-            grip_low,
-            h * 0.07,
-            ahead,
-        )),
-        7 => body(limb(
-            Shape::Limb,
-            at(0.0, 0.17, 0.71),
-            grip_high,
-            h * 0.07,
-            ahead,
-        )),
-        8 => body(limb(
-            Shape::Limb,
-            pivot - d * length * 0.3,
-            pivot + d * length * 0.7,
-            h * 0.035,
-            side,
-        )),
-        // The blade: a crescent of the shadow's darkest, thinning to its point.
-        p if p < FIGURE + BLADE => {
-            let k = (p - FIGURE) as f32;
-            let (a, b) = (
-                edge(angle, k / BLADE as f32),
-                edge(angle, (k + 1.0) / BLADE as f32),
-            );
-            let wide = h * 0.075 * (1.0 - 0.75 * k / BLADE as f32);
-            let normal = slant.cross(ahead);
-            let mut seg = framed(
-                Shape::Block,
-                (a + b) * 0.5,
-                b - a,
-                normal,
-                Vec3::new(wide, (b - a).length() * 1.15, h * 0.03),
-            );
-            seg.skin = if solid > 0.7 { Skin::Shade } else { wraith };
-            (solid > 0.02).then_some(seg)
-        }
-        // Its after-image through the cut: the outer half of the blade, where
-        // it was a frame and two frames ago, thinner each.
-        p if p < FIGURE + BLADE + 4 => {
-            if !(REAP_SWING..REAP_CUT + 0.08).contains(&u) {
-                return None;
-            }
-            let k = p - FIGURE - BLADE;
-            let behind = 1.0 + (k / 2) as f32;
-            let was = angle + (wound - through) * 0.08 * behind;
-            let (from, to) = if k % 2 == 0 { (0.35, 0.7) } else { (0.7, 1.0) };
-            let (a, b) = (edge(was, from), edge(was, to));
-            let mut seg = limb(Shape::Limb, a, b, h * 0.05, side);
-            seg.skin = Skin::Wraith((2.0 - behind) as u8);
-            Some(seg)
-        }
-        // The cut, left hanging across him: a violet slash, opening and
-        // closing again.
-        p if p == FIGURE + BLADE + 4 => {
-            let open = smooth(REAP_CUT - 0.06, REAP_CUT, u) * (1.0 - smooth(REAP_CUT, 0.8, u));
-            if open <= 0.0 {
-                return None;
-            }
-            let across = (side * 0.75 - Vec3::Y * 0.66).normalize();
-            let mut slash = framed(
-                Shape::Block,
-                chest,
-                across,
-                fwd,
-                Vec3::new(0.16 * open, tall * 1.6 * (0.6 + 0.4 * open), 0.02),
-            );
-            slash.skin = Skin::WraithEye;
-            Some(slash)
-        }
-        // Thorns of shadow breaking out of the floor round him, and sinking
-        // back.
-        p if p < FIGURE + BLADE + 5 + 5 => {
-            let k = (p - FIGURE - BLADE - 5) as f32;
-            let grow = smooth(REAP_CUT - 0.04, REAP_CUT + 0.06, u) * (1.0 - smooth(0.7, 0.95, u));
-            if grow <= 0.0 {
-                return None;
-            }
-            let turn = k / 5.0 * std::f32::consts::TAU + 0.4;
-            let out = Vec3::new(turn.cos(), 0.0, turn.sin());
-            let root = feet + out * (0.75 + 0.35 * grow);
-            let mut thorn = limb(
-                Shape::Spike,
-                root,
-                root + (Vec3::Y + out * 0.45) * tall * 0.7 * grow,
-                0.32 * grow.max(0.1),
-                out,
-            );
-            thorn.skin = Skin::Shade;
-            Some(thorn)
-        }
-        _ => None,
     }
 }
 
@@ -7670,6 +7760,101 @@ mod tests {
                 assert!(
                     drawn[a].at.distance(drawn[b].at) > 0.1,
                     "blades {a} and {b} are drawn on top of each other"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn five_of_her_stand_round_him_clear_of_her_and_strike_together() {
+        // The Reaping's copies: on a ring round him, none where she stands
+        // (she came from -x, the way the blow went being +x), no two on top
+        // of each other, every one looking at him, and all of them in the
+        // overhead's active frames on the same frame.
+        let effect = reaping_at(sim::tuning::cast_height(), sim::tuning::body_radius());
+        assert_eq!(
+            copy_size(&effect),
+            1.0,
+            "copies round a fighter are not her size"
+        );
+        let her = Vec3::NEG_X * COPY_RING;
+        let spots: Vec<(Vec3, Vec3)> = (0..copies()).map(|c| copy_spot(&effect, c)).collect();
+        assert_eq!(
+            spots.len(),
+            REAP_COPIES.min(sim::tuning::mark_cap() as usize)
+        );
+        for (k, (spot, facing)) in spots.iter().enumerate() {
+            assert!(
+                (spot.length() - COPY_RING).abs() < 1e-3,
+                "copy {k} is off the ring"
+            );
+            assert_eq!(spot.y, 0.0, "copy {k} is not on the floor");
+            assert!(spot.distance(her) > 1.0, "copy {k} stands where she does");
+            assert!(
+                facing.dot(-spot.normalize()) > 0.999,
+                "copy {k} is not looking at him"
+            );
+            for (j, (other, _)) in spots.iter().enumerate().skip(k + 1) {
+                assert!(spot.distance(*other) > 1.0, "copies {k} and {j} overlap");
+            }
+        }
+        let strike = COPY_STRIKE + 1.0;
+        assert!(matches!(
+            copy_action(strike),
+            sim::state::Action::Active { .. }
+        ));
+        assert!(
+            (0..copies()).all(|c| copy_solid(strike, c) > 0.3),
+            "a copy is not there when the overheads land"
+        );
+        assert!(
+            (0..copies()).all(|c| copy_solid(effect.life as f32, c) < 0.01),
+            "a copy is still standing when the Reaping is over"
+        );
+    }
+
+    /// A Reaping met `high` off the floor at the origin, on something
+    /// `thick`, her blow having gone along +x.
+    fn reaping_at(high: sim::Fx, thick: sim::Fx) -> Effect {
+        let mut e = Effect::cast(
+            EffectKind::Reaping,
+            0,
+            sim::Class::ShadowReaver,
+            0,
+            sim::V3::new(sim::Fx::ZERO, high, sim::Fx::ZERO),
+            sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+            thick,
+        );
+        e.home = sim::V3::ZERO;
+        e
+    }
+
+    #[test]
+    fn five_of_her_grow_to_what_they_cut_and_stand_on_the_floor_round_it() {
+        // A big creature's leg cut at the knee, and its back four metres up:
+        // the copies stand on the floor outside the thing, never in it, and
+        // the higher the place, the bigger they are -- big enough
+        // that the overhead lands there.
+        let fighter = copy_size(&reaping_at(
+            sim::tuning::cast_height(),
+            sim::tuning::body_radius(),
+        ));
+        let leg = reaping_at(sim::Fx::from_int(1), sim::Fx::ONE);
+        let back = reaping_at(sim::Fx::from_int(4), sim::Fx::from_int(2));
+        assert!(copy_size(&leg) >= fighter);
+        assert!(
+            copy_size(&back) > copy_size(&leg) * 1.5,
+            "a back is reaped by copies her size"
+        );
+        assert!(copy_size(&back) <= COPY_GROWS);
+        for (name, e) in [("leg", leg), ("back", back)] {
+            let thick = e.reach.to_f32_for_render();
+            for c in 0..copies() {
+                let (spot, _) = copy_spot(&e, c);
+                assert_eq!(spot.y, 0.0, "a copy round the {name} is not on the floor");
+                assert!(
+                    Vec2::new(spot.x, spot.z).length() > thick + 0.5,
+                    "copy {c} stands inside the {name}"
                 );
             }
         }

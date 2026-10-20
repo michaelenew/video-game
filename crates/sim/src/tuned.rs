@@ -715,7 +715,7 @@ pub const SCALARS: [i32; 708] = [
          1966080, // roam.out,_the_world_moves_to_a_nearer_place_by_(m) = 30
            32768, // blood_mage.black_spike,_a_hit_erupts_for_(x_what_it_dealt) = 0.5
                8, // blood_mage.black_spike,_an_eruption_spreads_out_over = 8
-              72, // reaver.cash-in,_the_reaping_plays_for = 72
+              60, // reaver.cash-in,_the_reaping_plays_for = 60
 ];
 
 #[rustfmt::skip]

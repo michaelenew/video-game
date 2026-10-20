@@ -1023,7 +1023,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_REAP=1",
-                "Start with player two six metres in front of player one and the Reaping just begun on him -- the picture of a Shadow Reaver's cash-in at a full tally -- so a capture can look at it without playing a whole tally up. SHOT_FRAME picks the moment; pair it with DEMO=0.",
+                "Start with player two six metres in front of player one and the Reaping just begun on him -- five copies of a Shadow Reaver's shadow, the picture of her cash-in at a full tally -- so a capture can look at it without playing a whole tally up. In a hunt, SHOT_REAP=leg and SHOT_REAP=back start it on the creature instead -- on a leg, or on top of its back. SHOT_FRAME picks the moment; pair it with DEMO=0.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

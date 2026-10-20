@@ -3447,11 +3447,16 @@ impl World {
                     }
                     if staggers {
                         stagger_the_cashed(&mut self.players[defender]);
+                        // A body is cut at its middle, and is a body thick.
+                        let victim = snapshot[defender].pos;
+                        let floor = floor_under(self.arena(), victim);
                         reap(
                             &mut self.effects,
                             &snapshot[attacker],
                             attacker,
-                            snapshot[defender].pos,
+                            aim::origin(victim),
+                            floor,
+                            t::body_radius(),
                         );
                     }
                     let owed = snapshot[attacker]
@@ -11989,30 +11994,45 @@ fn marks_once(effect: &mut Effect, victim: usize) -> bool {
 }
 
 /// **The Reaping** (2026-10-19): put the picture of a cash-in at a full tally
-/// in the world, standing at `at` -- the feet of whoever the blow spent the
-/// marks on -- and facing the way the blow went, from her to them. Nothing
-/// but a picture (`EffectKind::Reaping`); in the snapshot because its clock
-/// must survive a rollback like any animation's.
-fn reap(effects: &mut [Option<Effect>; MAX_EFFECTS], attacker: &Player, who: usize, at: V3) {
-    let away = V3::new(at.x.sub(attacker.pos.x), Fx::ZERO, at.z.sub(attacker.pos.z));
+/// in the world (`EffectKind::Reaping`). `met` is where the blow met what it
+/// cut -- a body's middle, or the place on a creature's part -- `floor` the
+/// floor under that, and `thick` how far the thing cut reaches out from
+/// `met` across the floor (a body's radius, a leg's, half a back):
+/// what the picture needs to stand its copies of her on the floor round a
+/// fighter, a leg or a whole animal, as big as it takes to reach the place.
+/// It faces the way the blow went, from her to it. Nothing but a picture; in
+/// the snapshot because its clock must survive a rollback like any
+/// animation's.
+fn reap(
+    effects: &mut [Option<Effect>; MAX_EFFECTS],
+    attacker: &Player,
+    who: usize,
+    met: V3,
+    floor: V3,
+    thick: Fx,
+) {
+    let away = V3::new(
+        met.x.sub(attacker.pos.x),
+        Fx::ZERO,
+        met.z.sub(attacker.pos.z),
+    );
     let facing = V3::new(attacker.facing.x, Fx::ZERO, attacker.facing.z);
     let dir = if away.flat_len().raw() > 0 {
         away.normalized()
     } else {
         facing.normalized()
     };
-    spawn_effect(
-        effects,
-        Effect::cast(
-            EffectKind::Reaping,
-            who as u8,
-            attacker.class,
-            attacker.action.attack_kind().unwrap_or(0),
-            at,
-            dir,
-            Fx::ZERO,
-        ),
+    let mut reaping = Effect::cast(
+        EffectKind::Reaping,
+        who as u8,
+        attacker.class,
+        attacker.action.attack_kind().unwrap_or(0),
+        met,
+        dir,
+        thick,
     );
+    reaping.home = floor;
+    spawn_effect(effects, reaping);
 }
 
 /// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
@@ -19315,9 +19335,14 @@ impl World {
             // turned spends nothing.
             if finisher && !guarded.turned() {
                 beast.spend_marks();
+                // On the creature, the Reaping is round the place the blow
+                // met, outside the part it met: a leg, a flank, the whole
+                // back she is standing on.
                 if full {
-                    let under = floor_under(self.arena(), box_out.centre());
-                    reap(&mut self.effects, &attacker, i, under);
+                    let met = box_out.centre();
+                    let floor = floor_under(self.arena(), met);
+                    let thick = beast.part_reach_from(part, met);
+                    reap(&mut self.effects, &attacker, i, met, floor, thick);
                 }
             }
             // Her double duty, against the creature: drink over the pool the

@@ -583,19 +583,16 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                 rising: true,
                 weight: 0.8,
             }),
-            // **The Reaping** (2026-10-19), a cash-in at a full tally: a
-            // knell -- one low bell, the deepest ring anything makes -- under
-            // the reaper's blade coming down, the biggest whoosh a fighter's
-            // move gets. Heard as a reward, not as one more hit.
-            EffectKind::Reaping => {
-                out.push(Patch::Ring(Ring { pitch: 147.0 }), e.pos);
-                Patch::Whoosh(Whoosh {
-                    frames: 22,
-                    size: 3.0,
-                    rising: false,
-                    weight: 1.0,
-                })
-            }
+            // **The Reaping** (2026-10-19), a cash-in at a full tally: five
+            // of her stepping in out of the air and bringing the overhead
+            // down at once -- one long rising whoosh, as long as their
+            // wind-up and the heaviest a fighter's move gets.
+            EffectKind::Reaping => Patch::Whoosh(Whoosh {
+                frames: 16,
+                size: FIGHTER,
+                rising: true,
+                weight: 1.0,
+            }),
             // Anything a later build adds speaks until it is given a voice.
             #[allow(unreachable_patterns)]
             _ => Patch::Gust(Gust {

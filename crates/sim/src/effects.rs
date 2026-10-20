@@ -370,9 +370,10 @@ pub enum EffectKind {
     /// moves nothing -- the blow that spent the marks already did all of
     /// that. `pos` is the victim's feet when the blow landed, `dir` the flat
     /// line from her to him, and it lives `tuning::reaping_life`. The reward
-    /// for executing the whole pattern, made something both players see: the
-    /// five marks driven into him, and a reaper of her shadow standing up
-    /// behind him to take the cut. See `docs/design/shadow-reaver-v2.md`.
+    /// for executing the whole pattern, made something both players see:
+    /// five of her, one a mark -- copies of her shadow body stepping in round
+    /// him and all bringing the overhead down at once. See
+    /// `docs/design/kits/shadow-reaver.md`.
     Reaping,
 }
 
@@ -1359,8 +1360,7 @@ impl Effect {
             EffectKind::Thrall => self.thrall_radius(),
             EffectKind::Heart => t::heart_ground(),
             EffectKind::Surge => self.source().radius,
-            // Nothing is tested against it; the reaper stands this far
-            // behind the one it cuts.
+            // Nothing is tested against it.
             EffectKind::Reaping => self.reach,
         }
     }
