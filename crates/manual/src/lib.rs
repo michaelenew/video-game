@@ -1025,6 +1025,10 @@ pub const SECTIONS: &[Section] = &[
                 "SHOT_REAP=1",
                 "Start with player two six metres in front of player one and the Reaping just begun on him -- five copies of a Shadow Reaver's shadow, the picture of her cash-in at a full tally -- so a capture can look at it without playing a whole tally up. In a hunt, SHOT_REAP=leg and SHOT_REAP=back start it on the creature instead -- on a leg, or on top of its back. SHOT_FRAME picks the moment; pair it with DEMO=0.",
             ),
+            e(
+                "SHOT_PORTRAIT=seat,angle,distance,height",
+                "Take the camera off the fight and put it distance metres from that seat's fighter (0 is player one), angle degrees round from straight in front of them, looking at height metres above their feet -- how a character is looked at as a piece of art: SHOT_PORTRAIT=0,25,2.4,1.0 is the Shadow Reaver head to foot, 0,20,0.9,1.62 her face. Pair it with DEMO=0 and SHOT_FRAME, and --look brushed for the painted picture.",
+            ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(

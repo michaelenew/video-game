@@ -11,7 +11,10 @@ jumps should feel, and what is still open about progression and story -- is
 [ability spec](ability-spec.md) → a class kit. For implementation, see
 [architecture](architecture.md); before touching anything that is *pointed at
 something*, see [aiming](aiming.md); how the picture is painted -- Guild Wars 2's
-brushwork, how it was found and what did not work -- is [painting](painting.md); the world's checksum logic -- the
+brushwork, how it was found and what did not work -- is [painting](painting.md); how a
+character is built as art rather than as a mannequin -- the Shadow Reaver, by script,
+from a CC0 body -- is [exploration/0024](exploration/0024_a_character_done_properly.md) and
+[`art/README.md`](../../art/README.md); the world's checksum logic -- the
 overlapping regions every build keeps its books in -- is
 [regions](regions.md), and where it goes next is
 [exploration/0018](exploration/0018_crowds.md).

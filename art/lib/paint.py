@@ -87,38 +87,60 @@ def _target(ob, img):
         nt.nodes.active = tex
 
 
-def bake(ob, kind, size, samples=32, build=None, margin=12):
+def bake(ob, kind, size, samples=32, build=None, margin=12, source=None):
     """Bake one pass of ``ob`` into a float image and return it as an
-    ``(size, size, 3)`` array, row 0 at the top of the texture."""
+    ``(size, size, 3)`` array, row 0 at the top of the texture.
+
+    With a ``source``, the pass is read off that object instead, along rays
+    from ``ob``'s surface (Blender's "selected to active"): how the high
+    piece's folds reach the game piece's texture. ``build`` then gives the
+    source's emission, and the image is written on ``ob``."""
     s = bpy.context.scene
     s.render.engine = "CYCLES"
     s.cycles.samples = samples
     s.cycles.use_denoising = False
     img = _image(f"{ob.name}_{kind}", size)
-    saved, temps = (None, None)
+    emitter = source if source is not None else ob
     if build is not None:
-        saved, temps = _emit_material(ob, build)
+        saved, temps = _emit_material(emitter, build)
     else:
         temps = []
-        saved = [sl.material for sl in ob.material_slots]
-        for slot in ob.material_slots:
+        saved = [sl.material for sl in emitter.material_slots]
+        for slot in emitter.material_slots:
             m = slot.material.copy()
             slot.material = m
             temps.append(m)
+    t_saved, t_temps = None, None
+    if source is not None:
+        t_saved = [sl.material for sl in ob.material_slots]
+        t_temps = []
+        for slot in ob.material_slots:
+            m = slot.material.copy()
+            slot.material = m
+            t_temps.append(m)
     _target(ob, img)
     for o in bpy.context.selected_objects:
         o.select_set(False)
+    if source is not None:
+        source.select_set(True)
     ob.select_set(True)
     bpy.context.view_layer.objects.active = ob
     s.render.bake.margin = margin
-    s.render.bake.use_selected_to_active = False
+    s.render.bake.use_selected_to_active = source is not None
+    s.render.bake.cage_extrusion = 0.012
+    s.render.bake.max_ray_distance = 0.03
     if kind == "AO":
         s.world.light_settings.distance = 0.35
         bpy.ops.object.bake(type="AO")
+    elif kind == "NORMAL":
+        s.render.bake.normal_space = "TANGENT"
+        bpy.ops.object.bake(type="NORMAL")
     else:
         bpy.ops.object.bake(type="EMIT")
     px = np.array(img.pixels[:]).reshape(size, size, 4)[::-1, :, :3].copy()
-    _restore(ob, saved, temps)
+    _restore(emitter, saved, temps)
+    if source is not None:
+        _restore(ob, t_saved, t_temps)
     bpy.data.images.remove(img)
     return px
 
@@ -129,8 +151,14 @@ def attr(nodes, name, kind="GEOMETRY"):
     return a
 
 
-def passes(ob, size, colours):
-    """Every pass ``compose`` reads. ``colours``: material name -> rgb."""
+def passes(ob, size, colours, high=None):
+    """Every pass ``compose`` reads. ``colours``: material name -> rgb.
+
+    With ``high``, the shape-dependent passes -- curvature, the direction a
+    point faces, and a tangent-space normal map for the game -- are read off
+    the high piece, so its folds are in them; the occlusion is the game
+    piece's own, with the high one hidden, because two surfaces a millimetre
+    apart would shade each other black."""
 
     def base(nodes, links, mname):
         rgb = nodes.new("ShaderNodeRGB")
@@ -156,7 +184,14 @@ def passes(ob, size, colours):
             links.new(sep.outputs[1], mix2.inputs["Factor"])
             links.new(mix.outputs["Result"], mix2.inputs["A"])
             links.new(third.outputs[0], mix2.inputs["B"])
-            return mix2.outputs["Result"]
+            fourth = nodes.new("ShaderNodeRGB")
+            fourth.outputs[0].default_value = (*colours.get(mname + "/4", colours.get(mname, (1, 0, 1))), 1)
+            mix3 = nodes.new("ShaderNodeMix")
+            mix3.data_type = "RGBA"
+            links.new(sep.outputs[2], mix3.inputs["Factor"])
+            links.new(mix2.outputs["Result"], mix3.inputs["A"])
+            links.new(fourth.outputs[0], mix3.inputs["B"])
+            return mix3.outputs["Result"]
         return rgb.outputs[0]
 
     def material_id(nodes, links, mname):
@@ -203,8 +238,11 @@ def passes(ob, size, colours):
     out = {}
     out["base"] = bake(ob, "EMIT", size, 1, base)
     out["id"] = bake(ob, "EMIT", size, 1, material_id)[:, :, 0]
-    out["curv"] = bake(ob, "EMIT", size, 4, curvature)[:, :, 0]
-    out["nrm"] = bake(ob, "EMIT", size, 1, normal) * 2 - 1
+    out["curv"] = bake(ob, "EMIT", size, 4, curvature, source=high)[:, :, 0]
+    out["nrm"] = bake(ob, "EMIT", size, 1, normal, source=high) * 2 - 1
+    if high is not None:
+        out["normal"] = bake(ob, "NORMAL", size, 1, source=high)
+        high.hide_render = True
     out["pos"] = (bake(ob, "EMIT", size, 1, position) - np.array([0.5, 0.5, 0.0])) / np.array([0.4, 0.4, 0.45])
     out["ao"] = bake(ob, "AO", size, 48)[:, :, 0]
     if "detail" in ob.data.color_attributes:

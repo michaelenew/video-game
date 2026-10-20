@@ -24,6 +24,7 @@ mod bake;
 mod beast;
 mod cairns;
 mod claimed;
+mod coat;
 mod critters;
 mod crosshair;
 mod debug;
@@ -35,6 +36,7 @@ mod grove;
 mod heel;
 mod hub;
 mod hud;
+mod ink;
 mod keep;
 mod land;
 mod menu;
@@ -50,6 +52,7 @@ mod settings;
 mod shapes;
 mod signs;
 mod sky;
+mod slash;
 mod sound;
 mod species;
 mod splats;
@@ -256,6 +259,7 @@ fn main() {
         .add_plugins(still::StillPlugin)
         .add_plugins(splats::SplatsPlugin)
         .add_plugins(warm::WarmPlugin)
+        .add_plugins(ink::InkPlugin)
         .add_plugins(reaver::ReaverPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
@@ -321,7 +325,14 @@ fn main() {
                     .chain(),
                 // One entry, so the chain stays under twenty: the balls go
                 // where the poses just put the joints.
-                (apply_poses, pose_balls, place_copies, pose_models).chain(),
+                (
+                    apply_poses,
+                    pose_balls,
+                    place_copies,
+                    pose_models,
+                    swing_coats,
+                )
+                    .chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -756,11 +767,15 @@ fn ball_width(skeleton: &Skeleton, joint: view::skeleton::Joint) -> f32 {
 }
 
 /// Where each fighter's joints are this frame, in the fighter's own frame:
-/// what [`pose_balls`] puts the balls at. Written by the posing pass.
+/// what [`pose_balls`] puts the balls at. Written by the posing pass. The
+/// Reaping's copies too, and how solid each is, for the Reaver's model
+/// (`reaver`), which is posed from here rather than solved again.
 #[derive(Resource, Default)]
 struct Joints {
     body: [Option<view::skeleton::Skin>; MAX_PLAYERS],
     shadow: [Option<view::skeleton::Skin>; MAX_PLAYERS],
+    copies: [[Option<view::skeleton::Skin>; REAP_COPIES]; MAX_PLAYERS],
+    copy_solid: [[f32; REAP_COPIES]; MAX_PLAYERS],
 }
 
 /// A ball at one of a fighter's joints. See [`BALLS`].
@@ -3049,48 +3064,131 @@ fn fade_own_body(
     }
 }
 
-/// The classes drawn as characters rather than mannequins (`reaver`): their
-/// model's joints put where the skeleton was just solved, and the
-/// mannequin's parts hidden while they are.
-#[allow(clippy::type_complexity)]
+/// The classes drawn as characters rather than mannequins (`reaver`): each
+/// model's joints put where the skeletons were just solved -- her own, her
+/// shadow's, the Reaping's copies' -- and the mannequins' parts hidden while
+/// the models stand in for them.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)] // a Bevy system: its arguments are what it reads
 fn pose_models(
     sim: Res<Sim>,
     joints: Res<Joints>,
     rigs: Res<reaver::Rigs>,
+    mut inks: ResMut<Assets<ink::InkMaterial>>,
     mut models: Query<(&reaver::Model, &mut Visibility)>,
     mut bones: Query<&mut Transform, Without<Fighter>>,
     mut parts: Query<(&BodyPart, &mut Visibility), Without<reaver::Model>>,
     mut balls: Query<(&BodyBall, &mut Visibility), (Without<reaver::Model>, Without<BodyPart>)>,
+    mut shadow_parts: Query<
+        (&ShadowPart, &mut Visibility),
+        (Without<reaver::Model>, Without<BodyPart>, Without<BodyBall>),
+    >,
+    mut shadow_balls: Query<
+        (&ShadowBall, &mut Visibility),
+        (
+            Without<reaver::Model>,
+            Without<BodyPart>,
+            Without<BodyBall>,
+            Without<ShadowPart>,
+        ),
+    >,
+    mut copy_parts: Query<
+        (&CopyPart, &mut Visibility),
+        (
+            Without<reaver::Model>,
+            Without<BodyPart>,
+            Without<BodyBall>,
+            Without<ShadowPart>,
+            Without<ShadowBall>,
+        ),
+    >,
 ) {
-    for owner in 0..MAX_PLAYERS {
-        let class = sim.cur.players[owner].class;
+    let modelled = |owner: usize| reaver::drawn(sim.cur.players[owner].class) && rigs.ready(owner);
+    for (model, mut seen) in models.iter_mut() {
+        let want = if modelled(model.owner) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *seen != want {
+            *seen = want;
+        }
+    }
+    for owner in (0..MAX_PLAYERS).filter(|&o| modelled(o)) {
+        reaver::pose(rigs.her[owner], joints.body[owner].as_ref(), &mut bones);
         reaver::pose(
-            &rigs,
-            owner,
-            class,
-            joints.body[owner].as_ref(),
-            &mut models,
+            rigs.shadow[owner],
+            joints.shadow[owner].as_ref(),
             &mut bones,
         );
+        for copy in 0..REAP_COPIES {
+            reaver::pose(
+                rigs.copies[owner][copy],
+                joints.copies[owner][copy].as_ref(),
+                &mut bones,
+            );
+            let solid = (joints.copy_solid[owner][copy] / COPY_SOLID).min(1.0);
+            reaver::fade_copy(&rigs, owner, copy, solid, &mut inks);
+        }
     }
     let mannequin = |owner: usize| {
-        if reaver::drawn(sim.cur.players[owner].class) && rigs.joints[owner].is_some() {
+        if modelled(owner) {
             Visibility::Hidden
         } else {
             Visibility::Inherited
         }
     };
-    for (part, mut seen) in parts.iter_mut() {
-        let want = mannequin(part.owner);
+    let put = |seen: &mut Visibility, owner: usize| {
+        let want = mannequin(owner);
         if *seen != want {
             *seen = want;
         }
+    };
+    for (part, mut seen) in parts.iter_mut() {
+        put(&mut seen, part.owner);
     }
     for (ball, mut seen) in balls.iter_mut() {
-        let want = mannequin(ball.owner);
-        if *seen != want {
-            *seen = want;
+        put(&mut seen, ball.owner);
+    }
+    for (part, mut seen) in shadow_parts.iter_mut() {
+        put(&mut seen, part.owner);
+    }
+    for (ball, mut seen) in shadow_balls.iter_mut() {
+        put(&mut seen, ball.owner);
+    }
+    for (part, mut seen) in copy_parts.iter_mut() {
+        put(&mut seen, part.owner);
+    }
+}
+
+/// Swing the coat tails of every seat drawn by its model (`coat`), from the
+/// skeleton just solved and where the fighter is.
+fn swing_coats(
+    sim: Res<Sim>,
+    time: Res<Time>,
+    joints: Res<Joints>,
+    rigs: Res<reaver::Rigs>,
+    mut coats: ResMut<coat::Coats>,
+    fighters: Query<(&Fighter, &Transform)>,
+    mut bones: Query<&mut Transform, Without<Fighter>>,
+) {
+    for (fighter, body) in fighters.iter() {
+        let owner = fighter.0;
+        if !reaver::drawn(sim.cur.players[owner].class) {
+            continue;
         }
+        let (Some(tails), Some(skin)) = (rigs.tails[owner].as_ref(), joints.body[owner].as_ref())
+        else {
+            continue;
+        };
+        coat::swing(
+            &mut coats,
+            owner,
+            tails,
+            skin,
+            body,
+            time.delta_secs(),
+            &mut bones,
+        );
     }
 }
 
@@ -5977,6 +6075,7 @@ fn reaping_cut(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
 fn place_copies(
     sim: Res<Sim>,
     looks: Res<CopyLooks>,
+    mut joints: ResMut<Joints>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut roots: Query<(&CopyRoot, &mut Transform, &mut Visibility), Without<CopyPart>>,
     mut parts: Query<(&CopyPart, &mut Transform), Without<CopyRoot>>,
@@ -6004,6 +6103,7 @@ fn place_copies(
             let solid = copy_solid(t, copy);
             (solid > 0.01).then_some((e, t, solid))
         });
+        joints.copy_solid[owner][copy] = shown.map_or(0.0, |(_, _, solid)| solid);
         let Some((effect, t, solid)) = shown else {
             if *seen != Visibility::Hidden {
                 *seen = Visibility::Hidden;
@@ -6054,6 +6154,7 @@ fn place_copies(
             &view::play::pose_for(input),
         ));
     }
+    joints.copies = skins;
     for (part, mut tf) in parts.iter_mut() {
         let Some(skin) = skins[part.owner][part.copy].as_ref() else {
             continue;

@@ -21,6 +21,7 @@ import numpy as np
 import garment as g
 
 JOINTS = g.JOINTS
+ALL = g.ALL
 
 
 def _pad(b, fill=b"\x00"):
@@ -38,6 +39,23 @@ def _mat4(origin, quat):
     M[:3, :3] = R
     M[:3, 3] = origin
     return M
+
+
+def _quat(R):
+    """A rotation matrix's quaternion, [x, y, z, w]."""
+    t = np.trace(R)
+    if t > 0:
+        s = np.sqrt(t + 1.0) * 2
+        return np.array([(R[2, 1] - R[1, 2]) / s, (R[0, 2] - R[2, 0]) / s, (R[1, 0] - R[0, 1]) / s, 0.25 * s])
+    i = int(np.argmax(np.diag(R)))
+    j, k = (i + 1) % 3, (i + 2) % 3
+    s = np.sqrt(1.0 + R[i, i] - R[j, j] - R[k, k]) * 2
+    q = np.zeros(4)
+    q[i] = 0.25 * s
+    q[j] = (R[j, i] + R[i, j]) / s
+    q[k] = (R[k, i] + R[i, k]) / s
+    q[3] = (R[k, j] - R[j, k]) / s
+    return q
 
 
 def gather(objects):
@@ -58,13 +76,17 @@ def gather(objects):
         n = len(me.vertices)
         co = np.zeros(n * 3)
         me.vertices.foreach_get("co", co)
-        co = g.b2g(co.reshape(-1, 3))
+        # Where the object stands, too: a piece placed by its object rather
+        # than in its mesh would otherwise come out at the feet.
+        mw = np.array(ob.matrix_world)
+        co = co.reshape(-1, 3) @ mw[:3, :3].T + mw[:3, 3]
+        co = g.b2g(co)
         loops = len(me.loops)
         lv = np.zeros(loops, dtype=np.int64)
         me.loops.foreach_get("vertex_index", lv)
         ln = np.zeros(loops * 3)
         me.corner_normals.foreach_get("vector", ln)
-        ln = g.b2g(ln.reshape(-1, 3))
+        ln = g.b2g(ln.reshape(-1, 3) @ np.linalg.inv(mw[:3, :3]))
         if me.uv_layers.active:
             uv = np.zeros(loops * 2)
             me.uv_layers.active.data.foreach_get("uv", uv)
@@ -104,11 +126,19 @@ def gather(objects):
     return out
 
 
-def write(path, prims, materials, images, bind_origin, bind_rot, name="character"):
+def write(path, prims, materials, images, bind_origin, bind_rot, name="character", extras=None):
     """``prims``: from ``gather``. ``materials``: name -> dict with
     ``color`` (image index or None), ``mr`` (image index or None),
     ``emissive`` (image index or None), ``factor`` (rgba). ``images``: a list
-    of PNG bytes."""
+    of PNG bytes.
+
+    ``extras``: ``{"tails": [(name, parent, origin)], "markers": [(name,
+    parent, point)]}`` -- the coat's joints, in ``garment.TAILS`` order, each
+    a child node of its parent at its bind place (unturned); and points a
+    joint carries that the game reads (a blade's tip), as children of it.
+    The sixteen joints of the skeleton are top-level nodes, as the game
+    sets them in character space; anything under one moves with it."""
+    extras = extras or {"tails": [], "markers": []}
     blob = bytearray()
     views, accessors = [], []
 
@@ -144,6 +174,8 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
         if m.get("mr") is not None:
             pbr["metallicRoughnessTexture"] = {"index": m["mr"]}
         gm = {"name": mname, "pbrMetallicRoughness": pbr}
+        if m.get("normal") is not None:
+            gm["normalTexture"] = {"index": m["normal"]}
         if m.get("emissive") is not None:
             gm["emissiveTexture"] = {"index": m["emissive"]}
             gm["emissiveFactor"] = [1.0, 1.0, 1.0]
@@ -175,15 +207,47 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
             "material": mi,
         })
 
-    ibm = np.stack([np.linalg.inv(_mat4(o, q)).T.astype(np.float32) for o, q in zip(bind_origin, bind_rot)])
-    ibm_acc = acc(ibm.reshape(16, 16), FLOAT, "MAT4")
+    # Every joint's bind matrix in character space: the skeleton's, then the
+    # coat's, which are unturned at their bind places.
+    world = {jn: _mat4(o, q) for jn, o, q in zip(JOINTS, bind_origin, bind_rot)}
+    parent_of = {}
+    tails = {t[0]: t for t in extras["tails"]}
+    for tn in g.TAILS:
+        _, parent, origin = tails.get(tn, (tn, "root", list(bind_origin[0])))
+        world[tn] = _mat4(np.asarray(origin, float), (0.0, 0.0, 0.0, 1.0))
+        parent_of[tn] = parent
+    count = len(ALL)
+    ibm = np.stack([np.linalg.inv(world[jn]).T.astype(np.float32) for jn in ALL])
+    ibm_acc = acc(ibm.reshape(count, 16), FLOAT, "MAT4")
+
+    def local(child_world, parent):
+        m = np.linalg.inv(world[parent]) @ child_world
+        q = _quat(m[:3, :3])
+        return [float(x) for x in m[:3, 3]], [float(x) for x in q]
 
     nodes = []
-    for j, jn in enumerate(JOINTS):
-        q = np.asarray(bind_rot[j], float)
-        nodes.append({"name": jn, "translation": [float(x) for x in bind_origin[j]],
-                      "rotation": [float(x) for x in q / np.linalg.norm(q)]})
+    index = {}
+    for jn in ALL:
+        index[jn] = len(nodes)
+        if jn in parent_of:
+            t, r = local(world[jn], parent_of[jn])
+        else:
+            j = JOINTS.index(jn)
+            q = np.asarray(bind_rot[j], float)
+            t, r = [float(x) for x in bind_origin[j]], [float(x) for x in q / np.linalg.norm(q)]
+        nodes.append({"name": jn, "translation": t, "rotation": r})
+    for mname, parent, point in extras["markers"]:
+        m = np.eye(4)
+        m[:3, 3] = point
+        t, _ = local(m, parent)
+        index[mname] = len(nodes)
+        nodes.append({"name": mname, "translation": t})
+        parent_of[mname] = parent
+    for child, parent in parent_of.items():
+        nodes[index[parent]].setdefault("children", []).append(index[child])
+    roots = [i for i, nd in enumerate(nodes) if nd["name"] not in parent_of]
     nodes.append({"name": name, "mesh": 0, "skin": 0})
+    roots.append(len(nodes) - 1)
 
     gl_images, textures = [], []
     for i, png in enumerate(images):
@@ -195,10 +259,10 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
     doc = {
         "asset": {"version": "2.0", "generator": "art/lib/glb.py"},
         "scene": 0,
-        "scenes": [{"name": name, "nodes": list(range(len(nodes)))}],
+        "scenes": [{"name": name, "nodes": roots}],
         "nodes": nodes,
         "meshes": [{"name": name, "primitives": primitives}],
-        "skins": [{"joints": list(range(16)), "inverseBindMatrices": ibm_acc}],
+        "skins": [{"joints": [index[jn] for jn in ALL], "inverseBindMatrices": ibm_acc}],
         "materials": gl_mats,
         "accessors": accessors,
         "bufferViews": views,

@@ -352,6 +352,18 @@ is the one place the simulation's transitions are read as sounds, and
 something sounds like in the game crate, stop: it goes in a patch. The
 reasoning is [`docs/design/sound.md`](docs/design/sound.md).
 
+## A character is a script, not a file
+
+The Shadow Reaver is drawn by a skinned model, `crates/game/assets/reaver.glb`,
+and **that file is built, never edited**: `art/reaver/build.py`, run under
+Blender as a Python module (`art/blender.sh`, `./scripts/setup-tools.sh art`),
+from MakeHuman's CC0 body. Its joints are the game's sixteen
+(`view::skeleton`), named as `Joint::name` names them and set each frame from
+the skin `apply_poses` solves, so a change to the skeleton is a rebuild there.
+Judge her lit, in the game (`SHOT_PORTRAIT`). The reasoning, what failed and
+what is left is [exploration/0024](docs/design/exploration/0024_a_character_done_properly.md);
+the commands are [`art/README.md`](art/README.md).
+
 ## Tools that are not on every machine
 
 Four things this repository does need tools a fresh machine does not have: the
@@ -362,7 +374,8 @@ to the browser build is checked) needs Playwright and its Chromium, and **a
 desktop joining a page's room** (`./scripts/room-desktop.sh`, how a change to
 `net::native` is checked) needs all of those and mosquitto.
 `./scripts/setup-tools.sh web`, `shot`, `browser`, `broker` or `all` installs
-them, once, and is the only place the steps are written. A fifth, `desktop`,
+them, once, and is the only place the steps are written. (`art`, which only
+rebuilding a character's model needs, is there too.) A fifth, `desktop`,
 is not a tool but the one system library the **desktop build** itself needs
 on Linux: ALSA's headers, for the game's sound; a build error naming
 `alsa-sys` is that. The Pages workflow runs it; a

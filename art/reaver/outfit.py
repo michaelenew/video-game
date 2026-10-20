@@ -28,6 +28,11 @@ J = {n: i for i, n in enumerate(g.JOINTS)}
 # (``view::hand_joint``).
 LEFT = "r"
 
+# What the export needs besides the skeleton: the coat's joints, each with
+# its parent and where it is in the bind pose; and points carried by a
+# joint that the game reads but nothing draws (the blades' tips).
+EXTRAS = {"tails": [], "markers": []}
+
 # Colours are placeholders for the painted textures: what each material is.
 PALETTE = {
     "knit": (0.07, 0.065, 0.085),
@@ -40,6 +45,7 @@ PALETTE = {
     "metal_dark": (0.2, 0.19, 0.2),
     "wrap": (0.30, 0.27, 0.25),
     "eye": (0.80, 0.78, 0.76),
+    "trousers": (0.06, 0.055, 0.07),
 }
 
 
@@ -74,25 +80,45 @@ def w(fw, *names):
 
 
 def piece(body, name, gap, keep, trims=(), keeps=(), thick=0.004, smooth=2, faces=1200,
-          material="leather", voxel=0.004, close=0.0, trim=0.03):
+          material="leather", voxel=0.004, close=0.0, trim=0.03, folds=None):
     """A garment: the body inflated by ``gap``, the faces ``keep`` names, cut
     clean by planes (``trims`` thrown away on their normal's side, ``keeps``
-    kept), thinned to a game's budget and given a thickness."""
+    kept), and made twice, as a game character is:
+
+    - the **high** piece, at the shell's full density, with its folds pushed
+      into it (``folds(ob)``) and a little unevenness everywhere;
+    - the **game** piece, thinned to a budget of ``faces`` triangles.
+
+    The high piece is never exported. Its folds are baked onto the game
+    piece's texture as a normal map and as the curvature the painter reads
+    (``paint.passes``), so they catch the game's light and the painted
+    light alike for no triangles. Both are given a thickness."""
     sh = g.shell(body, gap, voxel=voxel, smooth=smooth, close=close)
-    ob = g.cut(sh, keep, name)
+    hi = g.cut(sh, keep, name + "~hi")
     for point, normal in trims:
-        g.trim(ob, point, normal)
+        g.trim(hi, point, normal)
     for point, normal in keeps:
-        g.keep_side(ob, point, normal)
+        g.keep_side(hi, point, normal)
+    g.smooth_border(hi)
+    g.smooth_shape(hi, 0.4, 2)
+    if trim:
+        g.hem(hi, trim)
+    ob = hi.copy()
+    ob.data = hi.data.copy()
+    ob.name = ob.data.name = name
+    g.link(ob)
     # ``faces`` counts triangles; the shell is quads.
     g.decimate(ob, min(1.0, faces / max(1, 2 * len(ob.data.polygons))))
-    g.smooth_shape(ob, 0.4, 2)
-    if trim:
-        g.hem(ob, trim)
-    if thick:
-        g.thicken(ob, thick)
-    ob.data.shade_smooth()
-    g.material(ob, mat(material))
+    g.fabric(hi)
+    if folds:
+        folds(hi)
+    for o in (hi, ob):
+        if thick:
+            g.thicken(o, thick)
+        o.data.shade_smooth()
+        g.material(o, mat(material))
+    hi["hi"] = True
+    hi.hide_render = True
     return ob
 
 
@@ -101,9 +127,13 @@ def boots(body, r):
     for s in "lr":
         knee, ankle = f"shin.{s}", f"foot.{s}"
         up = r.dir(ankle, knee)
+        def folds(o, ankle=ankle, knee=knee):
+            g.wrinkle(o, r.o[ankle] + np.array([0, 0.03, 0.03]), r.dir(knee, ankle), 0.04, 0.0035,
+                      0.025, skew=0.8, seed=23)
+
         out.append(piece(body, f"boot.{s}", 0.008, lambda c, fw: w(fw, knee, ankle) > 0.3,
                          trims=[(r.along(knee, ankle, 0.12), up)], material="leather_dark",
-                         smooth=7, faces=1400))
+                         smooth=7, faces=1000, folds=folds))
         out.append(piece(body, f"cuff.{s}", 0.016, lambda c, fw: w(fw, knee) > 0.3,
                          trims=[(r.along(knee, ankle, 0.07), up)],
                          keeps=[(r.along(knee, ankle, 0.20), up)], material="leather", faces=400))
@@ -148,11 +178,64 @@ def armholes(r, inset):
 
 
 def jerkin(body, r):
+    """A fitted leather jerkin, collar to the top of the thigh: bridged
+    over the bust and the small of the back as stiff leather is, its skirt
+    falling past the belt, creased at the waist where it bends."""
     hip = r.o["thigh.l"][1]
     neck = r.o["head"][1]
-    return [piece(body, "jerkin", 0.009, smooth=8, close=0.035, keep= lambda c, fw: w(fw, "root", "spine", "chest", "arm.l", "arm.r") > 0.4,
-                  trims=[([0, hip - 0.05, 0], [0, -1, 0]), ([0, neck - 0.03, 0], [0, 1, 0])]
-                  + armholes(r, 0.03), faces=2600)]
+    waist = r.o["spine"]
+
+    def folds(o):
+        g.wrinkle(o, waist + np.array([0, 0.03, 0]), [0, 1, 0], 0.06, 0.004, 0.035, seed=1)
+        g.drape_folds(o, hip - 0.02, hip - 0.13, 0.004, 9, seed=2)
+
+    return [piece(body, "jerkin", 0.012, smooth=8, close=0.04,
+                  keep=lambda c, fw: w(fw, "root", "spine", "chest", "arm.l", "arm.r", "thigh.l", "thigh.r") > 0.4,
+                  trims=[([0, hip - 0.12, 0], [0, -1, 0]), ([0, neck - 0.03, 0], [0, 1, 0])]
+                  + armholes(r, 0.03), faces=2000, folds=folds, trim=0.025)]
+
+
+def trousers(body, r):
+    """Close-cut trousers of soft dark cloth, tucked into the boots: the
+    crotch bridged, folds pushed together at the knee, bunched where the boot
+    top grips them, and hanging from the seat."""
+    hip = r.o["thigh.l"][1]
+
+    def folds(o):
+        for i, s in enumerate("lr"):
+            knee = r.o[f"shin.{s}"]
+            g.wrinkle(o, knee, r.dir(f"thigh.{s}", f"shin.{s}"), 0.08, 0.005, 0.04, seed=3 + i)
+            top = r.along(f"shin.{s}", f"foot.{s}", 0.17)
+            g.wrinkle(o, top, r.dir(f"shin.{s}", f"foot.{s}"), 0.045, 0.006, 0.028, seed=5 + i,
+                      bias=0.2)
+            g.wrinkle(o, r.o[f"thigh.{s}"] + np.array([0, -0.08, 0.04]),
+                      r.dir(f"thigh.{s}", f"shin.{s}"), 0.07, 0.0035, 0.05, skew=1.4, seed=7 + i)
+
+    keep = lambda c, fw: w(fw, "root", "thigh.l", "thigh.r", "shin.l", "shin.r") > 0.4  # noqa: E731
+    trims = [([0, hip + 0.07, 0], [0, 1, 0])]
+    for s in "lr":
+        trims.append((r.along(f"shin.{s}", f"foot.{s}", 0.30), r.dir(f"shin.{s}", f"foot.{s}")))
+    return [piece(body, "trousers", 0.009, keep, trims=trims, smooth=4, close=0.025,
+                  material="trousers", faces=1800, folds=folds, trim=0.0)]
+
+
+def sleeves(body, r):
+    """Sleeves of the same knit as the trousers, from under the jerkin to
+    under the vambrace, gathered at the elbow."""
+    out = []
+    for i, s in enumerate("lr"):
+        sh, el, wr = f"arm.{s}", f"forearm.{s}", f"hand.{s}"
+
+        def folds(o, s=s, el=el, sh=sh, i=i):
+            g.wrinkle(o, r.o[el], r.dir(sh, el), 0.07, 0.0045, 0.03, seed=11 + i)
+            g.wrinkle(o, r.along(sh, el, 0.15), r.dir(sh, el), 0.05, 0.003, 0.04, skew=1.2,
+                      seed=13 + i)
+
+        out.append(piece(body, f"sleeve.{s}", 0.006, lambda c, fw, sh=sh, el=el: w(fw, sh, el) > 0.45,
+                         trims=[(r.along(el, wr, 0.55), r.dir(el, wr))],
+                         keeps=[(r.o[sh] - r.dir(sh, el) * 0.01, r.dir(sh, el))],
+                         smooth=3, close=0.01, material="trousers", faces=700, folds=folds, trim=0.0))
+    return out
 
 
 def belt(body, r):
@@ -186,8 +269,14 @@ def hood(body, r):
     trims = [([0, shoulder - 0.20, 0.0], [0.62, -1, 0.0]), ([0, shoulder - 0.20, 0.0], [-0.62, -1, 0.0])]
     for s, sign in (("l", -1), ("r", 1)):
         trims.append(([sign * (r.o[f"arm.{s}"][0] * sign + 0.06), 0, 0], [sign, -0.15, 0]))
+    neck = r.o["head"]
+
+    def folds(o):
+        g.wrinkle(o, neck + np.array([0, 0.05, 0]), [0, 1, 0], 0.05, 0.006, 0.03, skew=1.5, seed=17)
+        g.drape_folds(o, shoulder + 0.02, shoulder - 0.2, 0.005, 7, seed=19)
+
     ob = piece(body, "hood", 0.03, keep, trims=trims, smooth=6, material="hood", thick=0.005,
-               voxel=0.005, faces=2800, close=0.05, trim=0.025)
+               voxel=0.005, faces=2200, close=0.05, trim=0.025, folds=folds)
     _peak(ob, r.o["head"], eye)
     _brim(ob, eye)
     return [ob]
@@ -226,7 +315,8 @@ def mask(body, r):
     eye = (r.marks["eye.l"] + r.marks["eye.r"]) / 2
     shoulder = r.o["arm.l"][1]
     return [piece(body, "mask", 0.004, lambda c, fw: w(fw, "head", "chest") > 0.5,
-                  trims=[([0, eye[1] - 0.028, 0.0], [0, 1, 0.35])],
+                  # Over the bridge of the nose, just under the eyes.
+                  trims=[([0, eye[1] - 0.016, 0.0], [0, 1, 0.12])],
                   keeps=[([0, shoulder + 0.02, 0.0], [0, 1, 0])], material="mask", thick=0.003,
                   faces=1000, voxel=0.003, close=0.02, trim=0.012)]
 
@@ -242,6 +332,10 @@ def daggers(body, r):
         parts = []
         bv, bf, bedge = forge.blade()
         parts.append(("blade", bv, bf, "metal"))
+        # The tip and the root of the blade, for the trail its cut leaves.
+        span = forge.frame(np.array([[0.30, 0.012, 0.0], [0.06, 0.0, 0.0]]), origin, u, edge)
+        EXTRAS["markers"].append((f"blade.{s}.tip", f"hand.{s}", span[0].tolist()))
+        EXTRAS["markers"].append((f"blade.{s}.base", f"hand.{s}", span[1].tolist()))
         gv, gf = forge.guard()
         parts.append(("guard", gv, gf, "metal_dark"))
         hv, hf = forge.handle()
@@ -315,6 +409,14 @@ def coat_tails(body, r):
     spans = [(deg(52), deg(104), 0.50), (deg(108), deg(177), bottom),
              (deg(183), deg(252), bottom), (deg(256), deg(308), 0.50)]
     for k, (a0, a1, end) in enumerate(spans):
+        mid = (a0 + a1) / 2
+        r_mid = radius(mid)
+        out = np.array([np.sin(mid), 0.0, np.cos(mid)])
+        pivot = np.array([0.0, top, 0.0]) + out * r_mid
+        knee = top - (top - end) * 0.45
+        EXTRAS["tails"].append((f"tail.{k}.a", "root", pivot.tolist()))
+        EXTRAS["tails"].append((f"tail.{k}.b", f"tail.{k}.a",
+                                (pivot + out * (top - knee) * 0.42 + np.array([0, knee - top, 0])).tolist()))
         rows = int((top - end) / 0.02)
         cols = max(6, int((a1 - a0) / deg(5.5)))
         thetas = np.linspace(a0, a1, cols + 1)
@@ -342,24 +444,31 @@ def coat_tails(body, r):
             for j in range(n):
                 pin.add([i * n + j], 1.0 if i == 0 else 0.5, "REPLACE")
         panels.append(ob)
-    for ob in panels:
+    for k, ob in enumerate(panels):
+        end = spans[k][2]
         g.drape(ob, "pin", frames=90, mass=0.3, stiff=20.0, bend=0.4)
         ob.vertex_groups.remove(ob.vertex_groups["pin"])
         g.thicken(ob, 0.004)
         ob.data.shade_smooth()
         g.material(ob, mat("hood"))
-        # Weights by hand: the belt carries the top, and further down each
-        # thigh takes a share of whatever hangs on its own side.
+        # Weights by hand: the belt carries the top, the panel's own two
+        # joints the rest -- swung by springs in the game, pushed clear of
+        # the legs (`crates/game/src/reaver.rs`, `coats`).
         co = np.zeros(len(ob.data.vertices) * 3)
         ob.data.vertices.foreach_get("co", co)
         p = g.b2g(co.reshape(-1, 3))
-        down = np.clip((top - p[:, 1]) / (top - bottom), 0, 1)
-        share = 0.5 * down ** 1.3
-        left = 1 / (1 + np.exp(p[:, 0] / 0.04))
-        W = np.zeros((len(p), 16))
-        W[:, J["root"]] = 1 - share
-        W[:, J["thigh.l"]] = share * left
-        W[:, J["thigh.r"]] = share * (1 - left)
+        down = np.clip((top - p[:, 1]) / (top - end), 0, 1)
+
+        def ramp(x, a, b):
+            t = np.clip((x - a) / (b - a), 0, 1)
+            return t * t * (3 - 2 * t)
+
+        low = ramp(down, 0.35, 0.85)
+        belt = 1 - ramp(down, 0.0, 0.3)
+        W = np.zeros((len(p), len(g.ALL)))
+        W[:, J["root"]] = belt
+        W[:, g.ALL.index(f"tail.{k}.b")] = low
+        W[:, g.ALL.index(f"tail.{k}.a")] = np.clip(1 - belt - low, 0, 1)
         g.set_weights(ob, W)
         ob["weighted"] = True
     collider.modifiers.clear()
@@ -377,11 +486,13 @@ def eyes(body, r):
                                              location=tuple(g.g2b(c)))
         ob = bpy.context.active_object
         ob.name = f"eye.{s}"
+        # Into the mesh: the export reads vertices, not objects' places.
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         bpy.ops.object.shade_smooth()
         co = np.zeros(len(ob.data.vertices) * 3)
         ob.data.vertices.foreach_get("co", co)
         p = g.b2g(co.reshape(-1, 3))
-        d = p / np.linalg.norm(p, axis=1, keepdims=True)
+        d = (p - c) / np.linalg.norm(p - c, axis=1, keepdims=True)
         front = d[:, 2]
         iris = np.clip((front - 0.80) / 0.04, 0, 1)
         pupil = np.clip((front - 0.955) / 0.01, 0, 1)
@@ -395,7 +506,7 @@ def eyes(body, r):
     return out
 
 
-WARDROBE = ["boots", "vambraces", "jerkin", "belt", "mask", "hood", "pauldron", "coat_tails", "daggers", "eyes"]
+WARDROBE = ["boots", "vambraces", "sleeves", "trousers", "jerkin", "belt", "mask", "hood", "pauldron", "coat_tails", "daggers", "eyes"]
 
 
 def _hide_covered(body, r, only):
@@ -418,11 +529,18 @@ def _hide_covered(body, r, only):
             up = r.dir(ankle, knee)
             inside = w(fw, knee, ankle) > 0.6
             out |= inside & (((c - boot_top) @ up) < 0)
+        # Inside the trousers and the sleeves, away from where they end.
+        for s in "lr":
+            out |= w(fw, f"thigh.{s}") > 0.85
+            out |= (w(fw, f"shin.{s}") > 0.85) & (((c - r.along(f"shin.{s}", f"foot.{s}", 0.2)) @ r.dir(f"foot.{s}", f"shin.{s}")) > 0)
+            out |= w(fw, f"arm.{s}") > 0.9
+            out |= (w(fw, f"forearm.{s}") > 0.9) & (((c - r.along(f"forearm.{s}", f"hand.{s}", 0.75)) @ r.dir(f"hand.{s}", f"forearm.{s}")) > 0)
         trunk = w(fw, "root", "spine", "chest") > 0.85
         out |= trunk & (c[:, 1] > hip + 0.02) & (c[:, 1] < neck - 0.08) & (np.abs(c[:, 0]) < 0.11)
         # The head, but for the band of face between the brow and the mask.
         head = w(fw, "head") > 0.9
-        face = (c[:, 2] > 0.02) & (c[:, 1] > eye[1] - 0.045) & (c[:, 1] < eye[1] + 0.05) & (np.abs(c[:, 0]) < 0.075)
+        # Down well inside the mask, whose top edge dips toward the nose.
+        face = (c[:, 2] > 0.0) & (c[:, 1] > eye[1] - 0.10) & (c[:, 1] < eye[1] + 0.06) & (np.abs(c[:, 0]) < 0.08)
         out |= head & ~face & (c[:, 1] > eye[1] - 0.2)
         return out
 
@@ -467,4 +585,18 @@ def _body_masks(body, r):
         fingers = np.clip((along - reach * 1.05) / 0.01, 0, 1)
         skin = np.maximum(skin, hand * fingers)
         glove = np.maximum(glove, np.clip(hand * 3, 0, 1) * (1 - fingers))
-    g.vertex_mask(body, skin, glove)
+    # What a painter puts on a face to be read from a distance: brows, and
+    # the eyes smudged dark -- she is an assassin, and her eyes are all of
+    # her face the mask leaves.
+    paint = np.zeros(len(p))
+    for s in "lr":
+        e = r.marks[f"eye.{s}"]
+        d = p - e
+        out = np.sign(e[0])
+        kohl = np.exp(-((d[:, 0] - out * 0.004) / 0.019) ** 2 - (d[:, 1] / 0.010) ** 2)
+        arch = 0.016 + 0.004 * np.cos(np.clip((d[:, 0] * out + 0.002) / 0.022, -1.5, 1.5) * 1.6)
+        brow = np.exp(-((d[:, 1] - arch) / 0.0035) ** 2) * (np.abs(d[:, 0] * out + 0.002) < 0.021)
+        front = np.clip(d[:, 2] / 0.006 + 1.0, 0, 1)
+        paint = np.maximum(paint, np.clip(kohl * 0.75 + brow, 0, 1) * front)
+    paint *= skin
+    g.vertex_mask(body, skin, glove, paint)

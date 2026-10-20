@@ -29,9 +29,11 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use bevy::pbr::{NotShadowCaster, NotShadowReceiver};
 use bevy::prelude::*;
+use bevy::render::mesh::skinning::SkinnedMesh;
 use bevy::render::view::NoFrustumCulling;
 
 use crate::beast::MarkMaterial;
+use crate::ink::InkMaterial;
 use crate::paint::Paint;
 use crate::still::SkinMaterial;
 
@@ -53,6 +55,7 @@ impl Plugin for WarmPlugin {
                 prime::<Paint>,
                 prime::<MarkMaterial>,
                 prime::<SkinMaterial>,
+                prime::<InkMaterial>,
                 retire,
             )
                 .before(bevy::render::view::VisibilitySystems::CheckVisibility),
@@ -151,6 +154,12 @@ impl Warm for SkinMaterial {
     }
 }
 
+impl Warm for InkMaterial {
+    fn key(&self, h: &mut DefaultHasher) {
+        self.base.key(h);
+    }
+}
+
 impl Warm for MarkMaterial {
     fn key(&self, h: &mut DefaultHasher) {
         self.base.key(h);
@@ -171,6 +180,7 @@ fn prime<M: Warm>(
             &MeshMaterial3d<M>,
             Has<NotShadowCaster>,
             Has<NotShadowReceiver>,
+            Option<&SkinnedMesh>,
         ),
         (
             Or<(Changed<Mesh3d>, Changed<MeshMaterial3d<M>>)>,
@@ -178,7 +188,7 @@ fn prime<M: Warm>(
         ),
     >,
 ) {
-    for (mesh, material, no_cast, no_receive) in &new {
+    for (mesh, material, no_cast, no_receive, skin) in &new {
         let (Some(m), Some(mat)) = (meshes.get(&mesh.0), materials.get(&material.0)) else {
             continue;
         };
@@ -216,6 +226,16 @@ fn prime<M: Warm>(
             ));
             if no_cast {
                 e.insert(NotShadowCaster);
+            }
+            // A skinned mesh's pipeline is a skinned one, and drawing it
+            // without the joints it was skinned to is a validation error
+            // that takes the game down: the primer is skinned to the same
+            // joints. Its speck scale means nothing to a skinned mesh, so for
+            // its few frames it is drawn whole, where its joints are -- for
+            // the models `reaver` makes, at startup, at each seat's place,
+            // which is the one moment a flicker costs nothing.
+            if let Some(skin) = skin {
+                e.insert(skin.clone());
             }
             if no_receive {
                 e.insert(NotShadowReceiver);

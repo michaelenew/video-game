@@ -27,6 +27,11 @@ JOINTS = [
     "thigh.r", "shin.r", "foot.r",
 ]
 
+# The coat's joints, after the skeleton's: two a panel, the top half and the
+# bottom, swung by springs in the game rather than by the simulation.
+TAILS = [f"tail.{k}.{s}" for k in range(4) for s in "ab"]
+ALL = JOINTS + TAILS
+
 
 def g2b(p):
     p = np.asarray(p, float)
@@ -44,10 +49,11 @@ def link(ob):
 
 
 def weights_of(ob):
-    """An ``(n, 16)`` array of an object's joint weights."""
+    """An ``(n, len(ALL))`` array of an object's joint weights: the
+    skeleton's sixteen, then the coat's."""
     n = len(ob.data.vertices)
-    W = np.zeros((n, 16))
-    index = {g.index: JOINTS.index(g.name) for g in ob.vertex_groups if g.name in JOINTS}
+    W = np.zeros((n, len(ALL)))
+    index = {g.index: ALL.index(g.name) for g in ob.vertex_groups if g.name in ALL}
     for v in ob.data.vertices:
         for g in v.groups:
             if g.group in index:
@@ -56,10 +62,13 @@ def weights_of(ob):
 
 
 def set_weights(ob, W):
-    for name in JOINTS:
+    """Joint weights from an array whose columns are ``ALL``, or its first
+    sixteen."""
+    names = ALL[: W.shape[1]]
+    for name in names:
         if name not in ob.vertex_groups:
             ob.vertex_groups.new(name=name)
-    groups = [ob.vertex_groups[n] for n in JOINTS]
+    groups = [ob.vertex_groups[n] for n in names]
     for j, g in enumerate(groups):
         idx = np.nonzero(W[:, j] > 1e-4)[0]
         for i in idx:
@@ -75,7 +84,7 @@ def cut(body, keep_face, name):
     me.polygons.foreach_get("center", cents.ravel())
     cents = b2g(cents)
     W = weights_of(body)
-    fw = np.zeros((n, 16))
+    fw = np.zeros((n, W.shape[1]))
     for p in me.polygons:
         fw[p.index] = W[list(p.vertices)].mean(axis=0)
     keep = keep_face(cents, fw)
@@ -169,7 +178,7 @@ def apply(ob, modifier):
 def bind_to(ob, body):
     """Copy the body's joint weights onto a piece, from the nearest point of
     the body's surface."""
-    for name in JOINTS:
+    for name in ALL:
         if name not in ob.vertex_groups:
             ob.vertex_groups.new(name=name)
     m = ob.modifiers.new("weights", "DATA_TRANSFER")
@@ -194,8 +203,11 @@ def normalize(ob, top=4):
     W = np.where(mask, W, 0.0)
     s = W.sum(axis=1, keepdims=True)
     W = np.where(s > 0, W / np.maximum(s, 1e-9), 0.0)
+    # Only the joints' groups: a piece's ``hem`` and ``edge`` are the
+    # painter's, and go on to the bake.
     for g in list(ob.vertex_groups):
-        ob.vertex_groups.remove(g)
+        if g.name in ALL:
+            ob.vertex_groups.remove(g)
     set_weights(ob, W)
 
 
@@ -260,6 +272,10 @@ def drape(ob, pin_group, frames=60, mass=0.25, stiff=15.0, bend=0.5, shrink=0.0)
 
 _shells = {}
 
+# Where shells are kept between runs: a shell is a pure function of the body
+# and four numbers, and making one is most of what a build costs.
+CACHE = None
+
 
 def shell(body, gap, voxel=0.004, smooth=2, close=0.0):
     """The body inflated by ``gap`` metres: the surface everything ``gap``
@@ -271,17 +287,40 @@ def shell(body, gap, voxel=0.004, smooth=2, close=0.0):
     distance from the skin simply rounds over them, as cloth does. The body
     is made a distance field (OpenVDB, through Blender's grid nodes), moved
     out, and turned back into a mesh. Each shell carries the body's weights.
+
+    ``close`` bridges hollows narrower than about twice itself: the field is
+    pushed out that much further and pulled back in (a morphological
+    closing), so cloth spans the dip under a bust or between the shoulder
+    blades instead of following the skin into it.
     """
-    key = (round(gap, 5), voxel, smooth)
+    key = (round(gap, 5), voxel, smooth, round(close, 5))
     if key in _shells:
         return _shells[key]
+    name = "shell_%.4f_%.4f_%d_%.4f" % (gap, voxel, smooth, close)
+    path = None
+    if CACHE:
+        import hashlib
+        import os
+        co = np.zeros(len(body.data.vertices) * 3)
+        body.data.vertices.foreach_get("co", co)
+        stamp = hashlib.sha1(np.round(co, 5).tobytes()).hexdigest()[:12]
+        path = os.path.join(CACHE, f"{name}_{stamp}.npz")
+        if os.path.exists(path):
+            d = np.load(path)
+            me = bpy.data.meshes.new(name)
+            me.from_pydata(d["verts"].tolist(), [], d["faces"].tolist())
+            ob = link(bpy.data.objects.new(name, me))
+            set_weights(ob, d["weights"])
+            ob.hide_render = True
+            _shells[key] = ob
+            return ob
     ob = body.copy()
     ob.data = body.data.copy()
-    ob.name = ob.data.name = f"shell_{gap:.3f}_{close:.3f}"
+    ob.name = ob.data.name = name
     for m in list(ob.modifiers):
         ob.modifiers.remove(m)
     link(ob)
-    tree = bpy.data.node_groups.new(f"inflate_{gap}", "GeometryNodeTree")
+    tree = bpy.data.node_groups.new(f"inflate_{name}", "GeometryNodeTree")
     tree.interface.new_socket("Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
     tree.interface.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
     n = tree.nodes
@@ -316,6 +355,13 @@ def shell(body, gap, voxel=0.004, smooth=2, close=0.0):
     bind_to(ob, body)
     ob.hide_render = True
     _shells[key] = ob
+    if path:
+        import os
+        os.makedirs(CACHE, exist_ok=True)
+        co = np.zeros(len(ob.data.vertices) * 3)
+        ob.data.vertices.foreach_get("co", co)
+        faces = np.array([list(p.vertices) for p in ob.data.polygons], dtype=np.int32)
+        np.savez(path, verts=co.reshape(-1, 3), faces=faces, weights=weights_of(ob))
     return ob
 
 
@@ -354,7 +400,7 @@ def drop_faces(ob, gone):
     me.polygons.foreach_get("center", cents.ravel())
     cents = b2g(cents)
     W = weights_of(ob)
-    fw = np.zeros((n, 16))
+    fw = np.zeros((n, W.shape[1]))
     for p in me.polygons:
         fw[p.index] = W[list(p.vertices)].mean(axis=0)
     kill = gone(cents, fw)
@@ -410,3 +456,98 @@ def group_to_colour(ob, groups, name="detail"):
         ob.data.color_attributes.remove(ob.data.color_attributes[name])
     attr = ob.data.color_attributes.new(name, "FLOAT_COLOR", "POINT")
     attr.data.foreach_set("color", rgb.ravel())
+
+
+def _coords(ob):
+    co = np.zeros(len(ob.data.vertices) * 3)
+    ob.data.vertices.foreach_get("co", co)
+    no = np.zeros(len(ob.data.vertices) * 3)
+    ob.data.vertices.foreach_get("normal", no)
+    return b2g(co.reshape(-1, 3)), b2g(no.reshape(-1, 3))
+
+
+def _set_coords(ob, p):
+    ob.data.vertices.foreach_set("co", g2b(p).ravel())
+    ob.data.update()
+
+
+def _noise(p, scale, seed):
+    """Cheap smooth noise in 3D, -1 to 1: a sum of a few skewed sines."""
+    q = p * scale
+    out = np.zeros(len(p))
+    rng = np.random.default_rng(seed)
+    for _ in range(4):
+        d = rng.normal(size=3)
+        d /= np.linalg.norm(d)
+        out += np.sin(q @ d * rng.uniform(0.7, 1.4) + rng.uniform(0, 6.28))
+    return out / 4
+
+
+def wrinkle(ob, centre, axis, reach, amp, wavelength, skew=0.6, seed=0, sharp=3.0, bias=0.35):
+    """Folds where cloth is pushed together at a joint: ridges running round
+    the limb, strongest at the bend and gone ``reach`` metres along it,
+    wandering diagonally and in and out, as an elbow's or a knee's do.
+
+    Displaces along the surface's normal by up to ``amp`` metres, so the
+    piece it is run on is the *high* one, baked down to the game's mesh as a
+    normal map -- folds the light falls into, for no triangles."""
+    p, n = _coords(ob)
+    axis = np.asarray(axis, float) / np.linalg.norm(axis)
+    e1 = np.cross(axis, [0.0, 0.0, 1.0] if abs(axis[2]) < 0.9 else [1.0, 0.0, 0.0])
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(axis, e1)
+    d = p - np.asarray(centre, float)
+    t = d @ axis
+    theta = np.arctan2(d @ e2, d @ e1)
+    fall = np.exp(-(t / reach) ** 2)
+    phase = 2 * np.pi * t / wavelength + skew * np.sin(theta * 2 + seed) * 2.2 + 1.8 * _noise(p, 18.0, seed)
+    ridge = (0.5 + 0.5 * np.sin(phase)) ** sharp
+    # Ridges broken up round the limb, so they read as folds not rings.
+    patchy = np.clip(0.55 + 0.6 * _noise(p, 9.0, seed + 5), 0, 1)
+    _set_coords(ob, p + n * (amp * fall * patchy * (ridge - bias))[:, None])
+    return ob
+
+
+def drape_folds(ob, top, bottom, amp, count, seed=0, axis=(0.0, 1.0, 0.0), centre=(0.0, 0.0, 0.0)):
+    """Long folds that hang from where cloth is held: round a vertical axis
+    through ``centre``, ``count`` of them, growing from nothing at ``top`` to
+    full at ``bottom`` (heights)."""
+    p, n = _coords(ob)
+    c = np.asarray(centre, float)
+    theta = np.arctan2(p[:, 0] - c[0], p[:, 2] - c[2])
+    h = np.clip((top - p[:, 1]) / max(top - bottom, 1e-3), 0, 1)
+    phase = theta * count + 1.5 * _noise(p, 6.0, seed) + seed
+    fold = np.sin(phase) ** 3
+    _set_coords(ob, p + n * (amp * h * fold)[:, None])
+    return ob
+
+
+def fabric(ob, amp=0.0012, scale=60.0, seed=0):
+    """A little unevenness all over, so no surface is machined smooth."""
+    p, n = _coords(ob)
+    _set_coords(ob, p + n * (amp * _noise(p, scale, seed))[:, None])
+    return ob
+
+
+def smooth_border(ob, rounds=12, factor=0.5):
+    """Relax a piece's open edges into clean curves: each border vertex
+    moved toward the middle of its two neighbours along the border, round
+    after round. A cut across the voxels leaves a hem stepped like a stair,
+    and a painter's trim along it shows every step."""
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    border = [v for v in bm.verts if v.is_boundary]
+    links = {}
+    for v in border:
+        links[v] = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
+    for _ in range(rounds):
+        moved = {}
+        for v, ns in links.items():
+            if len(ns) == 2:
+                mid = (ns[0].co + ns[1].co) * 0.5
+                moved[v] = v.co.lerp(mid, factor)
+        for v, co in moved.items():
+            v.co = co
+    bm.to_mesh(ob.data)
+    bm.free()
+    return ob

@@ -19,6 +19,8 @@ import numpy as np  # noqa: E402
 
 import fit  # noqa: E402
 import garment as g  # noqa: E402
+
+g.CACHE = os.path.join(ROOT, "target/art/shells")
 import glb  # noqa: E402
 import mh  # noqa: E402
 import outfit  # noqa: E402
@@ -57,15 +59,17 @@ def body():
 # arena's sun.
 COLOURS = {
     "knit": (0.035, 0.032, 0.05),
-    "knit/2": (0.62, 0.42, 0.33),      # skin
+    "knit/2": (0.50, 0.30, 0.22),      # skin, warm
+    "knit/4": (0.06, 0.03, 0.05),      # brows and the smudge round her eyes
     "knit/3": (0.08, 0.045, 0.04),     # glove
-    "leather": (0.13, 0.065, 0.05),
+    "leather": (0.11, 0.05, 0.035),
     "leather_dark": (0.04, 0.03, 0.035),
-    "hood": (0.055, 0.05, 0.12),
-    "mask": (0.03, 0.03, 0.045),
+    "hood": (0.035, 0.022, 0.085),
+    "mask": (0.022, 0.018, 0.03),
     "metal": (0.62, 0.64, 0.70),
     "metal_dark": (0.08, 0.075, 0.09),
     "wrap": (0.14, 0.09, 0.06),
+    "trousers": (0.03, 0.024, 0.03),
     "eye": (0.70, 0.68, 0.66),
     "eye/2": (0.22, 0.14, 0.42),
     "eye/3": (0.01, 0.01, 0.015),
@@ -90,6 +94,10 @@ def finish(bo, br, size):
     for o in costume + team:
         g.group_to_colour(o, ["hem", "edge"])
     costume = g.join(costume, "costume")
+    highs = [o for o in bpy.context.scene.objects if o.get("hi")]
+    for o in highs:
+        o.hide_render = False
+    high = g.join(highs, "costume~hi") if highs else None
     team = g.join(team, "team")
     paint.uv_unwrap(costume)
     paint.uv_unwrap(team)
@@ -98,11 +106,14 @@ def finish(bo, br, size):
     materials = {}
     for ob, name, res in ((body, "body", size), (costume, "costume", size), (team, "team", size // 4)):
         slot_names = [s.material.name for s in ob.material_slots]
-        p = paint.passes(ob, res, COLOURS)
+        p = paint.passes(ob, res, COLOURS, high=high if ob is costume else None)
         np.save(os.path.join(TEX, f"{name}_passes.npy"), {k: v for k, v in p.items()}, allow_pickle=True)
         col = paint.compose(p, paint.ART)
         images.append(paint.to_png(col, os.path.join(TEX, f"{name}.jpg"), quality=92))
         entry = {"color": len(images) - 1}
+        if "normal" in p:
+            images.append(paint.to_png(p["normal"], os.path.join(TEX, f"{name}_normal.png"), srgb=False))
+            entry["normal"] = len(images) - 1
         shine = paint.glow(p, GLOW)
         if shine is not None and shine.max() > 0:
             images.append(paint.to_png(np.clip(shine, 0, 1), os.path.join(TEX, f"{name}_glow.jpg"), quality=90))
@@ -128,9 +139,11 @@ def finish(bo, br, size):
         ob.data.materials.append(m)
         for poly in ob.data.polygons:
             poly.material_index = 0
+    if high:
+        bpy.data.objects.remove(high)
     prims = glb.gather([body, costume, team])
     paint.ensure_dir(OUT)
-    glb.write(OUT, prims, materials, images, bo, br, name="reaver")
+    glb.write(OUT, prims, materials, images, bo, br, name="reaver", extras=outfit.EXTRAS)
     print("wrote", OUT, os.path.getsize(OUT) // 1024, "KiB",
           {k: len(v["idx"]) // 3 for k, v in prims.items()}, "triangles")
 
@@ -141,6 +154,7 @@ def main():
         import json
         meta = json.loads(bpy.context.scene["reaver_bind"])
         bo, br = np.array(meta["o"]), np.array(meta["r"])
+        outfit.EXTRAS.update(meta.get("extras", {}))
     else:
         stage.reset()
         ob, sk, bo, br, marks = body()
@@ -148,9 +162,10 @@ def main():
         only = opt("--only")
         outfit.dress(ob, rig, only[0].split(",") if only else None)
         import json
-        bpy.context.scene["reaver_bind"] = json.dumps({"o": np.asarray(bo).tolist(), "r": np.asarray(br).tolist()})
+        bpy.context.scene["reaver_bind"] = json.dumps({"o": np.asarray(bo).tolist(), "r": np.asarray(br).tolist(),
+                                                       "extras": outfit.EXTRAS})
         for o in list(bpy.context.scene.objects):
-            if o.type == "MESH" and o.hide_render:
+            if o.type == "MESH" and o.hide_render and not o.get("hi"):
                 bpy.data.objects.remove(o)
         bpy.ops.wm.save_as_mainfile(filepath=DRESSED)
     look = opt("--look")

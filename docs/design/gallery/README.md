@@ -75,3 +75,17 @@ Nine lineages from `sim::breed` ([exploration/0022](../exploration/0022_crossbre
 ### How they move (`breed/motion/`)
 
 Drawn by `scripts/breed-motion.py` from `breedcheck -- film` and `-- strides` ([exploration/0022](../exploration/0022_crossbreeding.md) §10). `moves_<name>.png`: one row per move, seven frames -- rest, a third into the windup, cocked (the tell), mid-strike, struck, the end of the held punish window, recovered. Red spheres are what the strike hits (fainter: earlier frames of the sweep; a flat red disc is a shockwave along the floor, which a jump clears); orange rings through the windup are where it will land, drawn from the hit. The row's header gives its frames, its answer, and the lane and range the hit was *measured* to reach. `in_game_keep.png` is the game itself (2026-10-18, `--range sky-shrine`, staged): a pink egg and a gold trophy under their columns of light, and a Hornback morph fed three Galewing feathers at the player's heel, with the lines about it at the bottom left. `moves_hornback_spades.png` is a Hornback on a digger's forelimbs, the mole that burrowing passes on as; under the floor nothing is drawn, the ground churning over it is a brown ring, and the orange ring through an eruption's windup is where it will come up. `gaits_<name>.png`: one row per gait, slowest first, eight moments of its cycle and a footfall diagram (dark: the foot is on the floor).
+
+## The Shadow Reaver, as a character
+
+The first class drawn as a character rather than a mannequin
+([exploration/0024](../exploration/0024_a_character_done_properly.md),
+2026-10-20), in the painted look. Each is `GAME_ARGS="--versus --p1 reaver
+--p2 champion --look brushed"`, `DEMO=0`, `SHOT_FRAME=120` and a
+`SHOT_PORTRAIT`, cropped.
+
+| | |
+| --- | --- |
+| ![](reaver/front.jpg) **Her**, `SHOT_PORTRAIT=0,25,2.5,1.0`; her shadow, in ink, behind her. | ![](reaver/side.jpg) **From the side**, `0,95,2.5,1.0`: the coat tails, the pauldron on her left. |
+| ![](reaver/face.jpg) **Her face**, `0,15,0.85,1.63`: the hood's brim, the mask over the nose. | ![](reaver/reaping.jpg) **The Reaping**, `SHOT_REAP=1 SHOT_FRAME=14`, `1,150,4.5,1.0`: five of her, in ink. |
+| ![](reaver/cut.jpg) **A cut**, `DEMO=1 SHOT_PRESS=L:2 SHOT_FRAME=10`, `0,70,3.0,1.0`: the Reave's ribbon (straight here because the software renderer draws one picture for every five frames). | |
