@@ -22,6 +22,7 @@ mod arenas;
 mod bag;
 mod bake;
 mod beast;
+mod cairns;
 mod claimed;
 mod critters;
 mod crosshair;
@@ -44,6 +45,7 @@ mod palette;
 mod picker;
 mod platform;
 mod profile;
+mod scrape;
 mod settings;
 mod shapes;
 mod signs;
@@ -60,6 +62,7 @@ mod valley;
 mod veil;
 mod warm;
 mod wash;
+mod window;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -146,12 +149,13 @@ fn seats_of(dummy: Dummy) -> u8 {
     if dummy == Dummy::Human { 2 } else { 1 }
 }
 
-/// Every seat's class: `--p1` to `--p4`, a Bulwark where none is named.
+/// Every seat's class: `--p1` to `--p4`, the first of the rotation (the
+/// Champion) where none is named.
 fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
     std::array::from_fn(|i| {
         opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
-            .unwrap_or(sim::Class::Bulwark)
+            .unwrap_or(sim::class::ROTATION[0])
     })
 }
 
@@ -219,6 +223,7 @@ fn main() {
         .init_resource::<Sim>()
         .init_resource::<arenas::Drawn>()
         .init_resource::<stream::Stream>()
+        .init_resource::<window::Windows>()
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
@@ -236,6 +241,7 @@ fn main() {
         .init_resource::<keep::Bag>()
         .init_resource::<keep::Melt>()
         .init_resource::<keep::Puffs>()
+        .init_resource::<scrape::Dust>()
         .init_resource::<bag::Keeping>()
         .init_resource::<heel::Heels>()
         .init_resource::<sound::Soundscape>()
@@ -245,6 +251,7 @@ fn main() {
         })
         .insert_resource(settings::Settings::load())
         .insert_resource(trophies::Trophies::load())
+        .insert_resource(cairns::Cairns::load())
         .init_resource::<InsideOwnHead>()
         .init_resource::<beast::Boom>()
         .init_resource::<Scripted>()
@@ -288,6 +295,7 @@ fn main() {
                 glint::setup,
                 veil::setup,
                 keep::setup,
+                scrape::setup,
             ),
         )
         .add_systems(
@@ -319,7 +327,8 @@ fn main() {
                     .chain(),
                 // One entry, so the chain stays under twenty: the balls go
                 // where the poses just put the joints.
-                (apply_poses, pose_balls, place_copies).chain(),
+                // And the dust off a wall goes where the poses put the hand.
+                (apply_poses, pose_balls, place_copies, scrape::place).chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -347,6 +356,7 @@ fn main() {
                     )
                         .chain(),
                     place_champion_glow,
+                    place_third_flare,
                     place_pips,
                     place_curses,
                     claimed::drape,
@@ -383,6 +393,7 @@ fn main() {
                 ground::overlay,
                 hud::update_picker,
                 hud::update_momentum,
+                hud::update_tempo,
                 valley::update_text,
                 glint::update,
                 veil::place,
@@ -392,7 +403,7 @@ fn main() {
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
-                menu::draw,
+                (menu::notice_cairns, menu::draw).chain(),
                 // What you carry and your morph (`sim::keep`).
                 (
                     heel::follow,
@@ -407,6 +418,9 @@ fn main() {
                 .after(beast::signs)
                 .before(palette::toggle),
         )
+        // The window through what the camera passes through, on to where
+        // the camera has just been put.
+        .add_systems(Update, window::follow.after(drive_camera))
         // The bag's key, before anything asks who owns the mouse: opening
         // it is what frees the cursor.
         .add_systems(Update, keep::toggle_bag.before(palette::sample_focus))
@@ -2125,6 +2139,8 @@ const BEAD: u8 = u8::MAX;
 /// cuts leave is `swing.rs`.
 #[derive(Resource)]
 struct ArmsLook {
+    /// The flare of the string's third hit. See `place_third_flare`.
+    flare: Handle<StandardMaterial>,
     /// **The glow at the head of the weapon in his hands** (exploration
     /// 0015): one per momentum tier, ember to white, the HUD bar's colours.
     glow: [Handle<StandardMaterial>; 4],
@@ -2133,6 +2149,12 @@ struct ArmsLook {
 /// The glow itself, one per fighter. See `place_champion_glow`.
 #[derive(Component)]
 struct GlowMesh {
+    owner: usize,
+}
+
+/// The third hit's flare, one per fighter. See `place_third_flare`.
+#[derive(Component)]
+struct FlareMesh {
     owner: usize,
 }
 
@@ -2939,6 +2961,13 @@ fn setup(
             Visibility::Hidden,
             GlowMesh { owner },
         ));
+        commands.spawn((
+            Mesh3d(look.ball.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            FlareMesh { owner },
+        ));
     }
     let glow = std::array::from_fn(|tier| {
         let c = hud::momentum_colour(tier as u8).to_linear();
@@ -2950,7 +2979,16 @@ fn setup(
             ..default()
         })
     });
-    commands.insert_resource(ArmsLook { glow });
+    let flare = materials.add(StandardMaterial {
+        // Kept well under white: the tonemapper washes a bright gold out to
+        // the white the momentum glow already owns.
+        base_color: Color::LinearRgba(LinearRgba::new(1.0, 0.45, 0.0, 0.85)),
+        emissive: LinearRgba::rgb(2.6, 1.0, 0.0),
+        alpha_mode: AlphaMode::Blend,
+        unlit: true,
+        ..default()
+    });
+    commands.insert_resource(ArmsLook { glow, flare });
     commands.insert_resource(look);
 }
 
@@ -3638,6 +3676,66 @@ fn place_champion_glow(
 
 fn quat(q: Quat) -> view::math::Quat {
     view::math::Quat([q.x, q.y, q.z, q.w])
+}
+
+/// **The third hit's flare** (2026-10-20, from play): a gold light at the head
+/// of the weapon from the first frame of the string's third hit, swelling
+/// through its wind-up, burning through the swing and gone through the first
+/// frames of the recovery. So the hit the string is for is told from the two
+/// before it while it is still coming -- and its absence, when the count went
+/// wrong, is as plain as the tempo bar's empty third pip.
+fn place_third_flare(
+    sim: Res<Sim>,
+    look: Res<ArmsLook>,
+    hands: Res<Hands>,
+    torsos: Res<Torsos>,
+    mut meshes: Query<(
+        &FlareMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let size = third_flare_size(p);
+        let arms = drawn_arms(&sim, &hands, &torsos, tag.owner);
+        let (Some(arms), true) = (arms, size > 0.0) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = Vec3::from(arms.head());
+        tf.scale = Vec3::splat(size);
+        if mat.0 != look.flare {
+            mat.0 = look.flare.clone();
+        }
+    }
+}
+
+/// How big the third hit's flare is this frame: nothing unless the move
+/// running is the string's third.
+fn third_flare_size(p: &sim::state::Player) -> f32 {
+    use sim::state::Action;
+    if p.class != sim::Class::Champion {
+        return 0.0;
+    }
+    let third =
+        |kind| sim::moves::champion::in_string(kind) && view::arms::place_in_string(p, kind) == 2;
+    match p.action {
+        Action::Startup { kind, left } if third(kind) => {
+            let startup = sim::moves::get(p.class, kind).startup.max(1) as f32;
+            0.3 + 0.5 * (1.0 - left as f32 / startup)
+        }
+        Action::Channel { kind, .. } if third(kind) => 0.8,
+        Action::Active { kind, .. } if third(kind) => 0.9,
+        Action::Recovery { kind, left } if third(kind) => {
+            let m = sim::moves::get(p.class, kind);
+            let gone = m.recovery.saturating_sub(left) as f32;
+            (0.9 * (1.0 - gone / view::arms::TRAIL_GHOST as f32)).max(0.0)
+        }
+        _ => 0.0,
+    }
 }
 
 /// Put the Reaver's pips over whoever is carrying marks.
@@ -6481,7 +6579,7 @@ fn tick_sim(
         // asked for on the wire rather than done here, like the picker below,
         // so against a person both machines restart on the same frame.
         let me = sim.local_player();
-        let next = ALL[(sim.cur.players[me].class as usize + 1) % ALL.len()];
+        let next = sim.cur.players[me].class.next_in_rotation();
         sim.travel = sim::input::Travel::class(me, next);
     }
     // A restart goes on the wire in training too, now that the simulation
@@ -7158,13 +7256,6 @@ fn apply_poses(
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
-    for (fighter, mut tf) in roots.iter_mut() {
-        let p = frame.players[fighter.0];
-        let (origin, turn) = body_frame(&p);
-        tf.translation = origin;
-        tf.rotation = turn;
-    }
-
     // One solve per fighter rather than one per bone: forward kinematics is a
     // single pass down the skeleton and there are sixteen bones hanging off it.
     let mut skeletons: [Skeleton; MAX_PLAYERS] =
@@ -7189,12 +7280,20 @@ fn apply_poses(
     for (owner, skin) in skins.iter().enumerate() {
         joints.body[owner] = Some(*skin);
     }
+    // Placed after the poses, because posing is what eases the drawn body
+    // round side-on to a wall (`Crossfade::turn`).
+    for (fighter, mut tf) in roots.iter_mut() {
+        let p = frame.players[fighter.0];
+        let (origin, turn) = body_frame(&p, fades.0[fighter.0].turn());
+        tf.translation = origin;
+        tf.rotation = turn;
+    }
 
     // The shield hand, in the arena rather than in the character's own space,
     // so whatever is holding something can be placed against it.
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
-        let (origin, turn) = body_frame(&p);
+        let (origin, turn) = body_frame(&p, fades.0[owner].turn());
         // The body's **left** hand, which in a drawn pose is not the slot of
         // that name -- see `view::hand_joint`.
         let (at, rot) = skins[owner].box_of(&skeletons[owner], view::hand_joint(true));
@@ -7294,6 +7393,7 @@ fn shadow_input(
     input.rise = 0.0;
     input.turn_rate = 0.0;
     input.ledge = None;
+    input.wall = None;
     input.bind_pose = bind_pose;
     input
 }
@@ -7560,10 +7660,14 @@ fn drive_camera(
 /// roll`), turned about the hips rather than the feet so a flip goes over
 /// rather than cartwheeling off its own toes. Everything carried on the body
 /// is placed through this, so a blade in hand flips with the hand.
-fn body_frame(p: &view::PlayerView) -> (Vec3, Quat) {
+///
+/// `turned` is how far the drawn body is turned off the facing about the
+/// vertical, the posing's own eased answer (`view::play::Crossfade::turn`):
+/// side-on to a wall it is sliding down (2026-10-20), nought otherwise.
+fn body_frame(p: &view::PlayerView, turned: f32) -> (Vec3, Quat) {
     // Swimming, she is drawn sunk into her ground, a hump of her showing.
     let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY, p.pos[2]);
-    let turn = body_turn(p.facing);
+    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned);
     if p.roll == [0.0, 0.0] {
         return (feet, turn);
     }

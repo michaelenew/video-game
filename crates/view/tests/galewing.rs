@@ -84,7 +84,7 @@ fn a_creature_overhead_does_not_lift_the_camera() {
         m.yaw = Fx::ZERO;
         let over = m.top_under(m.pos, Fx::from_int(1000));
         assert!(
-            over.to_f32_for_render() > at[1] + 4.5,
+            over.is_some_and(|top| top.to_f32_for_render() > at[1] + 4.5),
             "the bird is not over the eye at all (top {over:?})"
         );
         let under = settled(&w, at, pitch, true, false);

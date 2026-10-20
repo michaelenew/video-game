@@ -130,6 +130,9 @@ pub struct PoseInput {
     /// The ledge held, if any (`interp::Hold`): a hang, a shuffle or a climb
     /// instead of a flight.
     pub ledge: Option<crate::interp::Hold>,
+    /// On a wall slide or kicking off a wall, if either (`interp::OnWall`):
+    /// pressed to the face, or driving off it, instead of a flight.
+    pub wall: Option<crate::interp::OnWall>,
     /// Show the skeleton at rest instead of animating it. The toggle exists so
     /// that "is this the clip or is this the rig?" can be answered in one
     /// keypress while looking at the thing.
@@ -162,6 +165,7 @@ impl PoseInput {
             sim_frame: frame.sim_frame,
             shudder: view.shudder,
             ledge: view.ledge,
+            wall: view.wall,
             bind_pose: false,
         }
     }
@@ -220,6 +224,15 @@ fn shape_of(input: PoseInput) -> Shape {
                     Holding::Shuffle { right: true } => 213,
                     Holding::Shuffle { right: false } => 214,
                     Holding::Climb => 215,
+                }
+            } else if let Some(wall) = input.wall {
+                // A side each, so changing which side of her the wall is on
+                // is a fade rather than a cut from one mirror to the other.
+                match (wall.kick.is_some(), wall.left) {
+                    (false, true) => 216,
+                    (false, false) => 217,
+                    (true, true) => 218,
+                    (true, false) => 219,
                 }
             } else if !input.grounded {
                 206
@@ -320,7 +333,19 @@ pub struct Crossfade {
     /// comes from distance walked, so the feet stay where they belong while the
     /// body turns into the new direction over a few frames.
     travel: [f32; 2],
+    /// How far the drawn body is turned off its facing, eased toward
+    /// `interp::OnWall::turn` (and back to nothing off the wall). Read by the
+    /// renderer through [`Crossfade::turn`]. Renderer-local for the same
+    /// reason the fade is: a turn that hiccups across a rollback is
+    /// imperceptible, and a body that snaps a quarter turn round the frame a
+    /// slide starts is not.
+    turn: f32,
 }
+
+/// How fast the drawn body turns side-on to a wall, and back: the share of
+/// what is left closed each second, as a rate. About a tenth of a second to
+/// most of the way.
+const TURNING_IN: f32 = 18.0;
 
 impl Default for Crossfade {
     fn default() -> Self {
@@ -332,6 +357,7 @@ impl Default for Crossfade {
             length: 6.0,
             speed: 0.0,
             travel: [0.0, 1.0],
+            turn: 0.0,
         }
     }
 }
@@ -354,11 +380,34 @@ impl Crossfade {
     /// refresh rate.
     pub fn pose(&mut self, input: PoseInput, dt: f32) -> Pose {
         let input = self.eased(input, dt);
+        self.turn_toward(input, dt);
         // The shape is decided by the real speed, so stopping still starts a
         // fade at the moment it happens; only the blending is eased.
         let shape = shape_of(input);
         let target = pose_for(input);
         self.blend_into(target, shape, dt)
+    }
+
+    /// How far the drawn body is turned off its facing this frame, in
+    /// radians about the vertical, the engine's way round: draw the body at
+    /// the facing's yaw plus this. Nought except on a wall
+    /// (`interp::OnWall::turn`).
+    pub fn turn(&self) -> f32 {
+        self.turn
+    }
+
+    /// Ease the drawn turn toward the one the wall asks for, the short way
+    /// round.
+    fn turn_toward(&mut self, input: PoseInput, dt: f32) {
+        use std::f32::consts::{PI, TAU};
+        let target = match input.wall {
+            Some(wall) if !input.bind_pose => wall.turn,
+            _ => 0.0,
+        };
+        let wrap = |a: f32| (a + PI).rem_euclid(TAU) - PI;
+        let step = wrap(target - self.turn);
+        let k = 1.0 - (-dt * TURNING_IN).exp();
+        self.turn = wrap(self.turn + step * k);
     }
 
     /// Fill in the eased half of the input: how fast this body is going and
@@ -783,6 +832,9 @@ fn free(input: PoseInput) -> Pose {
     if let Some(hold) = input.ledge {
         return ledge(hold);
     }
+    if let Some(wall) = input.wall {
+        return on_the_wall(input, wall);
+    }
     if !input.grounded {
         return airborne(input);
     }
@@ -851,6 +903,49 @@ fn ledge(hold: crate::interp::Hold) -> Pose {
         }
         Holding::Climb => Clip::LedgeClimb.at(hold.clock.saturating_sub(1) as u32),
     }
+}
+
+/// How far off the face the kick runs, in metres: the kick clip is indexed
+/// by distance over this, and blends into the flight as it runs out. About a
+/// third of a second at the push the Oven gives a wall jump.
+pub const KICK_REACH: f32 = 1.2;
+
+/// How fast down a wall a slide has to be going for the stick and slip to
+/// play at full size, in metres a second: the slide's own cap
+/// (`sim::tuning::wall_slide_speed`). Slower, the body is more pressed and
+/// less shaken: a slide held almost still on the face is a still press.
+fn slide_full() -> f32 {
+    sim::tuning::wall_slide_speed().to_f32_for_render().max(0.5)
+}
+
+/// **On a wall** (2026-10-20, `interp::OnWall`): pressed to it and dragging,
+/// or kicking off it.
+///
+/// Both clips are cut for a wall on her left and mirrored for one on her
+/// right. The slide is the still press (its frame 0) blended into its own
+/// judder by how fast she is going down: the judder loops on the simulation's
+/// frame, so it is the same judder on a rollback, and only its size follows
+/// the speed -- a cadence that followed the speed would jump whenever the
+/// speed did. The kick is indexed by distance off the face and blends into
+/// the flight as it reaches `KICK_REACH`, so it ends as the flight it hands
+/// over to.
+fn on_the_wall(input: PoseInput, wall: crate::interp::OnWall) -> Pose {
+    let pose = match wall.kick {
+        None => {
+            let shaken = (wall.down / slide_full()).clamp(0.0, 1.0);
+            Clip::WallSlide
+                .at(0)
+                .blend(&Clip::WallSlide.at(input.sim_frame), shaken)
+        }
+        Some(off) => {
+            let last = Clip::WallKick.length().saturating_sub(1) as f32;
+            let kick = Clip::WallKick.at_fractional(off * last);
+            let out = off * off * (3.0 - 2.0 * off);
+            let since = input.air_frames.saturating_sub(Clip::JumpTakeoff.length()) as u32;
+            kick.blend(&flight(input, since), out)
+        }
+    };
+    if wall.left { pose } else { pose.mirrored() }
 }
 
 fn airborne(input: PoseInput) -> Pose {

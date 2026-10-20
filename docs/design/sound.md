@@ -88,6 +88,18 @@ edge is brighter than a club; a shield rings longer than flesh; a telegraph is
 loudest in the last tenth before its cut and quiet after. Each was wrong in
 the first build and the sheet showed where.
 
+**A wall slide is a scrape laid end to end** (2026-10-20). A one-shot
+patch cannot be held, and the game has no loops, so `cue::wall` lays a
+`Scrape` -- a grain of the face's own band, broken into stick-and-slip
+catches, over a low rub -- every few frames while `sliding` is set, each a
+couple of frames longer than the gap so they are heard as one drag, and each
+as bright, quick and loud as the body is going down. Off the slide, nothing
+more is laid and the last grain runs out: a slide is heard for exactly as long
+as it is one. It starts with a light `Step` of the hand on to the face, and a
+wall jump is a hard `Step` of both feet and a short swing. What the face is
+made of is the solid there (`Terrain::material_of_face`), rock where the wall
+is the land's. Two rows of the sheet are it.
+
 ## 4 · Under rollback
 
 The simulation is re-run — up to eight frames inside one picture — whenever a

@@ -953,6 +953,11 @@ fn spear(w: &Weapon, out: &mut [Piece; PIECES]) {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Cut {
     pub which: u8,
+    /// Where in the string the swing stands: 0, 1 or 2 for its first, second
+    /// and third hit, [`FINISHER`] for a finisher. Each is drawn bigger than
+    /// the one before, and the third in gold (2026-10-20, from play): a
+    /// player counting to three should see the count, not only feel it.
+    pub place: u8,
     pub glow: f32,
 }
 
@@ -967,9 +972,13 @@ pub fn cut(p: &Player, alpha: f32) -> Option<Cut> {
     if sim::moves::get(p.class, kind).active == 0 || kind == champion::POLE_VAULT {
         return None;
     }
+    let place = place_in_string(p, kind);
+    // The first hit's never quite solid.
+    let most = if place == 0 { 0.7 } else { 1.0 };
     Some(Cut {
         which: champion::weapon(kind),
-        glow,
+        place,
+        glow: glow * most,
     })
 }
 
@@ -984,13 +993,44 @@ pub const fn band(which: u8) -> f32 {
     }
 }
 
+/// [`Cut::place`] for a finisher.
+pub const FINISHER: u8 = 3;
+
+/// The band at a place in the string: the first hit's is the outer half of
+/// the weapon's own, the second's the weapon's own, and the third's -- and a
+/// finisher's -- reaches further in, so the three read as a climb.
+pub fn band_at(which: u8, place: u8) -> f32 {
+    let own = band(which);
+    match place {
+        0 => own + (1.0 - own) * 0.5,
+        1 => own,
+        _ => own * 0.6,
+    }
+}
+
+/// Where a Champion's move stands in his string, for the trail and the
+/// third hit's flare: a link's own place, an aerial's or a takeoff's the one
+/// it was thrown at, [`FINISHER`] for a finisher, and 0 for a Rush move.
+pub fn place_in_string(p: &Player, kind: u8) -> u8 {
+    if champion::is_full(kind) {
+        return FINISHER;
+    }
+    if let Some(link) = champion::link_of(kind) {
+        return link;
+    }
+    match p.mechanic {
+        Mechanic::Forms { fury, .. } if champion::in_string(kind) => fury.place,
+        _ => 0,
+    }
+}
+
 /// Where `arms`' weapon is drawn now, as a place on the arc behind it.
 pub fn sample(arms: &Arms, cut: &Cut, at: f32) -> trail::Sample {
     let w = &arms.weapons[cut.which as usize];
     trail::Sample {
         inner: math::add(
             w.butt,
-            math::scale(math::sub(w.tip, w.butt), band(cut.which)),
+            math::scale(math::sub(w.tip, w.butt), band_at(cut.which, cut.place)),
         ),
         outer: w.tip,
         at,

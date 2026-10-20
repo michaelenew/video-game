@@ -432,7 +432,9 @@ fn the_cut_glows_while_the_volume_is_out_and_fades_through_the_follow_through() 
     throw(c::SWORD_GROUND, |p, _| {
         let cut = arms::cut(p, 0.0).expect("a cut is drawn while the volume is out");
         assert_eq!(cut.which, c::SWORD);
-        assert_eq!(cut.glow, 1.0);
+        // The first hit of the string is never quite solid; the rest are.
+        let most = if cut.place == 0 { 0.7 } else { 1.0 };
+        assert_eq!(cut.glow, most);
         last = Some(*p);
     });
     let mut p = last.expect("the cut went out");

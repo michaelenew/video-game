@@ -1061,6 +1061,18 @@ scalars! {
     WallSlideFlip,        "Air",      "Wall slide, on or off no faster than",                Frames, 0, 60;
     WallSlideSteer,       "Air",      "Wall slide, steered along at (m/s)",                  Fixed, 0, fx(10,1);
     WallSlideGrip,        "Air",      "Wall slide, steering arrives per frame (x)",          Fixed, fx(1,100), fx(1,1);
+    // **The wall jump, overhauled** (2026-10-20, the owner: "really hard to
+    // stick to a wall, really hard to get a wall jump, and even when I do
+    // it's really hard to have any momentum forward"). A slide keeps the
+    // speed it brought along the wall, losing only this much a frame; it
+    // grabs a fall faster than its own cap down to it over a few frames,
+    // which is what being caught by the wall feels like; the stick along
+    // the wall at the jump carries the body that way at least this fast;
+    // and a press this many frames before the wall is kept until it arrives.
+    WallSlideKeep,        "Air",      "Wall slide, keeps of its speed along, a frame (x)",   Fixed, fx(9,10), fx(1,1);
+    WallSlideCatch,       "Air",      "Wall slide, grabs of a faster fall, a frame (x)",     Fixed, 0, fx(1,1);
+    WallJumpCarry,        "Air",      "Wall jump, along where the stick points at (m/s)",    Fixed, 0, fx(15,1);
+    WallJumpBuffer,       "Air",      "Wall jump, pressed before the wall and kept",         Frames, 0, 30;
     // **The ledge grab** (2026-10-16). A forgiving way up that is plainly not
     // the quick one: a body fully off an edge, not leaving it fast, with the
     // top at its hands and the stick not pushing away, catches it; the climb
@@ -1185,6 +1197,15 @@ scalars! {
     // full tally plays. Presentation that lives in the snapshot, because its
     // clock has to survive a rollback.
     ReapingLife,          "Reaver",   "Cash-in, the Reaping plays for",                       Frames, 20, 180;
+    // **Only a press throws a link** (2026-10-20): a held weapon button no
+    // longer runs the string. A press made a little before the next link may
+    // start is kept this long and comes out when it may.
+    PressKept,            "Champion", "Chain, a press waits for its link",                    Frames, 0, 30;
+    // **The Beat is a rhythm** (2026-10-20, from play): its sweet spot is a
+    // stretch of the window counted from the moment he may act again, the
+    // same place for every weapon, never as soon as possible.
+    BeatAt,               "Champion", "Beat, falls at (% of the window)",                     Percent, 0, 100;
+    BeatLasts,            "Champion", "Beat, lasts",                                          Frames, 1, 30;
 }
 
 // ---------------------------------------------------------------------------
@@ -1314,6 +1335,16 @@ view_knobs! {
     EyeBubble,      "Eye bubble, kept off the floor (m)", Fixed, 0, fx(4,1);
     EyeBubbleSoft,  "Eye bubble, soft edge (m)",          Fixed, fx(1,10), fx(6,1);
     EyeBubbleRate,  "Eye bubble, most it opens a frame (m)", Fixed, fx(1,100), fx(2,1);
+    // **What holds the camera off** (2026-10-20), appended for the same
+    // reason. A box keeps the eye out of it -- the drawn arm pulled in, the
+    // aimed-from eye held under it -- only if it is both this thick on its
+    // thinnest side and this broad on its middle one: a wall, a crag, a
+    // terrace. A platform, a post, a rail, a branch is passed through and
+    // drawn see-through round the line to the fighter instead, because a
+    // camera shoved about by every small thing it passes jerks. See
+    // `arena::Solid::holds_the_camera`.
+    CameraHeldThick, "Camera held off by a box this thick (m)", Fixed, 0, fx(8,1);
+    CameraHeldBroad, "Camera held off by a box this broad (m)", Fixed, 0, fx(20,1);
 }
 
 /// Counted from the table rather than written down, the same way

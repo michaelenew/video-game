@@ -325,6 +325,30 @@ pub struct Gust {
     pub weight: f32,
 }
 
+/// **A body dragged down a wall** (2026-10-20): a hand and a foot pressed to
+/// the face of a wall slide, scraping.
+///
+/// The same idea as a [`Step`] -- what the face is made of is its texture,
+/// never its modes, because a wall held on every side does not ring under a
+/// palm -- but continuous rather than struck, and **stick and slip** rather
+/// than a hiss: a hand dragged down stone does not glide, it catches and
+/// lets go many times a second, and those catches are what an ear hears as
+/// friction. So it is a band of the face's own noise, brightened and quickened
+/// by how fast the body is going, broken into catches, over a low rub of the
+/// glove and the boot. One cue is one grain of the slide, `frames` long; the
+/// cue lays them end to end while the slide lasts (`cue::cues`), so a slide is
+/// heard for exactly as long as it is a slide.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Scrape {
+    /// How fast down the face, in metres a second.
+    pub speed: f32,
+    pub material: Material,
+    /// How long this grain of it lasts, in simulation frames.
+    pub frames: u16,
+    /// Which grain this is, so two in a row are not the same sample.
+    pub seed: u8,
+}
+
 /// Every instrument the game has.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Patch {
@@ -337,6 +361,7 @@ pub enum Patch {
     Crackle(Crackle),
     Wet(Wet),
     Gust(Gust),
+    Scrape(Scrape),
 }
 
 /// The reference body: a fighter's height, in metres.
@@ -355,6 +380,7 @@ impl Patch {
             Patch::Crackle(c) => crackle(c),
             Patch::Wet(w) => wet(w),
             Patch::Gust(g) => gust(g),
+            Patch::Scrape(s) => scrape(s),
         }
     }
 
@@ -381,6 +407,12 @@ impl Patch {
             Patch::Crackle(c) => format!("crackle {:.1}s", c.seconds),
             Patch::Wet(w) => format!("wet w{:.1}", w.weight),
             Patch::Gust(g) => format!("gust {}f", g.frames),
+            Patch::Scrape(s) => format!(
+                "scrape {} {:.1}mps {}f",
+                s.material.name(),
+                s.speed,
+                s.frames
+            ),
         }
     }
 }
@@ -735,6 +767,47 @@ fn gust(g: &Gust) -> Vec<f32> {
     out
 }
 
+/// How fast down a wall a scrape is at its brightest, quickest and loudest,
+/// in metres a second: a slide at the wall slide's own fall cap and over.
+const SCRAPE_FULL: f32 = 6.0;
+
+fn scrape(s: &Scrape) -> Vec<f32> {
+    let pace = (s.speed.max(0.0) / SCRAPE_FULL).min(1.0);
+    let u = s.material.underfoot();
+    let len = frames(s.frames.max(2));
+    let n = samples(len + 0.03);
+    let mut out = vec![0.0f32; n];
+    let mut noise = Noise::new(0x5C2A_0001 ^ (s.material as u32) << 8 ^ s.seed as u32);
+    // The face's own band, lifted by the pace: a slow drag is a low grind, a
+    // fast one a hiss.
+    let lift = 0.7 + 0.8 * pace;
+    let mut low = LowPass::new((u.band.1 * lift).min(16_000.0));
+    let mut high = HighPass::new(u.band.0 * 0.5 * lift);
+    // The glove and the boot on it: a low rub under the texture.
+    let mut rub = LowPass::new(160.0 + 240.0 * pace);
+    // Stick and slip: catches a second, more the faster it goes, each one a
+    // little burst of the band dying in a few milliseconds.
+    let catch = (25.0 + 70.0 * pace) / synth::RATE as f32;
+    let let_go = decay(1.0 / synth::RATE as f32, 0.006);
+    let mut grip = 0.0f32;
+    let texture = u.texture.max(0.3);
+    for (i, out) in out.iter_mut().enumerate() {
+        let t = i as f32 / synth::RATE as f32;
+        let env = rise(t, 0.012) * if t < len { 1.0 } else { decay(t - len, 0.012) };
+        if noise.sample() * 0.5 + 0.5 < catch {
+            grip = 1.0;
+        }
+        grip *= let_go;
+        let hiss = high.tick(low.tick(noise.sample())) * (0.3 + 0.7 * grip);
+        let body = rub.tick(noise.sample()) * (0.4 + 0.4 * grip);
+        *out = (hiss * texture + body * 0.6) * env;
+    }
+    // Under a footfall: a slide is heard for as long as it lasts, so it has
+    // to sit under everything that happens while it does.
+    synth::finish(&mut out, 0.07 + 0.20 * pace);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -781,6 +854,12 @@ mod tests {
                 size: FIGHTER,
                 seed: 1,
             }),
+            Patch::Scrape(Scrape {
+                speed: 4.0,
+                material: Material::Stone,
+                frames: 8,
+                seed: 1,
+            }),
         ];
         for p in all {
             let v = p.render();
@@ -788,6 +867,45 @@ mod tests {
             assert!(v.iter().all(|s| s.is_finite()), "{}", p.name());
             assert!(peak(&v) > 0.1, "{} is silent", p.name());
         }
+    }
+
+    #[test]
+    fn a_faster_slide_scrapes_brighter_and_louder() {
+        let at = |speed: f32| {
+            scrape(&Scrape {
+                speed,
+                material: Material::Stone,
+                frames: 8,
+                seed: 3,
+            })
+        };
+        let (slow, fast) = (at(1.0), at(6.0));
+        assert!(peak(&fast) > peak(&slow));
+        assert!(
+            centroid(&fast) > centroid(&slow),
+            "{} vs {}",
+            centroid(&fast),
+            centroid(&slow)
+        );
+        // As long as the grain it was asked for, and a short tail.
+        assert_eq!(slow.len(), samples(frames(8) + 0.03));
+    }
+
+    #[test]
+    fn a_scrape_sits_under_a_footfall() {
+        let scraping = scrape(&Scrape {
+            speed: 6.0,
+            material: Material::Rock,
+            frames: 8,
+            seed: 1,
+        });
+        let landing = step(&Step {
+            weight: 0.6,
+            material: Material::Rock,
+            size: FIGHTER,
+            seed: 1,
+        });
+        assert!(peak(&scraping) < peak(&landing));
     }
 
     #[test]

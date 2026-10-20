@@ -613,6 +613,23 @@ impl Palette {
         tint::mix(self.of(Material::Water), [0.94, 0.97, 1.0], 0.55)
     }
 
+    /// **Dust off a wall** a fighter is sliding down or kicking off
+    /// (2026-10-20): the face's own colour ground to powder -- paler and
+    /// greyer than the thing it was scraped off, because powder scatters the
+    /// light it is lit by -- and pulled a little further toward the light, so
+    /// it reads as that wall's dust under every sky without anybody choosing
+    /// one. Pale enough to show against the face it comes off.
+    pub fn dust(&self, face: Material) -> [f32; 3] {
+        let c = Lch::of(self.of(face));
+        let pale = Lch {
+            l: (c.l * 1.2 + 0.14).min(0.93),
+            c: c.c * 0.5,
+            h: c.h,
+        }
+        .rgb();
+        tint::mix(pale, self.light, 0.2)
+    }
+
     /// **Foam and spray**, where a fall lands: nearly white.
     pub fn foam(&self) -> [f32; 3] {
         tint::mix(self.of(Material::Water), [0.97, 0.98, 1.0], 0.85)
@@ -735,6 +752,28 @@ mod tests {
                 assert!(c.l >= BAND.0 - 0.01, "{name}/{m}: dark ({:.2})", c.l);
                 assert!(c.l <= BAND.1 + 0.01, "{name}/{m}: blown out ({:.2})", c.l);
                 assert!(c.c <= CHROMA.1 + 0.005, "{name}/{m}: neon ({:.3})", c.c);
+            }
+        }
+    }
+
+    #[test]
+    fn wall_dust_shows_against_the_wall_it_comes_off() {
+        // A slide's dust is what says the hand is dragging on the face
+        // (2026-10-20); dust the colour of the face is invisible on it.
+        for arena in sim::arena::all() {
+            let p = of(arena.id);
+            for m in EVERY {
+                let (face, dust) = (Lch::of(p.of(m)), Lch::of(p.dust(m)));
+                // Snow is as pale as powder already: its spray is white on
+                // white, and shows by its shading as it leaves the face.
+                let lighter = if face.l > 0.8 { -0.02 } else { 0.04 };
+                assert!(
+                    dust.l > face.l + lighter,
+                    "{}/{m:?}: dust {:.2} on a face {:.2}",
+                    arena.name,
+                    dust.l,
+                    face.l
+                );
             }
         }
     }

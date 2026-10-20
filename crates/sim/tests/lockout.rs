@@ -133,8 +133,9 @@ fn the_same_move_held_down_comes_out_on_the_lockout_and_not_before() {
 
 #[test]
 fn a_chain_never_brings_a_locked_move_back_early() {
-    // The Champion's version of the measurement above. Leaning on one button
-    // there walks a three-hit string rather than repeating one move, so what
+    // The Champion's version of the measurement above. Tapping one button as
+    // fast as a hand can -- holding it throws one move and no more, since
+    // 2026-10-20 -- walks a three-hit string rather than repeating one move, so what
     // has to hold is the rule stated per slot: however the chain steps between
     // them, no single move comes back inside its own lockout.
     //
@@ -145,7 +146,8 @@ fn a_chain_never_brings_a_locked_move_back_early() {
     let mut w = duel(Class::Champion);
     let mut last: [Option<u32>; sim::moves::MAX_SLOTS] = [None; sim::moves::MAX_SLOTS];
     for frame in 0..400u32 {
-        w.advance([Input::new(L), Input::default()]);
+        let tap = if frame % 3 == 0 { L } else { 0 };
+        w.advance([Input::new(tap), Input::default()]);
         let Some(kind) = started(&w) else { continue };
         let m = sim::moves::get(Class::Champion, kind);
         if let Some(before) = last[kind as usize] {
@@ -161,7 +163,7 @@ fn a_chain_never_brings_a_locked_move_back_early() {
     }
     assert!(
         last.iter().filter(|seen| seen.is_some()).count() >= 3,
-        "holding left click on the Champion threw fewer than three different moves, \
+        "tapping left click on the Champion threw fewer than three different moves, \
          so the chain is not walking"
     );
 }

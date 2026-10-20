@@ -135,6 +135,7 @@ fn every_clip_belongs_to_a_file_the_hub_can_write() {
         "turns",
         "air",
         "ledge",
+        "wall",
         "dodge",
         "defence",
         "reactions",

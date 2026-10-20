@@ -897,7 +897,7 @@ const REQUIRED: &[(&str, i32, i32)] = &[
 
 #[test]
 fn every_class_can_make_the_hops_nobody_can_go_round() {
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let path = sim::envelope::off_the_edge(class, sim::envelope::Extra::Nothing);
         let apex = sim::envelope::path_apex(&path);
         for (what, gap, rise) in REQUIRED {
@@ -1021,7 +1021,7 @@ fn every_class_climbs_a_crag() {
     top.max.x = face.add(Fx::from_int(2));
     route.push(top);
     let mut failed = Vec::new();
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let mut w = World::arrive(
             [class, class],
             valley::Journey::default(),
@@ -1038,4 +1038,74 @@ fn every_class_climbs_a_crag() {
         }
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// **Fast travel** (`Destination::Cairn`): from Hearth to every cairn on the
+/// map, both fighters stand on it, it is their checkpoint, and the world has
+/// moved to where it is -- and, a second later, nobody has fallen off it.
+#[test]
+fn fast_travel_stands_everybody_on_any_cairn() {
+    let cairns = valley::cairns();
+    assert!(cairns.len() > 10, "only {} cairns", cairns.len());
+    assert!(cairns.len() <= 256, "a cairn is a byte on the wire");
+    let atlas = sim::atlas::valley();
+    let mut failed = Vec::new();
+    for (k, &b) in cairns.iter().enumerate() {
+        let top = valley::top_of(&atlas.solids[b as usize]);
+        let mut w = World::arrive(CLASSES, open_journey(), valley::START, None, 2);
+        let go = Input {
+            travel: Travel::cairn(k as u8),
+            ..Input::new(0)
+        };
+        assert_eq!(go.travel.destination(), Some(Destination::Cairn(k as u8)));
+        w.advance([go, Input::new(0)]);
+        for _ in 0..60 {
+            w.advance(idle());
+        }
+        for i in 0..2 {
+            let feet = on_map(&w, i);
+            let off = feet.sub(top);
+            let flat = off.x.abs().max(off.z.abs());
+            if flat.raw() > Fx::from_int(2).raw() || off.y.abs().raw() > Fx::ONE.raw() {
+                failed.push(format!(
+                    "cairn {k} ({}) at {:?}: fighter {i} is {:?} off it",
+                    atlas
+                        .place_at(top.x, top.z)
+                        .map_or("-", |p| p.arena.get().name),
+                    top,
+                    off
+                ));
+            }
+            if w.valley.cairn[i] != b as u16 + 1 {
+                failed.push(format!("cairn {k}: not fighter {i}'s checkpoint"));
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// Not out of a fight: a hunt is not left by fast travel, any more than by
+/// a door.
+#[test]
+fn fast_travel_is_refused_in_a_fight() {
+    let room = sim::atlas::valley()
+        .places
+        .iter()
+        .find(|p| valley::place(p.arena).is_some_and(|q| matches!(q.kind, Kind::Room(_))))
+        .expect("a room")
+        .arena;
+    let mut w = World::arrive(CLASSES, open_journey(), room, None, 2);
+    w.advance(idle());
+    assert!(w.hunting(), "the room's hunt did not start");
+    let (arena, at) = (w.arena, w.players[0].pos);
+    let go = Input {
+        travel: Travel::cairn(0),
+        ..Input::new(0)
+    };
+    w.advance([go, Input::new(0)]);
+    assert_eq!(w.arena, arena);
+    assert!(
+        sim::math::wide_len(w.players[0].pos.sub(at)).raw() < Fx::ONE.raw(),
+        "fast travelled out of a hunt"
+    );
 }

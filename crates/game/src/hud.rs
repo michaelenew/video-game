@@ -77,6 +77,50 @@ pub struct MomentumRow(pub usize);
 #[derive(Component)]
 pub struct MomentumFill(pub usize);
 
+/// **The Champion's tempo bar** (2026-10-20, from play): under his momentum
+/// and the same size, the time he has left to throw the next hit of his
+/// string, read off `sim::state::tempo`, with two ticks round the Beat -- the
+/// sweet spot. Under it, *Hit:* and three pips, one a hit of the string. A
+/// training aid for the beat the class is built on; hidden for every other
+/// class.
+///
+/// **One colour, by the hit that is coming.** The bar is the colour of the
+/// hit the next press throws -- [`hit_colour`], dull for the first, warmer for
+/// the second, vivid for the third -- and pip N is that same colour, filled
+/// when hit N lands: landing the hit moves the colour off the bar into its
+/// pip. It says nothing about early or late; that is the swing's and the
+/// sound's to reward, later.
+#[derive(Component)]
+pub struct TempoRow(pub usize);
+
+/// The *Hit:* line under it: the label and the three pips.
+#[derive(Component)]
+pub struct TempoPips(pub usize);
+
+/// One of the three pips: which fighter's, and which hit.
+#[derive(Component)]
+pub struct TempoPip(pub usize, pub u8);
+
+/// The time left: from now to the end of the window, so it empties from the
+/// left and its edge sweeps through the Beat's ticks.
+#[derive(Component)]
+pub struct TempoFill(pub usize);
+
+/// One of the two ticks round the Beat: its start (`false`) or its end.
+#[derive(Component)]
+pub struct TempoTick(pub usize, pub bool);
+
+/// The colour of the `n`th hit of his string (0, 1, 2): one hue, more vivid
+/// the further into the string it is. The bar wears the one coming next;
+/// the pips wear their own.
+pub fn hit_colour(n: u8) -> Color {
+    match n {
+        0 => Color::srgb(0.66, 0.60, 0.50),
+        1 => Color::srgb(0.90, 0.66, 0.34),
+        _ => Color::srgb(1.0, 0.62, 0.04),
+    }
+}
+
 #[derive(Component)]
 pub struct HealthBar {
     pub who: usize,
@@ -240,7 +284,8 @@ pub fn setup(mut commands: Commands) {
                                 spawn_health(line, seat, colour);
                             });
                         spawn_bar(column, seat);
-                        spawn_momentum(column, seat);
+                        spawn_momentum(column, seat, 34.0);
+                        spawn_tempo(column, seat, 34.0);
                         spawn_heart(column, seat);
                     });
                 }
@@ -273,8 +318,20 @@ pub fn setup(mut commands: Commands) {
                 ..default()
             })
             .with_children(|row| {
-                spawn_momentum(row, 0);
-                spawn_momentum(row, 1);
+                // His tempo just under it, in one column with it: the root
+                // spreads its rows out, and the two are read together.
+                for who in 0..2 {
+                    row.spawn(Node {
+                        width: Val::Percent(34.0),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: Val::Px(3.0),
+                        ..default()
+                    })
+                    .with_children(|column| {
+                        spawn_momentum(column, who, 100.0);
+                        spawn_tempo(column, who, 100.0);
+                    });
+                }
             });
 
             // The Blood mage's heart meter, under whichever fighter has one:
@@ -681,12 +738,13 @@ fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
         });
 }
 
-/// The momentum bar: a track, its fill, and a tick at each third.
-fn spawn_momentum(parent: &mut ChildSpawnerCommands, who: usize) {
+/// The momentum bar: a track, its fill, and a tick at each third. `width`
+/// is the share of its parent it spans.
+fn spawn_momentum(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
     parent
         .spawn((
             Node {
-                width: Val::Percent(34.0),
+                width: Val::Percent(width),
                 height: Val::Px(9.0),
                 border: UiRect::all(Val::Px(2.0)),
                 ..default()
@@ -770,6 +828,173 @@ pub fn update_momentum(
         };
         node.width = Val::Percent(100.0 * share);
         colour.0 = momentum_colour(tier);
+    }
+}
+
+/// The tempo bar, under the momentum bar and the same size: a track, the
+/// time left, and the two ticks of the Beat.
+fn spawn_tempo(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(width),
+                height: Val::Px(9.0),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            TempoRow(who),
+        ))
+        .with_children(|track| {
+            track.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(0.0),
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(Color::NONE),
+                TempoFill(who),
+            ));
+            for end in [false, true] {
+                track.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(0.0),
+                        width: Val::Px(2.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                    TempoTick(who, end),
+                ));
+            }
+        });
+    // *Hit:* and the three pips, under the bar. No fill until full: the game
+    // shows through an empty one.
+    parent
+        .spawn((
+            Node {
+                column_gap: Val::Px(4.0),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            Visibility::Hidden,
+            TempoPips(who),
+        ))
+        .with_children(|line| {
+            line.spawn((
+                Text::new("Hit:"),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                TextColor(INK),
+            ));
+            for hit in 0..3u8 {
+                line.spawn((
+                    Node {
+                        width: Val::Px(18.0),
+                        height: Val::Px(10.0),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                    BorderColor(hit_colour(hit)),
+                    TempoPip(who, hit),
+                ));
+            }
+        });
+}
+
+/// The Beat's two edges on the tempo bar, as shares of the track.
+pub type Beat = (f32, f32);
+
+/// What the tempo bar draws: where now is, as a share of the window -- the
+/// time left fills from there to the end -- the Beat's two edges as shares
+/// of the track, and the colour: the hit the next press throws. `None`
+/// when there is no window to time: no string running, or a finisher
+/// swinging.
+pub fn tempo_bar(t: &sim::state::Tempo) -> Option<(f32, Option<Beat>, Color)> {
+    if t.finishing || t.end == 0 {
+        return None;
+    }
+    let at = |f: u16| 100.0 * f.min(t.end) as f32 / t.end as f32;
+    let beat = (t.beat_to > t.beat_from).then(|| (at(t.beat_from), at(t.beat_to)));
+    Some((at(t.now), beat, hit_colour(t.next)))
+}
+
+/// The tempo bars: shown for a Champion, the time left in the colour of the
+/// hit coming, and the pips filled for the hits that landed.
+#[allow(clippy::type_complexity)]
+pub fn update_tempo(
+    sim: Res<crate::Sim>,
+    mut rows: Query<(&TempoRow, &mut Visibility), Without<TempoPips>>,
+    mut lines: Query<(&TempoPips, &mut Visibility), Without<TempoRow>>,
+    mut pips: Query<(&TempoPip, &mut BackgroundColor), (Without<TempoFill>, Without<TempoTick>)>,
+    mut fills: Query<
+        (&TempoFill, &mut Node, &mut BackgroundColor),
+        (Without<TempoPip>, Without<TempoTick>),
+    >,
+    mut ticks: Query<
+        (&TempoTick, &mut Node, &mut BackgroundColor),
+        (Without<TempoPip>, Without<TempoFill>),
+    >,
+) {
+    let shown = |who: usize| {
+        if sim::state::tempo(&sim.cur.players[who]).is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        }
+    };
+    for (row, mut visible) in rows.iter_mut() {
+        *visible = shown(row.0);
+    }
+    for (line, mut visible) in lines.iter_mut() {
+        *visible = shown(line.0);
+    }
+    for (pip, mut fill) in pips.iter_mut() {
+        let Some(t) = sim::state::tempo(&sim.cur.players[pip.0]) else {
+            continue;
+        };
+        fill.0 = if t.landed & 1 << pip.1 != 0 {
+            hit_colour(pip.1)
+        } else {
+            Color::NONE
+        };
+    }
+    for (fill, mut node, mut colour) in fills.iter_mut() {
+        match sim::state::tempo(&sim.cur.players[fill.0])
+            .as_ref()
+            .and_then(tempo_bar)
+        {
+            Some((now, _, c)) => {
+                node.left = Val::Percent(now);
+                node.width = Val::Percent(100.0 - now);
+                colour.0 = c;
+            }
+            None => {
+                node.width = Val::Percent(0.0);
+                colour.0 = Color::NONE;
+            }
+        }
+    }
+    for (tick, mut node, mut colour) in ticks.iter_mut() {
+        let beat = sim::state::tempo(&sim.cur.players[tick.0])
+            .as_ref()
+            .and_then(tempo_bar)
+            .and_then(|(_, beat, _)| beat);
+        match beat {
+            Some((from, to)) => {
+                node.left = Val::Percent(if tick.1 { to } else { from });
+                colour.0 = ASCENDED;
+            }
+            None => colour.0 = Color::NONE,
+        }
     }
 }
 
@@ -1417,9 +1642,7 @@ fn locked(p: &sim::state::Player) -> Option<String> {
 /// Separated from the click handling so the rule can be tested without a
 /// window, a cursor, or a rendered frame.
 pub fn cycle_class<const N: usize>(mut classes: [sim::Class; N], who: usize) -> [sim::Class; N] {
-    let all = sim::class::ALL_CLASSES;
-    let next = (classes[who] as usize + 1) % all.len();
-    classes[who] = all[next];
+    classes[who] = classes[who].next_in_rotation();
     classes
 }
 
@@ -1592,6 +1815,27 @@ mod tests {
     }
 
     #[test]
+    fn the_champion_comes_first_and_the_bulwark_last() {
+        // The owner's order (2026-10-20): `sim::class::ROTATION`.
+        let mut classes = [Class::Bulwark, Class::Bulwark];
+        classes = cycle_class(classes, 0);
+        assert_eq!(
+            classes[0],
+            Class::Champion,
+            "the Bulwark goes round to the Champion"
+        );
+        for _ in 2..ALL_CLASSES.len() {
+            classes = cycle_class(classes, 0);
+            assert_ne!(
+                classes[0],
+                Class::Bulwark,
+                "the Bulwark came before the end"
+            );
+        }
+        assert_eq!(cycle_class(classes, 0)[0], Class::Bulwark);
+    }
+
+    #[test]
     fn the_two_bars_grow_away_from_the_middle() {
         // The track is read at a glance while she is being steered, so the
         // thing that has to be true is positional: the middle is the middle,
@@ -1631,6 +1875,39 @@ mod tests {
             let p = sim::state::Player::new(class);
             assert_eq!(locked(&p), None, "{} starts locked", class.name());
         }
+    }
+
+    #[test]
+    fn the_tempo_bar_wears_the_colour_of_the_hit_coming() {
+        // A sword string, tapped: the bar is only ever the colour of the hit
+        // the next press throws, and now and the Beat's ticks sit inside
+        // the track.
+        let mut w = sim::World::with_classes([Class::Champion, Class::Bulwark]);
+        for _ in 0..90 {
+            w.advance([sim::Input::new(sim::Input::W), sim::Input::default()]);
+        }
+        let mut seen = [false; 3];
+        for f in 0..120 {
+            let tap = if f % 5 == 0 { sim::Input::LEFT } else { 0 };
+            w.advance([sim::Input::new(tap), sim::Input::default()]);
+            let t = sim::state::tempo(&w.players[0]).expect("a Champion has a tempo");
+            let Some((now, beat, colour)) = tempo_bar(&t) else {
+                continue;
+            };
+            assert!((0.0..=100.0).contains(&now), "{t:?}");
+            if let Some((from, to)) = beat {
+                assert!(0.0 <= from && from < to && to <= 100.0, "{t:?}");
+            }
+            let n = (0..3)
+                .position(|n| hit_colour(n) == colour)
+                .expect("a hit's colour");
+            assert_eq!(n as u8, t.next, "{t:?}");
+            seen[n] = true;
+        }
+        assert!(
+            seen.iter().all(|s| *s),
+            "the windows into each hit: {seen:?}"
+        );
     }
 
     #[test]

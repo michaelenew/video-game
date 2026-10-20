@@ -231,9 +231,14 @@ impl Default for Slots {
 
 /// The Champion's weapons' tints, so the three arcs are told apart as well as
 /// the three silhouettes: the sword's icy blue, white at its edge, the
-/// hammer's a hot ember, the spear's a thin blue streak.
-fn champion_tint(which: u8) -> [f32; 3] {
-    linear(match which {
+/// hammer's a hot ember, the spear's a thin blue streak -- and the string's
+/// third hit and the finishers in gold, whatever threw them, the colour of
+/// the tempo bar's window into it (2026-10-20, from play).
+fn champion_tint(cut: &view::arms::Cut) -> [f32; 3] {
+    if cut.place >= 2 {
+        return linear(Color::srgb(1.0, 0.78, 0.25));
+    }
+    linear(match cut.which {
         0 => Color::srgb(0.55, 0.80, 1.0),
         1 => Color::srgb(1.0, 0.55, 0.20),
         _ => Color::srgb(0.45, 0.80, 1.0),
@@ -304,7 +309,7 @@ pub fn emit_champions(
             inner: s.inner.into(),
             outer: s.outer.into(),
             glow: s.glow,
-            tint: champion_tint(cut.which),
+            tint: champion_tint(&cut),
             window: view::arms::WINDOW,
             style: Style::Blade,
         });
