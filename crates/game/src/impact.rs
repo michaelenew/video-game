@@ -7,9 +7,12 @@
 //! a blow is its weight (`crates/sound`); this is its picture, and it is what
 //! sells a finisher's strength more than any number.
 //!
-//! **When** is the simulation's: the frame `hit_used` comes up on a move that
-//! is out -- the same flag that stops a move hitting twice, so it fires once
-//! for one blow on anything, a fighter or a creature. **Where** is the drawn
+//! **When** is the simulation's: a move of hers that is out and has
+//! `hit_used`, *and* has met something -- the impact freeze has her
+//! (a fighter struck), or a creature's health has just gone down. `hit_used`
+//! alone is not a hit: a move that puts something in the world (the Plunge's
+//! ring) spends it on a whiff, and a flash on nobody is the very kind of
+//! drawn shape the owner asked to be rid of. **Where** is the drawn
 //! blade's tip (`slash`'s points), so the burst is on the steel. It plays
 //! for seventeen frames of the simulation's clock, so it holds through the
 //! blow's impact freeze, and a still capture lands on it.
@@ -59,12 +62,14 @@ struct Burst {
     blow: Option<(u8, u32)>,
 }
 
-/// The bursts, and what each effect slot had caught on the frame before --
-/// the effect itself, so a slot taken by a new one is not read as new hits.
+/// The bursts, what each effect slot had caught on the frame before -- the
+/// effect itself, so a slot taken by a new one is not read as new hits --
+/// and the creatures' health on the frame before.
 #[derive(Resource)]
 pub struct Bursts {
     all: [Burst; BURSTS],
     seen: [Option<Effect>; MAX_EFFECTS],
+    herd: [i32; MAX_MONSTERS],
     next: usize,
 }
 
@@ -73,6 +78,7 @@ impl Default for Bursts {
         Bursts {
             all: [Burst::default(); BURSTS],
             seen: [None; MAX_EFFECTS],
+            herd: [0; MAX_MONSTERS],
             next: 0,
         }
     }
@@ -199,6 +205,13 @@ fn draw(
     mut parts: Query<(&Part, &mut Transform, &mut Visibility)>,
 ) {
     let frame = sim.cur.frame;
+    // Has a creature just been hurt?
+    let mut hurt = false;
+    for (k, beast) in sim.cur.monsters.iter().enumerate() {
+        let health = beast.as_ref().map_or(0, |b| b.health);
+        hurt |= health < bursts.herd[k];
+        bursts.herd[k] = health;
+    }
     for b in bursts.all.iter_mut() {
         b.age = frame.wrapping_sub(b.start) as f32 / 60.0;
         b.live = b.live && frame >= b.start && b.age < LIFE;
@@ -210,7 +223,7 @@ fn draw(
         if !crate::reaver::drawn(p.class) {
             continue;
         }
-        let Some(blow) = landed(p, sim.cur.frame) else {
+        let Some(blow) = landed(p, frame).filter(|_| p.frozen > 0 || hurt) else {
             continue;
         };
         if b.blow == Some(blow) {
@@ -318,13 +331,16 @@ fn draw(
         match *part {
             Part::Flash(_) => {
                 tf.translation = b.at;
-                tf.scale = Vec3::splat((0.25 + 0.85 * out.sqrt()) * b.size);
+                // A hot point that swells for a moment and goes out: never
+                // a ball big enough to read as a shape of its own.
+                let swell = (t * 6.0).min(1.0) * (1.0 - t);
+                tf.scale = Vec3::splat((0.08 + 0.32 * swell) * b.size);
             }
             Part::Ring(_) => {
                 tf.translation = b.at + b.dir * 0.1 * out * b.size;
                 tf.rotation = Quat::from_rotation_arc(Vec3::Y, b.dir);
-                let r = (0.3 + 2.0 * out) * b.size;
-                tf.scale = Vec3::new(r, 0.15 * b.size, r);
+                let r = (0.15 + 0.9 * out) * b.size;
+                tf.scale = Vec3::new(r, 0.06 * b.size, r);
             }
             Part::Shard(_, k) => {
                 let seed = b
