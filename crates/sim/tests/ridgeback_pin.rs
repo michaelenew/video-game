@@ -176,13 +176,16 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// there is now kept for a wall (`Player::wall_press`, in `state_checksum`
 /// while not nought); and those that brush the proving ground's walls slide
 /// now where they used to fall past, and slide slower.
+/// **Every class again the same day: only enough wall is a wall**
+/// (`Terrain::wall_face`). The proving ground's low walls and edges the
+/// random presses brush are no longer slid on or jumped off.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xe92f781a5de4c50f),
-    (Class::Bulwark, 0x6e689b68053fea29),
-    (Class::ShadowReaver, 0xcc2db291bb37923f),
-    (Class::BloodMage, 0xb092df41f61f4e01),
-    (Class::DualMage, 0x2b34cb4b6218e982),
-    (Class::Elementalist, 0x42c71e0a7887d6ed),
+    (Class::Champion, 0x488936a9eef126bf),
+    (Class::Bulwark, 0xf68445ba591dfe6f),
+    (Class::ShadowReaver, 0xb70c8375aac8cb9c),
+    (Class::BloodMage, 0x520976d3f6cad020),
+    (Class::DualMage, 0x22b31e2bdcd3bb9b),
+    (Class::Elementalist, 0x5997d13e09ad2200),
 ];
 
 #[test]
