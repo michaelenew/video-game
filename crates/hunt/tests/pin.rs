@@ -65,8 +65,11 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // Elementalist's do not slide at all, and moved only for the hash -- a jump
 // pressed in the air is kept for a wall (`Player::wall_press`), which
 // `state_checksum` holds while it is not nought.
+// And the first Champion's, the Bulwark's, the Dual mage's and the Reaver's
+// again the same day: only enough wall is a wall (`Terrain::wall_face`), so
+// the edges they brushed are no longer slid on.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x9600a3bf8fd2bcb9),
+    (Class::Champion, 0x2545_F491, 0x41fd1135bb87c036),
     (Class::Champion, 7, 0x8ff13d2a62ee205e),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
@@ -78,7 +81,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-13, deliberately, with the Elementalist's: slopes, steps
     // and lips -- the steep-ground wall is the footing, and the arena's rim
     // is land, which the scripted hunt walks into. See feel-log.md.
-    (Class::Bulwark, 101, 0x2f5a7665588b9e3a),
+    (Class::Bulwark, 101, 0xd8542982379b030b),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between
@@ -93,7 +96,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // autos again, each hopping her the way she holds (0016); and again for
     // the second round -- forward wings, long holds, spending majors -- and
     // the third: the autos a ball, every click a tap or a hold (2026-10-13).
-    (Class::DualMage, 2_222, 0x11db3ab66b78f841),
+    (Class::DualMage, 2_222, 0xf97a9d9d8e728851),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
@@ -101,7 +104,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-12 with no change to her fight: an effect is hashed by
     // its kind's number, and the Dual mage's retired Shade bolt sat before
     // her shadow's blades in the list (0015).
-    (Class::ShadowReaver, 31, 0xd8f94c78e789fcda),
+    (Class::ShadowReaver, 31, 0xd56bc982f1f72c16),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.

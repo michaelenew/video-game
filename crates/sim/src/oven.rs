@@ -1073,6 +1073,13 @@ scalars! {
     WallSlideCatch,       "Air",      "Wall slide, grabs of a faster fall, a frame (x)",     Fixed, 0, fx(1,1);
     WallJumpCarry,        "Air",      "Wall jump, along where the stick points at (m/s)",    Fixed, 0, fx(15,1);
     WallJumpBuffer,       "Air",      "Wall jump, pressed before the wall and kept",         Frames, 0, 30;
+    // **Only a wall is a wall** (2026-10-20, from play: "I am getting the
+    // slide animation on very thin platforms where I wouldn't be able to
+    // slide at all"). A face is slid on and jumped off only where it covers
+    // this much of the body's height, and this much across it, behind the
+    // body: the side of a slab or a narrow post is not one.
+    WallFaceHigh,         "Air",      "Walls, a face covers the body at least (m)",          Fixed, 0, fx(3,1);
+    WallFaceWide,         "Air",      "Walls, a face is at least this wide (m)",             Fixed, 0, fx(3,1);
     // **The ledge grab** (2026-10-16). A forgiving way up that is plainly not
     // the quick one: a body fully off an edge, not leaving it fast, with the
     // top at its hands and the stick not pushing away, catches it; the climb

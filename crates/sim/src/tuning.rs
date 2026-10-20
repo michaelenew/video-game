@@ -744,6 +744,26 @@ pub fn wall_jump_buffer() -> u8 {
     oven::scalar(Scalar::WallJumpBuffer).clamp(0, 200) as u8
 }
 
+/// **How much of the body's height a face has to cover to be a wall**, in
+/// metres (2026-10-20, from play: the slide was drawn "on very thin
+/// platforms where I wouldn't be able to slide at all"). The side of a slab
+/// a body brushes in the air stops it as it always did, but it is not slid
+/// on, jumped off or drawn as a wall unless the face behind the body is at
+/// least this tall, counted over the body from the feet to the head
+/// (`Terrain::wall_face`). So the slide also ends as the feet pass the
+/// bottom of a wall, with the rest of the face too short to hold a body.
+pub fn wall_face_high() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallFaceHigh))
+}
+
+/// **How wide a face has to be to be a wall**, across the body, in metres
+/// (2026-10-20): the face is measured at the body's middle and half this
+/// either side along it, and the shortest of the three is what counts. A
+/// post, or the end of a narrow stone, is not slid on.
+pub fn wall_face_wide() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallFaceWide))
+}
+
 /// **How fast a body may be moving away from an edge and still catch it**,
 /// in metres a second, out of the face. Moving toward it is never too fast.
 /// Faster away is a body that meant to go -- a run off the edge, a dodge -- or
