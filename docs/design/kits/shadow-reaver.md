@@ -156,17 +156,16 @@ cut of shadow opening in him on each one's line, and then they fold back into he
 sliding into wherever she is now and thinning away. Her whole class is a second body copying
 her; this is that at its peak.
 
-**They grow to what they cut** (2026-10-19, from the owner: "it needs to make sense on a
-creature's back or a big creature's legs"). One rule for everything: the copies stand on the
-floor round the place the blow met, outside all of the thing that was struck, and are as big as
-it takes for the overhead to come down at that height. A fighter is cut at his middle, so they
-are her size. A leg cut at the knee rings the leg with copies a little bigger. A blow on top of
-a creature's back -- her standing on it -- puts five giants of her on the ground round the whole
-animal, up to twenty-five times her size for the crown of a forty-metre Siegeshell, and folds
-them back down to her size into her where she stands on top. The sim keeps where the blow met,
-the floor under it and how far the struck part reaches out from there across the floor
-(`Monster::part_reach_from`); the size and the ring are the renderer's (`copy_size`,
-`copy_spot`). `SHOT_REAP=leg` and `SHOT_REAP=back` stage it on a hunt's creature. The copies are the shadow's own skeleton and grey see-through,
+**They spread out round what they cut, and stay her size** (2026-10-20). The copies stand on the
+floor round the place the blow met, outside all of the thing that was struck, and the ring is
+as wide as that thing: close round a fighter, a little wider round a leg, and all the way round
+the animal for a blow on top of a creature's back -- her standing on it, the cuts opening on the
+back where she struck. They are always her size. A first cut (2026-10-19) grew them instead, as
+big as it took for the overhead to land at the struck height, up to twenty-five times her size;
+from play, copies grown to a Ridgeback's back looked wrong -- the shadow is her, and her size is
+part of what it is. The sim keeps where the blow met, the floor under it and how far the struck
+part reaches out from there across the floor (`Monster::part_reach_from`); the ring is the
+renderer's (`copy_spot`). `SHOT_REAP=leg` and `SHOT_REAP=back` stage it on a hunt's creature. The copies are the shadow's own skeleton and grey see-through,
 posed by the same pure function, on the Reaping's clock. Under it, one long rising whoosh.
 
 A first cut was a hooded reaper with a scythe and floor thorns, rejected the same day: the
