@@ -85,16 +85,15 @@ what was built, in one place:
   `Chain, a press waits for its link` (10 frames) whether or not the button is
   still down, and comes out on the first frame its link may; a tap made
   earlier than that is lost. (`Fury::fresh`, `state::champion_weapon`.)
-- **The tempo bar** (2026-10-20, a training aid): under the momentum bar, three
-  pips -- the hits of the string, filled if they landed, red-edged if
-  they missed -- and the window for the next hit, drawn from where the last one
-  landed: the Beat first (the sweet spot), then a red stretch where a press is
-  lost, a dim one where it is kept, a half-bright one where a *different*
-  weapon comes out at once (the same one is still kept), and the open window
-  until the string dies -- cold white into the second hit, **gold into the
-  third**, and all gold while the third or a finisher runs. Every colour edge
-  is one of those points; the one line on it is now. Every mark is read off the rule it draws (`state::tempo`). And the
-  three hits look different: each swing's trail is bigger than the last's and
+- **The tempo bar** (2026-10-20, a training aid): under the momentum bar and
+  the same size, the time left to throw the next hit, emptying from the left,
+  with two ticks round the Beat -- the sweet spot. It is one colour, the
+  colour of the hit the next press throws: dull for the first, warmer for the
+  second, vivid for the third. Under it, *Hit:* and three pips in those same
+  three colours, empty until that hit lands -- so landing a hit moves the
+  colour off the bar into its pip. It gives no early or late feedback; that is
+  for the swing and the sound to reward, later. Every mark is read off the
+  rule it draws (`state::tempo`). And the three hits look different: each swing's trail is bigger than the last's and
   the third's is gold, with a gold flare at the weapon's head while it comes.
 - **The Rush goes toward the crosshair** (2026-10-13): flat along the floor
   toward the spot the crosshair is on (`aim::racing_path` from his feet), not

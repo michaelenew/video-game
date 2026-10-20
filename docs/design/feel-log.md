@@ -9233,6 +9233,13 @@ spark laid where she already has ground merges, so this is rare.
   window -- it read as a mark the colours did not line up with. It is the edge between the
   half-bright and the bright stretch now, so every edge on the bar means something and the
   only line is now.
+  **And simpler again, the same day**: the bar is one colour -- the colour of the hit the
+  next press throws, dull, warmer, vivid for the first, second and third -- the same size as
+  the momentum bar, emptying from the left, with two ticks round the Beat and nothing else.
+  The pips moved under it beside *Hit:*, each in its hit's colour and empty (the game shows
+  through) until that hit lands, so landing one moves the colour from the bar into the pip.
+  The lost, kept and swap stretches are gone: the owner's call -- early and late is a lot to
+  read off a bar, and the swing and the sound can reward it later.
 - **The three hits look different.** The trail of the first is a thin outer band and never
   quite solid; the second's is the weapon's own band; the third's -- and a finisher's -- is a
   thick slab reaching further in, drawn **gold** whatever weapon threw it. A gold flare grows

@@ -77,59 +77,49 @@ pub struct MomentumRow(pub usize);
 #[derive(Component)]
 pub struct MomentumFill(pub usize);
 
-/// **The Champion's tempo bar** (2026-10-20, from play): under his momentum,
-/// how long he has to land the next hit of his string and where its sweet
-/// spot is, read off `sim::state::tempo`. Three pips -- the hits
-/// thrown, lit if they landed -- and a timeline per link. A training aid for
-/// the beat the class is built on; hidden for every other class.
+/// **The Champion's tempo bar** (2026-10-20, from play): under his momentum
+/// and the same size, the time he has left to throw the next hit of his
+/// string, read off `sim::state::tempo`, with two ticks round the Beat -- the
+/// sweet spot. Under it, *Hit:* and three pips, one a hit of the string. A
+/// training aid for the beat the class is built on; hidden for every other
+/// class.
+///
+/// **One colour, by the hit that is coming.** The bar is the colour of the
+/// hit the next press throws -- [`hit_colour`], dull for the first, warmer for
+/// the second, vivid for the third -- and pip N is that same colour, filled
+/// when hit N lands: landing the hit moves the colour off the bar into its
+/// pip. It says nothing about early or late; that is the swing's and the
+/// sound's to reward, later.
 #[derive(Component)]
 pub struct TempoRow(pub usize);
+
+/// The *Hit:* line under it: the label and the three pips.
+#[derive(Component)]
+pub struct TempoPips(pub usize);
 
 /// One of the three pips: which fighter's, and which hit.
 #[derive(Component)]
 pub struct TempoPip(pub usize, pub u8);
 
-/// One stretch of the timeline. See [`Stretch`].
+/// The time left: from now to the end of the window, so it empties from the
+/// left and its edge sweeps through the Beat's ticks.
 #[derive(Component)]
-pub struct TempoStretch(pub usize, pub Stretch);
+pub struct TempoFill(pub usize);
 
-/// The stretches of the tempo bar's timeline, in the order they are drawn.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Stretch {
-    /// The Beat: pressed here, the next link is a true link. The sweet spot.
-    Beat,
-    /// A press here is forgotten before the next link may start.
-    Lost,
-    /// A press here is kept and comes out when the link may.
-    Kept,
-    /// A different weapon comes out at once; the same one is still kept.
-    Swap,
-    /// The next link comes out at once, whichever weapon it is.
-    Open,
-    /// What has already gone by, darkened.
-    Gone,
-    /// Now.
-    Cursor,
+/// One of the two ticks round the Beat: its start (`false`) or its end.
+#[derive(Component)]
+pub struct TempoTick(pub usize, pub bool);
+
+/// The colour of the `n`th hit of his string (0, 1, 2): one hue, more vivid
+/// the further into the string it is. The bar wears the one coming next;
+/// the pips wear their own.
+pub fn hit_colour(n: u8) -> Color {
+    match n {
+        0 => Color::srgb(0.66, 0.60, 0.50),
+        1 => Color::srgb(0.90, 0.66, 0.34),
+        _ => Color::srgb(1.0, 0.62, 0.04),
+    }
 }
-
-const STRETCHES: [Stretch; 7] = [
-    Stretch::Beat,
-    Stretch::Lost,
-    Stretch::Kept,
-    Stretch::Swap,
-    Stretch::Open,
-    Stretch::Gone,
-    Stretch::Cursor,
-];
-
-/// The tempo bar's colours. The sweet spot is the one bright thing on it; the
-/// window into the third hit is gold, the window into the second a cold
-/// white, so which hit is coming is told at a glance.
-const BEAT: Color = Color::srgb(1.0, 0.95, 0.55);
-const LOST: Color = Color::srgb(0.45, 0.10, 0.10);
-const SECOND: Color = Color::srgb(0.62, 0.78, 0.95);
-const THIRD: Color = Color::srgb(1.0, 0.66, 0.12);
-const MISSED: Color = Color::srgb(0.85, 0.25, 0.22);
 
 #[derive(Component)]
 pub struct HealthBar {
@@ -841,168 +831,169 @@ pub fn update_momentum(
     }
 }
 
-/// The tempo bar: three pips, one a hit, then the timeline.
+/// The tempo bar, under the momentum bar and the same size: a track, the
+/// time left, and the two ticks of the Beat.
 fn spawn_tempo(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
     parent
         .spawn((
             Node {
                 width: Val::Percent(width),
-                height: Val::Px(14.0),
-                column_gap: Val::Px(3.0),
+                height: Val::Px(9.0),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            TempoRow(who),
+        ))
+        .with_children(|track| {
+            track.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(0.0),
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(Color::NONE),
+                TempoFill(who),
+            ));
+            for end in [false, true] {
+                track.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(0.0),
+                        width: Val::Px(2.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                    TempoTick(who, end),
+                ));
+            }
+        });
+    // *Hit:* and the three pips, under the bar. No fill until full: the game
+    // shows through an empty one.
+    parent
+        .spawn((
+            Node {
+                column_gap: Val::Px(4.0),
                 align_items: AlignItems::Center,
                 ..default()
             },
             Visibility::Hidden,
-            TempoRow(who),
+            TempoPips(who),
         ))
-        .with_children(|row| {
+        .with_children(|line| {
+            line.spawn((
+                Text::new("Hit:"),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                TextColor(INK),
+            ));
             for hit in 0..3u8 {
-                row.spawn((
+                line.spawn((
                     Node {
                         width: Val::Px(18.0),
-                        height: Val::Px(9.0),
+                        height: Val::Px(10.0),
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
                     BackgroundColor(Color::NONE),
-                    BorderColor(DIM),
+                    BorderColor(hit_colour(hit)),
                     TempoPip(who, hit),
                 ));
             }
-            row.spawn((
-                Node {
-                    flex_grow: 1.0,
-                    height: Val::Px(9.0),
-                    margin: UiRect::left(Val::Px(3.0)),
-                    border: UiRect::all(Val::Px(1.0)),
-                    ..default()
-                },
-                BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
-                BorderColor(DIM),
-            ))
-            .with_children(|track| {
-                for stretch in STRETCHES {
-                    track.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: Val::Percent(0.0),
-                            width: Val::Percent(0.0),
-                            height: Val::Percent(100.0),
-                            ..default()
-                        },
-                        BackgroundColor(Color::NONE),
-                        TempoStretch(who, stretch),
-                    ));
-                }
-            });
         });
 }
 
-/// Where a stretch of the tempo bar runs, as percentages of the track, and
-/// its colour; `None` when it is not drawn. A pure function of the tempo, so
-/// the test below can read it without a window.
-pub fn stretch_of(t: &sim::state::Tempo, stretch: Stretch) -> Option<(f32, f32, Color)> {
-    // The third hit running, or a finisher: the whole bar is the payoff.
-    if t.finishing {
-        return (stretch == Stretch::Open).then_some((0.0, 100.0, THIRD));
-    }
-    if t.end == 0 {
+/// The Beat's two edges on the tempo bar, as shares of the track.
+pub type Beat = (f32, f32);
+
+/// What the tempo bar draws: where now is, as a share of the window -- the
+/// time left fills from there to the end -- the Beat's two edges as shares
+/// of the track, and the colour: the hit the next press throws. `None` when there is no window to time: no string
+/// running, or its third hit or a finisher swinging.
+pub fn tempo_bar(t: &sim::state::Tempo) -> Option<(f32, Option<Beat>, Color)> {
+    if t.finishing || t.end == 0 {
         return None;
     }
     let at = |f: u16| 100.0 * f.min(t.end) as f32 / t.end as f32;
-    let span = |a: u16, b: u16| (b > a).then(|| (at(a), at(b) - at(a)));
-    // The window into the third hit is gold; into the second, cold.
-    let next = if t.thrown + 1 >= sim::moves::champion::DEPTH {
-        THIRD
-    } else {
-        SECOND
-    };
-    let dim = |c: Color| c.with_alpha(0.4);
-    let (from, width, colour) = match stretch {
-        Stretch::Beat => {
-            let (a, w) = span(0, t.beat)?;
-            (a, w, if t.on_the_beat { ASCENDED } else { BEAT })
-        }
-        Stretch::Lost => {
-            let (a, w) = span(t.beat, t.lost)?;
-            (a, w, LOST)
-        }
-        Stretch::Kept => {
-            let (a, w) = span(t.lost, t.swap)?;
-            (a, w, dim(next))
-        }
-        Stretch::Swap => {
-            let (a, w) = span(t.swap, t.repeat)?;
-            (a, w, next.with_alpha(0.75))
-        }
-        Stretch::Open => {
-            let (a, w) = span(t.repeat.max(t.swap), t.end)?;
-            (a, w, next)
-        }
-        Stretch::Gone => (0.0, at(t.now), Color::srgba(0.0, 0.0, 0.0, 0.6)),
-        Stretch::Cursor => (at(t.now), 0.0, ASCENDED),
-    };
-    Some((from, width, colour))
+    let beat = (t.beat > 0).then(|| (at(0), at(t.beat)));
+    Some((at(t.now), beat, hit_colour(t.thrown)))
 }
 
-/// The tempo bars: shown for a Champion, the pips counting his string and
-/// the timeline of the link he is in.
+/// The tempo bars: shown for a Champion, the time left in the colour of the
+/// hit coming, and the pips filled for the hits that landed.
+#[allow(clippy::type_complexity)]
 pub fn update_tempo(
     sim: Res<crate::Sim>,
-    mut rows: Query<(&TempoRow, &mut Visibility)>,
-    mut pips: Query<(&TempoPip, &mut BackgroundColor, &mut BorderColor), Without<TempoStretch>>,
-    mut stretches: Query<(&TempoStretch, &mut Node, &mut BackgroundColor), Without<TempoPip>>,
+    mut rows: Query<(&TempoRow, &mut Visibility), Without<TempoPips>>,
+    mut lines: Query<(&TempoPips, &mut Visibility), Without<TempoRow>>,
+    mut pips: Query<(&TempoPip, &mut BackgroundColor), (Without<TempoFill>, Without<TempoTick>)>,
+    mut fills: Query<
+        (&TempoFill, &mut Node, &mut BackgroundColor),
+        (Without<TempoPip>, Without<TempoTick>),
+    >,
+    mut ticks: Query<
+        (&TempoTick, &mut Node, &mut BackgroundColor),
+        (Without<TempoPip>, Without<TempoFill>),
+    >,
 ) {
-    for (row, mut visible) in rows.iter_mut() {
-        *visible = if sim::state::tempo(&sim.cur.players[row.0]).is_some() {
+    let shown = |who: usize| {
+        if sim::state::tempo(&sim.cur.players[who]).is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
-        };
+        }
+    };
+    for (row, mut visible) in rows.iter_mut() {
+        *visible = shown(row.0);
     }
-    for (pip, mut fill, mut border) in pips.iter_mut() {
+    for (line, mut visible) in lines.iter_mut() {
+        *visible = shown(line.0);
+    }
+    for (pip, mut fill) in pips.iter_mut() {
         let Some(t) = sim::state::tempo(&sim.cur.players[pip.0]) else {
             continue;
         };
-        let hit = pip.1;
-        let third = hit + 1 == sim::moves::champion::DEPTH;
-        let lit = if third { THIRD } else { SECOND };
-        // The latest hit, still on its way, is not a miss yet.
-        let coming = t.swinging && hit + 1 == t.thrown;
-        let thrown = hit < t.thrown && !coming;
-        let landed = t.landed & 1 << hit != 0;
-        // Thrown and landed: filled. Thrown and missed: a red edge, empty --
-        // which is why the next one came late. The next to throw: outlined in
-        // its colour.
-        fill.0 = match (thrown, landed) {
-            (true, true) => lit,
-            (true, false) => Color::NONE,
-            _ => Color::NONE,
-        };
-        border.0 = match (thrown, landed) {
-            (true, false) => MISSED,
-            (true, true) => lit,
-            _ if coming || (hit == t.thrown && !t.finishing) => lit,
-            _ => DIM,
+        fill.0 = if t.landed & 1 << pip.1 != 0 {
+            hit_colour(pip.1)
+        } else {
+            Color::NONE
         };
     }
-    for (tag, mut node, mut colour) in stretches.iter_mut() {
-        let drawn = sim::state::tempo(&sim.cur.players[tag.0])
+    for (fill, mut node, mut colour) in fills.iter_mut() {
+        match sim::state::tempo(&sim.cur.players[fill.0])
             .as_ref()
-            .and_then(|t| stretch_of(t, tag.1));
-        let Some((from, width, c)) = drawn else {
-            node.width = Val::Percent(0.0);
-            colour.0 = Color::NONE;
-            continue;
-        };
-        node.left = Val::Percent(from);
-        // Now is a line rather than a stretch.
-        node.width = if tag.1 == Stretch::Cursor {
-            Val::Px(2.0)
-        } else {
-            Val::Percent(width)
-        };
-        colour.0 = c;
+            .and_then(tempo_bar)
+        {
+            Some((now, _, c)) => {
+                node.left = Val::Percent(now);
+                node.width = Val::Percent(100.0 - now);
+                colour.0 = c;
+            }
+            None => {
+                node.width = Val::Percent(0.0);
+                colour.0 = Color::NONE;
+            }
+        }
+    }
+    for (tick, mut node, mut colour) in ticks.iter_mut() {
+        let beat = sim::state::tempo(&sim.cur.players[tick.0])
+            .as_ref()
+            .and_then(tempo_bar)
+            .and_then(|(_, beat, _)| beat);
+        match beat {
+            Some((from, to)) => {
+                node.left = Val::Percent(if tick.1 { to } else { from });
+                colour.0 = ASCENDED;
+            }
+            None => colour.0 = Color::NONE,
+        }
     }
 }
 
@@ -1867,35 +1858,36 @@ mod tests {
     }
 
     #[test]
-    fn the_tempo_bar_is_laid_out_in_order_inside_its_track() {
-        // A sword string, tapped: every frame's bar has its stretches in the
-        // order the timeline runs, inside the track, and the window into the
-        // third hit is gold.
+    fn the_tempo_bar_wears_the_colour_of_the_hit_coming() {
+        // A sword string, tapped: the bar is only ever the colour of the hit
+        // the next press throws, and now and the Beat's ticks sit inside
+        // the track.
         let mut w = sim::World::with_classes([Class::Champion, Class::Bulwark]);
         for _ in 0..90 {
             w.advance([sim::Input::new(sim::Input::W), sim::Input::default()]);
         }
-        let mut gold = false;
+        let mut seen = [false; 3];
         for f in 0..120 {
             let tap = if f % 5 == 0 { sim::Input::LEFT } else { 0 };
             w.advance([sim::Input::new(tap), sim::Input::default()]);
             let t = sim::state::tempo(&w.players[0]).expect("a Champion has a tempo");
-            let mut edge = 0.0;
-            for stretch in [
-                Stretch::Beat,
-                Stretch::Lost,
-                Stretch::Kept,
-                Stretch::Swap,
-                Stretch::Open,
-            ] {
-                if let Some((from, width, colour)) = stretch_of(&t, stretch) {
-                    assert!(from >= edge - 0.01 && from + width <= 100.01, "{t:?}");
-                    edge = from + width;
-                    gold |= stretch == Stretch::Open && colour == THIRD;
-                }
+            let Some((now, beat, colour)) = tempo_bar(&t) else {
+                continue;
+            };
+            assert!((0.0..=100.0).contains(&now), "{t:?}");
+            if let Some((from, to)) = beat {
+                assert!(0.0 <= from && from < to && to <= 100.0, "{t:?}");
             }
+            let n = (0..3)
+                .position(|n| hit_colour(n) == colour)
+                .expect("a hit's colour");
+            assert_eq!(n as u8, t.thrown, "{t:?}");
+            seen[n] = true;
         }
-        assert!(gold, "the window into the third hit was never gold");
+        assert!(
+            seen[1] && seen[2],
+            "the windows into the second and third: {seen:?}"
+        );
     }
 
     #[test]
