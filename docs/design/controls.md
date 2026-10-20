@@ -781,6 +781,14 @@ falloff the heights add up to a bounded sum however many walls there are — the
 aerial hangs make above. A chimney or a corner can still be climbed a little; it cannot be
 climbed forever. Both reset on landing.
 
+**Only enough wall is a wall** (2026-10-20, from play: the slide was drawn "on very thin
+platforms where I wouldn't be able to slide at all"). A face is slid on and jumped off only
+where it covers most of the body's height behind it (`Walls, a face covers the body at least`,
+1.7 m of the body's 1.8) and is wide enough across it (`Walls, a face is at least this wide`,
+0.8 m, measured at the middle and either side). The side of a slab, a stone's narrow end or a
+post still stops you; it is just not a wall. So a slide also ends as your feet pass the bottom
+of a wall.
+
 Only a solid's side is a wall. Ground too steep to climb is a slope you slide down, and the
 Elementalist's stones are not walls for this (they have their own rules for bodies). Pinned by
 `crates/sim/tests/wall_jump.rs` and, for the stick, `crates/sim/tests/ledge.rs`; the code is

@@ -7245,6 +7245,18 @@ fn cling_to_the_wall(p: &mut Player, normal: V3, ground: &Terrain) {
     if p.grounded || p.aboard() || normal == V3::ZERO {
         return;
     }
+    // **Only a wall is a wall** (2026-10-20): the side of a thin slab or a
+    // post stops the body, but is not slid on or jumped off.
+    let face = ground.wall_face(
+        p.pos,
+        normal,
+        t::body_radius(),
+        t::body_height(),
+        t::wall_face_wide().mul(Fx::ratio(1, 2)),
+    );
+    if face.raw() < t::wall_face_high().raw() {
+        return;
+    }
     p.wall = Wall { at: p.pos, normal };
     p.wall_since = 0;
     if p.sliding && slides(p) {
