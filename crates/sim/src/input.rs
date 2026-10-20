@@ -126,6 +126,12 @@ pub enum Destination {
     /// **A dev's grant** from the `--dev` item panel: an egg carried, a
     /// trophy handed to the sender's game through `World::picked`.
     Grant(crate::keep::Item),
+    /// **Fast travel**: everybody stood on this cairn of the valley, by its
+    /// place in [`crate::valley::cairns`], and it made their checkpoint --
+    /// out of a fight only. Which cairns a player may pick is their game's
+    /// to say (the ones they have touched; every one in `--dev`); the world
+    /// only checks it is a cairn.
+    Cairn(u8),
 }
 
 const _: () = assert!(
@@ -145,6 +151,8 @@ impl Travel {
     pub const VALLEY: Travel = Travel(5);
     /// See [`Destination::Left`].
     pub const LEFT: Travel = Travel(6);
+    /// `7`, the cairn in the high byte: see [`Destination::Cairn`].
+    const CAIRN: u16 = 7;
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
     /// With a high byte, one of that creature's items: `0iii iiii` granted
     /// ([`Travel::grant`]), `1iii iiii` fed ([`Travel::feed`]) -- one for
@@ -228,6 +236,11 @@ impl Travel {
         }
     }
 
+    /// Fast travel to the `k`th cairn of [`crate::valley::cairns`].
+    pub const fn cairn(k: u8) -> Travel {
+        Travel(Travel::CAIRN | (k as u16) << 8)
+    }
+
     /// Feed the morph `item` from the sender's bag.
     pub const fn feed(item: crate::keep::Item) -> Travel {
         Travel::item(item, Travel::FED)
@@ -271,6 +284,10 @@ impl Travel {
             } else {
                 Destination::Grant(item)
             });
+        }
+        // A cairn, by the high byte.
+        if low == Travel::CAIRN {
+            return Some(Destination::Cairn((self.0 >> 8) as u8));
         }
         // A high byte on anything but a class change is no request at all.
         let high = self.0 >> 8;

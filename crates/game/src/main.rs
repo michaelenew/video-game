@@ -22,6 +22,7 @@ mod arenas;
 mod bag;
 mod bake;
 mod beast;
+mod cairns;
 mod claimed;
 mod critters;
 mod crosshair;
@@ -244,6 +245,7 @@ fn main() {
         })
         .insert_resource(settings::Settings::load())
         .insert_resource(trophies::Trophies::load())
+        .insert_resource(cairns::Cairns::load())
         .init_resource::<InsideOwnHead>()
         .init_resource::<beast::Boom>()
         .init_resource::<Scripted>()
@@ -382,7 +384,7 @@ fn main() {
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
-                menu::draw,
+                (menu::notice_cairns, menu::draw).chain(),
                 // What you carry and your morph (`sim::keep`).
                 (
                     heel::follow,

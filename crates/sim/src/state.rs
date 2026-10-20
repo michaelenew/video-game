@@ -2103,7 +2103,8 @@ impl World {
             | Destination::Left
             | Destination::Credit(_)
             | Destination::Feed(_)
-            | Destination::Grant(_) => return None,
+            | Destination::Grant(_)
+            | Destination::Cairn(_) => return None,
             Destination::Valley => {
                 World::arrive_all(classes, self.valley, crate::valley::START, None, self.seats)
             }
@@ -2606,6 +2607,27 @@ impl World {
                     Some(Destination::Feed(item)) => self.fed(i, item),
                     Some(Destination::Grant(item)) => self.granted(i, item),
                     _ => {}
+                }
+            }
+            // **Fast travel**, out of a fight: everybody on the cairn,
+            // stood up on it as after a fall, and the frame follows them
+            // there this frame (`reframe`). The last seat to ask wins.
+            let to = wire
+                .iter()
+                .rev()
+                .find_map(|input| match input.travel.destination() {
+                    Some(Destination::Cairn(k)) => Some(k),
+                    _ => None,
+                });
+            if let Some(k) = to
+                && self.peaceful()
+                && let Some(&box_) = crate::valley::cairns().get(k as usize)
+                && let Some(place) = crate::valley::place(self.arena)
+            {
+                let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+                for i in 0..seats {
+                    self.valley.cairn[i] = box_ as u16 + 1;
+                    self.stand_back(i, place);
                 }
             }
         }

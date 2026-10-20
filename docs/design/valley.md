@@ -384,6 +384,15 @@ hashes as it did.
   a fight you are rested (health back) -- in one it rests nobody, but it
   still counts: the Needle's top cairn is on the roost, which is awake by the
   time anybody reaches it (2026-10-20).
+- **Fast travel** (2026-10-20): the Esc menu lists every cairn you have
+  touched, by place and height, and a click stands you -- and whoever you
+  play with -- on it, as your checkpoint. Out of a fight only. Which cairns
+  you have touched is your own record, kept beside your trophies
+  (`game::cairns`, by where each cairn is on the map, so a change to the map
+  does not lose them); the world hears only which cairn, as a trip on the
+  wire (`Destination::Cairn`, its place in `valley::cairns`). In `--dev`
+  every cairn is listed (`tests/valley.rs`,
+  `fast_travel_stands_everybody_on_any_cairn`).
 - **Nobody dies in a reach.** A fighter whose health runs out — a fall
   costs what the fall rule says, free to 9 m and 25 a metre past it — is
   stood on their last cairn, or on the place's arrival marks if they have

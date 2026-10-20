@@ -14,6 +14,9 @@
 //!   -- as a file (a download, in a browser) that
 //!   `cargo run -p hunt --bin replay` judges and `--replay` plays back. `Y`
 //!   does the same without the menu. See `docs/design/replays.md`.
+//! - **Fast travel**, in the valley: to any cairn this player has touched
+//!   ([`crate::cairns`]) -- every one in dev mode -- out of a fight. A trip
+//!   on the wire, so the other player comes too.
 //! - **Progress** -- the creatures, their trophies and tempers -- on the right,
 //!   which is otherwise hidden: it is reference, not something to read
 //!   mid-fight (`hud::update_picker` writes it; [`show_progress`] shows it).
@@ -54,6 +57,13 @@ fn visible(menu: &Menu, hub: &crate::hub::Hub) -> bool {
     menu.open && !hub.open
 }
 
+/// The cairn this player last touched is one they have touched: kept for
+/// fast travel, and saved as it is learned.
+pub fn notice_cairns(sim: Res<crate::Sim>, mut cairns: ResMut<crate::cairns::Cairns>) {
+    let me = sim.local_player();
+    cairns.notice(&sim.cur, me);
+}
+
 pub fn draw(
     mut contexts: EguiContexts,
     mut menu: ResMut<Menu>,
@@ -61,6 +71,7 @@ pub fn draw(
     palette: Res<crate::palette::Palette>,
     hub: Res<crate::hub::Hub>,
     time: Res<Time<Real>>,
+    cairns: Res<crate::cairns::Cairns>,
 ) {
     let now = time.elapsed_secs_f64();
     // None as the window closes: the frame the context is gone and the
@@ -172,6 +183,7 @@ pub fn draw(
                 }
             }
             details(ui, &mut menu, &sim, now);
+            fast_travel(ui, &mut sim, &cairns);
             ui.separator();
             ui.heading("Replay");
             ui.add_space(4.0);
@@ -200,6 +212,58 @@ pub fn draw(
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
         });
+}
+
+/// **Fast travel**: a button for every cairn on offer, by place, from the
+/// bottom up. Asked for on the wire (`Travel::cairn`), and the world refuses
+/// it in a fight, so the buttons are off there and say why.
+fn fast_travel(ui: &mut egui::Ui, sim: &mut crate::Sim, cairns: &crate::cairns::Cairns) {
+    if !sim.cur.valley.on {
+        return;
+    }
+    ui.separator();
+    ui.heading("Fast travel");
+    ui.add_space(4.0);
+    let offered = cairns.offered(crate::dev_mode());
+    if offered.is_empty() {
+        ui.label(
+            egui::RichText::new(
+                "Touch a cairn -- a snow-topped stone -- and you can come back to it from here.",
+            )
+            .weak(),
+        );
+        return;
+    }
+    let free = sim.cur.peaceful();
+    if !free {
+        ui.label(egui::RichText::new("Not in a fight.").weak());
+    }
+    let mut go = None;
+    egui::ScrollArea::vertical()
+        .id_salt("fast travel")
+        .max_height(260.0)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            for (i, place) in offered.chunk_by(|a, b| a.place == b.place).enumerate() {
+                ui.push_id(i, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(egui::RichText::new(place[0].place).strong());
+                        for o in place {
+                            let up = ui.add_enabled(free, egui::Button::new(&o.label));
+                            if up.clicked() {
+                                go = Some(o.k);
+                            }
+                        }
+                    });
+                });
+            }
+        });
+    if let Some(k) = go {
+        sim.travel = sim::input::Travel::cairn(k);
+    }
+    if crate::dev_mode() {
+        ui.label(egui::RichText::new("Dev mode: every cairn, touched or not.").weak());
+    }
 }
 
 /// **Connection details**, in dev mode: the meeting's own account of itself
