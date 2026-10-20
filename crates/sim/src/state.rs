@@ -2103,7 +2103,8 @@ impl World {
             | Destination::Left
             | Destination::Credit(_)
             | Destination::Feed(_)
-            | Destination::Grant(_) => return None,
+            | Destination::Grant(_)
+            | Destination::Cairn(_) => return None,
             Destination::Valley => {
                 World::arrive_all(classes, self.valley, crate::valley::START, None, self.seats)
             }
@@ -2189,7 +2190,8 @@ impl World {
         }
         let place = crate::valley::place(self.arena)?;
         let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
-        if self.peaceful() {
+        let peaceful = self.peaceful();
+        if peaceful {
             // **A fighter nobody plays is not in the valley**: kept under the
             // middle of the place's floor, where nothing reaches it and
             // nothing draws it in view -- rather than a body lying at every
@@ -2197,15 +2199,24 @@ impl World {
             // dummy or the bot there), and a hunt takes an absent hunter out
             // as it always has.
             self.park_absent();
-            let atlas = crate::atlas::valley();
-            let origin = self.map_origin();
             for i in 0..seats {
                 if self.players[i].health <= 0 {
                     self.stand_back(i, place);
                 }
-                let feet = self.players[i].pos.add(origin);
-                if let Some(k) = crate::valley::cairn_at(atlas, feet) {
-                    self.valley.cairn[i] = k as u16 + 1;
+            }
+        }
+        // **A cairn is a checkpoint in a fight too**; it only rests you out
+        // of one. The cairn on the Needle's top is on the roost, and stepping
+        // onto the ruins wakes the Galewing: kept to peace, it never counted,
+        // and a fall off the dome stood you back up a hundred metres down the
+        // stair (2026-10-20, from play).
+        let atlas = crate::atlas::valley();
+        let origin = self.map_origin();
+        for i in 0..seats {
+            let feet = self.players[i].pos.add(origin);
+            if let Some(k) = crate::valley::cairn_at(atlas, feet) {
+                self.valley.cairn[i] = k as u16 + 1;
+                if peaceful {
                     let p = &mut self.players[i];
                     p.health = p.health.max(t::health_of(p.class));
                 }
@@ -2596,6 +2607,27 @@ impl World {
                     Some(Destination::Feed(item)) => self.fed(i, item),
                     Some(Destination::Grant(item)) => self.granted(i, item),
                     _ => {}
+                }
+            }
+            // **Fast travel**, out of a fight: everybody on the cairn,
+            // stood up on it as after a fall, and the frame follows them
+            // there this frame (`reframe`). The last seat to ask wins.
+            let to = wire
+                .iter()
+                .rev()
+                .find_map(|input| match input.travel.destination() {
+                    Some(Destination::Cairn(k)) => Some(k),
+                    _ => None,
+                });
+            if let Some(k) = to
+                && self.peaceful()
+                && let Some(&box_) = crate::valley::cairns().get(k as usize)
+                && let Some(place) = crate::valley::place(self.arena)
+            {
+                let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+                for i in 0..seats {
+                    self.valley.cairn[i] = box_ as u16 + 1;
+                    self.stand_back(i, place);
                 }
             }
         }

@@ -1392,7 +1392,12 @@ impl Monster {
     }
 
     /// World height of the highest solid part top over a point that is **no
-    /// higher than `below`**, or zero.
+    /// higher than `below`**, or `None` with no part there.
+    ///
+    /// Not zero: a place's floor is at zero only in its own coordinates, and
+    /// on the roost -- whose floor is the Needle's dome -- a fall past the
+    /// rim had the camera resting on a Galewing top at nought, hundreds of
+    /// metres over the fighter (2026-10-20, from play).
     ///
     /// The companion to `arena::ground_under`, and used for the same thing: the
     /// camera treats a surface as something to rest on rather than something to
@@ -1400,10 +1405,10 @@ impl Monster {
     /// the camera asks for the surface under the fighter's own feet, and a
     /// creature passing *over* the eye -- a bird a few metres up -- is not a
     /// floor to put the camera on (galewing.md §6).
-    pub fn top_under(&self, world: V3, below: Fx) -> Fx {
+    pub fn top_under(&self, world: V3, below: Fx) -> Option<Fx> {
         let rig = self.rig();
         let sp = self.sp();
-        let mut best = Fx::ZERO;
+        let mut best: Option<Fx> = None;
         for (index, part) in sp.parts.iter().enumerate() {
             if !part.shape.solid || !rig.blocks(index) {
                 continue;
@@ -1418,8 +1423,8 @@ impl Monster {
                 continue;
             }
             let top = rig.part_to_world(index, V3::new(p.x, sh.max.y, p.z)).y;
-            if top.raw() > best.raw() && top.raw() <= below.raw() {
-                best = top;
+            if best.is_none_or(|b| top.raw() > b.raw()) && top.raw() <= below.raw() {
+                best = Some(top);
             }
         }
         best

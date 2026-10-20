@@ -715,6 +715,16 @@ an arm that refuses to shorten will happily hold the camera *inside* a wall when
 stands against one. The floor gets its own clamp, since it is a plane the simulation handles
 rather than an entry in `SOLIDS`.
 
+Two things on the map that were true only of an arena alone (2026-10-20, from a replay of a
+climb of the Needle). **The floor under the eye is the terrain's** -- `Terrain::floor_below`
+at the fighter's feet, and a creature's back only where a part of it is there
+(`Monster::top_under` is `None` elsewhere) -- never a plane at zero: zero is a place's own
+floor in its own coordinates, and the roost's is the Needle's dome, so a fall off it left the
+camera on the dome while the fighter fell to the town. And **a solid blocks the arm by its own
+shape** (`Solid::covers_at`), not its box: the dome is rings ninety metres across, and a
+fighter on a ledge in the corner of the top ring's box had the arm pulled to nothing whenever
+it swung back over that corner. Both are `view/tests/needle.rs`.
+
 ### Pitch is two different cameras, blended
 
 Looking down and looking up are not the same problem, and one arm length cannot serve both.
