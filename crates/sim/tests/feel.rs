@@ -436,7 +436,11 @@ fn best_case(m: &Move) -> i32 {
             // Fissure's surge, 2026-10-18: placed by the world on the move's
             // first active frame, never by a row's code. Its blow is the
             // move's own, at a tap.
-            | EffectKind::Surge,
+            | EffectKind::Surge
+            // The Reaping, 2026-10-19: the picture of a full tally cashed,
+            // placed by the world on the blow that cashed it. It hits
+            // nobody; the blow is the move's own.
+            | EffectKind::Reaping,
         )
         | None => m.damage * swings,
     }

@@ -3454,6 +3454,17 @@ impl World {
                     }
                     if staggers {
                         stagger_the_cashed(&mut self.players[defender]);
+                        // A body is cut at its middle, and is a body thick.
+                        let victim = snapshot[defender].pos;
+                        let floor = floor_under(self.arena(), victim);
+                        reap(
+                            &mut self.effects,
+                            &snapshot[attacker],
+                            attacker,
+                            aim::origin(victim),
+                            floor,
+                            t::body_radius(),
+                        );
                     }
                     let owed = snapshot[attacker]
                         .action
@@ -11992,6 +12003,48 @@ fn marks_once(effect: &mut Effect, victim: usize) -> bool {
     first
 }
 
+/// **The Reaping** (2026-10-19): put the picture of a cash-in at a full tally
+/// in the world (`EffectKind::Reaping`). `met` is where the blow met what it
+/// cut -- a body's middle, or the place on a creature's part -- `floor` the
+/// floor under that, and `thick` how far the thing cut reaches out from
+/// `met` across the floor (a body's radius, a leg's, half a back):
+/// what the picture needs to stand its copies of her on the floor round a
+/// fighter, a leg or a whole animal, as big as it takes to reach the place.
+/// It faces the way the blow went, from her to it. Nothing but a picture; in
+/// the snapshot because its clock must survive a rollback like any
+/// animation's.
+fn reap(
+    effects: &mut [Option<Effect>; MAX_EFFECTS],
+    attacker: &Player,
+    who: usize,
+    met: V3,
+    floor: V3,
+    thick: Fx,
+) {
+    let away = V3::new(
+        met.x.sub(attacker.pos.x),
+        Fx::ZERO,
+        met.z.sub(attacker.pos.z),
+    );
+    let facing = V3::new(attacker.facing.x, Fx::ZERO, attacker.facing.z);
+    let dir = if away.flat_len().raw() > 0 {
+        away.normalized()
+    } else {
+        facing.normalized()
+    };
+    let mut reaping = Effect::cast(
+        EffectKind::Reaping,
+        who as u8,
+        attacker.class,
+        attacker.action.attack_kind().unwrap_or(0),
+        met,
+        dir,
+        thick,
+    );
+    reaping.home = floor;
+    spawn_effect(effects, reaping);
+}
+
 /// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
 /// own hitstun, and only if it is longer.
 fn stagger_the_cashed(p: &mut Player) {
@@ -12732,6 +12785,9 @@ impl World {
             // A thrall and a heart are stepped in passes of their own
             // (`step_thralls`, `step_hearts`).
             EffectKind::Thrall | EffectKind::Heart => {}
+            // The Reaping is only to look at: the blow that cashed the tally
+            // already did everything it does.
+            EffectKind::Reaping => {}
 
             // The blade. One pass out, one back, and it cuts each victim once
             // per pass. What it takes is banked rather than paid, and arrives
@@ -19262,6 +19318,7 @@ impl World {
             // and poise rules' business -- a hit three times the size is
             // already the thing those read.
             let finisher = attacker.class == Class::ShadowReaver && moves::reaver::cashes(kind);
+            let full = finisher && shadow::full_tally(beast.marks);
             let cash = if finisher {
                 shadow::cash_multiple(beast.marks)
             } else {
@@ -19314,6 +19371,15 @@ impl World {
             // turned spends nothing.
             if finisher && !guarded.turned() {
                 beast.spend_marks();
+                // On the creature, the Reaping is round the place the blow
+                // met, outside the part it met: a leg, a flank, the whole
+                // back she is standing on.
+                if full {
+                    let met = box_out.centre();
+                    let floor = floor_under(self.arena(), met);
+                    let thick = beast.part_reach_from(part, met);
+                    reap(&mut self.effects, &attacker, i, met, floor, thick);
+                }
             }
             // Her double duty, against the creature: drink over the pool the
             // blade passes through, then spill under the part it struck.

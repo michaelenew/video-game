@@ -1133,6 +1133,27 @@ impl Monster {
         self.rig().world_to_part(part, world)
     }
 
+    /// How far a part reaches out from `at`, across the floor: the furthest
+    /// of its box's corners, as they stand this frame, measured flat. A leg's
+    /// thickness when struck on the leg; the half-width of the whole back
+    /// when struck on top of it. What the Reaping stands its copies of her
+    /// outside of (`state::reap`), so none of them stands inside the animal.
+    pub fn part_reach_from(&self, part: usize, at: V3) -> Fx {
+        let sh = self.sp().shape(part);
+        let rig = self.rig();
+        let mut far = Fx::ZERO;
+        for k in 0..8 {
+            let corner = V3::new(
+                if k & 1 == 0 { sh.min.x } else { sh.max.x },
+                if k & 2 == 0 { sh.min.y } else { sh.max.y },
+                if k & 4 == 0 { sh.min.z } else { sh.max.z },
+            );
+            let w = rig.part_to_world(part, corner);
+            far = far.max(V3::new(w.x.sub(at.x), Fx::ZERO, w.z.sub(at.z)).flat_len());
+        }
+        far
+    }
+
     /// The world position of a point held in a part's own frame.
     pub fn world_of(&self, part: usize, rest: V3) -> V3 {
         self.rig().part_to_world(part, rest)

@@ -1181,6 +1181,10 @@ scalars! {
     // in the stain times this, not the spike's row -- a bleed tick's small
     // stain is a small blast, a big pool a big one.
     StainErupts,          "Blood mage", "Black spike, a stain erupts for (x its blood)",    Fixed, 0, fx(4,1);
+    // **The Reaping** (2026-10-19): how long the picture of a cash-in at a
+    // full tally plays. Presentation that lives in the snapshot, because its
+    // clock has to survive a rollback.
+    ReapingLife,          "Reaver",   "Cash-in, the Reaping plays for",                       Frames, 20, 180;
 }
 
 // ---------------------------------------------------------------------------

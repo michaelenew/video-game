@@ -148,6 +148,36 @@ swing is not a hit and spends nothing: the tally stays on him.
 the jump out of it does, and turns her to the crosshair, so arriving and striking are one
 motion. It buys no safety: a blocked Slash is still −5. See the feel log.
 
+**A full tally cashed is reaped: five of her** (2026-10-19). The Reaping is the picture of it,
+both players see it, and it does nothing else — the blow that spent the marks already did all
+of that. One copy of her shadow body a mark steps in out of the air round him, so that with her
+they stand six round him; all five bring her Executioner down on him on the same frame, a dark
+cut of shadow opening in him on each one's line, and then they fold back into her one at a time,
+sliding into wherever she is now and thinning away. Her whole class is a second body copying
+her; this is that at its peak.
+
+**They grow to what they cut** (2026-10-19, from the owner: "it needs to make sense on a
+creature's back or a big creature's legs"). One rule for everything: the copies stand on the
+floor round the place the blow met, outside all of the thing that was struck, and are as big as
+it takes for the overhead to come down at that height. A fighter is cut at his middle, so they
+are her size. A leg cut at the knee rings the leg with copies a little bigger. A blow on top of
+a creature's back -- her standing on it -- puts five giants of her on the ground round the whole
+animal, up to twenty-five times her size for the crown of a forty-metre Siegeshell, and folds
+them back down to her size into her where she stands on top. The sim keeps where the blow met,
+the floor under it and how far the struck part reaches out from there across the floor
+(`Monster::part_reach_from`); the size and the ring are the renderer's (`copy_size`,
+`copy_spot`). `SHOT_REAP=leg` and `SHOT_REAP=back` stage it on a hunt's creature. The copies are the shadow's own skeleton and grey see-through,
+posed by the same pure function, on the Reaping's clock. Under it, one long rising whoosh.
+
+A first cut was a hooded reaper with a scythe and floor thorns, rejected the same day: the
+scythe, the reap and the thorns are the Blood mage's (*the scythe that grows*, the *Rising reap*,
+*Thorn lash*, the Black spike). The Reaver's own vocabulary is a second body, thrown blades and
+arriving out of nowhere; a reward built from anything else steps on another class.
+
+A sim effect (`EffectKind::Reaping`, so its clock survives a rollback) with no hit test;
+`place_copies` and `reaping_cut` in the game draw it, `Reaver: Cash-in, the Reaping plays for`
+is how long, and `SHOT_REAP=1` stages one for a capture.
+
 The rhythm: **send, mark, cross, cash, send.** After the cash the target is clean and the
 shadow is at her shoulder marking nothing; staying is her own swings and a small copy against a
 body with more health than hers. Sending it away and dashing to it is the exit, and it starts
@@ -473,6 +503,14 @@ inside the animation rather than after it, which is the same kind of decision th
 makes with Rush.
 
 ## Open questions
+
+- **Replay, kept for later** (2026-10-19, the owner's). A reward picture considered for the
+  full-tally cash-in and liked, but saved for something else: the action freezes for a beat,
+  and the hits that built the tally reappear as frozen afterimages of her shadow, each posed
+  mid-swing where it actually struck from, shattering one after another and ending on the real
+  blow. It plays the player's own setup back to them -- the most direct "you did the whole
+  pattern" there is, and a lesson in what the pattern was. It would need the snapshot to
+  remember where each mark was struck from.
 
 - Does the shadow have collision, or is it purely a marker? Collision makes it
   denial-able, which cuts both ways. **It has none today.**

@@ -1204,6 +1204,15 @@ pub fn cash_stagger() -> u16 {
     oven::scalar(Scalar::CashStagger).max(0) as u16
 }
 
+/// **The Reaping** (2026-10-19): how long the picture of a cash-in at a full
+/// tally plays: five copies of her shadow stepping in round him, bringing
+/// her Executioner down on him together, and folding back into her one at a
+/// time. The game's copies keep their own clock inside it and are home by
+/// about the sixtieth frame (`game::place_copies`).
+pub fn reaping_life() -> u16 {
+    oven::scalar(Scalar::ReapingLife).max(1) as u16
+}
+
 // ---------------------------------------------------------------------------
 // Health, per class
 // ---------------------------------------------------------------------------

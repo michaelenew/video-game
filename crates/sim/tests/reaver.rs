@@ -2004,6 +2004,17 @@ fn any_hit_of_hers_on_a_marked_target_spends_the_marks() {
         !matches!(w.players[1].action, Action::Stagger { .. }),
         "a tally short of the cap staggered"
     );
+    assert!(reaping(&w).is_none(), "a tally short of the cap was reaped");
+}
+
+/// The Reaping in the world, if there is one: the picture of a cash-in at a
+/// full tally.
+fn reaping(w: &World) -> Option<sim::effects::Effect> {
+    w.effects
+        .iter()
+        .flatten()
+        .find(|e| e.kind == sim::effects::EffectKind::Reaping)
+        .copied()
 }
 
 #[test]
@@ -2023,6 +2034,39 @@ fn a_cash_in_at_the_cap_staggers_and_clears() {
         matches!(w.players[1].action, Action::Stagger { .. }),
         "a full tally cashed without the stagger"
     );
+}
+
+#[test]
+fn a_cash_in_at_the_cap_is_reaped_and_the_reaping_hurts_nobody() {
+    // The reward, seen: a full tally cashed puts the Reaping on him, facing
+    // the way the blow went -- and it is only a picture, so nothing it does
+    // costs either of them a point of health or a mark.
+    let mut w = face_to_face(t::mark_cap());
+    let dealt = first_blow(&mut w, L);
+    assert!(dealt > 0, "fixture: nothing landed");
+    let reap = reaping(&w).expect("a full tally was cashed without the Reaping");
+    assert_eq!(reap.owner, 0, "the Reaping is not hers");
+    assert!(
+        reap.pos.sub(w.players[1].pos).flat_len() < Fx::ONE,
+        "the Reaping is not on him"
+    );
+    assert!(
+        reap.dir.x > Fx::ZERO,
+        "the Reaping does not face the way her blow went"
+    );
+    // Out of her reach for the rest of it, and the copy's blow behind hers
+    // let land, so only the Reaping is near him.
+    w.players[0].pos = w.players[0]
+        .pos
+        .sub(V3::new(Fx::from_int(8), Fx::ZERO, Fx::ZERO));
+    run(&mut w, 20, 0, 0);
+    assert!(reaping(&w).is_some(), "the Reaping was over at once");
+    let (hers, his) = (w.players[0].health, w.players[1].health);
+    run(&mut w, t::reaping_life() as u32, 0, 0);
+    assert_eq!(w.players[0].health, hers, "the Reaping hurt her");
+    assert_eq!(w.players[1].health, his, "the Reaping hurt him");
+    assert_eq!(w.players[1].marks, 0, "the Reaping marked him");
+    assert!(reaping(&w).is_none(), "the Reaping outlived its life");
 }
 
 #[test]
@@ -2142,14 +2186,30 @@ fn a_cash_in_lands_on_the_creature_too() {
         run(&mut w, 2, L, down(89));
         for _ in 0..30 {
             if beast_health(&w) < full {
-                return (full - beast_health(&w), w.monster().copied().unwrap().marks);
+                return (
+                    full - beast_health(&w),
+                    w.monster().copied().unwrap().marks,
+                    reaping(&w),
+                );
             }
             run(&mut w, 1, 0, down(89));
         }
-        (0, marks)
+        (0, marks, None)
     };
-    let (plain, _) = first_blow_on_it(0);
-    let (cashed, left) = first_blow_on_it(t::mark_cap());
+    let (plain, _, none) = first_blow_on_it(0);
+    assert!(none.is_none(), "a plain hit on the creature was reaped");
+    let (cashed, left, reap) = first_blow_on_it(t::mark_cap());
+    // The Reaping is where the blow met the part, over the floor, as thick
+    // as the part: what the copies grow to and stand round.
+    let reap = reap.expect("a full tally cashed on the creature was not reaped");
+    assert!(
+        reap.home.y <= reap.pos.y,
+        "the Reaping's floor is above the blow"
+    );
+    assert!(
+        reap.reach > Fx::ZERO,
+        "the Reaping does not know how thick the part is"
+    );
     assert!(plain > 0, "fixture: she never reached the creature");
     assert!(
         cashed > plain * 2,
