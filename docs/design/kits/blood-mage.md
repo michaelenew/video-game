@@ -540,14 +540,17 @@ easier collection of the pools it passes near, which is what pays the constant, 
 aggression the class is for. This is the one hit volume in the game that scales with a bar
 — [../aiming.md](../aiming.md) refuses that everywhere else — and it is allowed on one
 condition: **the volume is drawn at the size it hits at.** The weapon itself is iron and one
-size, drawn at the row's reach and riding her hands; what grows is drawn as **essence**, the
-same stuff as her pools, in the exact capsule the hit test reads — because it is the life
-force doing the swinging, and the more of it she has let out, the more of it there is around
-the blade. It lingers and fades through the first frames of the recovery so the arc can be
-read. `view::scythe::swing_volume` is the shape, `state::live_reach` and `live_radius` are
-the numbers, and `view/tests/kinematics.rs` checks the drawn capsule against the hit volume
-at three levels of grey, and that the iron did not grow with it. Both players read a thing in
-the world, not a number.
+size, drawn at the row's reach and riding her hands; what grows is drawn as **essence**, in
+the colour of her pools — because it is the life force doing the swinging. Since 2026-10-20
+that is the **trail behind the blade** (`game::swing`, the same one the Champion's weapons
+leave): drawn from the scythe as it is drawn, on every picture, and reaching out past the iron
+to the furthest point the swing hits — the volume's far end and its radius beyond it — so the
+more grey she has let out, the further the arc runs past the blade, and the brighter it is.
+What the trail does not show that the capsule did is the volume's thickness either side of the
+cut's plane. `view::scythe::reach_share` is the reach, `state::live_reach` and `live_radius`
+are the numbers, and `view/tests/kinematics.rs` checks the trail's reach against the hit
+volume's with no grey and with a full bar. Both players read a thing in the world, not a
+number.
 
 | Grey | Reach | Damage |
 | --- | --- | --- |
