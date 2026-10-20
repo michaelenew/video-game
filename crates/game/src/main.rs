@@ -45,6 +45,7 @@ mod palette;
 mod picker;
 mod platform;
 mod profile;
+mod reaver;
 mod settings;
 mod shapes;
 mod signs;
@@ -255,6 +256,7 @@ fn main() {
         .add_plugins(still::StillPlugin)
         .add_plugins(splats::SplatsPlugin)
         .add_plugins(warm::WarmPlugin)
+        .add_plugins(reaver::ReaverPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
         // `platform::draws_outlines`. Registering it anyway would not fail
@@ -319,7 +321,7 @@ fn main() {
                     .chain(),
                 // One entry, so the chain stays under twenty: the balls go
                 // where the poses just put the joints.
-                (apply_poses, pose_balls, place_copies).chain(),
+                (apply_poses, pose_balls, place_copies, pose_models).chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -3008,28 +3010,31 @@ fn fade_own_body(
     sim: Res<Sim>,
     inside: Res<InsideOwnHead>,
     parts: Query<(&BodyPart, &MeshMaterial3d<still::SkinMaterial>)>,
+    rigs: Res<reaver::Rigs>,
     mut materials: ResMut<Assets<still::SkinMaterial>>,
 ) {
     let me = sim.local_player();
     // The rig has already worked out how much of the body to take away and
     // why -- coming up on the crosshair, or the eye simply being close to it.
     let alpha = (1.0 - inside.0).clamp(0.0, 1.0);
-    for (part, material) in parts.iter() {
-        if part.owner != me {
-            continue;
-        }
+    let mine = parts
+        .iter()
+        .filter(|(part, _)| part.owner == me)
+        .map(|(_, material)| &material.0)
+        .chain(rigs.looks[me].iter());
+    for material in mine {
         // Looked at before it is taken mutably: `Assets::get_mut` marks the
         // asset changed whether or not anything is written to it, and a
         // material marked changed is rebuilt on the GPU that frame -- which
         // this did, for one's own skin, sixteen parts over, every frame. The
         // one `get_mut` left is reached only when the alpha has moved.
-        let Some(skin) = materials.get(&material.0) else {
+        let Some(skin) = materials.get(material) else {
             continue;
         };
         if (skin.base.base_color.alpha() - alpha).abs() < 0.001 {
             continue;
         }
-        let Some(skin) = materials.get_mut(&material.0) else {
+        let Some(skin) = materials.get_mut(material) else {
             continue;
         };
         skin.base.base_color.set_alpha(alpha);
@@ -3041,6 +3046,51 @@ fn fade_own_body(
         } else {
             AlphaMode::Blend
         };
+    }
+}
+
+/// The classes drawn as characters rather than mannequins (`reaver`): their
+/// model's joints put where the skeleton was just solved, and the
+/// mannequin's parts hidden while they are.
+#[allow(clippy::type_complexity)]
+fn pose_models(
+    sim: Res<Sim>,
+    joints: Res<Joints>,
+    rigs: Res<reaver::Rigs>,
+    mut models: Query<(&reaver::Model, &mut Visibility)>,
+    mut bones: Query<&mut Transform, Without<Fighter>>,
+    mut parts: Query<(&BodyPart, &mut Visibility), Without<reaver::Model>>,
+    mut balls: Query<(&BodyBall, &mut Visibility), (Without<reaver::Model>, Without<BodyPart>)>,
+) {
+    for owner in 0..MAX_PLAYERS {
+        let class = sim.cur.players[owner].class;
+        reaver::pose(
+            &rigs,
+            owner,
+            class,
+            joints.body[owner].as_ref(),
+            &mut models,
+            &mut bones,
+        );
+    }
+    let mannequin = |owner: usize| {
+        if reaver::drawn(sim.cur.players[owner].class) && rigs.joints[owner].is_some() {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        }
+    };
+    for (part, mut seen) in parts.iter_mut() {
+        let want = mannequin(part.owner);
+        if *seen != want {
+            *seen = want;
+        }
+    }
+    for (ball, mut seen) in balls.iter_mut() {
+        let want = mannequin(ball.owner);
+        if *seen != want {
+            *seen = want;
+        }
     }
 }
 
@@ -7392,6 +7442,7 @@ fn drive_camera(
     mut boom: ResMut<beast::Boom>,
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
     mut origin: Local<Option<Vec3>>,
+    mut portrait: Local<Option<Option<[f32; 4]>>>,
 ) {
     if settings.is_changed() {
         rig.0.set_fov(settings.fov_radians());
@@ -7452,12 +7503,37 @@ fn drive_camera(
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);
+        if let Some([seat, angle, distance, height]) = *portrait.get_or_insert_with(shot_portrait) {
+            // A portrait instead of the fight's camera: round one fighter,
+            // `angle` degrees from straight in front of them.
+            let p = frame.players[(seat as usize).min(MAX_PLAYERS - 1)];
+            let at = Vec3::new(p.pos[0], p.pos[1] + height, p.pos[2]);
+            let turn = body_turn(p.facing) * Quat::from_rotation_y(angle.to_radians());
+            tf.translation = at + turn * Vec3::new(0.0, 0.15, distance);
+            tf.look_at(at, Vec3::Y);
+            // Nobody's own body is faded for being near the fight's eye.
+            inside.0 = 0.0;
+        }
         if settings.is_changed() {
             if let Projection::Perspective(p) = projection.as_mut() {
                 p.fov = settings.fov_radians();
             }
         }
     }
+}
+
+/// `SHOT_PORTRAIT=seat,angle,distance,height` takes the camera off the fight
+/// and puts it `distance` metres from a fighter, `angle` degrees round from
+/// in front of them, looking at `height` above their feet: how a character is
+/// looked at as a piece of art (`docs/design/exploration/0024_a_character_done_properly.md`).
+/// Pair it with `DEMO=0` and a `SHOT_FRAME`.
+fn shot_portrait() -> Option<[f32; 4]> {
+    let spec = platform::env("SHOT_PORTRAIT")?;
+    let v: Vec<f32> = spec
+        .split(',')
+        .filter_map(|v| v.trim().parse().ok())
+        .collect();
+    (v.len() == 4).then(|| [v[0], v[1], v[2], v[3]])
 }
 
 /// A simulation position, in the renderer's units.
