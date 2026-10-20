@@ -234,13 +234,19 @@ fn walk(clip: Clip, travel: Travel) -> Recipe {
     // to take a real sideways step, so a body that does not turn its pelvis
     // ends up asking the hip joint for an angle it does not have.
     let open = travel.sideways() * 20.0;
-    let torso = |drop: f32, twist: f32| {
+    // **The upper body moves** (2026-10-20). Drawn on a body that looks
+    // real, a walk with a still head, still shoulders and elbows at the
+    // sides was the stiffest thing on screen. So: the shoulders turn against
+    // the hips by more, the trunk leans a little over the leg it stands on,
+    // and the head nods with the weight arriving and tilts with the trunk --
+    // a few degrees, not a bobblehead.
+    let torso = |drop: f32, twist: f32, side: f32, nod: f32| {
         Pose::rest()
             .hips(0.0, drop, 0.0)
-            .root(0.0, 0.0, twist * 0.6 + open)
-            .spine(lean, 0.0, -twist * 0.5 - open * 0.45)
-            .chest(lean * 0.3, 0.0, -twist * 0.8 - open * 0.5)
-            .head(-lean * 0.7, 0.0, twist * 0.3)
+            .root(0.0, -side * 0.6, twist * 0.7 + open)
+            .spine(lean, side, -twist * 0.6 - open * 0.45)
+            .chest(lean * 0.3, side * 0.5, -twist - open * 0.5)
+            .head(-lean * 0.7 + nod, -side * 0.8, twist * 0.25)
     };
 
     // Four shapes, and only the shapes: the torso, the arms and the hips. Where
@@ -250,29 +256,32 @@ fn walk(clip: Clip, travel: Travel) -> Recipe {
     // Contact -- the left heel lands and the right is rolling off its toe. The
     // hips are already dropping, because the weight arrives before the pose
     // does.
-    let contact = torso(-0.070, 8.0)
-        .shoulder_l(-16.0, 10.0, 0.0)
-        .elbow_l(28.0)
-        .shoulder_r(24.0, 9.0, 0.0)
-        .elbow_r(42.0);
-    // Down: the weight is taken and the hips reach their lowest.
-    let down = torso(-0.095, 3.0)
-        .shoulder_l(-10.0, 10.0, 0.0)
-        .elbow_l(26.0)
-        .shoulder_r(16.0, 9.0, 0.0)
+    //
+    // The arms swing from the shoulder, loosely, a hand's width off the
+    // body: back nearly straight, forward with the elbow softening.
+    let contact = torso(-0.070, 11.0, 1.5, 3.0)
+        .shoulder_l(-26.0, 15.0, 0.0)
+        .elbow_l(16.0)
+        .shoulder_r(30.0, 14.0, 0.0)
         .elbow_r(38.0);
+    // Down: the weight is taken and the hips reach their lowest.
+    let down = torso(-0.095, 5.0, 2.5, 4.0)
+        .shoulder_l(-18.0, 15.0, 0.0)
+        .elbow_l(14.0)
+        .shoulder_r(21.0, 14.0, 0.0)
+        .elbow_r(32.0);
     // Passing: the swinging leg comes under the body, the hips rise.
-    let passing = torso(-0.048, -1.0)
-        .shoulder_l(-2.0, 10.0, 0.0)
-        .elbow_l(22.0)
-        .shoulder_r(6.0, 9.0, 0.0)
-        .elbow_r(30.0);
+    let passing = torso(-0.048, -1.0, 2.0, 0.0)
+        .shoulder_l(-2.0, 14.0, 0.0)
+        .elbow_l(18.0)
+        .shoulder_r(4.0, 14.0, 0.0)
+        .elbow_r(22.0);
     // Up: the standing leg straightens into its push, the swing leg reaches.
-    let up = torso(-0.036, -7.0)
-        .shoulder_l(10.0, 10.0, 0.0)
-        .elbow_l(24.0)
-        .shoulder_r(-7.0, 9.0, 0.0)
-        .elbow_r(26.0);
+    let up = torso(-0.036, -9.0, 0.5, -1.5)
+        .shoulder_l(17.0, 14.0, 0.0)
+        .elbow_l(30.0)
+        .shoulder_r(-19.0, 15.0, 0.0)
+        .elbow_r(16.0);
 
     let shapes = [
         (0.0, contact),
@@ -337,40 +346,47 @@ fn run(clip: Clip, travel: Travel) -> Recipe {
     // At a sprint the hips have to open a long way toward the direction of
     // travel -- a sideways run is a crossover run, and it looks like one.
     let open = travel.sideways() * 30.0;
-    let torso = |drop: f32, twist: f32| {
+    // As the walk's, harder: the shoulders drive against the hips, the head
+    // takes each landing with a nod and settles out of it.
+    let torso = |drop: f32, twist: f32, side: f32, nod: f32| {
         Pose::rest()
             .hips(0.0, drop, 0.02)
-            .root(0.0, 0.0, twist * 0.8 + open)
-            .spine(lean, 0.0, -twist * 0.6 - open * 0.4)
-            .chest(lean * 0.25, 0.0, -twist - open * 0.55)
-            .head(-lean * 0.8, 0.0, twist * 0.35)
+            .root(0.0, -side * 0.6, twist * 0.8 + open)
+            .spine(lean, side, -twist * 0.6 - open * 0.4)
+            .chest(lean * 0.25, side * 0.5, -twist * 1.15 - open * 0.55)
+            .head(-lean * 0.8 + nod, -side * 0.7, twist * 0.3)
     };
 
     // Contact: the foot lands close under the hips. Reaching out in front is
     // what a fast walk does; a run lands beneath itself.
-    let contact = torso(-0.040, 12.0)
-        .shoulder_l(-40.0, 11.0, 0.0)
-        .elbow_l(80.0)
-        .shoulder_r(48.0, 10.0, 0.0)
-        .elbow_r(88.0);
-    let absorb = torso(-0.088, 5.0)
-        .shoulder_l(-24.0, 11.0, 0.0)
-        .elbow_l(72.0)
-        .shoulder_r(32.0, 10.0, 0.0)
-        .elbow_r(84.0);
-    // Drive: the last of the stance, up on the toe and pushing back.
-    let drive = torso(-0.016, -4.0)
-        .shoulder_l(16.0, 11.0, 0.0)
-        .elbow_l(66.0)
-        .shoulder_r(-16.0, 10.0, 0.0)
+    //
+    // The arms pump from the shoulder, elbows off the ribs: the forward hand
+    // comes up to the chest with the elbow closed, the back one swings past
+    // the hip with it open. An elbow held at a right angle while the upper
+    // arm barely moved was the tray-carrying run this replaced.
+    let contact = torso(-0.040, 15.0, 2.0, 4.0)
+        .shoulder_l(-46.0, 20.0, 0.0)
+        .elbow_l(96.0)
+        .shoulder_r(56.0, 18.0, 0.0)
         .elbow_r(74.0);
+    let absorb = torso(-0.088, 7.0, 3.0, 6.0)
+        .shoulder_l(-32.0, 20.0, 0.0)
+        .elbow_l(92.0)
+        .shoulder_r(42.0, 18.0, 0.0)
+        .elbow_r(78.0);
+    // Drive: the last of the stance, up on the toe and pushing back.
+    let drive = torso(-0.016, -5.0, 1.0, 1.0)
+        .shoulder_l(14.0, 19.0, 0.0)
+        .elbow_l(82.0)
+        .shoulder_r(-14.0, 19.0, 0.0)
+        .elbow_r(86.0);
     // Flight: both feet off the ground and the body at its highest. Without
     // this shape the clip is a fast walk, and a viewer can tell at a glance.
-    let flight = torso(0.028, -10.0)
-        .shoulder_l(32.0, 11.0, 0.0)
-        .elbow_l(60.0)
-        .shoulder_r(-30.0, 10.0, 0.0)
-        .elbow_r(62.0);
+    let flight = torso(0.028, -14.0, -0.5, -2.0)
+        .shoulder_l(48.0, 18.0, 0.0)
+        .elbow_l(72.0)
+        .shoulder_r(-44.0, 20.0, 0.0)
+        .elbow_r(98.0);
 
     let shapes = [
         (0.0, contact),
