@@ -165,13 +165,18 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// up, the dash jump was cut to three quarters, the Fan's hang wears down and
 /// the shadow rests after a dash collects it -- the random presses throw all
 /// four. See `docs/design/feel-log.md`.
+/// **Every class moved 2026-10-20, deliberately: the wall jump's
+/// overhaul.** The random presses jump in the air all the time, and a press
+/// there is now kept for a wall (`Player::wall_press`, in `state_checksum`
+/// while not nought); and those that brush the proving ground's walls slide
+/// now where they used to fall past, and slide slower.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0xd12b055c26db8afb),
-    (Class::ShadowReaver, 0xf62e51af6026ca5e),
-    (Class::BloodMage, 0x07c2f689e32197d2),
-    (Class::DualMage, 0x810a930f65195268),
-    (Class::Elementalist, 0x405a4e207b063bea),
+    (Class::Champion, 0xebcb9db767cbe2ff),
+    (Class::Bulwark, 0x6e689b68053fea29),
+    (Class::ShadowReaver, 0xcc2db291bb37923f),
+    (Class::BloodMage, 0xb092df41f61f4e01),
+    (Class::DualMage, 0x2b34cb4b6218e982),
+    (Class::Elementalist, 0x42c71e0a7887d6ed),
 ];
 
 #[test]
