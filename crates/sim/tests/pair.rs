@@ -657,7 +657,11 @@ fn hurting_the_wounded_cat_brings_the_other_between() {
 #[test]
 fn the_survivor_enrages_and_no_tell_goes_below_fifteen_frames() {
     let mut tells = 0;
-    for seed in 1..=3u64 {
+    // Five scripts, not three (2026-10-20): the random presses' path through
+    // the fight moved with the wall slide and the Champion's Beat landing
+    // together, and three scripts saw nine tells -- a sample too thin for
+    // the count below, not a tell any shorter.
+    for seed in 1..=5u64 {
         let mut w = hunt();
         w.monsters[1].as_mut().unwrap().health = 0;
         let full = w.players[0].health;
