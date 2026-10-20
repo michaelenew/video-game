@@ -24,6 +24,7 @@ pub mod locomotion;
 pub mod reactions;
 pub mod reaver;
 pub mod turns;
+pub mod wall;
 
 /// Every recipe in the game, in no particular order.
 pub fn all() -> Vec<Recipe> {
@@ -32,6 +33,7 @@ pub fn all() -> Vec<Recipe> {
     out.extend(turns::clips());
     out.extend(air::clips());
     out.extend(ledge::clips());
+    out.extend(wall::clips());
     out.extend(dodge::clips());
     out.extend(defence::clips());
     out.extend(reactions::clips());

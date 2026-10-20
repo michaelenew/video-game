@@ -2005,6 +2005,24 @@ impl Terrain {
         material_among(self, pos)
     }
 
+    /// **What a wall is made of**, at a point on its face: the material of
+    /// the solid whose side covers that point within `pad`, or `None` where
+    /// the wall is the land's own (a rim, a crag's slope), which is rock.
+    /// Read-only, and asked only by what draws and sounds a wall slide
+    /// (2026-10-20): the simulation never needs to know.
+    pub fn material_of_face(&self, at: V3, pad: Fx) -> Option<Material> {
+        let mut found = None;
+        for s in self.around(at, pad) {
+            if s.covers_at(at.x, at.z, at.y, pad)
+                && at.y.raw() >= s.min.y.sub(pad).raw()
+                && at.y.raw() <= s.max.y.add(pad).raw()
+            {
+                found = Some(s.material);
+            }
+        }
+        found
+    }
+
     /// **The lowest ceiling near a point, sloped**: for every solid hanging
     /// from the roof whose underside is above `above`, its underside plus
     /// `slope` for each metre the point stands outside its footprint (the

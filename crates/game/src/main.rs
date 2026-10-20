@@ -44,6 +44,7 @@ mod palette;
 mod picker;
 mod platform;
 mod profile;
+mod scrape;
 mod settings;
 mod shapes;
 mod signs;
@@ -234,6 +235,7 @@ fn main() {
         .init_resource::<keep::Bag>()
         .init_resource::<keep::Melt>()
         .init_resource::<keep::Puffs>()
+        .init_resource::<scrape::Dust>()
         .init_resource::<bag::Keeping>()
         .init_resource::<heel::Heels>()
         .init_resource::<sound::Soundscape>()
@@ -285,6 +287,7 @@ fn main() {
                 glint::setup,
                 veil::setup,
                 keep::setup,
+                scrape::setup,
             ),
         )
         .add_systems(
@@ -316,7 +319,8 @@ fn main() {
                     .chain(),
                 // One entry, so the chain stays under twenty: the balls go
                 // where the poses just put the joints.
-                (apply_poses, pose_balls).chain(),
+                // And the dust off a wall goes where the poses put the hand.
+                (apply_poses, pose_balls, scrape::place).chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -6645,13 +6649,6 @@ fn apply_poses(
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
-    for (fighter, mut tf) in roots.iter_mut() {
-        let p = frame.players[fighter.0];
-        let (origin, turn) = body_frame(&p);
-        tf.translation = origin;
-        tf.rotation = turn;
-    }
-
     // One solve per fighter rather than one per bone: forward kinematics is a
     // single pass down the skeleton and there are sixteen bones hanging off it.
     let mut skeletons: [Skeleton; MAX_PLAYERS] =
@@ -6676,12 +6673,20 @@ fn apply_poses(
     for (owner, skin) in skins.iter().enumerate() {
         joints.body[owner] = Some(*skin);
     }
+    // Placed after the poses, because posing is what eases the drawn body
+    // round side-on to a wall (`Crossfade::turn`).
+    for (fighter, mut tf) in roots.iter_mut() {
+        let p = frame.players[fighter.0];
+        let (origin, turn) = body_frame(&p, fades.0[fighter.0].turn());
+        tf.translation = origin;
+        tf.rotation = turn;
+    }
 
     // The shield hand, in the arena rather than in the character's own space,
     // so whatever is holding something can be placed against it.
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
-        let (origin, turn) = body_frame(&p);
+        let (origin, turn) = body_frame(&p, fades.0[owner].turn());
         // The body's **left** hand, which in a drawn pose is not the slot of
         // that name -- see `view::hand_joint`.
         let (at, rot) = skins[owner].box_of(&skeletons[owner], view::hand_joint(true));
@@ -6781,6 +6786,7 @@ fn shadow_input(
     input.rise = 0.0;
     input.turn_rate = 0.0;
     input.ledge = None;
+    input.wall = None;
     input.bind_pose = bind_pose;
     input
 }
@@ -7047,10 +7053,14 @@ fn drive_camera(
 /// roll`), turned about the hips rather than the feet so a flip goes over
 /// rather than cartwheeling off its own toes. Everything carried on the body
 /// is placed through this, so a blade in hand flips with the hand.
-fn body_frame(p: &view::PlayerView) -> (Vec3, Quat) {
+///
+/// `turned` is how far the drawn body is turned off the facing about the
+/// vertical, the posing's own eased answer (`view::play::Crossfade::turn`):
+/// side-on to a wall it is sliding down (2026-10-20), nought otherwise.
+fn body_frame(p: &view::PlayerView, turned: f32) -> (Vec3, Quat) {
     // Swimming, she is drawn sunk into her ground, a hump of her showing.
     let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY, p.pos[2]);
-    let turn = body_turn(p.facing);
+    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned);
     if p.roll == [0.0, 0.0] {
         return (feet, turn);
     }

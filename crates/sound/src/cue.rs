@@ -18,7 +18,7 @@
 //! frame.
 
 use crate::patch::{
-    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Step, Strike, Wet, Whoosh,
+    Crackle, FIGHTER, Growl, Gust, Material, Patch, Ring, Rumble, Scrape, Step, Strike, Wet, Whoosh,
 };
 use sim::class::{Mechanic, Shield};
 use sim::effects::EffectKind;
@@ -262,6 +262,8 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                 );
             }
         }
+        // On a wall (2026-10-20): the slide scraping, and the kick off it.
+        wall(i, was, now, after, out);
         // A blow taken. Whose: the other fighter's live move, or a creature's.
         let hit = struck(now.action)
             && (!struck(was.action) || now.action.frames_left() > was.action.frames_left());
@@ -596,6 +598,111 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
 
 /// The class mechanics that make a sound: a stone coming up or breaking, a
 /// shield thrown, planted and caught.
+/// How long one grain of a wall slide's scrape is, in frames, at a crawl and
+/// at full pace; a new one starts every [`SCRAPE_EVERY`] frames, so they
+/// overlap by a couple of frames and are heard as one drag.
+const SCRAPE_SLOW: u16 = 10;
+const SCRAPE_FAST: u16 = 6;
+/// The speed down a wall at which the grains are at their shortest, m/s.
+const SCRAPE_PACE: f32 = 6.0;
+
+/// **A wall slide and a wall jump, as sounds** (2026-10-20). Nothing was
+/// heard for either until then, and a slide you cannot hear is a slide you
+/// have to look at your feet to know you are on.
+///
+/// The slide: a slap of the hand on to the face the frame it starts -- a
+/// light [`Step`] in the face's material -- and then a [`Scrape`] laid end to
+/// end for as long as it lasts, each grain as fast as the body is going down.
+/// Off it, nothing more is laid and the last grain runs out. The kick: the
+/// count of wall jumps went up, which is the one frame it happened -- a hard
+/// [`Step`] of both feet on the face, and a short swing of the body leaving it.
+///
+/// What the face is made of is the solid there (`Terrain::material_of_face`),
+/// or rock where the wall is the land's own.
+fn wall(
+    i: usize,
+    was: &sim::state::Player,
+    now: &sim::state::Player,
+    after: &World,
+    out: &mut Cues,
+) {
+    let sliding = now.sliding && !now.grounded && now.wall.is_some();
+    let kicked = now.wall_jumps > was.wall_jumps && now.wall_jumped.is_some();
+    if !sliding && !kicked {
+        return;
+    }
+    let face_of = |w: sim::state::Wall| -> (V3, Material) {
+        let r = sim::tuning::body_radius();
+        let probe = V3::new(
+            w.at.x.sub(w.normal.x.mul(r.add(sim::Fx::ratio(1, 10)))),
+            w.at.y.add(sim::Fx::ONE),
+            w.at.z.sub(w.normal.z.mul(r.add(sim::Fx::ratio(1, 10)))),
+        );
+        let material = after
+            .terrain()
+            .material_of_face(probe, sim::Fx::ratio(1, 5))
+            .map_or(Material::Rock, Material::of_floor);
+        // Heard from the face, at the height of the hand on it.
+        let at = V3::new(
+            w.at.x.sub(w.normal.x.mul(r)),
+            w.at.y.add(sim::Fx::ONE),
+            w.at.z.sub(w.normal.z.mul(r)),
+        );
+        (at, material)
+    };
+    if sliding {
+        let (at, material) = face_of(now.wall);
+        let speed = (-now.vel.y.to_f32_for_render()).max(0.0);
+        let pace = (speed / SCRAPE_PACE).min(1.0);
+        let grain = SCRAPE_SLOW - ((SCRAPE_SLOW - SCRAPE_FAST) as f32 * pace) as u16;
+        let every = grain.saturating_sub(2).max(2) as u32;
+        let started = !was.sliding;
+        if started {
+            out.push(
+                Patch::Step(Step {
+                    weight: 0.3,
+                    material,
+                    size: FIGHTER,
+                    seed: after.frame as u8 ^ i as u8,
+                }),
+                at,
+            );
+        }
+        if started || (after.frame + i as u32) % every == 0 {
+            out.push(
+                Patch::Scrape(Scrape {
+                    speed,
+                    material,
+                    frames: grain,
+                    seed: (after.frame / every) as u8 ^ (i as u8) << 4,
+                }),
+                at,
+            );
+        }
+    }
+    if kicked {
+        let (at, material) = face_of(now.wall_jumped);
+        out.push(
+            Patch::Step(Step {
+                weight: 0.75,
+                material,
+                size: FIGHTER,
+                seed: after.frame as u8 ^ i as u8,
+            }),
+            at,
+        );
+        out.push(
+            Patch::Whoosh(Whoosh {
+                frames: 9,
+                size: FIGHTER,
+                rising: false,
+                weight: 0.35,
+            }),
+            chest(now),
+        );
+    }
+}
+
 fn mechanic(was: &sim::state::Player, now: &sim::state::Player, out: &mut Cues) {
     match (&was.mechanic, &now.mechanic) {
         (Mechanic::Structures(before), Mechanic::Structures(after)) => {
@@ -778,6 +885,101 @@ mod tests {
         }
         let c = step(&mut w, [Input::default(); 2]);
         assert!(c.is_empty(), "{c:?}");
+    }
+
+    /// Player one put in the air against a wall that faces `-z`, and the
+    /// slide or the kick written straight into the snapshot: these ask
+    /// what a slide *sounds* like, not when the simulation starts one, which
+    /// `sim/tests` own.
+    fn against_the_wall() -> World {
+        let mut w = World::with_classes([Class::Champion; 2]);
+        let p = &mut w.players[0];
+        p.grounded = false;
+        p.pos = V3::new(
+            sim::Fx::from_int(20),
+            sim::Fx::from_int(3),
+            sim::Fx::from_int(5),
+        );
+        p.vel = V3::ZERO;
+        p.wall = sim::state::Wall {
+            at: p.pos,
+            normal: V3::new(sim::Fx::ZERO, sim::Fx::ZERO, sim::Fx::from_int(-1)),
+        };
+        p.wall_since = 0;
+        w
+    }
+
+    #[test]
+    fn a_wall_slide_slaps_on_and_then_scrapes_for_as_long_as_it_lasts() {
+        let before = against_the_wall();
+        let mut after = before.clone();
+        after.frame += 1;
+        after.players[0].sliding = true;
+        after.players[0].vel.y = sim::Fx::from_int(-3);
+        let mut c = Cues::default();
+        cues(&before, &after, &mut c);
+        assert!(has(&c, |p| matches!(p, Patch::Step(_))), "no slap: {c:?}");
+        assert!(
+            has(&c, |p| matches!(p, Patch::Scrape(s) if s.speed > 2.5)),
+            "no scrape: {c:?}"
+        );
+        // Held on it, a grain is laid every few frames and no frame slaps
+        // again.
+        let mut scraped = 0;
+        for f in 0..30 {
+            let (mut was, mut now) = (after.clone(), after.clone());
+            was.frame += f;
+            now.frame += f + 1;
+            cues(&was, &now, &mut c);
+            assert!(!has(&c, |p| matches!(p, Patch::Step(_))), "{c:?}");
+            scraped += c
+                .iter()
+                .filter(|c| matches!(c.patch, Patch::Scrape(_)))
+                .count();
+        }
+        assert!(
+            (3..=15).contains(&scraped),
+            "{scraped} grains in half a second"
+        );
+        // Off it, silence.
+        let mut off = after.clone();
+        off.frame += 1;
+        off.players[0].sliding = false;
+        off.players[0].wall_since = 3;
+        cues(&after, &off, &mut c);
+        assert!(!has(&c, |p| matches!(p, Patch::Scrape(_))), "{c:?}");
+    }
+
+    #[test]
+    fn a_wall_jump_kicks_off_the_face() {
+        let mut before = against_the_wall();
+        before.players[0].sliding = true;
+        let mut after = before.clone();
+        after.frame += 1;
+        let p = &mut after.players[0];
+        p.sliding = false;
+        p.wall_since = u8::MAX;
+        p.wall_jumped = p.wall;
+        p.wall_jumps = 1;
+        p.vel.y = sim::Fx::from_int(8);
+        let mut c = Cues::default();
+        cues(&before, &after, &mut c);
+        assert!(
+            has(&c, |p| matches!(p, Patch::Step(s) if s.weight > 0.5)),
+            "no kick: {c:?}"
+        );
+        assert!(
+            has(&c, |p| matches!(
+                p,
+                Patch::Whoosh(Whoosh { rising: false, .. })
+            )),
+            "{c:?}"
+        );
+        // The frame after, still in the air with the count unchanged: once.
+        let mut later = after.clone();
+        later.frame += 1;
+        cues(&after, &later, &mut c);
+        assert!(!has(&c, |p| matches!(p, Patch::Step(_))), "{c:?}");
     }
 
     #[test]
