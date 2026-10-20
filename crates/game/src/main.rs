@@ -390,6 +390,7 @@ fn main() {
                 online::announce,
                 hud::update_online,
                 hud::update_seats,
+                hud::update_rival,
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
