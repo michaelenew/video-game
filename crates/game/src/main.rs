@@ -1003,12 +1003,15 @@ fn shot_reap(w: &mut World) {
         let at = sim::V3::new(mid(sh.min.x, sh.max.x), up, mid(sh.min.z, sh.max.z));
         // The creature put so the place sits in front of the camera, which
         // starts looking along +x, holding still, as far off as it takes to
-        // see the whole of them: further the higher the place.
+        // see the whole ring of them: further the bigger and higher it is.
         beast.yaw = sim::Fx::ZERO;
         beast.pos = p.pos;
         let near = beast.world_of(part, at);
         let high = near.y.sub(p.pos.y);
-        let off = sim::Fx::from_int(8).add(high.mul(sim::Fx::from_int(4)));
+        let spread = beast.part_reach_from(part, near);
+        let off = sim::Fx::from_int(6)
+            .add(spread.mul(sim::Fx::from_int(2)))
+            .add(high);
         beast.pos = sim::V3::new(
             p.pos.x.add(off).sub(near.x.sub(p.pos.x)),
             p.pos.y,
@@ -5952,12 +5955,8 @@ const REAP_COPIES: usize = 5;
 
 /// How far from his middle each copy stands, in metres, round a fighter: a
 /// step inside the Executioner's reach, so the overhead comes down on him.
-/// Round anything thicker, the same step out from its skin.
+/// Round anything bigger, the same step out from all of it.
 const COPY_RING: f32 = 1.4;
-
-/// The most times her size a copy grows to: enough for the crown of a
-/// forty-metre colossus.
-const COPY_GROWS: f32 = 25.0;
 
 /// The copies' clock, in frames since the cash-in. They step in out of the
 /// air over `COPY_IN`, play her Executioner squeezed so it strikes at
@@ -5983,24 +5982,18 @@ fn copies() -> usize {
     (sim::tuning::mark_cap() as usize).min(REAP_COPIES)
 }
 
-/// **How big the copies are** (2026-10-19): as big as it takes for their
-/// overhead to come down where the blow met. The sim keeps where it met
-/// (`pos`), the floor under that (`home`) and how far the thing cut reaches
-/// out from there (`reach`): a fighter is cut at his middle, a fighter's
-/// height off the floor, and they are her size; a creature's leg cut at the
-/// knee wants them a little bigger, and its back four metres up wants giants
-/// standing on the ground round the whole animal. Never smaller than her.
-fn copy_size(effect: &sim::effects::Effect) -> f32 {
-    let meets = sim::tuning::cast_height().to_f32_for_render().max(0.1);
-    let high = (fx3(effect.pos).y - fx3(effect.home).y) / meets;
-    high.clamp(1.0, COPY_GROWS)
-}
-
 /// Where copy `copy` of a Reaping stands -- its feet, on the floor under
 /// where the blow met -- and the way it faces: on a ring round that place,
-/// outside all of whatever was cut, spaced so that with her they
-/// are six round it and none of them stands where she came from, every one
-/// looking in.
+/// spaced so that with her they are six round it and none of them stands
+/// where she came from, every one looking in.
+///
+/// **They are always her size, and spread out round what they cut**
+/// (2026-10-20, from play: copies grown to a Ridgeback's back "look weird").
+/// The sim keeps how far the struck thing reaches out from the place across
+/// the floor (`reach`: a body's radius, a leg's, half a back), and the ring
+/// is that plus the step a fighter is cut from -- so round a fighter they
+/// stand close, round a leg a little wider, and round a whole animal they
+/// stand off on the floor all the way round it.
 fn copy_spot(effect: &sim::effects::Effect, copy: usize) -> (Vec3, Vec3) {
     let met = fx3(effect.pos);
     let floor = fx3(effect.home).y;
@@ -6009,7 +6002,7 @@ fn copy_spot(effect: &sim::effects::Effect, copy: usize) -> (Vec3, Vec3) {
         -Vec3::new(d.x, 0.0, d.z).try_normalize().unwrap_or(Vec3::Z)
     };
     let body = sim::tuning::body_radius().to_f32_for_render();
-    let ring = effect.reach.to_f32_for_render() + (COPY_RING - body) * copy_size(effect);
+    let ring = effect.reach.to_f32_for_render() + (COPY_RING - body);
     let turn = (copy + 1) as f32 / (copies() + 1) as f32 * std::f32::consts::TAU;
     let out = Quat::from_rotation_y(turn) * to_her;
     (Vec3::new(met.x, floor, met.z) + out * ring, -out)
@@ -6076,10 +6069,10 @@ fn reaping_cut(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         return None;
     }
     let (_, facing) = copy_spot(effect, part);
-    let tall = sim::tuning::body_height().to_f32_for_render() * copy_size(effect);
+    let tall = sim::tuning::body_height().to_f32_for_render();
     // At the place the blow met, a little toward the copy's side, down the
     // line its overhead fell along.
-    let at = fx3(effect.pos) - facing * 0.15 * copy_size(effect);
+    let at = fx3(effect.pos) - facing * 0.15;
     let down = (Vec3::Y * 1.0 - facing * 0.35).normalize();
     let mut cut = framed(
         Shape::Block,
@@ -6138,17 +6131,16 @@ fn place_copies(
         };
         *seen = Visibility::Inherited;
         let (spot, facing) = copy_spot(&effect, copy);
-        let size = copy_size(&effect);
         // Stepping in from a little further out, and folding home to her --
-        // wherever she is, a creature's back included -- down to her size.
+        // wherever she is, a creature's back included.
         let arrived = (t / COPY_IN).clamp(0.0, 1.0);
-        let spot = spot - facing * 0.6 * size * (1.0 - arrived) * (1.0 - arrived);
+        let spot = spot - facing * 0.6 * (1.0 - arrived) * (1.0 - arrived);
         let her = Vec3::from(frame.players[owner].pos);
         let fold = copy_folded(t, copy);
         let fold = fold * fold;
         tf.translation = spot.lerp(her, fold);
         tf.rotation = Quat::from_rotation_y(facing.x.atan2(facing.z));
-        tf.scale = Vec3::splat(size + (0.7 - size) * fold);
+        tf.scale = Vec3::splat(1.0 - 0.3 * fold);
         if let Some(look) = looks.0.get(owner).map(|l| &l[copy]) {
             let want = solid;
             if materials
@@ -7965,11 +7957,6 @@ mod tests {
         // of each other, every one looking at him, and all of them in the
         // overhead's active frames on the same frame.
         let effect = reaping_at(sim::tuning::cast_height(), sim::tuning::body_radius());
-        assert_eq!(
-            copy_size(&effect),
-            1.0,
-            "copies round a fighter are not her size"
-        );
         let her = Vec3::NEG_X * COPY_RING;
         let spots: Vec<(Vec3, Vec3)> = (0..copies()).map(|c| copy_spot(&effect, c)).collect();
         assert_eq!(
@@ -8023,23 +8010,26 @@ mod tests {
     }
 
     #[test]
-    fn five_of_her_grow_to_what_they_cut_and_stand_on_the_floor_round_it() {
+    fn five_of_her_spread_out_round_what_they_cut_and_stay_her_size() {
         // A big creature's leg cut at the knee, and its back four metres up:
-        // the copies stand on the floor outside the thing, never in it, and
-        // the higher the place, the bigger they are -- big enough
-        // that the overhead lands there.
-        let fighter = copy_size(&reaping_at(
-            sim::tuning::cast_height(),
-            sim::tuning::body_radius(),
-        ));
+        // the copies stand on the floor outside the thing, never in it, the
+        // ring wider the bigger the thing. (Every copy is her size: nothing
+        // scales them but the fold back into her.)
+        let ring = |e: &Effect| {
+            let (spot, _) = copy_spot(e, 0);
+            Vec2::new(spot.x, spot.z).length()
+        };
+        let fighter = reaping_at(sim::tuning::cast_height(), sim::tuning::body_radius());
         let leg = reaping_at(sim::Fx::from_int(1), sim::Fx::ONE);
-        let back = reaping_at(sim::Fx::from_int(4), sim::Fx::from_int(2));
-        assert!(copy_size(&leg) >= fighter);
+        let back = reaping_at(sim::Fx::from_int(4), sim::Fx::from_int(4));
         assert!(
-            copy_size(&back) > copy_size(&leg) * 1.5,
-            "a back is reaped by copies her size"
+            ring(&leg) > ring(&fighter),
+            "a leg is ringed as tight as a fighter"
         );
-        assert!(copy_size(&back) <= COPY_GROWS);
+        assert!(
+            ring(&back) > ring(&leg),
+            "a whole back is ringed as tight as a leg"
+        );
         for (name, e) in [("leg", leg), ("back", back)] {
             let thick = e.reach.to_f32_for_render();
             for c in 0..copies() {
