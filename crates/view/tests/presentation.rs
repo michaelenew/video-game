@@ -765,6 +765,7 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         sim_frame: frame,
         shudder: 0.0,
         ledge: None,
+        wall: None,
         bind_pose: false,
     }
 }
@@ -1577,4 +1578,167 @@ fn the_climb_is_as_long_as_the_simulation_says() {
         view::clips::Clip::LedgeClimb.length(),
         sim::tuning::ledge_climb() as u16
     );
+}
+
+// ---------------------------------------------------------------------------
+// On a wall (2026-10-20)
+// ---------------------------------------------------------------------------
+
+fn on_a_wall(left: bool, down: f32, kick: Option<f32>, frame: u32) -> PoseInput {
+    PoseInput {
+        grounded: false,
+        air_frames: 40,
+        rise: -down,
+        wall: Some(view::interp::OnWall {
+            left,
+            turn: 0.0,
+            down,
+            kick,
+            normal: [0.0, 0.0, -1.0],
+            contact: [20.0, 3.0, 6.0],
+        }),
+        ..input_at(Action::Free, 0.0, frame)
+    }
+}
+
+#[test]
+fn a_body_on_a_wall_slide_is_pressed_to_it_rather_than_falling() {
+    use view::clips::Clip;
+    // Held still on the face: the press, frame 0.
+    let still = pose_for(on_a_wall(true, 0.0, None, 37));
+    assert_eq!(still.channels, Clip::WallSlide.at(0).channels);
+    assert_ne!(still.channels, Clip::JumpFall.at(0).channels);
+    // Going down it fast: the stick and slip, on the simulation's frame.
+    let fast = pose_for(on_a_wall(true, 8.0, None, 37));
+    assert_eq!(fast.channels, Clip::WallSlide.at(37).channels);
+    // A wall on her right is the same slide in the mirror.
+    let right = pose_for(on_a_wall(false, 8.0, None, 37));
+    assert_eq!(right.channels, Clip::WallSlide.at(37).mirrored().channels);
+    // Each its own shape, and none of them the fall's, so going on to a wall
+    // or changing which side of her it is on is a fade, not a cut.
+    let shape = |i: PoseInput| view::play::pose_and_shape(i).1;
+    let falling = PoseInput {
+        wall: None,
+        ..on_a_wall(true, 8.0, None, 37)
+    };
+    let shapes = [
+        shape(falling),
+        shape(on_a_wall(true, 8.0, None, 37)),
+        shape(on_a_wall(false, 8.0, None, 37)),
+        shape(on_a_wall(true, 0.0, Some(0.2), 37)),
+    ];
+    for (i, a) in shapes.iter().enumerate() {
+        for b in &shapes[i + 1..] {
+            assert_ne!(a, b, "{shapes:?}");
+        }
+    }
+}
+
+#[test]
+fn a_kick_off_the_wall_is_drawn_by_how_far_off_it_she_is() {
+    use view::clips::Clip;
+    // On the face, the kick's first frame; halfway out, a blend of the kick
+    // into the flight it is handing over to.
+    let on = pose_for(on_a_wall(true, 0.0, Some(0.0), 40));
+    assert_eq!(on.channels, Clip::WallKick.at(0).channels);
+    let half = pose_for(on_a_wall(true, 0.0, Some(0.5), 40));
+    assert_ne!(half.channels, Clip::WallKick.at(0).channels);
+    assert_ne!(half.channels, Clip::JumpFall.at(0).channels);
+}
+
+/// One fighter in the air against a wall facing `-z`, sliding, and the
+/// world a frame on.
+fn sliding_world(facing: sim::V3, along: i32) -> (World, World) {
+    let mut w = World::with_classes([sim::Class::Champion; 2]);
+    let p = &mut w.players[0];
+    p.grounded = false;
+    p.pos = sim::V3::new(
+        sim::Fx::from_int(20),
+        sim::Fx::from_int(3),
+        sim::Fx::from_int(5),
+    );
+    p.vel = sim::V3::new(
+        sim::Fx::from_int(along),
+        sim::Fx::from_int(-3),
+        sim::Fx::ZERO,
+    );
+    p.facing = facing;
+    p.sliding = true;
+    p.wall = sim::state::Wall {
+        at: p.pos,
+        normal: sim::V3::new(sim::Fx::ZERO, sim::Fx::ZERO, sim::Fx::from_int(-1)),
+    };
+    p.wall_since = 0;
+    let prev = w.clone();
+    w.frame += 1;
+    (prev, w)
+}
+
+#[test]
+fn a_slide_is_drawn_side_on_to_the_wall_the_way_she_is_going() {
+    use sim::{Fx, V3};
+    let into = V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE);
+    // Facing into the wall (+z), going along it to +x.
+    let (prev, cur) = sliding_world(into, 2);
+    let on = interpolate(&prev, &cur, 1.0).players[0]
+        .wall
+        .expect("a sliding fighter is on the wall");
+    assert!(on.kick.is_none());
+    assert!((on.down - 3.0).abs() < 0.01, "{on:?}");
+    // Drawn along the face the way she is going, +x: the facing's yaw (0)
+    // plus the turn is a quarter turn.
+    assert!((on.turn.sin() - 1.0).abs() < 1e-3, "{on:?}");
+    // Going +x with the wall at +z, the wall is on her right: a body
+    // facing +x has its left at -z.
+    assert!(!on.left, "{on:?}");
+    // Going the other way along it, the other way round.
+    let (prev, cur) = sliding_world(into, -2);
+    let other = interpolate(&prev, &cur, 1.0).players[0].wall.unwrap();
+    assert!(other.left);
+    assert!((other.turn.sin() + 1.0).abs() < 1e-3, "{other:?}");
+    // Off the slide, nothing.
+    let (prev, mut cur) = sliding_world(into, 2);
+    cur.players[0].sliding = false;
+    assert!(interpolate(&prev, &cur, 1.0).players[0].wall.is_none());
+}
+
+#[test]
+fn a_wall_jump_is_a_kick_until_she_is_clear_of_the_face() {
+    use sim::{Fx, V3};
+    let (prev, mut cur) = sliding_world(V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE), 0);
+    let p = &mut cur.players[0];
+    p.sliding = false;
+    p.wall_jumped = p.wall;
+    p.wall_jumps = 1;
+    p.wall_since = u8::MAX;
+    p.vel = V3::new(Fx::ZERO, Fx::from_int(8), Fx::from_int(-5));
+    // Half a metre off the face (out is -z).
+    p.pos.z = p.pos.z.sub(Fx::ratio(1, 2));
+    let kick = interpolate(&prev, &cur, 1.0).players[0].wall.unwrap();
+    let off = kick.kick.expect("kicking");
+    assert!((off - 0.5 / view::play::KICK_REACH).abs() < 0.01, "{off}");
+    // Clear of it, the flight.
+    cur.players[0].pos.z = cur.players[0].pos.z.sub(Fx::from_int(2));
+    assert!(interpolate(&prev, &cur, 1.0).players[0].wall.is_none());
+}
+
+#[test]
+fn the_drawn_body_turns_round_to_the_wall_rather_than_snapping() {
+    let mut fade = view::play::Crossfade::default();
+    let mut slide = on_a_wall(true, 3.0, None, 40);
+    if let Some(w) = slide.wall.as_mut() {
+        w.turn = std::f32::consts::FRAC_PI_2;
+    }
+    fade.pose(slide, 1.0 / 60.0);
+    let first = fade.turn();
+    assert!(first > 0.05 && first < 0.5, "{first}");
+    for _ in 0..30 {
+        fade.pose(slide, 1.0 / 60.0);
+    }
+    assert!((fade.turn() - std::f32::consts::FRAC_PI_2).abs() < 0.02);
+    // Off the wall, back round to the facing.
+    for _ in 0..30 {
+        fade.pose(input_at(Action::Free, 0.0, 40), 1.0 / 60.0);
+    }
+    assert!(fade.turn().abs() < 0.02, "{}", fade.turn());
 }

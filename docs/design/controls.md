@@ -786,6 +786,30 @@ Elementalist's stones are not walls for this (they have their own rules for bodi
 `crates/sim/tests/wall_jump.rs` and, for the stick, `crates/sim/tests/ledge.rs`; the code is
 `state::cling_to_the_wall` and `state::keep_sliding`.
 
+**A slide is seen and heard — added 2026-10-20.** Until then nothing at all was drawn or played
+for one: a body on a slide looked exactly like a body falling past a wall, which is why it was
+"really hard to stick to a wall" — there was no way to tell whether you had. Now, from the frame
+`sliding` is set and for no frame it is not:
+
+- **The body turns side-on to the wall**, its back a little to it, the near hand flat on the
+  face at the shoulder and the near foot on it at the knee, the far leg braced under it
+  (`wall_slide`, mirrored for a wall on the right). The hand and foot **stick and slip** — a
+  judder as big as the slide is fast, so a slide held almost still on the face is a still press
+  and a fast one shakes. Which way round is the way you are going along the wall; going
+  nowhere along it, the way you are looking; looking straight into it, one fixed by the wall.
+  The turn is drawn only: the camera, the aim and the facing never turn.
+- **Dust comes off the hand and the foot**, the colour of the face ground pale, thicker the
+  faster you go, left hanging as you go on down past it.
+- **It scrapes**: a slap of the hand on to the face as the slide starts, then a drag in the
+  face's own material for as long as it lasts, brighter and louder the faster.
+
+**A kick off the wall** is a burst of that dust where your feet were, a hard foot on the face and
+a swing of the body leaving it, and its own clip (`wall_kick`): coiled on the face, both legs
+driving it away, gathered and turned away into the flight — drawn by how far off the face you
+are rather than by time, so it is the same kick at any push. Falling past a wall without the
+slide gets none of this, on purpose: the point is to know which you are doing.
+`view::play::on_the_wall`, `sound::cue` (`wall`), `game::scrape`.
+
 ### Ledges catch — added 2026-10-16
 
 **A forgiving way up that is plainly not the quick one.** The jump sections were losing people

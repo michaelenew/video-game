@@ -9327,3 +9327,47 @@ is the first thing to play. Things to watch: the +9 hops ask the Champion's vaul
 30 cm of its height; the Crown's +10s are past the vault, so by the numbers they are the
 Elementalist's and the Dual mage's; the precision
 stones are a metre across, which the stand-in player lands but a person on a camera might not.
+
+### 2026-10-20 — the wall slide seen and heard
+
+From the owner: "It's really hard to stick to a wall ... More obvious feedback when you're wall
+sliding." Nothing at all was drawn or played for a slide or a wall jump: nothing outside `sim`
+read `sliding`, `wall_since` or `wall_jumps`, so a body on a slide looked exactly like one falling
+past a wall, and there was no way to tell whether the stick had done anything.
+
+**Changed** no gameplay number; the slide itself is being changed separately (slower, easier to
+start). What is new is what shows it:
+
+- **Two clips** (`crates/anim/src/clips/wall.rs`), chosen by `view::play::on_the_wall` off a new
+  `interp::OnWall`, only while `sliding` is set -- falling past a wall without the slide gets
+  none of it, on purpose. `wall_slide` (12 frames) is the body side-on to the wall and turned a
+  little back to it, the near hand flat on the face at the shoulder and the near foot on it, the
+  far leg braced and the far arm out; the hand and foot **stick and slip**, riding up the body for
+  seven frames as it slides on under them and letting go in two. It loops on the simulation's
+  frame and is blended in from its still frame by speed down the wall (full at 4 m/s), so a
+  slide held nearly still is a still press. `wall_kick` (14 frames) is indexed by **distance off
+  the face** over 1.2 m (`play::KICK_REACH`) and blends into the flight as it runs out. Both cut
+  for a wall on her left, mirrored for the right.
+- **The drawn body turns** side-on to the wall (`OnWall::turn`), eased by `Crossfade::turn` over
+  about a tenth of a second; which way round is the way she is going along the wall, else the
+  way she is looking, else one fixed by the wall so it cannot flick. The camera, the aim and the
+  facing never turn.
+- **Dust** (`game::scrape`) off the hand and the foot, in the face's colour ground pale
+  (`look::Palette::dust`), up to 25 motes a second a contact, hanging where it was left as the body
+  goes on down; a burst of fourteen off a kick. It first came out in the shade's blue and vanished
+  into a shaded face, so it gives off a little of its own colour.
+- **Sound** (`sound::cue::wall`): a light slap of the hand on to the face as the slide starts,
+  then a `Scrape` grain every few frames -- the face's own band broken into stick-and-slip
+  catches, brighter, quicker and louder the faster -- and a hard foot on the face and a short
+  swing on a kick. The face's material is the solid there (`Terrain::material_of_face`, a new
+  read-only query), rock on the land's own walls.
+
+Captured with `SHOT_AT=20,6.55,7.5 SHOT_FALL=1 SHOT_PRESS=A:600 SHOT_FRAME=24 DEMO=1`, `--arena
+range`: the slide pose on the tower's north face with dust off the hand and foot. In that capture
+the body was falling at 14.5 m/s on the slide, near full gravity, which is the other change's
+business.
+**Not done** the kick's dust cannot be seen in a still capture (it lives 0.6 s of real time and the
+frozen frame lays no more), and none of it has been played with a stick. The slide's judder full
+size (4 m/s) and the scrape's (6 m/s) were picked against today's fall cap; once the slower slide
+lands they may want bringing down to it.
+**Verdict** open -- unplayed.
