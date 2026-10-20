@@ -639,8 +639,9 @@ fn inside_geometry(p: [f32; 3], pad: f32, arena: &sim::arena::Terrain) -> bool {
     // On a map, only the tiles round the point: the arm is a few metres long.
     let at = sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2]));
     let pad = fx_of(pad);
-    // Not a grown tree, which is cut away round the line to the fighter
-    // instead (`Terrain::seen_around`).
+    // Only what is large enough to hold the camera off: not a grown tree,
+    // and not a platform, a post or a branch, which are cut away round the
+    // line to the fighter instead (`Terrain::seen_around`).
     arena.seen_around(at, pad.add(sim::Fx::ONE)).any(|s| {
         // **The solid's own shape, not its box.** A round one is a disc in
         // its box, and the box's corners are air: the Needle's dome is a

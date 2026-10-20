@@ -9371,3 +9371,18 @@ frozen frame lays no more), and none of it has been played with a stick. The sli
 size (4 m/s) and the scrape's (6 m/s) were picked against today's fall cap; once the slower slide
 lands they may want bringing down to it.
 **Verdict** open -- unplayed.
+
+### 2026-10-20 — the camera keeps out of large things only
+
+**Changed** The camera used to keep out of every box: the drawn arm pulled in, and the
+aimed-from eye was held under anything hanging overhead. Now only a box at least
+`Camera held off by a box this thick` (1 m) on its thinnest side and `... this broad` (4 m) on
+its middle one does (`Solid::holds_the_camera`) -- walls, crags, terraces, cliffs, and the
+town's buildings and props. Platforms, steps, posts, rails, thin slabs and trunks are passed
+through and drawn see-through round the line to the fighter, the way the Wood's trees have been
+since 2026-10-16 (`game::window`).
+**Why** From the owner: the forest's camera felt right, and elsewhere it was still jerky --
+stepping on and off blocks threw it around, and in a tight space with something above and below,
+small mouse movements zoomed it in and out. Camera-affecting geometry should be convex, large
+and smooth. Of the valley's 1,607 drawn boxes, 1,156 are small by this rule.
+**Verdict** open -- to be played. Both thresholds are in the Oven (F7) to try.

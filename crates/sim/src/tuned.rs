@@ -3486,7 +3486,7 @@ pub const MOVES: [i32; 2730] = [
 ];
 
 #[rustfmt::skip]
-pub const VIEW: [i32; 29] = [
+pub const VIEW: [i32; 31] = [
           602931, // camera.sphere_radius_(m) = 9.2
            13107, // camera.sphere,_at_the_head_(m) = 0.2
               85, // camera.look_down_limit = 85
@@ -3516,4 +3516,6 @@ pub const VIEW: [i32; 29] = [
           117965, // camera.eye_bubble,_kept_off_the_floor_(m) = 1.8
           131072, // camera.eye_bubble,_soft_edge_(m) = 2
            16384, // camera.eye_bubble,_most_it_opens_a_frame_(m) = 0.25
+           65536, // camera.camera_held_off_by_a_box_this_thick_(m) = 1
+          262144, // camera.camera_held_off_by_a_box_this_broad_(m) = 4
 ];

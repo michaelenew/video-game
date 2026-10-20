@@ -61,6 +61,7 @@ mod valley;
 mod veil;
 mod warm;
 mod wash;
+mod window;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -221,6 +222,7 @@ fn main() {
         .init_resource::<Sim>()
         .init_resource::<arenas::Drawn>()
         .init_resource::<stream::Stream>()
+        .init_resource::<window::Windows>()
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
@@ -404,6 +406,9 @@ fn main() {
                 .after(beast::signs)
                 .before(palette::toggle),
         )
+        // The window through what the camera passes through, on to where
+        // the camera has just been put.
+        .add_systems(Update, window::follow.after(drive_camera))
         // The bag's key, before anything asks who owns the mouse: opening
         // it is what frees the cursor.
         .add_systems(Update, keep::toggle_bag.before(palette::sample_focus))
