@@ -225,40 +225,49 @@ pub fn setup(mut commands: Commands) {
             // at one keyboard, which nobody does (2026-10-20): the other
             // fighter -- the dummy, the bot, a person online -- has one bar in
             // the middle, under the round counter, the way a creature does.
+            // One column, so the root's spacing does not push the two
+            // apart and the bar down onto the valley's line.
             root.spawn(Node {
                 width: Val::Percent(100.0),
-                column_gap: Val::Px(18.0),
-                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
                 ..default()
             })
-            .with_children(|top| {
-                spawn_class_button(top, 0, P1);
-                spawn_health(top, 0, P1);
-                top.spawn((
-                    Text::new("0 - 0"),
-                    TextFont {
-                        font_size: 26.0,
+            .with_children(|head| {
+                head.spawn(Node {
+                    width: Val::Percent(100.0),
+                    column_gap: Val::Px(18.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                })
+                .with_children(|top| {
+                    spawn_class_button(top, 0, P1);
+                    spawn_health(top, 0, P1);
+                    top.spawn((
+                        Text::new("0 - 0"),
+                        TextFont {
+                            font_size: 26.0,
+                            ..default()
+                        },
+                        TextColor(INK),
+                        RoundText,
+                    ));
+                });
+
+                // The other fighter's health, centred, the creature's shape.
+                head.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        margin: UiRect::top(Val::Px(4.0)),
                         ..default()
                     },
-                    TextColor(INK),
-                    RoundText,
-                ));
-            });
-
-            // The other fighter's health, centred, the creature's shape.
-            root.spawn((
-                Node {
-                    width: Val::Percent(100.0),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
-                    margin: UiRect::top(Val::Px(4.0)),
-                    ..default()
-                },
-                Visibility::Hidden,
-                RivalRow,
-            ))
-            .with_children(|row| {
-                spawn_meter(row, 10.0, P2, RivalBar);
+                    Visibility::Hidden,
+                    RivalRow,
+                ))
+                .with_children(|row| {
+                    spawn_meter(row, 10.0, P2, RivalBar);
+                });
             });
 
             // The third and fourth fighters, when there are any: the same
