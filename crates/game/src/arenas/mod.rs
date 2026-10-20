@@ -262,6 +262,7 @@ pub fn dress(
     mut ambient: ResMut<AmbientLight>,
     mut camera: Query<Entity, With<crate::MainCamera>>,
     looks: Option<Res<crate::ground::Looks>>,
+    mut windows: ResMut<crate::window::Windows>,
 ) {
     let arena = sim.cur.arena();
     let mapped = sim.cur.valley.on;
@@ -328,6 +329,7 @@ pub fn dress(
         paint: &mut paints,
     };
     let white = materials.paint.add(Paint::white());
+    let see = windows.white(materials.paint);
     draw_place(
         &mut commands,
         &mut meshes,
@@ -347,7 +349,7 @@ pub fn dress(
             Vec3::ZERO,
             solid.hangs(),
             &look,
-            &white,
+            (&white, &see),
             Under::Scenery,
             true,
         );
@@ -660,7 +662,7 @@ pub fn draw_solid(
     offset: Vec3,
     hangs: bool,
     look: &PlaceLook,
-    white: &Handle<Paint>,
+    paints: (&Handle<Paint>, &(Handle<Paint>, Handle<Paint>)),
     under: Under,
     near: bool,
 ) -> Entity {
@@ -671,15 +673,47 @@ pub fn draw_solid(
             (Transform::default(), Visibility::default()),
         );
     };
+    // **A box the camera passes through is drawn see-through round the line
+    // to the fighter** (`crate::window`): the window paint, and its ghost
+    // over the window.
+    let (white, (window, ghost)) = paints;
+    let see = !solid.holds_the_camera();
+    let paint = if see { window } else { white };
+    let mesh = meshes.add(mesh);
     let e = put(
         commands,
         under,
         (
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(white.clone()),
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(paint.clone()),
             Transform::from_translation(at + offset),
         ),
     );
+    let relief = relief.map(|r| meshes.add(r));
+    if see {
+        let lo = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z));
+        let hi = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));
+        let g = commands
+            .spawn((
+                Mesh3d(mesh),
+                MeshMaterial3d(ghost.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                bevy::pbr::NotShadowCaster,
+                crate::window::Ghost::over(lo, hi),
+                ChildOf(e),
+            ))
+            .id();
+        if let Some(r) = &relief {
+            commands.spawn((
+                Mesh3d(r.clone()),
+                MeshMaterial3d(ghost.clone()),
+                Transform::default(),
+                bevy::pbr::NotShadowCaster,
+                ChildOf(g),
+            ));
+        }
+    }
     // **A crown of leaves lets the light through** (the Great Wood's): a
     // disc forty metres across over every giant, casting the whole grove into
     // one shadow, left the trunks and the branches lit by nothing but the
@@ -689,8 +723,8 @@ pub fn draw_solid(
     }
     if let Some(relief) = relief {
         commands.spawn((
-            Mesh3d(meshes.add(relief)),
-            MeshMaterial3d(white.clone()),
+            Mesh3d(relief),
+            MeshMaterial3d(paint.clone()),
             Transform::default(),
             bevy::pbr::NotShadowCaster,
             ChildOf(e),

@@ -397,6 +397,29 @@ pub struct SidePush {
 }
 
 impl Solid {
+    /// **Is this box big enough to hold the camera off** (2026-10-20, from
+    /// play): at least `Camera held off by a box this thick` on its thinnest
+    /// side and `... this broad` on its middle one -- a wall, a crag, a
+    /// terrace, a cliff. The camera keeps out of those, as it always did.
+    ///
+    /// Anything smaller -- a platform, a step, a post, a rail, a branch -- it
+    /// passes through, and the renderer draws it see-through round the line
+    /// to the fighter instead (`game::window`). A camera pushed in by every
+    /// small thing behind it jumps as you step on and off blocks, and between
+    /// a ledge overhead and one underfoot it zoomed in and out with every
+    /// small turn of the mouse. What holds it off wants to be large and
+    /// plain, so that the camera moves rarely and smoothly when it does.
+    pub fn holds_the_camera(&self) -> bool {
+        use crate::oven::{ViewKnob as V, view};
+        let mut e = [
+            self.max.x.sub(self.min.x).raw(),
+            self.max.y.sub(self.min.y).raw(),
+            self.max.z.sub(self.min.z).raw(),
+        ];
+        e.sort_unstable();
+        e[0] >= view(V::CameraHeldThick) && e[1] >= view(V::CameraHeldBroad)
+    }
+
     pub const fn new(min: V3, max: V3) -> Solid {
         Solid {
             min,
@@ -1681,7 +1704,7 @@ impl std::ops::Deref for Terrain {
 pub struct Solids<'a> {
     own: Own<'a>,
     raised: std::slice::Iter<'a, Solid>,
-    /// Leave out the map's hidden boxes ([`Terrain::seen_around`]).
+    /// Leave out what the camera passes through ([`Terrain::seen_around`]).
     seen: bool,
 }
 
@@ -1689,7 +1712,12 @@ pub struct Solids<'a> {
 // stack for one query and is never boxed: a frame does not allocate.
 #[allow(clippy::large_enum_variant)]
 enum Own<'a> {
-    Table(std::slice::Iter<'static, Solid>),
+    /// A table's own solids, by index; `town` is whether it is the town's,
+    /// some of whose boxes the town draws whole (`hearth::drawn_whole`).
+    Table {
+        solids: std::iter::Enumerate<std::slice::Iter<'static, Solid>>,
+        town: bool,
+    },
     Map {
         atlas: &'static Atlas,
         near: crate::atlas::Near<'static>,
@@ -1702,8 +1730,11 @@ impl Iterator for Solids<'_> {
     type Item = Solid;
 
     fn next(&mut self) -> Option<Solid> {
+        let seen = self.seen;
         let own = match &mut self.own {
-            Own::Table(it) => it.next().copied(),
+            Own::Table { solids, town } => solids
+                .find(|(k, s)| !seen || holds_the_camera(s, *town && hearth::drawn_whole(*k)))
+                .map(|(_, s)| *s),
             Own::Map {
                 atlas,
                 near,
@@ -1711,7 +1742,7 @@ impl Iterator for Solids<'_> {
                 ..
             } => {
                 let mut i = near.next();
-                while i.is_some_and(|k| self.seen && atlas.hidden[k as usize]) {
+                while i.is_some_and(|k| seen && !atlas.holds_the_camera(k as usize)) {
                     i = near.next();
                 }
                 i
@@ -1727,6 +1758,31 @@ impl Iterator for Solids<'_> {
             }),
         };
         own.or_else(|| self.raised.next().copied())
+    }
+}
+
+/// Whether a box keeps the camera out ([`Solid::holds_the_camera`]), or is
+/// one the town draws `whole` and so cannot draw see-through: a building, a
+/// prop. Those hold it off as they always did.
+fn holds_the_camera(s: &Solid, whole: bool) -> bool {
+    whole || s.holds_the_camera()
+}
+
+impl Atlas {
+    /// **Does the map's box `k` hold the camera off**
+    /// ([`Solid::holds_the_camera`])? Never a grown tree's wood
+    /// (`Atlas::hidden`), which is cut away round the line to the fighter by
+    /// the tree's own drawing; always a box the town draws whole.
+    pub fn holds_the_camera(&self, k: usize) -> bool {
+        if self.hidden[k] {
+            return false;
+        }
+        let src = self.sources[k];
+        let whole = self
+            .places
+            .get(src.place as usize)
+            .is_some_and(|p| p.arena == ArenaId::HEARTH && hearth::drawn_whole(src.index as usize));
+        holds_the_camera(&self.solids[k], whole)
     }
 }
 
@@ -1787,7 +1843,10 @@ impl Terrain {
     /// all of them.
     pub fn near(&self, lo: V3, hi: V3) -> Solids<'_> {
         let own = match self.atlas {
-            None => Own::Table(self.arena.solids().iter()),
+            None => Own::Table {
+                solids: self.arena.solids().iter().enumerate(),
+                town: self.arena.id == ArenaId::HEARTH,
+            },
             Some(atlas) => Own::Map {
                 atlas,
                 near: atlas.near(
@@ -1805,11 +1864,14 @@ impl Terrain {
         }
     }
 
-    /// **The solids within `reach` of a point that are drawn as themselves**:
-    /// [`Terrain::around`] without a grown tree's wood (`Atlas::hidden`).
-    /// What the camera keeps out of -- a tree is cut away round the line to
-    /// the fighter instead (`game::grove`), because a camera shoved in by
-    /// every branch it passes jerks the whole way up a tree.
+    /// **The solids within `reach` of a point that hold the camera off**:
+    /// [`Terrain::around`] with only the boxes
+    /// [`Solid::holds_the_camera`] -- large ones -- and never a grown tree's
+    /// wood (`Atlas::hidden`). What the camera keeps out of: everything else
+    /// is drawn see-through round the line to the fighter instead
+    /// (`game::window`, `game::grove`), because a camera shoved in by every
+    /// branch and platform it passes jerks. The raised solids are all here,
+    /// as they always were.
     pub fn seen_around(&self, at: V3, reach: Fx) -> Solids<'_> {
         let mut s = self.around(at, reach);
         s.seen = true;
