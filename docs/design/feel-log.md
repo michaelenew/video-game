@@ -9221,14 +9221,18 @@ spark laid where she already has ground merges, so this is rare.
   its link` (new, 10 frames) after it whether or not the button is still down, and spent by
   the move it throws.
 - **A tempo bar** under the momentum bar (`hud::update_tempo`, read off
-  `sim::state::tempo`): three numbered pips -- filled when that hit landed, a red edge when it
+  `sim::state::tempo`): three pips -- filled when that hit landed, a red edge when it
   missed -- and a timeline per link from where it lands. On it, in order: the Beat (pale
   gold, the sweet spot: pressed there, the next link is a true link, and it comes out at the
   first frame it may), a red stretch where a press is forgotten before the link may come out,
-  a dim stretch where it is kept, and the open window until the string dies, cold white into
-  the second hit and **gold into the third**. A white tick is where the same weapon again may
-  come out; the gold-into-dim edge before it is where a different one may. While the third
-  hit or a finisher runs the whole bar is gold.
+  a dim stretch where it is kept, a half-bright stretch where a different weapon comes out
+  at once (the same one is still kept), and the open window until the string dies, cold white
+  into the second hit and **gold into the third**. While the third hit or a finisher runs the
+  whole bar is gold. **The same day, from a first look**: the pips' numerals went (too small
+  to read, and odd), and the same weapon's mark stopped being a white tick inside the bright
+  window -- it read as a mark the colours did not line up with. It is the edge between the
+  half-bright and the bright stretch now, so every edge on the bar means something and the
+  only line is now.
 - **The three hits look different.** The trail of the first is a thin outer band and never
   quite solid; the second's is the weapon's own band; the third's -- and a finisher's -- is a
   thick slab reaching further in, drawn **gold** whatever weapon threw it. A gold flare grows

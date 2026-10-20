@@ -86,13 +86,14 @@ what was built, in one place:
   still down, and comes out on the first frame its link may; a tap made
   earlier than that is lost. (`Fury::fresh`, `state::champion_weapon`.)
 - **The tempo bar** (2026-10-20, a training aid): under the momentum bar, three
-  numbered pips -- the hits of the string, filled if they landed, red-edged if
+  pips -- the hits of the string, filled if they landed, red-edged if
   they missed -- and the window for the next hit, drawn from where the last one
   landed: the Beat first (the sweet spot), then a red stretch where a press is
-  lost, a dim one where it is kept, and the open window until the string dies --
-  cold white into the second hit, **gold into the third**, and all gold while
-  the third or a finisher runs. A tick marks where the same weapon again may
-  come out. Every mark is read off the rule it draws (`state::tempo`). And the
+  lost, a dim one where it is kept, a half-bright one where a *different*
+  weapon comes out at once (the same one is still kept), and the open window
+  until the string dies -- cold white into the second hit, **gold into the
+  third**, and all gold while the third or a finisher runs. Every colour edge
+  is one of those points; the one line on it is now. Every mark is read off the rule it draws (`state::tempo`). And the
   three hits look different: each swing's trail is bigger than the last's and
   the third's is gold, with a gold flare at the weapon's head while it comes.
 - **The Rush goes toward the crosshair** (2026-10-13): flat along the floor

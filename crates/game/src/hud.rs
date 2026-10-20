@@ -79,7 +79,7 @@ pub struct MomentumFill(pub usize);
 
 /// **The Champion's tempo bar** (2026-10-20, from play): under his momentum,
 /// how long he has to land the next hit of his string and where its sweet
-/// spot is, read off `sim::state::tempo`. Three numbered pips -- the hits
+/// spot is, read off `sim::state::tempo`. Three pips -- the hits
 /// thrown, lit if they landed -- and a timeline per link. A training aid for
 /// the beat the class is built on; hidden for every other class.
 #[derive(Component)]
@@ -100,12 +100,12 @@ pub enum Stretch {
     Beat,
     /// A press here is forgotten before the next link may start.
     Lost,
-    /// A press here is kept and comes out at the mark.
+    /// A press here is kept and comes out when the link may.
     Kept,
-    /// The next link comes out at once, swapped or repeated.
+    /// A different weapon comes out at once; the same one is still kept.
+    Swap,
+    /// The next link comes out at once, whichever weapon it is.
     Open,
-    /// The mark where the same weapon again may come out.
-    Repeat,
     /// What has already gone by, darkened.
     Gone,
     /// Now.
@@ -116,8 +116,8 @@ const STRETCHES: [Stretch; 7] = [
     Stretch::Beat,
     Stretch::Lost,
     Stretch::Kept,
+    Stretch::Swap,
     Stretch::Open,
-    Stretch::Repeat,
     Stretch::Gone,
     Stretch::Cursor,
 ];
@@ -841,7 +841,7 @@ pub fn update_momentum(
     }
 }
 
-/// The tempo bar: three numbered pips, then the timeline.
+/// The tempo bar: three pips, one a hit, then the timeline.
 fn spawn_tempo(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
     parent
         .spawn((
@@ -859,27 +859,15 @@ fn spawn_tempo(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
             for hit in 0..3u8 {
                 row.spawn((
                     Node {
-                        width: Val::Px(14.0),
-                        height: Val::Px(14.0),
-                        border: UiRect::all(Val::Px(1.0)),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
+                        width: Val::Px(18.0),
+                        height: Val::Px(9.0),
+                        border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
                     BackgroundColor(Color::NONE),
                     BorderColor(DIM),
                     TempoPip(who, hit),
-                ))
-                .with_children(|pip| {
-                    pip.spawn((
-                        Text::new(["1", "2", "3"][hit as usize]),
-                        TextFont {
-                            font_size: 10.0,
-                            ..default()
-                        },
-                        TextColor(INK),
-                    ));
-                });
+                ));
             }
             row.spawn((
                 Node {
@@ -929,7 +917,7 @@ pub fn stretch_of(t: &sim::state::Tempo, stretch: Stretch) -> Option<(f32, f32, 
     } else {
         SECOND
     };
-    let dim = |c: Color| c.with_alpha(0.45);
+    let dim = |c: Color| c.with_alpha(0.4);
     let (from, width, colour) = match stretch {
         Stretch::Beat => {
             let (a, w) = span(0, t.beat)?;
@@ -943,11 +931,14 @@ pub fn stretch_of(t: &sim::state::Tempo, stretch: Stretch) -> Option<(f32, f32, 
             let (a, w) = span(t.lost, t.swap)?;
             (a, w, dim(next))
         }
+        Stretch::Swap => {
+            let (a, w) = span(t.swap, t.repeat)?;
+            (a, w, next.with_alpha(0.75))
+        }
         Stretch::Open => {
-            let (a, w) = span(t.swap, t.end)?;
+            let (a, w) = span(t.repeat.max(t.swap), t.end)?;
             (a, w, next)
         }
-        Stretch::Repeat => (at(t.repeat), 0.0, INK),
         Stretch::Gone => (0.0, at(t.now), Color::srgba(0.0, 0.0, 0.0, 0.6)),
         Stretch::Cursor => (at(t.now), 0.0, ASCENDED),
     };
@@ -1005,8 +996,8 @@ pub fn update_tempo(
             continue;
         };
         node.left = Val::Percent(from);
-        // The two marks are lines rather than stretches.
-        node.width = if matches!(tag.1, Stretch::Repeat | Stretch::Cursor) {
+        // Now is a line rather than a stretch.
+        node.width = if tag.1 == Stretch::Cursor {
             Val::Px(2.0)
         } else {
             Val::Percent(width)
@@ -1890,7 +1881,13 @@ mod tests {
             w.advance([sim::Input::new(tap), sim::Input::default()]);
             let t = sim::state::tempo(&w.players[0]).expect("a Champion has a tempo");
             let mut edge = 0.0;
-            for stretch in [Stretch::Beat, Stretch::Lost, Stretch::Kept, Stretch::Open] {
+            for stretch in [
+                Stretch::Beat,
+                Stretch::Lost,
+                Stretch::Kept,
+                Stretch::Swap,
+                Stretch::Open,
+            ] {
                 if let Some((from, width, colour)) = stretch_of(&t, stretch) {
                     assert!(from >= edge - 0.01 && from + width <= 100.01, "{t:?}");
                     edge = from + width;
