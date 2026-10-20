@@ -1581,6 +1581,10 @@ pub struct World {
     /// **The Blood mage's ground** (2026-10-18): the patches of floor her
     /// blood has claimed. See [`crate::ground`].
     pub ground: crate::ground::Ground,
+    /// Which of `ground`'s patches a heart holds (2026-10-19), as the last
+    /// frame's `ground::step` found them: drawn whole, and never made way
+    /// with when the table is full. See [`crate::ground::Held`].
+    pub ground_held: crate::ground::Held,
     /// Fire bolts in flight. The only projectile a fighter throws that is not
     /// part of somebody's mechanic -- see [`crate::bolt`].
     pub bolts: Flight,
@@ -1708,6 +1712,7 @@ impl World {
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
             ground: crate::ground::NONE,
+            ground_held: 0,
             bolts: [None; MAX_BOLTS],
             debris: [None; MAX_DEBRIS],
             gusts: [None; MAX_GUSTS],
@@ -2266,6 +2271,7 @@ impl World {
         self.lore = Lore::NONE;
         self.effects = [None; MAX_EFFECTS];
         self.ground = crate::ground::NONE;
+        self.ground_held = 0;
         self.bolts = [None; MAX_BOLTS];
         self.debris = [None; MAX_DEBRIS];
         self.gusts = [None; MAX_GUSTS];
@@ -2373,6 +2379,7 @@ impl World {
         self.bolts = [None; MAX_BOLTS];
         // Nor does her ground: a round starts on clean floor.
         self.ground = crate::ground::NONE;
+        self.ground_held = 0;
         self.debris = [None; MAX_DEBRIS];
         self.gusts = [None; MAX_GUSTS];
         // A course's runs start again with the round, clock and all.
@@ -4062,6 +4069,9 @@ impl World {
                 h.write_i32(g.at.z.raw());
                 h.write_i32(g.radius().raw());
                 h.write_u32(g.life as u32 | (g.owner as u32) << 16);
+            }
+            for word in 0..4 {
+                h.write_u32((self.ground_held >> (32 * word)) as u32);
             }
         }
         for p in &self.players {
@@ -12201,8 +12211,7 @@ impl World {
                 // drained away, rather than drunk or set off, it leaves a
                 // patch of her ground where it stood.
                 if effect.is_a_pool() && (effect.owner as usize) < MAX_PLAYERS {
-                    crate::ground::lay(
-                        &mut self.ground,
+                    self.lay_ground(
                         effect.owner,
                         effect.pos,
                         effect.stain_ground(),
@@ -14514,26 +14523,36 @@ impl World {
             }
             return;
         }
-        // Past the cap: into the newest.
+        // **Past the cap, her oldest stain makes way** (2026-10-19), and
+        // bleeds into her ground where it stood as a stain that fades does.
+        // It used to be the new blood that gave way, poured into her newest
+        // stain wherever that was, so once the cap filled no new stain ever
+        // appeared where blood was spilled. A lit stain is going up and is
+        // left to.
         let mut count = 0;
-        let mut newest: Option<(usize, u16)> = None;
+        let mut oldest: Option<(usize, u16)> = None;
         for (i, e) in self.effects.iter().enumerate() {
             let Some(e) = e else { continue };
             if !e.is_a_pool() || e.owner != owner {
                 continue;
             }
             count += 1;
-            if newest.is_none_or(|(_, age)| e.age < age) {
-                newest = Some((i, e.age));
+            if e.life == UNLIT && oldest.is_none_or(|(_, age)| e.age > age) {
+                oldest = Some((i, e.age));
             }
         }
         if count >= t::pool_cap() {
-            if let Some((i, _)) = newest {
-                if let Some(pool) = self.effects[i].as_mut() {
-                    pool.banked += volume;
-                }
+            let Some((i, _)) = oldest else {
+                return;
+            };
+            if let Some(gone) = self.effects[i].take() {
+                self.lay_ground(
+                    gone.owner,
+                    gone.pos,
+                    gone.stain_ground(),
+                    t::ground_stain_lasts(),
+                );
             }
-            return;
         }
         spawn_effect(&mut self.effects, born);
     }
@@ -16445,7 +16464,7 @@ impl World {
                     .clamp(1, u16::MAX as i32) as u16,
             )
         };
-        crate::ground::lay(&mut self.ground, owner as u8, at, radius, life);
+        self.lay_ground(owner as u8, at, radius, life);
     }
 
     /// Every disc of ground that is not a patch, of every owner's: her stains
@@ -16494,10 +16513,19 @@ impl World {
         crate::ground::nearest(&self.ground, &discs[..n], owner as u8, at)
     }
 
+    /// Lay a patch of `owner`'s ground (`crate::ground::lay_sparing`), with
+    /// what her hearts hold spared and, at the cap, the held patch furthest
+    /// from them making way.
+    fn lay_ground(&mut self, owner: u8, at: V3, radius: Fx, life: u16) {
+        let (discs, n) = self.blood_discs();
+        let held = self.ground_held;
+        crate::ground::lay_sparing(&mut self.ground, held, &discs[..n], owner, at, radius, life);
+    }
+
     /// **The ground, one frame** (`crate::ground::step`).
     fn step_ground(&mut self) {
         let (discs, n) = self.blood_discs();
-        crate::ground::step(&mut self.ground, &discs[..n], self.frame);
+        self.ground_held = crate::ground::step(&mut self.ground, &discs[..n], self.frame);
     }
 
     /// **Who is on her own ground** (2026-10-18), once a frame before anybody
@@ -17202,6 +17230,14 @@ impl World {
         // her blow (2026-10-19). What it sets off, it sets off as it spreads
         // (`Effect::spreads`).
         born.power = worth_of(&self.players[owner], None);
+        // **Worth its stain** (2026-10-19): the blow is the blood that was in
+        // it, `tuning::stain_erupts` to the point, rather than the row's --
+        // carried on the power, which every hit an effect lands is scaled by.
+        if !cascade {
+            let row = Fx::from_int(m.damage.max(1)).mul(t::erupt_damage());
+            let worth = Fx::from_int(pool.pool_volume().max(0)).mul(t::stain_erupts());
+            born.power = born.power.mul(worth.div(row.max(Fx::ONE)));
+        }
         spawn_effect(&mut self.effects, born);
         if cascade {
             let generation = pool.power.to_int();

@@ -909,6 +909,13 @@ inputs), and settled only once it is older than a rollback can reach
 (`game/src/bag.rs` tests a pickup undone by a rollback). **Where each morph
 stands** (`game::heel`) is worked out every frame from where the fighters
 are, by the same rules and the same Oven knobs; nothing in a fight reads it.
+**It keeps to your side, further the bigger it is** (2026-10-19: grown to
+a creature's size, about 12 m, it stood between the camera and you): its
+body's own reach plus the follow distance out, on whichever side of you it
+is, and in a fight back and to that side. **The bag's "Copy feeding
+history"** puts everything your morph has eaten on the clipboard, one item
+a line: a feeding rolls no dice, so that list rebuilds it exactly, which is
+how a morph that looks wrong is sent to be looked at.
 
 That took the keep from about 640 bytes of the snapshot to 16 for the eggs
 and 8 for `picked` (the world: 20,876 bytes to 20,340). What it gives up,
@@ -917,6 +924,39 @@ is taken at its word, as the owner chose; one day verifying offline play
 would sign the bag, outside the world's checksum. And both games build the
 morphs from the feedings they have seen, so they agree from the start of a
 session; a morph carried in from another session would need sending.
+
+**Bodies that stand clear of themselves** (2026-10-19, `sim::breed::build`,
+`tests/limbs.rs`). Two things the owner saw on fed morphs:
+- **An abdomen in the ground.** It trailed at the torso's own pitch, so an
+  upright torso drove it down -- the Mantis's own, 0.8 m under. It points
+  down a little at most now, whatever the torso does, and further up if
+  its underside would still touch the floor standing.
+- **Legs passing through each other.** Every pair bends in the body's own
+  plane, so a long leg bent deep swung its knee into the next pair, and a
+  stride swung a fore foot back through the hind one. Each pair's reach
+  front to back is worked out from how it stands plus the furthest a
+  stride swings a foot; where two pairs' reaches overlap, one of them --
+  the longer limb, or the hinder -- holds its knee out from the body and
+  steps outside the other's line, as a walking wing's elbow does (the
+  owner: *"moving limbs towards wings does this by default and it looks
+  great"*). Of six trophies of each creature on each other's egg, 56 of
+  121 crossed standing and 74 walking; 14 and 26 do now. What is left is
+  mostly pairs closer together than they are thick (the Siegeshell's
+  front two) and spider legs fanning across another kind of leg.
+
+**A stance comes over in thirds** (2026-10-19). Size only closes on the
+donor's, but the stance is one major that flipped at once: a body that took
+the Broodmother's sprawl and was then fed the Ridgeback stood its legs
+under it in one feeding, and across it went from about 14.5 m to 10.5 m
+while its length kept growing -- "it got small again". The morph now
+remembers the stance it came from (`Morph::stance_was`) and how many
+feedings it has stood the new one (`settled`, of `Morph::SETTLING`, three);
+until it is all the way over, the game draws each part between the body as
+it stood and as it stands, at the same point of its stride, a third more a
+feeding (`Morph::stance_blend`, `game::keep::Drawn`). A part the old body
+had none of grows in. It is the morph's alone -- a lineage's crossing has
+nobody watching -- and, the morph being each game's own, it costs the
+shared world nothing.
 
 **On screen** (`game::keep`): an egg is big, pale and glowing in its
 creature's colour, bobbing and turning under a column of light you can see
@@ -928,7 +968,8 @@ anything"*): glossy pink, two big eyes and a mouth, floating at shoulder
 height, wobbling; fed an egg it melts into the creature, the blob shrinking
 away as the body grows in where it hung. The first blob read as a
 blobfish -- squat, tipped nose-down, its face slid to the bottom -- so it
-is round and upright, its face high: big eyes close together with a
+is round and upright, about a guinea pig's size (a quarter of a metre;
+it was 0.85 m and far too big), its face high: big eyes close together with a
 highlight in each, a small smile, pink cheeks, nubs, and a tapering tail.
 **Moving, it leaves a trail of puffs** off that tail, like a cartoon's
 propulsion: a quarter of its size, a little lumpy, left where they were

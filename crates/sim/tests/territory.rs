@@ -781,3 +781,110 @@ fn a_spike_a_stride_short_of_a_stain_sets_it_off() {
     }
     assert!(erupted, "the stain it touched did not go up");
 }
+
+#[test]
+fn an_eruption_is_worth_the_blood_in_its_stain() {
+    // 2026-10-19: every stain used to erupt for the spike's row whatever its
+    // size, so a bleed's scattered ticks went up as a minefield. Now the blow
+    // is the blood that was in it.
+    let landed = {
+        let mut w = mage();
+        step_looking(&mut w, keys::SPIKES, -3500);
+        let mut at = None;
+        for _ in 0..40 {
+            step_looking(&mut w, 0, -3500);
+            if let Some(e) = effects_of(&w, EffectKind::BlackSpike).first() {
+                at = Some(e.pos);
+                break;
+            }
+        }
+        at.expect("fixture: the spike came up")
+    };
+    let dealt = |volume: i32| {
+        let mut w = mage();
+        let stain = Effect::pool(0, Class::BloodMage, b::THORN_LASH, landed, volume);
+        let edge = stain.pool_radius().max(metres(1.0));
+        place(&mut w, stain);
+        w.players[1].pos = V3::new(landed.x, landed.y, landed.z.add(edge));
+        let full = w.players[1].health;
+        step_looking(&mut w, keys::SPIKES, -3500);
+        run_looking(&mut w, 60, -3500);
+        full - w.players[1].health
+    };
+    for volume in [50, 200] {
+        let got = dealt(volume);
+        assert!(
+            got <= volume && got >= volume - 2 * t::pool_drain(),
+            "a stain of {volume} erupted for {got}"
+        );
+    }
+}
+
+fn run_looking(w: &mut World, frames: u32, pitch: i16) {
+    for _ in 0..frames {
+        step_looking(w, 0, pitch);
+    }
+}
+
+#[test]
+fn a_full_table_never_pushes_out_what_a_heart_holds() {
+    // 2026-10-19: a held patch stands at its last frame, so it was the
+    // weakest on the table and the first to make way when it filled -- the
+    // home base pushed out by sparks laid anywhere else.
+    let mut w = planted();
+    let h = effects_of(&w, EffectKind::Heart)[0].pos;
+    let ring = as_f(t::heart_ground());
+    let home = V3::new(h.x, h.y, h.z.add(metres(ring + 0.8)));
+    claim(&mut w, home, 1.0, 30);
+    run(&mut w, 30 * t::ground_joined_every() as u32 + 10, 0);
+    let held = |w: &World| w.ground.iter().any(|p| p.live() && p.covers(home));
+    assert!(held(&w), "fixture: the heart holds it");
+    assert!(w.ground_held != 0, "and the world knows it is held");
+    // Fill the table with sparks far from anything, longer-lived than it.
+    for k in 0..sim::ground::MAX_PATCHES as i32 + 8 {
+        let at = V3::new(h.x.sub(metres(40.0)), h.y, h.z.add(Fx::from_int(3 * k)));
+        sim::ground::lay_sparing(&mut w.ground, w.ground_held, &[], 0, at, metres(1.0), 150);
+    }
+    assert!(
+        held(&w),
+        "a spark laid elsewhere pushed out what the heart holds"
+    );
+}
+
+#[test]
+fn with_every_patch_held_the_one_furthest_from_her_hearts_makes_way() {
+    // 2026-10-19: what her hearts hold never runs out, so a long fight can
+    // fill the table with it; new ground must still go down where she
+    // fights. The edge of the held field goes, not the base.
+    let mut ground = sim::ground::NONE;
+    for k in 0..sim::ground::MAX_PATCHES {
+        let at = V3::new(Fx::from_int(3 * k as i32), Fx::ZERO, Fx::ZERO);
+        sim::ground::lay(&mut ground, 0, at, metres(1.0), 100);
+    }
+    let held: sim::ground::Held = !0;
+    let heart = sim::ground::Disc {
+        at: V3::ZERO,
+        radius: t::heart_ground(),
+        owner: 0,
+        holds: true,
+    };
+    let fresh = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(-30));
+    sim::ground::lay_sparing(&mut ground, held, &[heart], 0, fresh, metres(1.0), 100);
+    let far_end = V3::new(
+        Fx::from_int(3 * (sim::ground::MAX_PATCHES as i32 - 1)),
+        Fx::ZERO,
+        Fx::ZERO,
+    );
+    assert!(
+        ground.iter().any(|p| p.covers(fresh)),
+        "the new ground was refused"
+    );
+    assert!(
+        !ground.iter().any(|p| p.covers(far_end)),
+        "the furthest held patch is still there"
+    );
+    assert!(
+        ground.iter().any(|p| p.covers(V3::ZERO)),
+        "and the base was not touched"
+    );
+}

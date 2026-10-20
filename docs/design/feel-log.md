@@ -9148,3 +9148,65 @@ size (`monster::a_spreading_eruption_hits_the_creature_once`, which fails withou
 eruption, six frames, 1018). **No number was changed**: with each eruption hitting once, a
 bleed into a spike is back to what it did before the rework. If it is still too much in play,
 the knob is the spike row's damage (100), which every eruption is a share of.
+
+### 2026-10-19 — the Blood mage: an eruption is worth the blood in its stain
+
+From the owner, after the fix above: "still too strong -- like detonating a minefield; the
+individual spikes need to be weaker. First, confirm the damage is lower for a small pool." **It
+was not.** Measured, a stain of 25, 50, 100, 200 or 400 erupted for 150 every time (the spike's
+row of 100 times `erupt_damage` 1.5); only the width grew with it. A bleed tick deals 25 and leaves
+a stain of 25, which a spike turned into 150 -- six times what laid it -- and a bleed lays several.
+
+Now the blow is the blood in the stain times `Black spike, a stain erupts for (x its blood)`
+(1, the owner's call): measured, 25 → 23, 50 → 48, 100 → 98, 200 → 198, 400 → 398 (a stain drains
+a little before the spike reaches it). A bleed and one spike on a parked Ridgeback: **1.3% of its
+health off her ground, 2.2% on it** (was 4.3% and 6.4%). The width is unchanged. Test:
+`territory::an_eruption_is_worth_the_blood_in_its_stain`; `haemorrhage`'s chain test now weighs
+the chain against the same frames without the spike, since a tick's eruption is a tick's worth.
+
+### 2026-10-19 — the Blood mage: a heart's ground looked gone, and could be pushed out
+
+From the owner: "hearts aren't keeping all territory connected to them from fading -- an
+important part of the game: a home base you protect by pushing your territory forward." In the
+simulation the hold worked: patches joined to a heart stopped at their last frame and stood.
+**Two things undid it.** The renderer fades a patch over its last 60 frames, so a held patch at
+its last frame was drawn at a sixtieth of its colour -- there, and invisible. And a full table
+makes way with the patch with least life left, which a held one always was, so in a busy fight
+the home base was the first ground to go.
+
+Now the world keeps which patches are held (`World::ground_held`, a bit a slot, in the
+snapshot and its hash): the renderer draws a held patch whole, and a full table makes way only
+with a patch nobody holds -- with every patch held, a new one is refused. Test:
+`territory::a_full_table_never_pushes_out_what_a_heart_holds`. The Ridgeback and hunt pins moved
+for the hash.
+
+### 2026-10-19 — the Blood mage: a long fight stopped making stains
+
+From the owner: "if you keep playing long enough new bloodstains stop spawning." **A cap, and
+the wrong thing giving way at it.** She could have 8 stains (`Pools at once`); past that, new
+blood was poured into her newest stain, wherever it was -- so once 8 were down, nothing new
+appeared where blood was spilled, and the stain that took it grew rather than drained. Walking
+through a stain at full health stopped drinking it the same day (the Well was cut), so stains
+lasted longer and the 8 filled for good.
+
+Now `Pools at once` is 32 (its knob reaches 64), and past it **her oldest stain makes way**,
+bleeding into her ground where it stood as a fading stain does; the new one is where the blood
+was spilled (`essence::past_the_cap_her_oldest_stain_makes_way`, which fails on the old rule).
+
+A twenty-minute run of random presses, measuring the tables, found the same shape of trouble
+in her ground: 48 patches, full within a minute and full for the rest. **Her ground now holds
+128 patches**, and the snapshot's cap went from 21 KiB to 22 KiB for it (the owner's call: none
+of it is sent over the network, only inputs are). A heart's hold is a 128-bit mask, and the
+per-frame "who touches whom" no longer takes a root.
+
+**The size was not the cause, and 128 filled too.** Looked at, the full table was 127 patches
+whose middles sat inside a bigger patch of hers -- ground laid over ground, piled up, and a
+heart holding the pile for good. So a patch laid with its middle inside one of hers now grows
+that one (to the widest patch) rather than taking a slot, and a patch wholly inside another of
+hers is dropped each frame, the one round it keeping the longer life. The same twenty minutes
+then used 58 patches at three minutes rather than 128 -- and still filled by six, every patch
+held, because a heart holds what is joined to it forever and the run kept joining more. So the
+last rule: **with every patch of hers held, the one furthest from any heart of hers makes way**
+-- the edge of the held field, never the base -- and new ground still goes down where she
+fights (`territory::with_every_patch_held_the_one_furthest_from_her_hearts_makes_way`). A
+spark laid where she already has ground merges, so this is rare.

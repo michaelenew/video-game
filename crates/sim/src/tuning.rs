@@ -2427,9 +2427,9 @@ pub fn pool_drain() -> i32 {
     oven::scalar(Scalar::PoolDrain)
 }
 
-/// How many pools one Blood mage can have on the floor. A further one merges
-/// into the newest. The Elementalist's cap, for the Elementalist's reason:
-/// readability in third person matters more than the combo ceiling.
+/// How many pools one Blood mage can have on the floor. Past it her oldest
+/// makes way (2026-10-19; it used to be the new blood that merged into her
+/// newest, so a long fight stopped making stains where blood was spilled).
 pub fn pool_cap() -> usize {
     oven::scalar(Scalar::PoolCap).clamp(1, crate::effects::MAX_EFFECTS as i32) as usize
 }
@@ -4843,4 +4843,12 @@ pub fn spike_hit_erupts() -> Fx {
 /// chain of blasts, one setting off the next.
 pub fn erupt_spread() -> u16 {
     oven::scalar(Scalar::EruptSpread).max(1) as u16
+}
+
+/// **An eruption out of a stain is worth the blood in it** (2026-10-19),
+/// times this: a bleed tick's small stain is a small blast, a big pool a big
+/// one. Before, every stain erupted for the spike's row whatever its size,
+/// and a bleed's scattered ticks went up as a minefield.
+pub fn stain_erupts() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StainErupts).max(0))
 }

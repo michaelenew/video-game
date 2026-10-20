@@ -723,12 +723,6 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
         let waist = along.scale(torso.mul(fx(-1, 6)));
         let a = r.bone("abdomen", root, waist, 0);
         let sac = g.minors.back == Back::Sacs;
-        let tilt = if sac { fx(1, 24) } else { Fx::ZERO }.add(d.abdomen);
-        let dir = v3(
-            cos_turns(tilt.sub(pitch)).neg(),
-            sin_turns(tilt.sub(pitch)),
-            Fx::ZERO,
-        );
         let (half_len, half_up, half_across) = if sac {
             (
                 torso.mul(fx(3, 4)),
@@ -742,6 +736,27 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                 half_w.mul(fx(9, 10)),
             )
         };
+        // **Held off the floor** (2026-10-19). It trailed at the torso's
+        // own pitch, so an upright torso -- a mantis's, nose up -- drove it
+        // down into the ground (the Mantis's own, 0.8 m under). An abdomen
+        // is carried: it points down a little at most, whatever the torso
+        // does, and further up if its underside would still touch the floor
+        // standing.
+        let tilt = if sac { fx(1, 24) } else { Fx::ZERO }.add(d.abdomen);
+        let rest = q.root.add(bob).add(waist.y);
+        let depth = half_up.max(half_across);
+        let under = |angle: Fx| {
+            let (sa, ca) = (sin_turns(angle), cos_turns(angle));
+            rest.add(half_len.mul(sa).mul(fx(9, 10)))
+                .sub(half_len.mul(sa.abs()))
+                .sub(depth.mul(ca.abs()))
+        };
+        let clear = q.root.mul(fx(3, 20));
+        let mut angle = tilt.sub(pitch).max(fx(-1, 24));
+        while under(angle) < clear && angle < fx(1, 8) {
+            angle = angle.add(fx(1, 96));
+        }
+        let dir = v3(cos_turns(angle).neg(), sin_turns(angle), Fx::ZERO);
         let centre = dir.scale(half_len.mul(fx(9, 10)));
         r.along(
             "abdomen",
@@ -1013,6 +1028,8 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
         }
     }
     let hang = half_h.mul(super::posture::ATTACH_DOWN);
+    // How far each pair steps out of its neighbours' way.
+    let room = out_of_the_way(g, q, &p, pitch, hang);
     for station in Station::ALL {
         let i = station.index();
         let Some(pair) = g.pair(station) else {
@@ -1283,9 +1300,20 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                         .sub(reach.mul(reach).mul(fx(1, 4)))
                         .max(Fx::ZERO)
                         .sqrt();
+                    // Stepping out of a neighbour's way: further out, the
+                    // knee a little higher (`out_of_the_way`).
+                    let (_, widen) = room[i];
                     (
-                        v3(reach.mul(fx(1, 2)), Fx::ZERO, out.mul(sd)),
-                        v3(reach.mul(fx(1, 2)), down.neg(), Fx::ZERO),
+                        v3(
+                            reach.mul(fx(1, 2)),
+                            widen.mul(fx(1, 2)),
+                            out.add(widen).mul(sd),
+                        ),
+                        v3(
+                            reach.mul(fx(1, 2)),
+                            down.neg().sub(widen.mul(fx(1, 2))),
+                            Fx::ZERO,
+                        ),
                     )
                 }
                 _ => {
@@ -1302,11 +1330,30 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                     );
                     let (nx, ny) = (uy.neg(), ux);
                     let bend = if fore { h.neg() } else { h };
+                    // **Out of the next pair's way** (2026-10-19). The joint
+                    // bends in the body's own plane, as every other pair's
+                    // does, so a long limb bent deep at rest swung its knee
+                    // into the next pair and they passed through each other
+                    // walking. Where the knee, standing, would reach past
+                    // halfway to a neighbouring pair, it turns out from the
+                    // body instead -- the more it would cross, the further,
+                    // as an elbow held out does (a walking wing's is) --
+                    // and keeps that turn through the stride.
+                    let (turn, widen) = room[i];
+                    let (keep, side_out) = (cos_turns(turn), sin_turns(turn));
                     let mid = v3(reach.mul(fx(1, 2)), down.neg().mul(fx(1, 2)), Fx::ZERO);
-                    let knee = v3(mid.x.add(nx.mul(bend)), mid.y.add(ny.mul(bend)), Fx::ZERO);
+                    let knee = v3(
+                        mid.x.add(nx.mul(bend).mul(keep)),
+                        mid.y.add(ny.mul(bend).mul(keep)),
+                        bend.abs().mul(side_out).add(widen).mul(sd),
+                    );
                     (
                         knee,
-                        v3(reach.sub(knee.x), down.neg().sub(knee.y), Fx::ZERO),
+                        v3(
+                            reach.sub(knee.x),
+                            down.neg().sub(knee.y),
+                            widen.mul(sd).sub(knee.z),
+                        ),
                     )
                 }
             };
@@ -1397,6 +1444,136 @@ fn arm_pose(a: Fx, upper: [Key; 3], lower: [Key; 3]) -> ((Fx, Fx), (Fx, Fx)) {
 type Key = ((i32, i32), (i32, i32));
 
 /// A wing's arm: the humerus and forearm, as shares of the wing. The hand
+/// **Out of each other's way** (2026-10-19): for each pair, how far (turns,
+/// nought to a fifth) its knee turns out from the body's plane, and how
+/// far (metres) its foot steps out to the side.
+///
+/// Every pair bends in the body's own plane, so where two neighbouring
+/// pairs reach toward each other -- a long limb bent deep, or a stride
+/// that swings a fore foot back as the hind one comes forward -- they
+/// passed through each other. Each pair's reach along the body is worked
+/// out from how it stands, plus the furthest a stride swings a foot
+/// (`locomotion::MAX_REACH`), so it holds through the walk; where two
+/// pairs' reaches overlap, one of them -- the longer limb, or the hinder
+/// on a tie -- holds its knee out from the body and steps outside the
+/// other, as an elbow held out does (a walking wing's is), the more the
+/// further they would cross. Wings and limbs that do not stand are only
+/// in the way, never moved.
+fn out_of_the_way(
+    g: &Genome,
+    q: &super::posture::Posture,
+    p: &Proportions,
+    pitch: Fx,
+    hang: Fx,
+) -> [(Fx, Fx); super::STATIONS] {
+    #[derive(Clone, Copy)]
+    struct Reach {
+        /// Where its hip is front to back, on the floor's line: a body
+        /// pitched up stacks its pairs closer than they sit along it.
+        attach: Fx,
+        ahead: Fx,
+        behind: Fx,
+        girth: Fx,
+        limb: Fx,
+        moves: bool,
+    }
+    let mut out = [(Fx::ZERO, Fx::ZERO); super::STATIONS];
+    let reaches: [Option<Reach>; super::STATIONS] = core::array::from_fn(|i| {
+        let station = Station::ALL[i];
+        let pair = g.pair(station)?;
+        let pose = q.stations[i];
+        let (limb, girth) = (p.limb[i], p.girth[i]);
+        let half_limb = limb.mul(fx(1, 2));
+        if pair.role == Role::Wing || pair.build == Build::Spindle || !pose.grounded {
+            // In the way, as it is held: a striking limb forward.
+            let ahead = if pose.grounded || pair.role == Role::Wing {
+                girth
+            } else {
+                half_limb
+            };
+            return Some(Reach {
+                attach: pose.attach.mul(cos_turns(pitch)),
+                ahead,
+                behind: girth.neg(),
+                girth,
+                limb,
+                moves: false,
+            });
+        }
+        let fore = matches!(station, Station::Fore | Station::MidFore);
+        let hip_y = q.root.add(pose.attach.mul(sin_turns(pitch))).sub(hang);
+        let standing = super::posture::standing_length(g.stance, pair.build, false, limb);
+        let reach = pose.reach;
+        let knee = if super::posture::splayed(g.stance, pair.build) {
+            reach.mul(fx(1, 2))
+        } else {
+            let d = hip_y
+                .mul(hip_y)
+                .add(reach.mul(reach))
+                .sqrt()
+                .min(standing)
+                .max(fx(1, 100));
+            let h = half_limb
+                .mul(half_limb)
+                .sub(d.mul(d).mul(fx(1, 4)))
+                .max(Fx::ZERO)
+                .sqrt();
+            let bend = if fore { h.neg() } else { h };
+            reach.mul(fx(1, 2)).add(hip_y.div(d).mul(bend))
+        };
+        let stride = standing.mul(super::locomotion::MAX_REACH);
+        Some(Reach {
+            attach: pose.attach.mul(cos_turns(pitch)),
+            ahead: knee.max(reach.add(stride)),
+            behind: knee.min(reach.sub(stride)),
+            girth,
+            limb,
+            moves: true,
+        })
+    });
+    // Twice through, so a step out to clear one pair is cleared in turn
+    // by the next: each steps outside the other's line, not its old one.
+    for _ in 0..2 {
+        for i in 0..super::STATIONS {
+            for j in 0..super::STATIONS {
+                let (Some(a), Some(b)) = (reaches[i], reaches[j]) else {
+                    continue;
+                };
+                // `a` the one in front.
+                if i == j || a.attach <= b.attach {
+                    continue;
+                }
+                let overlap = b
+                    .attach
+                    .add(b.ahead)
+                    .sub(a.attach.add(a.behind))
+                    .add(a.girth)
+                    .add(b.girth);
+                if overlap <= Fx::ZERO {
+                    continue;
+                }
+                let (k, other) = match (a.moves, b.moves) {
+                    (false, false) => continue,
+                    (true, false) => (i, j),
+                    (false, true) => (j, i),
+                    _ if a.limb > b.limb => (i, j),
+                    _ => (j, i),
+                };
+                // Clear of the other's thickness as soon as they overlap by
+                // as much: a little crossing is as solid a hit as a lot.
+                let share = overlap
+                    .div(a.girth.add(b.girth).max(fx(1, 100)))
+                    .min(Fx::ONE);
+                let widen = out[other]
+                    .1
+                    .add(share.mul(a.girth.add(b.girth)).mul(fx(6, 5)));
+                out[k] = (out[k].0.max(share.mul(fx(1, 5))), out[k].1.max(widen));
+            }
+        }
+    }
+    out
+}
+
 /// and its primaries are the other half: a wing's span is mostly hand.
 pub fn wing_arm(limb: Fx) -> (Fx, Fx) {
     (limb.mul(fx(1, 5)), limb.mul(fx(3, 10)))

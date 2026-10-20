@@ -505,7 +505,7 @@ scalars! {
     SweepTip,         "Blood mage", "Sweep, tip as a share of the reach",     Fixed, 0,        fx(1,1);
     SweepTipDamage,   "Blood mage", "Sweep, tip damage (x)",                  Fixed, fx(1,1),  fx(4,1);
     PoolDrain,        "Blood mage", "Pool drains (volume per second)",        Int,   0,        600;
-    PoolCap,          "Blood mage", "Pools at once",                          Int,   1,        8;
+    PoolCap,          "Blood mage", "Pools at once",                          Int,   1,        64;
     PoolLock,         "Blood mage", "Crosshair lock on a pool",               Fixed, 0,        fx(6,1);
     SpikeErupt,       "Blood mage", "Black spike, eruption lasts",            Frames, 1,       120;
     // A pool is a shadowy figure the size of the body it came out of, and it
@@ -1177,6 +1177,10 @@ scalars! {
     // reaches as it goes. See `docs/design/kits/blood-mage.md`.
     SpikeHitErupts,       "Blood mage", "Black spike, a hit erupts for (x what it dealt)",  Fixed, 0, fx(2,1);
     EruptSpread,          "Blood mage", "Black spike, an eruption spreads out over",        Frames, 1, 30;
+    // **An eruption is worth its stain** (2026-10-19): its blow is the blood
+    // in the stain times this, not the spike's row -- a bleed tick's small
+    // stain is a small blast, a big pool a big one.
+    StainErupts,          "Blood mage", "Black spike, a stain erupts for (x its blood)",    Fixed, 0, fx(4,1);
     // **The Reaping** (2026-10-19): how long the picture of a cash-in at a
     // full tally plays. Presentation that lives in the snapshot, because its
     // clock has to survive a rollback.

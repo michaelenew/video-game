@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 708] = [
+pub const SCALARS: [i32; 709] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -267,7 +267,7 @@ pub const SCALARS: [i32; 708] = [
            42598, // blood_mage.sweep,_tip_as_a_share_of_the_reach = 0.65
            98304, // blood_mage.sweep,_tip_damage_(x) = 1.5
                5, // blood_mage.pool_drains_(volume_per_second) = 5
-               8, // blood_mage.pools_at_once = 8
+              32, // blood_mage.pools_at_once = 32
            98304, // blood_mage.crosshair_lock_on_a_pool = 1.5
               20, // blood_mage.black_spike,_eruption_lasts = 20
              110, // blood_mage.pool,_full-sized_at_volume = 110
@@ -715,6 +715,7 @@ pub const SCALARS: [i32; 708] = [
          1966080, // roam.out,_the_world_moves_to_a_nearer_place_by_(m) = 30
            32768, // blood_mage.black_spike,_a_hit_erupts_for_(x_what_it_dealt) = 0.5
                8, // blood_mage.black_spike,_an_eruption_spreads_out_over = 8
+           65536, // blood_mage.black_spike,_a_stain_erupts_for_(x_its_blood) = 1
               60, // reaver.cash-in,_the_reaping_plays_for = 60
 ];
 

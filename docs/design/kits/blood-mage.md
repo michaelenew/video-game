@@ -73,6 +73,10 @@ spike sets them off.
 - **A bleed is worth more than a spike.** The Thorn lash and its bleed are 30 + 8 × 25 = 230;
   a tapped spike and its eruption are 80 + 40 = 120. The bleed takes its time and the bolt
   has to land; the spike cashes it in (`territory::one_bleed_is_worth_more_than_one_spike`).
+- **An eruption is worth its stain** (`Black spike, a stain erupts for (x its blood)`, ×1,
+  since the same day): its blow is the blood that was in the stain, not the spike's row. A bleed
+  tick's stain of 25 erupts for 25 and a pool of 200 for 200; before, every stain erupted for 150
+  whatever its size, and a bleed's scattered ticks went up as a minefield.
 - **An eruption spreads.** It comes up small and reaches its full size over `Black spike, an
   eruption spreads out over` (8 frames) (`Effect::spike_volume`), hitting what its edge reaches
   as it goes. Every stain of hers its edge comes within `Black spike, an eruption sets off
@@ -93,6 +97,14 @@ spike sets them off.
 - **A heart holds the ground joined to it** (`ground::step`): a patch joined to one of her
   hearts, through any run of patches and stains, still ages but never runs out. When the heart
   goes, what had run out goes on the next frame; the rest keeps what it had left.
+  Which patches are held is kept on the world (`World::ground_held`): a held patch is **drawn
+  whole** however little life it has left, and a full table **never makes way with one** -- a
+  spark laid anywhere else is refused before a home base is pushed out.
+- **Past `Pools at once` (32), her oldest stain makes way**, into her ground where it stood;
+  the new stain is where the blood was spilled. (It used to be the new blood that merged into
+  her newest stain, and a long fight stopped making stains.) Her ground holds 128 patches; one laid with its middle inside another of hers grows that one,
+  one wholly inside another goes, and with every patch held the one furthest from her hearts
+  makes way for new ground.
 - **The Well is gone.** Her finishers spend her grey alone. A stain she walks through gives her
   only what her grey can hold and stays on the floor with the rest, so at full health she
   walks through her stains and leaves them as ground and as spike fodder.
@@ -121,7 +133,7 @@ swim, hearts and her thralls on her ground; `tests/blood_mage.rs` the clicks.
 ### Her ground
 
 **One substance, in patches** (`sim::ground`, `World::ground`): discs on the floor with an owner
-and the frames each has left -- forty-eight of sixteen bytes, a table of its own in the snapshot
+and the frames each has left -- a hundred and twenty-eight of sixteen bytes (forty-eight until 2026-10-19), a table of its own in the snapshot
 so a fight's effects do not make room for it. It comes from three places:
 
 - **Her moves, where they touch** (`World::lay_touch`): every spike and eruption, the Stake's

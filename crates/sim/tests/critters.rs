@@ -59,7 +59,7 @@ fn a_critter_is_fifty_six_bytes_and_a_full_pack_fits_the_snapshot() {
     // the mount names any creature slot in two bytes rather than four in one.
     assert_eq!(std::mem::size_of::<Critter>(), 56);
     let world = std::mem::size_of::<World>();
-    assert!(world <= 21 * 1024, "a World is {world} bytes");
+    assert!(world <= 22 * 1024, "a World is {world} bytes");
     // Every slot full: the Gnawers' coop pack is ten, the most there is.
     let mut w = gnats(Class::Champion);
     for i in 0..MAX_CRITTERS {
