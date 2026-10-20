@@ -260,27 +260,27 @@ fn walk(clip: Clip, travel: Travel) -> Recipe {
     // The arms swing from the shoulder, loosely, a hand's width off the
     // body: back nearly straight, forward with the elbow softening.
     let contact = torso(-0.070, 11.0, 1.5, 3.0)
-        .shoulder_l(-26.0, 15.0, 0.0)
+        .shoulder_l(-32.0, 15.0, 0.0)
         .elbow_l(16.0)
-        .shoulder_r(30.0, 14.0, 0.0)
+        .shoulder_r(24.0, 14.0, 0.0)
         .elbow_r(38.0);
     // Down: the weight is taken and the hips reach their lowest.
     let down = torso(-0.095, 5.0, 2.5, 4.0)
-        .shoulder_l(-18.0, 15.0, 0.0)
+        .shoulder_l(-24.0, 15.0, 0.0)
         .elbow_l(14.0)
-        .shoulder_r(21.0, 14.0, 0.0)
+        .shoulder_r(15.0, 14.0, 0.0)
         .elbow_r(32.0);
     // Passing: the swinging leg comes under the body, the hips rise.
     let passing = torso(-0.048, -1.0, 2.0, 0.0)
-        .shoulder_l(-2.0, 14.0, 0.0)
+        .shoulder_l(-8.0, 14.0, 0.0)
         .elbow_l(18.0)
-        .shoulder_r(4.0, 14.0, 0.0)
+        .shoulder_r(-2.0, 14.0, 0.0)
         .elbow_r(22.0);
     // Up: the standing leg straightens into its push, the swing leg reaches.
     let up = torso(-0.036, -9.0, 0.5, -1.5)
-        .shoulder_l(17.0, 14.0, 0.0)
+        .shoulder_l(11.0, 14.0, 0.0)
         .elbow_l(30.0)
-        .shoulder_r(-19.0, 15.0, 0.0)
+        .shoulder_r(-25.0, 15.0, 0.0)
         .elbow_r(16.0);
 
     let shapes = [
@@ -364,29 +364,34 @@ fn run(clip: Clip, travel: Travel) -> Recipe {
     // comes up to the chest with the elbow closed, the back one swings past
     // the hip with it open. An elbow held at a right angle while the upper
     // arm barely moved was the tray-carrying run this replaced.
+    //
+    // The swing is measured from the chest, which leans a run's lean, so the
+    // arc is set back by about that much: even about the *upright*, in front
+    // and behind. Centred on the chest instead, both hands rode in front of
+    // her, and the back one sat on her hip.
     let contact = torso(-0.040, 15.0, 2.0, 4.0)
-        .shoulder_l(-46.0, 20.0, 0.0)
-        .elbow_l(96.0)
-        .shoulder_r(56.0, 18.0, 0.0)
-        .elbow_r(74.0);
+        .shoulder_l(-64.0, 20.0, 0.0)
+        .elbow_l(80.0)
+        .shoulder_r(40.0, 18.0, 0.0)
+        .elbow_r(70.0);
     let absorb = torso(-0.088, 7.0, 3.0, 6.0)
-        .shoulder_l(-32.0, 20.0, 0.0)
-        .elbow_l(92.0)
-        .shoulder_r(42.0, 18.0, 0.0)
-        .elbow_r(78.0);
+        .shoulder_l(-50.0, 20.0, 0.0)
+        .elbow_l(78.0)
+        .shoulder_r(28.0, 18.0, 0.0)
+        .elbow_r(72.0);
     // Drive: the last of the stance, up on the toe and pushing back.
     let drive = torso(-0.016, -5.0, 1.0, 1.0)
-        .shoulder_l(14.0, 19.0, 0.0)
-        .elbow_l(82.0)
-        .shoulder_r(-14.0, 19.0, 0.0)
-        .elbow_r(86.0);
+        .shoulder_l(-4.0, 19.0, 0.0)
+        .elbow_l(76.0)
+        .shoulder_r(-32.0, 19.0, 0.0)
+        .elbow_r(80.0);
     // Flight: both feet off the ground and the body at its highest. Without
     // this shape the clip is a fast walk, and a viewer can tell at a glance.
     let flight = torso(0.028, -14.0, -0.5, -2.0)
-        .shoulder_l(48.0, 18.0, 0.0)
-        .elbow_l(72.0)
-        .shoulder_r(-44.0, 20.0, 0.0)
-        .elbow_r(98.0);
+        .shoulder_l(34.0, 18.0, 0.0)
+        .elbow_l(70.0)
+        .shoulder_r(-62.0, 20.0, 0.0)
+        .elbow_r(80.0);
 
     let shapes = [
         (0.0, contact),
