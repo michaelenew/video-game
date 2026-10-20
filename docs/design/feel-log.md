@@ -9497,3 +9497,8 @@ wooden posts and its 1.5 m wall), which fails with both knobs at nought.
 bottom, a drop that short; the Sky Road's stones (1.2–1.5 m thick) and the courses' islands'
 sides are never walls; a slab 2 m thick is a wall for the 0.3 m the body is wholly beside it.
 **Verdict** open -- unplayed.
+**What it cost the search** (`tests/fixtures/envelope.txt`): four stored lines had been kicking
+off or sliding down the lab's ledges where the 3 m slab covered only part of the body; they were
+re-searched (`envelope search --class`) and replaced, every other line kept. The Elementalist's
+best onto the +8 m ledge fell from 33.4 m to 27.7 m (shared blocks 32.2 to 20.5); the Champion's
+two moved by under a metre. One Blood mage line lost 2 cm.
