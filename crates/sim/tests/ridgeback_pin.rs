@@ -192,13 +192,18 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// for the body, so it stands differently where a top is narrow -- the
 /// platforms' edges, the Elementalist's stones. Re-pinned once more on merging
 /// main's Elementalist pass above.
+/// **Every class again later on 2026-10-21, for the hash**: `state_checksum`
+/// holds `Player::thrown` and `Player::taken`, the knockback rules between
+/// fighters (`docs/design/stun.md`). With those two lines out, every hunt
+/// reproduced the pin above exactly: no rule of them reaches a creature's
+/// fight.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xc9aeada703d9903d),
-    (Class::Bulwark, 0x76869afd57557183),
-    (Class::ShadowReaver, 0xf38da36ffa8d8baf),
-    (Class::BloodMage, 0xf8141302e4e18fb1),
-    (Class::DualMage, 0x510e33528d365dc1),
-    (Class::Elementalist, 0xc32f72e9884a63d8),
+    (Class::Champion, 0xc2f705a2763aac1d),
+    (Class::Bulwark, 0xf91179c141549863),
+    (Class::ShadowReaver, 0x27430b980165d9cf),
+    (Class::BloodMage, 0x1846765ec0e3ac51),
+    (Class::DualMage, 0x55307ee570d15601),
+    (Class::Elementalist, 0x198c66ddf7761b18),
 ];
 
 #[test]

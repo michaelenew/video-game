@@ -1379,9 +1379,21 @@ pub fn update(
 
     for (tag, mut text) in states.iter_mut() {
         let p = &sim.cur.players[seat(&sim, tag.0)];
+        // Between fighters, how far the next blow throws this one, where Smash
+        // shows its percent: the number that decides whether a hit is a shove
+        // or a round ender. See `docs/design/stun.md`.
+        let name = if sim.cur.pvp() {
+            format!(
+                "{}   launch x{:.1}",
+                p.class.name(),
+                sim::state::launch_scale(p).to_f32_for_render()
+            )
+        } else {
+            p.class.name().to_string()
+        };
         set_text(
             &mut text,
-            format!("{}\n{}\n{}", p.class.name(), describe(p), mechanic(p)),
+            format!("{}\n{}\n{}", name, describe(p), mechanic(p)),
         );
     }
 

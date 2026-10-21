@@ -104,8 +104,16 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                 // beats a crouch is a property of the move rather than of its
                 // geometry. A sphere would imply a vertical extent the rules
                 // do not have.
-                let at = Vec3::new(v3(hb.centre()).x, pos.y, v3(hb.centre()).z);
-                cylinder(&mut gizmos, at, radius, body_height(), colour);
+                // A strip (the Reave's, reaching back to her body) is drawn
+                // as its two ends and its middle, which is what it is tested
+                // as: the floor distance to the line between them.
+                for end in [hb.from, hb.centre(), hb.to] {
+                    let at = Vec3::new(v3(end).x, pos.y, v3(end).z);
+                    cylinder(&mut gizmos, at, radius, body_height(), colour);
+                    if hb.from == hb.to {
+                        break;
+                    }
+                }
             } else if hb.is_a_beam() && hb.radius.to_f32_for_render() < 0.35 {
                 // A line, drawn as the line it is: from where the shot leaves
                 // her to wherever it stopped, at whatever angle it was fired.

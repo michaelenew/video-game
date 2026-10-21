@@ -168,6 +168,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
 | [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
+| [stun.md](stun.md) | What a hit does between fighters: the swell (knockback grows as a bar empties), weight, the string's decay, steering a launch | **Built 2026-10-21**, unplayed |
 | [blood-mage.md](blood-mage.md) | v1 kit: grey health, essence pools, the scythe, the blink | **Built 2026-09-23**, unplayed |
 | [dual-mage.md](dual-mage.md) | Two bars, the hill between them, the depth curve, the tiers, ascension and the wings; the single bar under "Was" | **Built 2026-09-23**, unplayed |
 | [dual-mage-v2.md](dual-mage-v2.md) | The proposal the two bars were built from | Built; folded into dual-mage.md |

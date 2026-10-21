@@ -660,6 +660,18 @@ pub struct Player {
     /// worth more than one thrown standing. Zero outside a Slam. See
     /// `crate::bulwark::track_fall`.
     pub slam_fall: Fx,
+    /// Upward speed a grab banked, spent when the hold lets go.
+    ///
+    /// A held fighter has their velocity zeroed every frame by
+    /// `drag_the_held`, so a launch handed to them on contact would be gone
+    /// before it moved them. It waits instead: held, you go where your captor
+    /// goes; let go, and you are thrown. See `docs/design/stun.md`.
+    pub thrown: Fx,
+    /// Blows from a fighter taken without getting a turn back: the length of
+    /// the string this fighter is in. Each one keeps less of the hitstun
+    /// swell (`tuning::combo_decay`), and it is cleared the moment they are
+    /// free to act again.
+    pub taken: u8,
 
     // -- Animation clocks ---------------------------------------------------
     //
@@ -1547,6 +1559,8 @@ impl Default for Player {
             hauled_in: false,
             slam: Fx::ZERO,
             slam_fall: Fx::ZERO,
+            thrown: Fx::ZERO,
+            taken: 0,
             stride: 0,
             air_frames: 0,
             since_landed: 0,
@@ -4367,6 +4381,14 @@ impl Hitbox {
             .add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))
     }
 
+    /// The point of a flat volume nearest `at` along the floor: its one
+    /// point for a disc, and the nearest point of the strip for one stretched
+    /// from her body (the Reave's, see [`hitbox`]). A flat volume is tested
+    /// by the floor distance from here; everything that tests one asks this.
+    pub fn flat_nearest(&self, at: V3) -> V3 {
+        crate::math::flat_segment_nearest(at, self.from, self.to)
+    }
+
     /// Is this volume a line rather than a bubble?
     pub fn is_a_beam(&self) -> bool {
         self.from != self.to
@@ -4499,6 +4521,21 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             moves::Shape::Cylinder if p.stoop.raw() < 0 => {
                 return Some(disc(p.pos.add(p.facing.scale(m.reach))));
             }
+            // **The Reave's cut reaches back to her** (2026-10-21, from
+            // play): its dash is a fixed 2.5 m, so thrown from on top of
+            // somebody it ran her onto them and the disc landed past them --
+            // a whiff, and only the shadow's copy connected, which marks
+            // rather than cashes. 0013 says the cut is plain from there, not
+            // gone: so the disc is stretched into a strip from her body,
+            // and only its far end is the sweet spot (`reave_sweet`).
+            moves::Shape::Cylinder
+                if p.class == Class::ShadowReaver && kind == moves::reaver::REAVE =>
+            {
+                return Some(Hitbox {
+                    from: p.pos,
+                    ..disc(p.pos.add(p.aim_dir().scale(m.reach)))
+                });
+            }
             moves::Shape::Cylinder => return Some(disc(p.pos.add(p.aim_dir().scale(m.reach)))),
             moves::Shape::Swing(plane) => {
                 // The hand stays near the body and the head of the weapon
@@ -4613,7 +4650,8 @@ fn reave_sweet(
     if attacker.class != Class::ShadowReaver || kind != moves::reaver::REAVE {
         return Fx::ONE;
     }
-    if inside(box_out.centre(), t::reave_sweet()) {
+    // The middle of the cut's disc, at the far end of its strip.
+    if inside(box_out.to, t::reave_sweet()) {
         t::reave_sweet_damage()
     } else {
         Fx::ONE
@@ -4842,7 +4880,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         // The original rule, kept for every move that has not been given a
         // shape: flat distance from the middle of the disc, with no top and no
         // bottom. You cannot duck under one of these or jump over it.
-        let delta = defender.pos.sub(box_out.centre());
+        let delta = defender.pos.sub(box_out.flat_nearest(defender.pos));
         delta.flat_len().raw() <= reach.raw()
     } else {
         // A capsule against a standing body. Height genuinely decides this
@@ -5120,6 +5158,11 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     let Some(hit) = brace_the_rush(defender, hit) else {
         return;
     };
+    // **A blow one fighter landed on another.** The swell, weight and the
+    // string are all about two fighters running along bars of the same size;
+    // a creature's blow, a critter's or a hazard's does exactly what its table
+    // says. See `docs/design/stun.md`.
+    let duel = (hit.by as usize) < MAX_PLAYERS;
     // Taken on the shield, either way: stored as weight. A parry stores more.
     // See `crate::bulwark` -- this is the one place a blocked blow is
     // resolved, which is why the creature's blows load it without asking.
@@ -5141,7 +5184,16 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             };
         }
         // A heavy shield moves less. One at empty, `heavy_pushback` at the cap.
+        //
+        // And a heavy *class* moves less, between fighters: the same weight
+        // that divides a hit divides a blocked one. Blocked pushback never
+        // swells -- the swell is about damage taken, and a block takes none.
         let knockback = hit.knockback.mul(bulwark::pushback(defender));
+        let knockback = if duel {
+            knockback.div(t::weight_of(defender.class))
+        } else {
+            knockback
+        };
         defender.vel.x = hit.dir.x.mul(knockback);
         defender.vel.z = hit.dir.z.mul(knockback);
     } else {
@@ -5149,37 +5201,71 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         if hit.damage > 0 {
             hurt_the_momentum(defender);
         }
-        defender.vel.x = hit.dir.x.mul(hit.knockback);
-        defender.vel.z = hit.dir.z.mul(hit.knockback);
+        // **How far a fighter's blow throws another**: swelled by what the
+        // victim has already lost -- read after this blow's damage, so the
+        // killing blow carries the largest swell there is -- and divided by
+        // what they weigh. One multiplier for the whole launch, sideways and
+        // up alike, so a move keeps the angle it was authored with and only
+        // the distance grows. A creature's blow does what its table says.
+        //
+        // The shove starts above the table at full health and climbs to the
+        // same ceiling (`tuning::swell_start`); the launch starts at the
+        // table, because the follow-ups into the air are tuned to its height.
+        let (carry, lift_carry) = if duel {
+            let weight = t::weight_of(defender.class);
+            (
+                knockback_swell(defender, hit.damage, t::swell_start()).div(weight),
+                knockback_swell(defender, hit.damage, Fx::ONE).div(weight),
+            )
+        } else {
+            (Fx::ONE, Fx::ONE)
+        };
+        let shove = hit.knockback.mul(carry);
+        let lift = hit.launch.mul(lift_carry);
+        defender.vel.x = hit.dir.x.mul(shove);
+        defender.vel.z = hit.dir.z.mul(shove);
         if hit.grabs > 0 {
             defender.seized(hit.by, hit.grabs, 0);
+            // A grab that launches cannot do both at once: the hold zeroes
+            // their velocity every frame. The launch waits for the release.
+            defender.thrown = lift.max(Fx::ZERO);
         } else if hit.interrupts {
             // Writing the action is the interrupt, and it happens even when
             // `hitstun` is zero -- `HitStun { left: 0 }` is one frame of
             // nothing, but the move it replaced is gone. Anything that must
             // land without stopping its victim has to skip this branch rather
             // than tune the number to zero. See `Hit::interrupts`.
-            defender.stun_total = hit.hitstun;
-            defender.action = Action::HitStun { left: hit.hitstun };
+            let stun = if duel {
+                swelled_hitstun(defender, hit.hitstun)
+            } else {
+                hit.hitstun
+            };
+            if duel {
+                defender.taken = defender.taken.saturating_add(1);
+            }
+            defender.stun_total = stun;
+            defender.action = Action::HitStun { left: stun };
         }
         // Anything that is not itself a spike clears one that was banked: being
         // caught on the way down and thrown somewhere else is not the landing
         // the spike was charging for.
         defender.slam = Fx::ZERO;
-        if hit.launch.raw() > 0 {
+        if hit.grabs > 0 {
+            // Banked above; the hold decides where they go until it ends.
+        } else if lift.raw() > 0 {
             // Taken off the ground. Launch *sets* vertical speed rather than
             // adding to it, so being hit on the way down does not cancel out.
-            defender.vel.y = hit.launch;
+            defender.vel.y = lift;
             defender.grounded = false;
-        } else if hit.launch.raw() < 0 {
+        } else if lift.raw() < 0 {
             // Spiked. The same rule pointed the other way, and the speed is
             // banked so that the landing can charge for it -- see
             // `Player::slam`. Terminal velocity is what the ground actually
             // sees, so banking the intent rather than the arrival would
             // overstate it.
-            defender.vel.y = hit.launch;
+            defender.vel.y = lift;
             defender.grounded = false;
-            defender.slam = hit.launch.abs();
+            defender.slam = lift.abs();
         }
     }
     // Whatever else it did, it broke the dash -- the Champion's Rush, and the
@@ -5202,6 +5288,63 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         // it. The arms let go.
         defender.haul = 0;
     }
+}
+
+/// The share of a fighter's own bar already gone: zero untouched, one at
+/// death. Smash's percent, upside down.
+fn hurt(p: &Player) -> Fx {
+    let full = p.full_health().max(1);
+    Fx::ratio((full - p.health).clamp(0, full), full)
+}
+
+/// What a fighter's blow is multiplied by against this victim, before their
+/// weight: `start` at full health, rising in a straight line to the ceiling
+/// at death.
+///
+/// The ceiling has two terms, as Smash has: one for dying at all, the other
+/// for the share of their bar this blow took, so a committed move scales
+/// harder against a hurt opponent than a poke does. A start above one is a
+/// slower climb to the same ceiling, never a higher one.
+fn knockback_swell(victim: &Player, damage: i32, start: Fx) -> Fx {
+    let full = victim.full_health().max(1);
+    let share = Fx::ratio(damage.clamp(0, full), full);
+    let ceiling = Fx::ONE
+        .add(t::swell_knockback())
+        .add(t::swell_blow().mul(share));
+    let rise = ceiling.sub(start).max(Fx::ZERO);
+    start.add(hurt(victim).mul(rise))
+}
+
+/// How much further this fighter would be thrown than an untouched one: the
+/// readable half of the swell, for the HUD, where Smash shows its percent. It
+/// leaves out the blow's own term, which belongs to whichever move lands next,
+/// and folds in the class's weight.
+pub fn launch_scale(p: &Player) -> Fx {
+    let ceiling = Fx::ONE.add(t::swell_knockback());
+    let start = t::swell_start();
+    start
+        .add(hurt(p).mul(ceiling.sub(start).max(Fx::ZERO)))
+        .div(t::weight_of(p.class))
+}
+
+/// A fighter's blow's hitstun, swelled by what the victim has lost.
+///
+/// Grows far more slowly than the knockback does, and the gap between the two
+/// is the combo design: stun grows and moves start to link, knockback grows
+/// faster and throws the victim out of reach again. **And it fades through a
+/// string**: each hit taken without a turn back keeps `combo_decay` of the
+/// last one's swell, so a ranged move that re-aims wherever they landed runs
+/// out of the extra frames too. Never below the move table's own number.
+fn swelled_hitstun(victim: &Player, base: u16) -> u16 {
+    let mut kept = t::swell_hitstun();
+    for _ in 0..victim.taken.min(16) {
+        kept = kept.mul(t::combo_decay());
+    }
+    let swell = Fx::ONE.add(hurt(victim).mul(kept));
+    Fx::from_int(base as i32)
+        .mul(swell)
+        .to_int()
+        .clamp(base as i32, u16::MAX as i32) as u16
 }
 
 impl World {
@@ -6176,9 +6319,22 @@ fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
         Action::Held { left } if left > 0 => Action::Held { left: left - 1 },
         Action::Held { .. } => {
             p.held_by = NOBODY;
+            p.taken = 0;
+            // Let go, and whatever the grab banked is spent now. See
+            // `Player::thrown`.
+            if p.thrown.raw() > 0 {
+                p.vel.y = p.thrown;
+                p.grounded = false;
+            }
+            p.thrown = Fx::ZERO;
             Action::Free
         }
-        Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => Action::Free,
+        Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => {
+            // Free to act again: the string is over, and the swell is whole
+            // for whatever lands next.
+            p.taken = 0;
+            Action::Free
+        }
         // Already resolved, by `step_channel`, on the frame it happened: a
         // channel is the one action whose next state needs the scene and the
         // buttons, which is more than this function is given. Reaching here
@@ -6806,9 +6962,21 @@ fn step_player(
     } else if p.action.stunned() {
         // Knockback decays rather than stopping dead, in the air as on the
         // ground. Checked before the airborne branch so a hit connecting
-        // mid-jump is not immediately steered out of.
+        // mid-jump is not handed the ordinary air control below.
         p.vel.x = p.vel.x.mul(t::stun_decay());
         p.vel.z = p.vel.z.mul(t::stun_decay());
+        // **Launched, a fighter still steers** -- the game's answer to
+        // Smash's directional influence, and the air control the player
+        // already has rather than a second mechanic beside it. The Quake
+        // projection turns a velocity without adding to it, so a launched
+        // fighter picks *where* they land and never how far. Grounded stun
+        // keeps none of it: skidding is not a moment anyone is flying
+        // through. And like the rest of the stun rules it is between fighters
+        // (`taken` counts only their blows): a creature's throw lands where
+        // the creature threw you. See `docs/design/stun.md`.
+        if steering && !p.grounded && p.taken > 0 && matches!(p.action, Action::HitStun { .. }) {
+            steer_while_stunned(p, move_dir(input.aim_turns(), ax, az), mob.air_speed);
+        }
     } else if let Some(drive) = rising {
         // **Gallows** holds its line, all three axes, with gravity off below
         // and the arena on: a ceiling or a wall stops the rise.
@@ -9184,7 +9352,15 @@ pub fn shield_hitbox(p: &Player) -> Option<Hitbox> {
 /// not of standing next to it and swinging.
 fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<usize> {
     if box_out.flat {
-        return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
+        // A disc is one point; a strip (the Reave's) is asked from its far
+        // end, the sweet spot, back toward her.
+        if box_out.from == box_out.to {
+            return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
+        }
+        return (0..=3).rev().find_map(|i| {
+            let at = crate::math::lerp3(box_out.from, box_out.to, Fx::ratio(i, 3));
+            beast.part_struck(at, box_out.radius, attacker.hurt_height())
+        });
     }
     const SAMPLES: i32 = 5;
     let thick = box_out.radius;
@@ -10492,6 +10668,25 @@ fn clamp_air_speed(p: &mut Player) {
 /// That is why strafing is expressive and holding forward is not: the game is
 /// not rewarding a faster input, it is rewarding an input aimed at the component
 /// of your motion you have not already used up.
+/// Air control at knockback speed: it turns you, it never slows you.
+///
+/// `air_accelerate` ends on the air speed cap, a rule about how fast a fighter
+/// may make *themselves* go. Knockback routinely exceeds it, so left alone,
+/// holding any direction during a launch would cut the hit short. Pressing a
+/// direction must never be worth less knockback than pressing nothing, so the
+/// flat speed is put back along the new heading; below the cap this does
+/// nothing at all.
+fn steer_while_stunned(p: &mut Player, wish: V3, wish_speed: Fx) {
+    let before = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+    air_accelerate(p, wish, wish_speed);
+    let after = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+    if after.raw() > 0 && before.raw() > after.raw() {
+        let restore = before.div(after);
+        p.vel.x = p.vel.x.mul(restore);
+        p.vel.z = p.vel.z.mul(restore);
+    }
+}
+
 fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
     let current = p.vel.x.mul(wish.x).add(p.vel.z.mul(wish.z));
     let head_room = wish_speed.sub(current);
@@ -11354,6 +11549,8 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.hauled_in as u32);
     h.write_i32(p.slam.raw());
     h.write_i32(p.slam_fall.raw());
+    h.write_i32(p.thrown.raw());
+    h.write_u32(p.taken as u32);
     h.write_u32(p.held_by as u32);
     h.write_u32(p.jump_hold as u32);
     h.write_u32(p.air_stall as u32);
@@ -17238,7 +17435,7 @@ impl World {
             let reach = hb.radius.add(radius);
             let top = V3::new(th.pos.x, th.pos.y.add(height), th.pos.z);
             let touched = if hb.flat {
-                th.pos.sub(hb.centre()).flat_len().raw() <= reach.raw()
+                th.pos.sub(hb.flat_nearest(th.pos)).flat_len().raw() <= reach.raw()
             } else {
                 crate::math::segment_gap(hb.from, hb.to, th.pos, top).raw() <= reach.raw()
             };
@@ -20421,5 +20618,204 @@ mod fury_tests {
             matches!(q.mechanic, Mechanic::Forms { recharge: 50, .. }),
             "a second hit does not"
         );
+    }
+}
+
+#[cfg(test)]
+mod knockback_tests {
+    //! The knockback rules between fighters (`docs/design/stun.md`) at the
+    //! level of one blow. What a real fight does with them is
+    //! `tests/knockback.rs`.
+    use super::*;
+
+    /// A shove and a launch to measure by: real speeds from the Oven, so
+    /// nothing here is a number of its own.
+    fn shove() -> Fx {
+        t::move_speed()
+    }
+
+    fn lift() -> Fx {
+        t::move_speed()
+    }
+
+    fn blow(by: u8) -> Hit {
+        Hit {
+            damage: 50,
+            hitstun: 20,
+            blockstun: 10,
+            knockback: shove(),
+            launch: Fx::ZERO,
+            grabs: 0,
+            by,
+            dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            blocked: false,
+            parried: false,
+            interrupts: true,
+        }
+    }
+
+    fn hurt_to(class: Class, share: (i32, i32)) -> Player {
+        let mut p = Player::new(class);
+        p.health = p.full_health() * share.0 / share.1;
+        p
+    }
+
+    #[test]
+    fn a_fighters_blow_swells_with_what_the_victim_has_lost() {
+        let mut fresh = Player::new(Class::Champion);
+        let mut hurt = hurt_to(Class::Champion, (1, 2));
+        apply_hit(&mut fresh, blow(1));
+        apply_hit(&mut hurt, blow(1));
+        assert!(
+            hurt.vel.x.raw() > fresh.vel.x.raw(),
+            "half a bar down is thrown no further: {:?} against {:?}",
+            hurt.vel.x,
+            fresh.vel.x
+        );
+        assert!(
+            hurt.stun_total > fresh.stun_total,
+            "nor held any longer: {} against {}",
+            hurt.stun_total,
+            fresh.stun_total
+        );
+        assert!(
+            fresh.stun_total >= 20,
+            "never less than the table's own stun"
+        );
+    }
+
+    #[test]
+    fn the_shove_starts_above_the_table_and_ends_where_it_did() {
+        // A Champion weighs one, so what is measured is the swell alone.
+        let mut fresh = Player::new(Class::Champion);
+        let mut nothing = blow(1);
+        nothing.damage = 0;
+        apply_hit(&mut fresh, nothing);
+        assert_eq!(
+            fresh.vel.x,
+            shove().mul(t::swell_start()),
+            "untouched, the shove is the start times the table"
+        );
+        assert!(
+            t::swell_start().raw() > Fx::ONE.raw(),
+            "and the start is above one"
+        );
+        // The killing blow: the ceiling, which the start does not move.
+        let mut last = Player::new(Class::Champion);
+        let finishing = blow(1);
+        last.health = finishing.damage;
+        apply_hit(&mut last, finishing);
+        let share = Fx::ratio(finishing.damage, last.full_health());
+        let ceiling = Fx::ONE
+            .add(t::swell_knockback())
+            .add(t::swell_blow().mul(share));
+        assert!(
+            (last.vel.x.raw() - shove().mul(ceiling).raw()).abs() < 64,
+            "at death the ceiling: {:?} against {:?}",
+            last.vel.x,
+            shove().mul(ceiling)
+        );
+    }
+
+    #[test]
+    fn a_launch_starts_at_the_table() {
+        let mut p = Player::new(Class::Champion);
+        let mut up = blow(1);
+        up.damage = 0;
+        up.launch = lift();
+        apply_hit(&mut p, up);
+        assert_eq!(p.vel.y, lift(), "the follow-ups are tuned to it");
+    }
+
+    #[test]
+    fn a_creatures_blow_does_what_its_table_says() {
+        for by in [QUARRY, NOBODY] {
+            let mut p = hurt_to(Class::DualMage, (1, 4));
+            apply_hit(&mut p, blow(by));
+            assert_eq!(p.vel.x, shove(), "no swell and no weight");
+            assert_eq!(p.stun_total, 20, "and the stun as written");
+            assert_eq!(p.taken, 0, "and it starts no string");
+        }
+    }
+
+    #[test]
+    fn a_heavy_travels_less_than_a_light_from_the_same_blow() {
+        let mut heavy = Player::new(Class::Bulwark);
+        let mut light = Player::new(Class::DualMage);
+        apply_hit(&mut heavy, blow(0));
+        apply_hit(&mut light, blow(0));
+        assert!(heavy.vel.x.raw() < light.vel.x.raw());
+        assert_eq!(
+            heavy.stun_total, light.stun_total,
+            "weight divides knockback, never stun"
+        );
+        let (mut heavy, mut light) = (Player::new(Class::Bulwark), Player::new(Class::DualMage));
+        let mut guarded = blow(0);
+        guarded.blocked = true;
+        apply_hit(&mut heavy, guarded);
+        apply_hit(&mut light, guarded);
+        assert!(
+            heavy.vel.x.raw() < light.vel.x.raw(),
+            "and blocked pushback with it"
+        );
+    }
+
+    #[test]
+    fn each_hit_in_a_string_keeps_less_of_the_swell() {
+        let mut p = hurt_to(Class::Champion, (1, 2));
+        let mut stuns = Vec::new();
+        for _ in 0..4 {
+            p.health = p.full_health() / 2;
+            apply_hit(&mut p, blow(0));
+            stuns.push(p.stun_total);
+        }
+        assert!(
+            stuns.windows(2).all(|w| w[1] <= w[0]) && stuns[3] < stuns[0],
+            "a string does not fade: {stuns:?}"
+        );
+        assert!(stuns.iter().all(|s| *s >= 20), "below the table: {stuns:?}");
+        // Free again: the string is over.
+        p.action = Action::HitStun { left: 0 };
+        countdown(&mut p, false, Input::default());
+        assert_eq!(p.taken, 0);
+    }
+
+    #[test]
+    fn a_grab_keeps_its_launch_for_the_release() {
+        let mut p = Player::new(Class::Champion);
+        let mut grab = blow(1);
+        grab.grabs = 10;
+        grab.launch = lift();
+        apply_hit(&mut p, grab);
+        assert!(matches!(p.action, Action::Held { .. }));
+        assert!(p.thrown.raw() > 0, "the launch was dropped");
+        let banked = p.thrown;
+        p.action = Action::Held { left: 0 };
+        countdown(&mut p, false, Input::default());
+        assert_eq!(p.vel.y, banked, "let go, and thrown");
+        assert!(!p.grounded);
+        assert_eq!(p.thrown, Fx::ZERO);
+    }
+
+    #[test]
+    fn steering_a_launch_turns_it_and_never_shortens_it() {
+        let mut p = Player::new(Class::Champion);
+        p.vel = V3::new(shove(), Fx::ZERO, Fx::ZERO);
+        let before = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+        let air = p.class.mobility().air_speed;
+        for _ in 0..10 {
+            steer_while_stunned(&mut p, V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE), air);
+        }
+        let after = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+        assert!(p.vel.z.raw() > 0, "holding sideways did not turn it");
+        assert!(
+            after.raw() >= before.raw() - 64,
+            "steering cut the launch: {before:?} -> {after:?}"
+        );
+        // Holding back against it: it may turn, it may not brake.
+        let mut q = Player::new(Class::Champion);
+        q.vel = V3::new(shove(), Fx::ZERO, Fx::ZERO);
+        steer_while_stunned(&mut q, V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO), air);
+        assert!(V3::new(q.vel.x, Fx::ZERO, q.vel.z).flat_len().raw() >= before.raw() - 64);
     }
 }

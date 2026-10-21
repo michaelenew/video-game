@@ -1241,6 +1241,25 @@ scalars! {
     MorphClimbDown,       "Morph",    "Getting down (x getting up)",                          Fixed, fx(1,10), fx(2,1);
     MorphClimbClear,      "Morph",    "Feet clear the lip by (x shoulder)",                   Fixed, 0, fx(1,2);
     MorphClimbDip,        "Morph",    "Settles before it pushes (x shoulder)",                Fixed, 0, fx(1,2);
+    // **Knockback between fighters** (2026-10-21; the stun thread of
+    // 2026-09-13, `docs/design/stun.md`). What a class divides a fighter's
+    // shove by -- above one is a heavy -- and the swell: how much further and
+    // longer a blow holds somebody who has already lost part of their bar.
+    // Fighter against fighter only; a creature's blows read none of these.
+    WeightBulwark,        "Knockback", "Weight, Bulwark (x)",                                 Fixed, fx(1,2), fx(2,1);
+    WeightChampion,       "Knockback", "Weight, Champion (x)",                                Fixed, fx(1,2), fx(2,1);
+    WeightReaver,         "Knockback", "Weight, Shadow Reaver (x)",                           Fixed, fx(1,2), fx(2,1);
+    WeightElementalist,   "Knockback", "Weight, Elementalist (x)",                            Fixed, fx(1,2), fx(2,1);
+    WeightBloodMage,      "Knockback", "Weight, Blood mage (x)",                              Fixed, fx(1,2), fx(2,1);
+    WeightDualMage,       "Knockback", "Weight, Dual mage (x)",                               Fixed, fx(1,2), fx(2,1);
+    SwellKnockback,       "Knockback", "Swell, knockback added at death (x)",                 Fixed, 0, fx(8,1);
+    SwellBlow,            "Knockback", "Swell, added per share of the bar a blow takes (x)",  Fixed, 0, fx(20,1);
+    SwellHitstun,         "Knockback", "Swell, hitstun added at death (x)",                   Fixed, 0, fx(3,1);
+    ComboDecay,           "Knockback", "Swell kept per hit in a string",                      Fixed, 0, fx(1,1);
+    // **Knockback starts higher** (2026-10-21, from play): at full health a
+    // fighter's shove is this times the table, rising in a straight line to
+    // the same multiple at death it reached before. Sideways only.
+    SwellStart,           "Knockback", "Knockback at full health (x)",                        Fixed, fx(1,2), fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

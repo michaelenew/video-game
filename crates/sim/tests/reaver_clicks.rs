@@ -842,3 +842,39 @@ fn the_send_does_not_put_the_shadow_where_she_could_not_walk() {
         Some(open)
     );
 }
+
+/// **The Reave cashes from any distance up to its sweet spot's** (0013:
+/// "from on top of somebody the dash runs into them and the cut is plain").
+/// Against a target standing still. The bug this was written beside --
+/// a Reave from close in cutting past a target walking into it, so only the
+/// shadow's copy landed and the marks stayed -- needs the sparring bot to
+/// show, and is held in `crates/hunt/tests/duel.rs`
+/// (`the_reave_spends_the_marks_on_the_bot`).
+#[test]
+fn the_reave_cashes_from_any_distance_up_to_its_sweet_spot() {
+    let plain = sim::moves::get(Class::ShadowReaver, r::REAVE).damage;
+    for gap in [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0] {
+        let mut w = facing(gap);
+        w.players[1].marks = 3;
+        let before = w.players[1].health;
+        step(&mut w, keys::FINISHER);
+        let mut spent_at = None;
+        for f in 0..30 {
+            step(&mut w, 0);
+            if spent_at.is_none() && w.players[1].marks == 0 {
+                spent_at = Some((f, before - w.players[1].health));
+            }
+        }
+        let (_, took) = spent_at.unwrap_or_else(|| {
+            panic!(
+                "from {gap} m the Reave never spent the marks: {} left, {} damage",
+                w.players[1].marks,
+                before - w.players[1].health
+            )
+        });
+        assert!(
+            took > plain,
+            "from {gap} m the cash-in was only {took} (the plain cut is {plain})"
+        );
+    }
+}
