@@ -58,7 +58,7 @@ on a map with a hill, so every other fight hashes as it always did.
 | The other side stepping onto a part-taken point first **takes it back to nothing**, then starts its own | | | |
 | **Holding** the point runs your side's **clock** down | each side has its own | King of the hill, each side's clock | 2:00 |
 | Your clock out and nobody challenging: **you win the round** | | | |
-| Your clock out while the other side is on the point or part way to taking it: **overtime**, for as long as they keep at it | | | |
+| Your clock out while anybody of the other side is on the point: **overtime**, until the last of them steps or is knocked off -- then you win that frame, whatever capture they had under way -- or they take it. Contested in overtime moves nothing either way, as contested always does | | | |
 | The **knocked out** stand back up, fresh, at their side's start | after a wait | King of the hill, the dead are back after | 5 s |
 
 Team Fortress 2 runs three-minute clocks and a thirty-second lock for twelve

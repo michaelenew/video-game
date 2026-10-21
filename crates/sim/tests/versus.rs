@@ -329,6 +329,89 @@ fn a_clock_out_while_challenged_is_overtime() {
 }
 
 #[test]
+fn overtime_ends_the_frame_the_last_challenger_steps_off() {
+    let id = ArenaId::QUARRY;
+    let hill = hill_of(id);
+    let mut w = World::versus_in([Class::Champion; 2], id);
+    w.hill.locked = 0;
+    w.hill.owner = 0;
+    w.hill.clock[0] = 1;
+    stand(&mut w, 1, hill.at);
+    home(&mut w, 0);
+    // Half a capture in, in overtime.
+    for _ in 0..t::hill_capture() / 2 {
+        w.advance(idle::<2>());
+    }
+    assert!(w.hill.overtime());
+    assert!(w.hill.progress > 0);
+    // Off it: the capture they had under way does not hold the round open.
+    home(&mut w, 1);
+    w.advance(idle::<2>());
+    assert!(
+        matches!(w.phase, Phase::RoundOver { winner: 0, .. }),
+        "{:?} {:?}",
+        w.phase,
+        w.hill
+    );
+}
+
+#[test]
+fn contested_in_overtime_holds_the_round_open_and_moves_nothing() {
+    let id = ArenaId::GLACIER;
+    let hill = hill_of(id);
+    let mut w = World::versus_in([Class::Champion; 2], id);
+    w.hill.locked = 0;
+    w.hill.owner = 0;
+    w.hill.clock[0] = 1;
+    // The challengers' capture part way, and both sides on the point.
+    w.hill.capper = 1;
+    w.hill.progress = sim::versus::Koth::full() / 3;
+    let before = w.hill.progress;
+    stand(&mut w, 0, hill.at);
+    stand(
+        &mut w,
+        1,
+        hill.at.add(V3::new(Fx::from_int(2), Fx::ZERO, Fx::ZERO)),
+    );
+    for _ in 0..t::hill_capture() * 2 {
+        w.advance(idle::<2>());
+    }
+    assert_eq!(w.phase, Phase::Fighting);
+    assert!(w.hill.contested() && w.hill.overtime());
+    // No movement toward either side.
+    assert_eq!(
+        (w.hill.owner, w.hill.capper, w.hill.progress),
+        (0, 1, before)
+    );
+}
+
+#[test]
+fn contested_with_a_capture_under_way_moves_nothing() {
+    let id = ArenaId::DELTA;
+    let hill = hill_of(id);
+    let mut w = World::versus_in([Class::Champion; 2], id);
+    w.hill.locked = 0;
+    w.hill.owner = 0;
+    w.hill.capper = 1;
+    w.hill.progress = sim::versus::Koth::full() / 2;
+    let before = w.hill.progress;
+    stand(&mut w, 0, hill.at);
+    stand(
+        &mut w,
+        1,
+        hill.at.add(V3::new(Fx::from_int(2), Fx::ZERO, Fx::ZERO)),
+    );
+    for _ in 0..120 {
+        w.advance(idle::<2>());
+    }
+    assert!(w.hill.contested());
+    assert_eq!(
+        (w.hill.owner, w.hill.capper, w.hill.progress),
+        (0, 1, before)
+    );
+}
+
+#[test]
 fn a_second_fighter_of_a_side_captures_faster() {
     let id = ArenaId::GLACIER;
     let hill = hill_of(id);

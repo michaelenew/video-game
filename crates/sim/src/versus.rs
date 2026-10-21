@@ -14,9 +14,10 @@
 //!   team-mate; both sides on it is **contested** and nothing moves; once a
 //!   side owns it **their clock runs down** while they hold it, and it is
 //!   theirs until the other side captures it back. The side whose clock
-//!   reaches zero wins -- unless the other side is on the point or part way
-//!   through taking it, which is **overtime**, and lasts as long as they
-//!   stay. The dead stand back up at their own side's start after a wait.
+//!   reaches zero wins -- unless somebody of the other side is standing on
+//!   the point, which is **overtime**, and lasts until the last of them
+//!   steps off (or is knocked off) or they take it. The dead stand back up
+//!   at their own side's start after a wait.
 //!
 //! **Sides are seats taken alternately**: seats 0 and 2 against 1 and 3
 //! ([`side`]), so a duel is seat 0 against seat 1 as it always was. On a
@@ -217,17 +218,20 @@ impl Koth {
         self.standing.iter().all(|&n| n > 0)
     }
 
-    /// **Overtime**: a clock is out, but the other side is on the point or
-    /// part way through taking it, so the game goes on while they are.
+    /// **Overtime**: a clock is out, but somebody of the other side is on the
+    /// point, so the game goes on until the last of them is off it.
     pub fn overtime(&self) -> bool {
         self.owner != NOBODY && self.clock[self.owner as usize] == 0 && self.challenged()
     }
 
-    /// The side that does not own the point is on it, or has a capture
-    /// under way.
+    /// **Somebody of the side that does not own the point is on it**, alive:
+    /// what holds a round open in overtime (2026-10-21, from play: "overtime
+    /// until the losing team steps off"). A capture they had under way and
+    /// left does not -- the moment the last of them is off, the clock that
+    /// ran out wins.
     fn challenged(&self) -> bool {
         let other = (self.owner as usize + 1) % SIDES;
-        self.standing[other] > 0 || self.capper as usize == other && self.progress > 0
+        self.standing[other] > 0
     }
 
     /// **One frame of the hill.** `on[i]` is whether seat `i` is alive and

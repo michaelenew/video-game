@@ -654,7 +654,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "King of the Hill",
-                "The point in the middle opens after a few seconds. Stand on it alone to take it -- in the air over it counts, so you can jump and fight on it, but standing on a bridge over it does not -- faster with a team-mate; both sides on it and nothing moves. While your side holds it your clock runs down, and when it runs out your side wins -- unless the other side is on the point or part way to taking it, which is overtime. The knocked out stand back up at their side's start after a few seconds. Seats one and three are blue, two and four orange, and a side cannot hurt its own. The line under the bars shows both clocks and the point.",
+                "The point in the middle opens after a few seconds. Stand on it alone to take it -- in the air over it counts, so you can jump and fight on it, but standing on a bridge over it does not -- faster with a team-mate; both sides on it and nothing moves. While your side holds it your clock runs down, and when it runs out your side wins -- unless somebody of the other side is standing on the point, which is overtime: it lasts until the last of them steps off. Both sides on the point moves the capture neither way. The knocked out stand back up at their side's start after a few seconds. Seats one and three are blue, two and four orange, and a side cannot hurt its own. The line under the bars shows both clocks and the point.",
             ),
         ],
     },
