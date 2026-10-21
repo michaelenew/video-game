@@ -79,9 +79,9 @@ and shots -- bolts, debris, the Elementalist's air, the aimed lines -- pass
 through team-mates (`aim::Targets::spare`, from `World::allies`). On a duel
 stage it is everybody against everybody, as versus always was.
 
-**Not done:** the fighters are still coloured by seat, not side, so seat
-three is green and seat four violet while playing for blue and orange. The
-HUD names the sides by colour; the bodies should follow.
+**On a hill the fighters wear their side's colour** (`hud::seat_colour`):
+seats one and three blue, two and four orange, bodies and health bars
+alike. Everywhere else each seat keeps its own colour, as before.
 
 ## 2 · The floating duel stages (`arena/stages.rs`)
 
@@ -233,7 +233,9 @@ dressing in `game::arenas::stages`, and a sky each in `look::skies`.
   metre and a quarter: bodies pressed against a cone's slope wall-jumped off
   it instead of climbing it. And a cairn in the middle of the Twin Isles'
   bridge was taken out: it tripped bodies and added nothing.
-- **The sides' bodies are not yet coloured by side** (§1).
+- **The sides' bodies are their side's colour on a hill** (§1); the third
+  and fourth seats' class buttons keep their seat's colour, as a way of
+  telling the two team-mates apart in the HUD.
 - **More room between the floating stages' pieces** (from play): every
   separate piece is across a real gap now -- the Anvil's horns 4 m out,
   the Ziggurat's stones 3.5 m, the Twin Isles 7 m apart -- and everything

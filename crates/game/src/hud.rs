@@ -37,6 +37,19 @@ pub const SEAT_COLOURS: [Color; sim::state::MAX_PLAYERS] = {
     all
 };
 
+/// **The colour seat `seat` is shown in** in this fight: its own, or on a
+/// King of the Hill map its side's -- the colour of the seat leading that
+/// side (`sim::versus::side`), so seats one and three are blue and two and
+/// four orange, bodies and bars alike.
+pub fn seat_colour(w: &sim::World, seat: usize) -> Color {
+    let shown = if w.hill.on {
+        sim::versus::side(seat) as usize
+    } else {
+        seat
+    };
+    SEAT_COLOURS[shown % SEAT_COLOURS.len()]
+}
+
 /// The row of the third and fourth fighters' health, under the first two;
 /// hidden while those seats are empty.
 #[derive(Component)]
@@ -1495,7 +1508,7 @@ pub fn update_rival(
     let p = &sim.cur.players[who];
     for (mut node, mut colour) in bars.iter_mut() {
         node.width = Val::Percent(100.0 * p.health.max(0) as f32 / p.full_health().max(1) as f32);
-        colour.0 = SEAT_COLOURS[who];
+        colour.0 = seat_colour(&sim.cur, who);
     }
 }
 

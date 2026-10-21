@@ -366,7 +366,7 @@ fn main() {
                 ),
                 beast::place,
                 drive_camera,
-                fade_own_body,
+                (colour_by_side, fade_own_body).chain(),
                 hud::toggle_class_buttons,
                 hud::class_buttons,
                 (hud::update, hud::update_heart),
@@ -3091,6 +3091,32 @@ fn fade_own_body(
         } else {
             AlphaMode::Blend
         };
+    }
+}
+
+/// **Each fighter in its seat's colour, or its side's on a hill**
+/// (`hud::seat_colour`): the skin's hue follows the fight it is in, and its
+/// alpha is left to [`fade_own_body`]. Looked at before it is taken mutably,
+/// for the reason that system gives, so a skin is rebuilt only on the frame
+/// its colour changes -- a trip onto or off a hill map.
+fn colour_by_side(
+    sim: Res<Sim>,
+    parts: Query<(&BodyPart, &MeshMaterial3d<still::SkinMaterial>)>,
+    mut materials: ResMut<Assets<still::SkinMaterial>>,
+) {
+    for (part, material) in parts.iter() {
+        let want = hud::seat_colour(&sim.cur, part.owner).to_srgba();
+        let Some(skin) = materials.get(&material.0) else {
+            continue;
+        };
+        let have = skin.base.base_color.to_srgba();
+        if (have.red, have.green, have.blue) == (want.red, want.green, want.blue) {
+            continue;
+        }
+        let Some(skin) = materials.get_mut(&material.0) else {
+            continue;
+        };
+        skin.base.base_color = Color::Srgba(want.with_alpha(have.alpha));
     }
 }
 

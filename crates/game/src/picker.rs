@@ -541,6 +541,21 @@ mod tests {
     }
 
     #[test]
+    fn on_a_hill_fighters_are_their_sides_colour_and_elsewhere_their_own() {
+        use crate::hud::{SEAT_COLOURS, seat_colour};
+        let four = [Class::Champion; 4];
+        let hill = World::versus_in(four, sim::arena::ArenaId::QUARRY);
+        assert_eq!(seat_colour(&hill, 0), SEAT_COLOURS[0]);
+        assert_eq!(seat_colour(&hill, 2), SEAT_COLOURS[0]);
+        assert_eq!(seat_colour(&hill, 1), SEAT_COLOURS[1]);
+        assert_eq!(seat_colour(&hill, 3), SEAT_COLOURS[1]);
+        let duel = World::versus_in(four, sim::arena::ArenaId::ANVIL);
+        for (seat, &own) in SEAT_COLOURS.iter().enumerate() {
+            assert_eq!(seat_colour(&duel, seat), own);
+        }
+    }
+
+    #[test]
     fn shift_n_steps_through_every_versus_stage() {
         let mut w = World::with_classes([Class::Champion; 2]);
         let mut seen = Vec::new();
