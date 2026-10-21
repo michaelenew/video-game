@@ -7,7 +7,7 @@
 //! the Sandmaw's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 372] = [
+pub const KNOBS: [i32; 379] = [
            65536, // sandmaw.size_(x) = 1
            13000, // sandmaw.health = 13000
              800, // sandmaw.breakable_part_health = 800
@@ -380,4 +380,11 @@ pub const KNOBS: [i32; 372] = [
                0, // sandmaw.sinkhole.solid,_height_a_layer = 0
                0, // sandmaw.sinkhole.solid,_most_layers = 0
                2, // sandmaw.sinkhole.most_at_once = 2
+               0, // sandmaw_·_climb.gets_up_onto_(x_shoulder) = 0
+               0, // sandmaw_·_climb.gets_down_off_(x_shoulder) = 0
+               1, // sandmaw_·_climb.getting_up,_frames = 1
+               0, // sandmaw_·_climb.getting_up,_frames_a_metre = 0
+           65536, // sandmaw_·_climb.getting_down_(x_getting_up) = 1
+               0, // sandmaw_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0
+               0, // sandmaw_·_climb.settles_before_it_pushes_(x_shoulder) = 0
 ];

@@ -7,7 +7,7 @@
 //! the Veilstalker's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 479] = [
+pub const KNOBS: [i32; 486] = [
            65536, // veilstalker.size_(x) = 1
             7000, // veilstalker.health = 7000
              500, // veilstalker.breakable_part_health = 500
@@ -487,4 +487,11 @@ pub const KNOBS: [i32; 479] = [
                0, // veilstalker.flash.solid,_height_a_layer = 0
                0, // veilstalker.flash.solid,_most_layers = 0
                0, // veilstalker.flash.most_at_once = 0
+               0, // veilstalker_·_climb.gets_up_onto_(x_shoulder) = 0
+               0, // veilstalker_·_climb.gets_down_off_(x_shoulder) = 0
+              14, // veilstalker_·_climb.getting_up,_frames = 14
+               6, // veilstalker_·_climb.getting_up,_frames_a_metre = 6
+           39322, // veilstalker_·_climb.getting_down_(x_getting_up) = 0.6
+            7864, // veilstalker_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.12
+            6554, // veilstalker_·_climb.settles_before_it_pushes_(x_shoulder) = 0.1
 ];

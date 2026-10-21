@@ -9502,3 +9502,46 @@ off or sliding down the lab's ledges where the 3 m slab covered only part of the
 re-searched (`envelope search --class`) and replaced, every other line kept. The Elementalist's
 best onto the +8 m ledge fell from 33.4 m to 27.7 m (shared blocks 32.2 to 20.5); the Champion's
 two moved by under a metre. One Blood mage line lost 2 cm.
+
+### 2026-10-21 — the Ridgeback meets the ground: it collides, and it gets up
+
+From play: "In the high plane the two ridgeback fight is really crazy. The ridgebacks clip
+into and out of the box they start next to just by walking, their spikes and charge are
+super inconsistent with how they interact with it. The collision and AI need to be fixed."
+And: "every monster needs a 'get up' and 'get down' animation and move ... the ridgebacks can
+get up things lower than their shoulders ... the ridgeback cannot go through other moves while
+getting up, so they get a window of opportunity."
+
+**Changed**
+- The Ridgeback collides (`FightDecl::collides`, with a senses row for its body radius 1.5 m
+  and step 1 m). It is fenced by discs along its length over each one's underside, stands on
+  what it steps onto, and walks round a rock between it and a fighter on the floor.
+- **Getting up and down** (`sim::climb`, `Doing::Climb`): a ledge over its step and under
+  `Gets up onto (x shoulder)` = 1 (4.5 m) is got up in `24 + 12 a metre` frames -- 72 up the
+  Sky Meadow's 4 m rock, 42 up the proving ground's 1.5 m platform -- and a drop under
+  1.25 shoulders got down in 0.7 of that. Not free, open, nothing out: the window.
+- A charge into a solid ends there and plays its recovery. The spray stops at the first
+  solid in its lane, and is smothered thrown from against one. A move that cannot reach a
+  fighter up a ledge, or whose lane is blocked, is not chosen; a fighter up a ledge is walked
+  right up to.
+- Placed at the start of a hunt, it stands on the highest top under its legs it could have
+  got up: the proving ground's spawn is astride the east platform, and it starts on it.
+- The same motion for a morph (`breed::climb`, the Oven's "Morph · Gets up onto" row), drawn
+  by the game as it follows you up a step bigger than a quarter of its shoulder.
+- `Solid::middle` takes a corner and half the size rather than half of each corner: a round
+  solid's middle was a sixty-thousandth off after a change of frame, which the Caverns'
+  Ridgebacks, now against its columns, found (`tests/valley.rs`).
+
+**Why** The fight on the plane was a body walking through the scenery it was placed beside.
+The climb is the owner's: pursuit up a box, paid for with a window.
+
+**Pins** `tests/ridgeback_pin.rs`, every class: the proving ground's Ridgeback starts on a
+platform and gets down, climbs the platforms after the hunters and walks round them. The
+proving ground's tests that measured pursuit and dodging through its middle (`hunted.rs`) run
+along a lane clear of the platforms now; two that stood it in the middle (`monster.rs`'s bite,
+`dual_spells.rs`'s curse) stand it on open floor.
+
+**Verdict** open -- unplayed. To feel for: whether 72 frames up a 4 m rock is a window worth
+having and not a tedium; whether 42 up the proving ground's platform makes the platforms a
+place to fight from; whether the walk-round reads as an animal or a robot; whether getting down
+after a fighter who jumped off is quick enough to be a threat.

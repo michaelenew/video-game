@@ -179,13 +179,18 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **Every class again the same day: only enough wall is a wall**
 /// (`Terrain::wall_face`). The proving ground's low walls and edges the
 /// random presses brush are no longer slid on or jumped off.
+/// **Every class again 2026-10-21, deliberately: the Ridgeback meets the
+/// ground.** It collides with the proving ground's walls and platforms,
+/// starts on the platform its spawn is astride and gets down, gets up the
+/// platforms after the hunters and walks round them, and its charge and
+/// spray stop at what they run into (`sim::climb`, `docs/design/feel-log.md`).
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x488936a9eef126bf),
-    (Class::Bulwark, 0xf68445ba591dfe6f),
-    (Class::ShadowReaver, 0xb70c8375aac8cb9c),
-    (Class::BloodMage, 0x520976d3f6cad020),
-    (Class::DualMage, 0x22b31e2bdcd3bb9b),
-    (Class::Elementalist, 0x5997d13e09ad2200),
+    (Class::Champion, 0xc55f215e15d0932d),
+    (Class::Bulwark, 0xa6d54ebe7376b3b3),
+    (Class::ShadowReaver, 0x98cc84bf577888df),
+    (Class::BloodMage, 0x15eb57123846b741),
+    (Class::DualMage, 0x410fda2490b3d761),
+    (Class::Elementalist, 0x2bb8e48f8004041b),
 ];
 
 #[test]

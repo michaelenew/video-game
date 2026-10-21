@@ -224,6 +224,71 @@ bite, a hundred and ten after a slam, seventy after a charge that has run
 twenty metres past you, and the forty-frame flinch that a big enough burst
 earns.
 
+## 1b · The ground it stands on
+
+**Added 2026-10-21**, from play on the High Plane: "the ridgebacks clip into
+and out of the box they start next to just by walking, their spikes and charge
+are super inconsistent with how they interact with it." Until then the
+Ridgeback was kept inside its bounds and nothing else -- it walked through
+every solid at floor height (review.md `MACH-3`). On the proving ground's
+low platforms that read as wading; beside the Sky Meadow's four-metre rock it
+stood in the middle of it, rearing at the fighter on top.
+
+- **It is a body against the solids.** Fenced along its length -- discs of its
+  body radius (1.5 m) from its hind legs to its nose, each pushed only by what
+  is taller than its step (1 m) or its underside there, so its forelegs meet a
+  rock its head is held over. It stands on what it steps onto, coming up a
+  step no faster than it walks.
+- **A ledge under its shoulders it gets up; down off one it gets down** --
+  as a move, `Doing::Climb`: the front end goes up first and the forefeet over
+  the lip, the haunches settle and push, the hind feet follow. Up a four-metre
+  rock is 72 frames, the proving ground's platform 42, getting down seven
+  tenths of that. In it, it throws nothing and is open: **the window a ledge
+  buys.** A ledge over its shoulders is a wall, and an edge over its drop one it
+  stops at.
+- **It goes after you up there.** With its target up a ledge it walks right up
+  to it rather than holding off at its preferred distance; with its target on
+  the floor past a rock, it walks round.
+- **What it throws meets the rock.** A charge into a solid stops at it and
+  leaves its recovery -- a charge baited into a rock is a window, as the
+  Hornback's is. The spray stops at the first solid in its lane, and thrown
+  against a rock it is standing at, it is smothered. A move whose volume cannot
+  reach a fighter up a ledge, or whose lane a solid blocks, is not chosen.
+
+The motion is not the Ridgeback's: it is every body's, read off its skeleton
+(`sim::climb`, below), and a bred body's (`sim::breed::climb`). Only the
+Ridgeback has it on yet; see review.md `MACH-3` for the rest.
+
+### Getting up is one motion, read off the skeleton
+
+The owner: it "needs to be added for morph creatures too, so it needs to be
+well thought through and can't be a hand-craft just-so animation with bespoke
+code." So nothing in it is authored per creature:
+
+1. **What the body is** (`climb::Build`): its shoulder height, where its fore
+   and hind legs hang along it, how far it runs fore and aft -- read off its
+   bones and parts (a bred body's off its posture). What it can get up is a
+   share of its shoulder; how far it goes forward is from its forefeet at the
+   lip to its hind feet past it.
+2. **The motion** (`climb::profile`): five numbers of its progress and the rise
+   -- its middle's rise and travel, its front end's height, where its fore and
+   hind feet are. The same sentence for every body; down is the same sentence
+   the other way, forefeet reaching down first.
+3. **The pose** (`climb::layer`, `climb::plant`): the root pitched so the
+   front end is where the profile says (never past sixty degrees), the neck
+   pitched back so the head stays level, and each foot put where the profile
+   says -- first by a straight leg's crouch, then measured on the posed
+   skeleton and corrected by whichever of folding, spreading or swinging moves
+   that foot most. That second step is what makes a toad's folded hind legs, a
+   spider's splayed ones and the Siegeshell's towers come out right;
+   `tests/ledges.rs` holds every species with legs to it.
+
+Each species has a **climb row** ("<Species> · climb"): how high it gets up
+and how deep it gets down as shares of its shoulder, frames and frames a
+metre, getting down's share, and how far its feet clear the lip and it settles
+first. A morph's are the Oven's "Morph" row, shares of its own shoulder, so
+they grow with it.
+
 ## 2 · Getting on it
 
 Five ways up. Four are earned, and the fifth belongs to one class.

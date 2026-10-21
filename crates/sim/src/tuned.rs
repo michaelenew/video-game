@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 718] = [
+pub const SCALARS: [i32; 726] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -726,6 +726,14 @@ pub const SCALARS: [i32; 718] = [
               10, // champion.chain,_a_press_waits_for_its_link = 10
               33, // champion.beat,_falls_at_(%_of_the_window) = 33
                6, // champion.beat,_lasts = 6
+           65536, // morph.gets_up_onto_(x_shoulder) = 1
+           81920, // morph.gets_down_off_(x_shoulder) = 1.25
+           16384, // morph.walks_up_a_step_under_(x_shoulder) = 0.25
+              20, // morph.getting_up,_frames = 20
+              10, // morph.getting_up,_frames_a_metre = 10
+           45875, // morph.getting_down_(x_getting_up) = 0.7
+            7864, // morph.feet_clear_the_lip_by_(x_shoulder) = 0.12
+            5243, // morph.settles_before_it_pushes_(x_shoulder) = 0.08
 ];
 
 #[rustfmt::skip]

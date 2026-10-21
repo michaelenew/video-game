@@ -87,7 +87,9 @@ body the ray passed through, which never stops it — and `aim::stoop` turns tha
 into how far below the shoulder a standing swing meets it: what makes a
 knee-high critter hittable (bestiary A1, [`docs/design/critters.md`](docs/design/critters.md)).
 `aim::line_clear` answers *is anything solid on this straight line*, which a pack
-asks when it cuts a ring round a fighter. Critters are on `aim::first_along`'s
+asks when it cuts a ring round a fighter, and `aim::room_along` *how far along one
+before something solid stops it* -- a creature's charge lane, and how far its
+spray may fly before a rock (2026-10-21). Critters are on `aim::first_along`'s
 list with the creatures (A2). `aim::sight_clear` answers *can something at this
 point see that one* -- `line_clear`, and no floor hazard that blocks sight
 (smoke) -- which a creature's perception filter asks from its head

@@ -295,6 +295,16 @@ pub enum Doing {
         left: u16,
     },
     Dead,
+    /// **Getting up a ledge, or down off one** (`crate::climb`): `rise`
+    /// centimetres, below nothing for down, over `total` frames. Not free --
+    /// it throws nothing until it is up -- and open: the window a ledge buys.
+    /// Only the rise is kept, never where it started, so a change of the
+    /// world's frame moves nothing (`World::shift`).
+    Climb {
+        left: u16,
+        total: u16,
+        rise: i16,
+    },
 }
 
 impl Doing {
@@ -321,7 +331,13 @@ impl Doing {
                 | Doing::Flinch { .. }
                 | Doing::Stumble { .. }
                 | Doing::Toppled { .. }
+                | Doing::Climb { .. }
         )
+    }
+
+    /// Is it getting up a ledge or down off one?
+    pub const fn climbing(self) -> bool {
+        matches!(self, Doing::Climb { .. })
     }
 
     /// Is it down far enough to climb onto from the floor?
@@ -339,6 +355,7 @@ impl Doing {
             Doing::Toppled { .. } => 5,
             Doing::Dead => 6,
             Doing::Stumble { .. } => 7,
+            Doing::Climb { .. } => 8,
         }
     }
 
@@ -354,7 +371,9 @@ impl Doing {
             Doing::Startup { kind, .. }
             | Doing::Active { kind, .. }
             | Doing::Recovery { kind, .. } => kind,
-            Doing::Prowl => moves,
+            // Getting up is a layer over its standing, from nothing to
+            // nothing: one continuous motion with it, which a rider rides.
+            Doing::Prowl | Doing::Climb { .. } => moves,
             Doing::Flinch { .. } => moves + 1,
             Doing::Stumble { .. } => moves + 2,
             Doing::Toppled { .. } => moves + 3,
@@ -370,7 +389,8 @@ impl Doing {
             | Doing::Recovery { left, .. }
             | Doing::Flinch { left }
             | Doing::Stumble { left, .. }
-            | Doing::Toppled { left } => left,
+            | Doing::Toppled { left }
+            | Doing::Climb { left, .. } => left,
         }
     }
 }
@@ -393,6 +413,14 @@ fn phase(species: &Species, doing: Doing) -> (u8, Fx) {
         Doing::Recovery { left, .. } => (2, part(left, m.recovery)),
         _ => (3, Fx::ZERO),
     }
+}
+
+/// **How high over its feet what a move throws is stopped** -- three
+/// quarters of the way up its volume: a solid that reaches that far stops
+/// it, and a step under it does not.
+fn thrown_over(m: &Attack) -> Fx {
+    let tall = m.hit_high.sub(m.hit_low);
+    m.hit_high.sub(crate::math::half(crate::math::half(tall)))
 }
 
 /// How far through a countdown we are, as a fraction: zero at the start.
@@ -620,6 +648,10 @@ pub struct Brain {
     /// solid on its line. See `species::MoveDecl`. Zero, and never read, for a
     /// move with neither flag, so it is only hashed when it is not.
     pub aim: [i16; 2],
+    /// **How far the volume of a travelling move in progress may fly** before
+    /// a solid stops it, centimetres: the spray against a rock. `None`, as
+    /// for every move that does not travel or meets nothing.
+    pub stop: Option<i16>,
 }
 
 impl Default for Brain {
@@ -640,6 +672,7 @@ impl Default for Brain {
             rng: 0x2545_F491,
             grace: 0,
             aim: [0; 2],
+            stop: None,
         }
     }
 }
@@ -890,10 +923,24 @@ impl Monster {
         if self.doing.free() {
             p = p.over(&self.tracking_layer(), Fx::ONE);
         }
-        // Its species' own say, last (`FightDecl::repose`).
-        match self.sp().fight.repose {
+        // Its species' own say (`FightDecl::repose`).
+        let p = match self.sp().fight.repose {
             Some(f) => f(self, p),
             None => p,
+        };
+        // Getting up or down, last: the one motion every body has, read off
+        // its skeleton and planted on the legs it is standing on
+        // (`crate::climb::plant`).
+        match self.doing {
+            Doing::Climb { left, total, rise } => crate::climb::plant(
+                self.sp(),
+                &p,
+                self.pos,
+                self.yaw,
+                through(left, total),
+                crate::lore::from_cm(rise),
+            ),
+            _ => p,
         }
     }
 
@@ -918,6 +965,8 @@ impl Monster {
                 beast::sample(sp, stock.flinch, through(left, sp.flinch_frames()))
             }
             Doing::Prowl => self.locomotion(),
+            // Getting up or down is a layer over its standing (`pose`).
+            Doing::Climb { .. } => beast::sample(sp, stock.idle, Fx::from_raw(self.beat as i32)),
             _ => {
                 let kind = self.doing.attacking().unwrap_or(0);
                 let (which, at) = phase(sp, self.doing);
@@ -1632,6 +1681,13 @@ impl Monster {
             flown.min(self.room_to_aim(m.hit_x))
         } else {
             flown
+        };
+        // And at the first solid in its lane (`Monster::spare_the_lane`):
+        // thrown into a rock it is standing against, it is smothered.
+        let flown = match self.brain.stop {
+            Some(cm) if cm < 0 => return None,
+            Some(cm) => flown.min(crate::lore::from_cm(cm)),
+            None => flown,
         };
         let rig = self.rig();
         // The anchor is authored in body space and carried by whichever bone
@@ -2370,12 +2426,62 @@ impl Monster {
             return 0;
         }
         let base = self.appetite(kind, riders);
+        if base > 0 && !self.within_reach(kind, mind) {
+            return 0;
+        }
         match sp.fight.appetite {
             Some(hook) if self.brain.cooldown[(kind as usize).min(sp.moves.len() - 1)] == 0 => {
                 hook(self, kind, base, mind)
             }
             _ => base,
         }
+    }
+
+    /// **Could the move reach what it is after**, for a creature that keeps
+    /// its own footing: a target up on a rock is over every hit volume that
+    /// starts at its feet, and one behind a rock is not in the lane of a
+    /// charge or a spray. Before this a Ridgeback under a fighter on a rock
+    /// reared and slammed at them through four metres of it.
+    fn within_reach(&self, kind: u8, mind: &Mind) -> bool {
+        if !self.climber() {
+            return true;
+        }
+        let decl = self.move_decl(kind);
+        let m = self.sp().attack(kind);
+        if m.damage <= 0 || decl.own_hit || decl.lobbed {
+            return true;
+        }
+        let target = mind.quarry.get(self.brain.target as usize);
+        if target.is_some_and(|q| q.aboard) {
+            return true;
+        }
+        let seen = self.brain.seen;
+        let (low, high) = (self.pos.y.add(m.hit_low), self.pos.y.add(m.hit_high));
+        if seen.y.add(crate::tuning::body_height()).raw() < low.raw() || seen.y.raw() > high.raw() {
+            return false;
+        }
+        if m.travel.raw() > 0 || m.advance.raw() > 0 {
+            // A body runs into what is over its step; what it throws, into
+            // what stands most of the way up what it throws.
+            let step = self.sp().fight_fx(crate::species::FightField::StepOver);
+            let over = if m.travel.raw() > 0 {
+                thrown_over(&m)
+            } else {
+                step.add(Fx::ratio(1, 4))
+            };
+            let knee = self.pos.y.add(over);
+            let from = V3::new(self.pos.x, knee, self.pos.z);
+            let to = V3::new(seen.x, knee, seen.z);
+            let span = crate::math::wide_flat_dist(from, to);
+            if span.raw() > 0 {
+                let dir = crate::math::wide_normalized(to.sub(from));
+                let room = crate::aim::room_along(from, dir, span, mind.ground);
+                if room.raw() < span.raw() {
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     /// Pick something to do, if anything is worth doing.
@@ -2493,6 +2599,11 @@ impl Monster {
         // during a sweep's windup swings the tail *away* from them, which is a
         // tell that makes its own move miss.
         let winding = matches!(self.doing, Doing::Startup { kind, .. } if self.sp().attack(kind).aim_cos.raw() > 0);
+        // Getting up or down it faces the way it is going, and only that.
+        if self.doing.climbing() {
+            self.yaw_rate = Fx::ZERO;
+            return;
+        }
         if !self.doing.free() && !winding {
             // Committed, or down. Whatever swing was in progress bleeds off
             // rather than stopping dead, so a move does not visibly clamp the
@@ -2592,6 +2703,11 @@ impl Monster {
     /// Walk. Forward along its own facing, and never sideways -- a quadruped
     /// that could strafe would make its turn limit decorative.
     fn walk(&mut self, arena: &Terrain, prowl: Option<V3>, pace: Option<Fx>, homing: bool) {
+        if let Doing::Climb { left, total, rise } = self.doing {
+            self.climb_along(left, total, rise);
+            self.beat = self.beat.wrapping_add(self.sp().breath_rate());
+            return;
+        }
         // Where it is kept: its own bounds, or the map once it is out of them
         // (`arena::Den`).
         let bounds = &arena.den.kept;
@@ -2626,7 +2742,7 @@ impl Monster {
                     .mul(self.sp().pursuit_gain());
                 // Somewhere of its own is somewhere to stand on; the
                 // preferred distance is from a target.
-                let stand_off = if prowl.is_some() {
+                let stand_off = if prowl.is_some() || self.target_up_a_ledge(arena) {
                     Fx::ZERO
                 } else {
                     self.sp().prowl_range()
@@ -2729,10 +2845,11 @@ impl Monster {
             .pos
             .z
             .clamp(bounds.lo_z.add(margin), bounds.hi_z.sub(margin));
-        if !self.sp().fight.keeps_height {
+        if !self.sp().fight.keeps_height && !self.climber() {
             // On the floor, wherever the floor is: a hill's crown on a hill
-            // (`arena::relief`). Not on a solid -- the creature does not
-            // collide with those (review.md `MACH-3`).
+            // (`arena::relief`). Not on a solid -- a creature that does not
+            // climb does not stand on those (review.md `MACH-3`); one that
+            // does keeps its own footing (`keep_footing`).
             self.pos.y = arena.relief_at(self.pos.x, self.pos.z);
         }
     }
@@ -2806,6 +2923,12 @@ impl Monster {
             Doing::Stumble { .. } => rest(self),
             Doing::Toppled { left } if left > 0 => Doing::Toppled { left: left - 1 },
             Doing::Toppled { .. } => rest(self),
+            Doing::Climb { left, total, rise } if left > 0 => Doing::Climb {
+                left: left - 1,
+                total,
+                rise,
+            },
+            Doing::Climb { .. } => rest(self),
         };
     }
 
@@ -2918,17 +3041,44 @@ impl Monster {
                 Some(to) => (Some(to), Some(crate::tuning::roam_pace())),
                 None => (prowl, None),
             }
+        } else if self.climber() && self.doing.free() && !self.target_up_a_ledge(arena) {
+            // **Round what is in the way**, for a creature that keeps its own
+            // footing and is after somebody on the floor: a rock between it
+            // and them is walked round, not climbed over or pressed against
+            // for the rest of the fight. Somebody up on the rock is climbed
+            // to (`keep_footing`).
+            let goal = prowl.unwrap_or(self.brain.seen);
+            let r = crate::climb::footprint(self.sp());
+            match crate::valley::roam::detour(arena, self.pos, goal, self.yaw, r) {
+                Some(to) => (Some(to), None),
+                None => (prowl, None),
+            }
         } else {
             (prowl, None)
         };
         let was = self.pos;
         self.steer(prowl);
         self.walk(arena, prowl, pace, homing);
+        // Whether it was going anywhere, before a solid it walked into took
+        // the speed off it: what decides whether it gets up.
+        let going = self.speed.raw() > 0;
         self.fence(arena);
+        self.keep_footing(arena, was, prowl, going);
+        self.spare_the_lane(arena);
         // Out, it walks only where a body can: it slides along what stands
         // in its way, and never goes up land too steep to climb, or up a step
         // or off a drop past its knobs.
-        if out && self.pos != was {
+        if out && self.pos != was && self.climber() {
+            // A creature that keeps its own footing is only refused land too
+            // steep to climb: its height is its footing's.
+            let from = V3::new(was.x, arena.relief_at(was.x, was.z), was.z);
+            if !self.doing.climbing()
+                && crate::valley::roam::ground_step(arena, from, self.pos).is_none()
+            {
+                self.pos = V3::new(was.x, self.pos.y, was.z);
+                self.speed = Fx::ZERO;
+            }
+        } else if out && self.pos != was {
             if !self.sp().fight.collides {
                 let (at, _) = arena.fence(self.pos, self.roam_radius(), crate::tuning::roam_step());
                 self.pos = V3::new(at.x, self.pos.y, at.z);
@@ -2950,6 +3100,259 @@ impl Monster {
         self.sp().margin().min(Fx::from_int(2)).max(Fx::ratio(1, 2))
     }
 
+    /// **Does it keep its own footing** -- stand on what is under it, get up
+    /// a ledge under its reach and down a drop under its drop, and go over no
+    /// edge it cannot (`crate::climb`)? A species that collides, whose height
+    /// is not its own hooks' business, with a reach or a drop to its name.
+    pub fn climber(&self) -> bool {
+        let sp = self.sp();
+        sp.fight.collides
+            && !sp.fight.keeps_height
+            && sp.has_body()
+            && (crate::climb::reach(sp).raw() > 0 || crate::climb::drop_reach(sp).raw() > 0)
+    }
+
+    /// **Is what it is after up a ledge** -- standing on something over its
+    /// step, out past its own body? Then it walks right up to it rather than
+    /// holding off at its preferred distance: nothing it throws from the
+    /// floor reaches up there, and the way to them is up.
+    fn target_up_a_ledge(&self, arena: &Terrain) -> bool {
+        if !self.climber() {
+            return false;
+        }
+        let b = crate::climb::build(self.sp());
+        let seen = self.brain.seen;
+        if crate::math::wide_flat_dist(seen, self.pos).raw() <= b.nose.raw() {
+            return false;
+        }
+        let step = self.sp().fight_fx(crate::species::FightField::StepOver);
+        arena.floor_below(seen).raw() > self.pos.y.add(step).raw()
+    }
+
+    /// **One frame of getting up or down**: its middle carried up (or down)
+    /// and forward by what the profile says this frame adds.
+    fn climb_along(&mut self, left: u16, total: u16, rise: i16) {
+        let sp = self.sp();
+        let rise = crate::lore::from_cm(rise);
+        let now = crate::climb::phase_of(sp, through(left, total), rise);
+        let before = crate::climb::phase_of(sp, through(left.saturating_add(1), total), rise);
+        let advance = crate::climb::advance(sp);
+        let forward = V3::from_turns(self.yaw);
+        self.pos = self
+            .pos
+            .add(forward.scale(advance.mul(now.along.sub(before.along))));
+        self.pos.y = self.pos.y.add(rise.mul(now.body.sub(before.body)));
+        self.speed = Fx::ZERO;
+    }
+
+    /// **The floor under its legs**: the land under its middle, or the
+    /// highest top of a solid no higher than its feet and its step under its
+    /// hind legs, its middle or its forelegs -- and whether it is a top. The
+    /// land itself is read at its middle only, as it always was: a hillside
+    /// is not a ledge, and the ground under its fore and hind feet on one is
+    /// a metre apart.
+    fn floor_under(&self, arena: &Terrain) -> (Fx, bool) {
+        let sp = self.sp();
+        let b = crate::climb::build(sp);
+        let step = sp.fight_fx(crate::species::FightField::StepOver);
+        let forward = V3::from_turns(self.yaw);
+        let ceiling = self.pos.y.add(step);
+        let mut floor = arena.relief_at(self.pos.x, self.pos.z);
+        let mut on_top = false;
+        for x in [b.rear, Fx::ZERO, b.front] {
+            let at = self.pos.add(forward.scale(x));
+            let top = arena.floor_below(V3::new(at.x, ceiling, at.z));
+            if top.raw() > arena.relief_at(at.x, at.z).raw() && top.raw() > floor.raw() {
+                floor = top;
+                on_top = true;
+            }
+        }
+        (floor, on_top)
+    }
+
+    /// **Stand on what is under it, and meet a ledge or an edge as what it
+    /// is**, for a creature that keeps its own footing ([`Monster::climber`]):
+    /// after it has walked and been fenced.
+    ///
+    /// - Walking at a ledge over its step and under its reach, toward where it
+    ///   is going, with room on top: it starts getting up.
+    /// - Walking at an edge with a drop under its drop: it starts getting down.
+    ///   Over its drop, or committed to something else: it stops at the edge.
+    /// - Otherwise it comes to the floor under its legs -- up a step at its
+    ///   walk, down at a fall -- rather than snapping a metre in a frame.
+    fn keep_footing(&mut self, arena: &Terrain, was: V3, prowl: Option<V3>, going: bool) {
+        if !self.climber() {
+            return;
+        }
+        match self.doing {
+            Doing::Dead => return,
+            Doing::Climb { left, .. } if left > 0 => return,
+            Doing::Climb { .. } => {
+                self.pos.y = self.floor_under(arena).0;
+                return;
+            }
+            _ => {}
+        }
+        let sp = self.sp();
+        let step = sp.fight_fx(crate::species::FightField::StepOver);
+        let forward = V3::from_turns(self.yaw);
+        let goal = prowl.unwrap_or(self.brain.seen);
+        // Where it is going is past where its front end will be.
+        let probe = crate::climb::probe(sp);
+        let onward = goal.sub(self.pos).dot(forward).raw() > probe.raw();
+        let ahead = self.pos.add(forward.scale(probe));
+        let kept = &arena.den.kept;
+        let margin = sp.margin();
+        let within = |p: V3| {
+            p.x.raw() >= kept.lo_x.add(margin).raw()
+                && p.x.raw() <= kept.hi_x.sub(margin).raw()
+                && p.z.raw() >= kept.lo_z.add(margin).raw()
+                && p.z.raw() <= kept.hi_z.sub(margin).raw()
+        };
+        let land = self.pos.add(forward.scale(crate::climb::advance(sp)));
+        let (floor, on_top) = self.floor_under(arena);
+        let free = self.doing.free() && going && onward && within(land);
+
+        // A ledge: the top of what stands ahead, over its step.
+        let top = arena.ground_under(ahead);
+        let rise = top.sub(self.pos.y);
+        if free
+            && rise.raw() > step.raw()
+            && rise.raw() <= crate::climb::reach(sp).raw()
+            && arena.ground_under(land).sub(top).abs().raw() <= step.raw()
+        {
+            self.begin_climb(rise);
+            return;
+        }
+
+        // An edge: standing on a top, and the floor ahead well under its feet.
+        let below = arena.floor_below(V3::new(ahead.x, self.pos.y.add(step), ahead.z));
+        let drop = self.pos.y.sub(below);
+        let forward_of = self.pos.sub(was).dot(forward).raw() > 0;
+        if on_top && drop.raw() > step.raw() && forward_of {
+            let landing = arena.floor_below(V3::new(land.x, self.pos.y.add(step), land.z));
+            if free
+                && drop.raw() <= crate::climb::drop_reach(sp).raw()
+                && landing.sub(below).abs().raw() <= step.raw()
+            {
+                self.begin_climb(below.sub(self.pos.y));
+                return;
+            }
+            // An edge it will not go over: it stops at it.
+            self.pos = V3::new(was.x, self.pos.y, was.z);
+            self.speed = Fx::ZERO;
+            return;
+        }
+
+        // To the floor under its legs: up a step no faster than it walks,
+        // down at a fall.
+        let up = sp.walk().max(Fx::ONE).mul(DT);
+        let down = sp.gallop().add(sp.gallop()).mul(DT);
+        let y = self.pos.y;
+        self.pos.y = if floor.raw() > y.raw() {
+            y.add(up).min(floor)
+        } else {
+            y.sub(down).max(floor)
+        };
+    }
+
+    /// **Put down where it is placed**, for a creature that keeps its own
+    /// footing: on the highest top under its legs it could have got up, or
+    /// the floor. What a spawn does, so a Ridgeback placed astride the
+    /// proving ground's platform stands on it rather than in it -- or, fenced
+    /// out of it on its first frame, five metres from where it was put.
+    pub fn settle(&mut self, arena: &Terrain) {
+        if !self.climber() {
+            return;
+        }
+        let sp = self.sp();
+        let reach = crate::climb::reach(sp);
+        let (discs, n) = crate::climb::discs(sp);
+        let step = sp.fight_fx(crate::species::FightField::StepOver);
+        let forward = V3::from_turns(self.yaw);
+        let floor = arena.relief_at(self.pos.x, self.pos.z);
+        let ceiling = floor.add(reach);
+        let mut y = floor;
+        for (x, low) in discs.iter().take(n) {
+            if low.raw() > step.raw() {
+                continue;
+            }
+            let at = self.pos.add(forward.scale(*x));
+            y = y.max(arena.floor_below(V3::new(at.x, ceiling, at.z)));
+        }
+        self.pos.y = y;
+    }
+
+    /// Start getting up `rise` (down, below nothing).
+    fn begin_climb(&mut self, rise: Fx) {
+        let total = crate::climb::frames(self.sp(), rise);
+        self.doing = Doing::Climb {
+            left: total,
+            total,
+            rise: crate::lore::to_cm(rise),
+        };
+        self.speed = Fx::ZERO;
+        self.yaw_rate = Fx::ZERO;
+        self.hit_used = false;
+    }
+
+    /// **The body against the solids along its length** (`climb::discs`): a
+    /// disc of its radius at each place along it, fenced over its step or the
+    /// underside there, whichever is higher -- so its forelegs meet a rock
+    /// its head is held over. Every disc's push moves the whole body.
+    fn fence_body(&self, arena: &Terrain, radius: Fx, step: Fx) -> (V3, V3) {
+        let sp = self.sp();
+        let forward = V3::from_turns(self.yaw);
+        let (discs, n) = crate::climb::discs(sp);
+        let start = self.pos;
+        let mut pos = self.pos;
+        for (x, low) in discs.iter().take(n) {
+            let at = pos.add(forward.scale(*x));
+            let (out, push) = arena.fence(at, radius, step.max(*low));
+            if push != V3::ZERO {
+                pos = pos.add(out.sub(at));
+            }
+        }
+        (pos, pos.sub(start))
+    }
+
+    /// **What it throws along the floor stops at a solid**: how far the
+    /// volume of a move in progress that travels -- the spray -- may go before
+    /// what stands in its lane, held in the brain ([`Brain::stop`]) for the
+    /// hit volume. Asked every frame of the windup and the hit, from where
+    /// the body is, so a rock it has turned to face is in the lane.
+    fn spare_the_lane(&mut self, arena: &Terrain) {
+        if !self.sp().fight.collides {
+            return;
+        }
+        let kind = match self.doing {
+            Doing::Startup { kind, .. } | Doing::Active { kind, .. } => kind,
+            _ => {
+                self.brain.stop = None;
+                return;
+            }
+        };
+        let m = self.sp().attack(kind);
+        if m.travel.raw() <= 0 || self.move_decl(kind).lobbed {
+            self.brain.stop = None;
+            return;
+        }
+        let forward = V3::from_turns(self.yaw);
+        // From the body, not from where the volume starts: a creature
+        // standing against a rock starts its spray inside it. And near the
+        // volume's top: spikes are flung in an arc, so a step a fighter is
+        // standing on is not cover -- what stops them is what stands most of
+        // the way up the volume.
+        let from = self.pos.add(V3::new(Fx::ZERO, thrown_over(&m), Fx::ZERO));
+        let start = m.hit_x.max(Fx::ZERO);
+        let reach = start.add(m.travel.mul(Fx::from_int(m.active as i32)).mul(DT));
+        let room = crate::aim::room_along(from, forward, reach, arena);
+        // How far its middle may go past where it starts: short of the face
+        // by its radius, and below nothing when it starts in the rock.
+        self.brain.stop = (room.raw() < reach.raw())
+            .then(|| crate::lore::to_cm(room.sub(start).sub(m.hit_radius)));
+    }
+
     /// **Walk into the arena's solids**, for a species that `collides`: pushed
     /// out sideways from anything taller than its row's `StepOver`, at its
     /// row's `BodyRadius`, and told so through its `bumped` hook (the
@@ -2961,9 +3364,17 @@ impl Monster {
             return;
         }
         use crate::species::FightField;
+        // Getting up or down, it is going over the solid on purpose.
+        if self.doing.climbing() {
+            return;
+        }
         let radius = sp.fight_fx(FightField::BodyRadius);
         let step = sp.fight_fx(FightField::StepOver);
-        let (at, push) = arena.fence(self.pos, radius, step);
+        let (at, push) = if self.climber() {
+            self.fence_body(arena, radius, step)
+        } else {
+            arena.fence(self.pos, radius, step)
+        };
         if push != V3::ZERO {
             self.pos = at;
             // Whatever of its speed went into the solid is gone.
@@ -2971,6 +3382,22 @@ impl Monster {
             let into = forward.dot(crate::math::wide_normalized(push));
             if into.raw() < 0 {
                 self.speed = self.speed.mul(Fx::ONE.add(into)).max(Fx::ZERO);
+            }
+            // **A run into a solid ends it**, for a body that keeps its own
+            // footing: the charge stops at the rock rather than grinding
+            // along its face for the rest of its window, and what is left is
+            // its recovery -- a charge baited into a rock is a window.
+            if self.climber() && into.raw() < Fx::ratio(-1, 2).raw() {
+                if let Doing::Active { kind, .. } = self.doing {
+                    let m = sp.attack(kind);
+                    if m.advance.raw() > 0 {
+                        self.doing = Doing::Recovery {
+                            kind,
+                            left: m.recovery,
+                        };
+                        self.speed = Fx::ZERO;
+                    }
+                }
             }
             if let Some(bumped) = sp.fight.bumped {
                 bumped(self, push);
@@ -3027,9 +3454,10 @@ impl Monster {
             Doing::Startup { .. } | Doing::Active { .. } => 0,
             Doing::Prowl => self.brain.think_left,
             Doing::Recovery { kind, left } => left.saturating_add(pause(Some(kind))),
-            Doing::Flinch { left } | Doing::Stumble { left, .. } | Doing::Toppled { left } => {
-                left.saturating_add(pause(None))
-            }
+            Doing::Flinch { left }
+            | Doing::Stumble { left, .. }
+            | Doing::Toppled { left }
+            | Doing::Climb { left, .. } => left.saturating_add(pause(None)),
         }
     }
 

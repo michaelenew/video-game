@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 545] = [
+pub const KNOBS: [i32; 552] = [
            65536, // broodmother.size_(x) = 1
             6000, // broodmother.health = 6000
              500, // broodmother.breakable_part_health = 500
@@ -555,4 +555,11 @@ pub const KNOBS: [i32; 545] = [
                0, // broodmother.burning_strand.solid,_height_a_layer = 0
                0, // broodmother.burning_strand.solid,_most_layers = 0
                0, // broodmother.burning_strand.most_at_once = 0
+           98304, // broodmother_·_climb.gets_up_onto_(x_shoulder) = 1.5
+           98304, // broodmother_·_climb.gets_down_off_(x_shoulder) = 1.5
+              16, // broodmother_·_climb.getting_up,_frames = 16
+               8, // broodmother_·_climb.getting_up,_frames_a_metre = 8
+           39322, // broodmother_·_climb.getting_down_(x_getting_up) = 0.6
+            9830, // broodmother_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.15
+            3277, // broodmother_·_climb.settles_before_it_pushes_(x_shoulder) = 0.05
 ];

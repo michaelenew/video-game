@@ -494,10 +494,13 @@ impl Solid {
 
     /// The middle of its box in the floor plane.
     pub fn middle(&self) -> (Fx, Fx) {
-        (
-            Fx::from_raw(self.min.x.raw() / 2 + self.max.x.raw() / 2),
-            Fx::from_raw(self.min.z.raw() / 2 + self.max.z.raw() / 2),
-        )
+        // A corner and half the size, not half of each corner: that rounds
+        // the odd bit of where the world's frame is, so a round solid's middle
+        // moved by a frame's shift was a sixty-thousandth off where the shift
+        // put it -- and a body against it in one frame was pushed differently
+        // in the next (`tests/valley.rs`, a change of frame, 2026-10-21).
+        let half = |lo: Fx, hi: Fx| lo.add(Fx::from_raw(hi.sub(lo).raw() / 2));
+        (half(self.min.x, self.max.x), half(self.min.z, self.max.z))
     }
 
     /// A round solid's radius at height `y` (clamped to its span).

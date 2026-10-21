@@ -1506,6 +1506,24 @@ pub fn line_clear(a: V3, b: V3, scene: &Scene) -> bool {
     nothing_between(a, b, scene)
 }
 
+/// **How far along a straight line before something solid stops it**: from
+/// `from` along `dir`, up to `reach`, against the ground's solids -- and
+/// `reach` when nothing does. What a creature asks of the lane a charge or a
+/// spray would run down, and how far a spray already thrown may fly
+/// (`Monster::spare_the_lane`, 2026-10-21): a rock in the way is cover, not a
+/// thing the spikes pass through.
+pub fn room_along(from: V3, dir: V3, reach: Fx, arena: &Terrain) -> Fx {
+    let mut room = reach;
+    for solid in arena.along(from, dir, reach, Fx::ONE) {
+        if let Some(d) = crate::math::ray_hits_solid(from, dir, &solid, Fx::ZERO) {
+            if d.raw() < room.raw() {
+                room = d.max(Fx::ZERO);
+            }
+        }
+    }
+    room
+}
+
 /// **Can something at `a` see `b`?** [`line_clear`] -- nothing solid between
 /// them -- and no floor hazard that blocks sight (smoke) on the way.
 ///
