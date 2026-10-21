@@ -661,7 +661,7 @@ scalars! {
     AirBallShrink,        "Elementalist", "Air ball, shrinks by (m/s)", Fixed, fx(1,20), fx(4,1);
     AirBallHolds,         "Elementalist", "Air ball, holds a body down to (m)", Fixed, 0, fx(2,1);
     AirBallCarriedShrink, "Elementalist", "Air ball, shrinks faster carrying (x)", Fixed, fx(1,1), fx(4,1);
-    CarpetLife,           "Elementalist", "Fire carpet, hangs for", Frames, 1, 240;
+    CarpetLife,           "Elementalist", "Fire carpet, hangs for", Frames, 1, 600;
     CarpetAhead,          "Elementalist", "Fire carpet, starts ahead of her (m)", Fixed, 0, fx(6,1);
     CarpetDamage,         "Elementalist", "Fire carpet, burn per tick", Int, 0, 120;
     ThermalLift,          "Elementalist", "Thermal, lift (m/s)", Fixed, 0, fx(60,1);
@@ -1213,6 +1213,10 @@ scalars! {
     // same place for every weapon, never as soon as possible.
     BeatAt,               "Champion", "Beat, falls at (% of the window)",                     Percent, 0, 100;
     BeatLasts,            "Champion", "Beat, lasts",                                          Frames, 1, 30;
+    // **The Fire carpet sinks** (2026-10-21, from play): it comes down at
+    // this speed for as long as it hangs, and an end that meets the floor
+    // rests on it -- so one laid low enough ends up lying on the ground.
+    CarpetSink,           "Elementalist", "Fire carpet, sinks at (m/s)",                      Fixed, 0, fx(5,1);
 }
 
 // ---------------------------------------------------------------------------

@@ -3404,6 +3404,12 @@ pub fn carpet_life() -> u16 {
     oven::scalar(Scalar::CarpetLife).max(1) as u16
 }
 
+/// How fast a Fire carpet comes down while it hangs, in metres a second.
+/// Each end stops on the floor under it. See `state::World::sink_the_carpet`.
+pub fn carpet_sink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetSink)).max(Fx::ZERO)
+}
+
 /// How far in front of her the carpet starts, along her look.
 pub fn carpet_ahead() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CarpetAhead)).max(Fx::ZERO)

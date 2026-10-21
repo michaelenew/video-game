@@ -9502,3 +9502,21 @@ off or sliding down the lab's ledges where the 3 m slab covered only part of the
 re-searched (`envelope search --class`) and replaced, every other line kept. The Elementalist's
 best onto the +8 m ledge fell from 33.4 m to 27.7 m (shared blocks 32.2 to 20.5); the Champion's
 two moved by under a metre. One Blood mage line lost 2 cm.
+
+
+### 2026-10-21 — the Fire carpet lasts, and sinks
+
+From play: the carpet should "last a lot longer (2-3x) and drift downward over time, eventually
+settling on the ground if it started low enough."
+**Changed** `Fire carpet, hangs for` 90 → 225 frames (2.5x; the slider's top 240 → 600), and a
+new knob, `Fire carpet, sinks at` (0.8 m/s): every frame it hangs, each end comes down by that
+much until it is the capsule's radius over the floor under it (`Terrain::floor_below`, so a
+stone or a ledge catches an end), and the strip lies between its ends wherever they are
+(`World::sink_the_carpet`). Over its life it comes down 3 m, so one laid from a short hop
+ends up lying on the ground along the slope it met; one laid from high up is still in the air
+when it burns out. Pinned by `tests/elementalist_clicks.rs`
+(`the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor`).
+**Consequences** to feel for: an Updraft or a shot aimed at a carpet laid a second ago meets it
+up to a metre lower than it was laid; a carpet on the floor is a burning strip to walk round, and
+a Thermal off it throws her along the slope it lies on (flat, on a flat floor).
+**Verdict** open -- unplayed.

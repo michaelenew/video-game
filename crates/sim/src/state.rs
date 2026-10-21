@@ -13716,6 +13716,7 @@ impl World {
             // What it is *for* is the shot flown down it and the Thermal
             // thrown along it; the burn is what makes it a thing in the way.
             EffectKind::FireCarpet => {
+                self.sink_the_carpet(effect);
                 if effect.ticks_now() {
                     let (a, b) = effect.carpet_line();
                     let radius = effect.field_radius();
@@ -18614,6 +18615,45 @@ impl World {
     /// it is given its speed, so it leaves with it. A ball smaller than
     /// `tuning::air_ball_holds` holds nobody, so the rider is put down a
     /// moment before the ball vanishes rather than dropped when it does.
+    /// The Fire carpet comes down while it hangs (2026-10-21, from play), at
+    /// `tuning::carpet_sink`, each end on its own: an end that reaches the
+    /// floor under it rests there, its capsule's radius up, and the other
+    /// keeps coming until it does too. So a carpet laid low enough ends up
+    /// lying on the ground, along the slope it landed on, and one laid high
+    /// is still in the air when it burns out. The floor is
+    /// `Terrain::floor_below`, so a stone or a ledge under an end catches it.
+    fn sink_the_carpet(&self, effect: &mut Effect) {
+        let drop = t::carpet_sink().mul(DT);
+        if drop == Fx::ZERO {
+            return;
+        }
+        let terrain = self.terrain();
+        let rest = effect.field_radius();
+        let lower = |end: V3| {
+            let floor = terrain.floor_below(end).add(rest);
+            let y = end.y.sub(drop).max(floor).min(end.y);
+            V3::new(end.x, y, end.z)
+        };
+        let (a, b) = effect.carpet_line();
+        let (near, far) = (lower(a), lower(b));
+        if near.y == a.y.sub(drop) && far.y == b.y.sub(drop) {
+            // Both ends still falling: the strip comes down whole, its line
+            // as it was laid.
+            effect.pos = near;
+            return;
+        }
+        if near == a && far == b {
+            return;
+        }
+        // An end has landed: the strip lies between where its ends are now.
+        let run = far.sub(near);
+        effect.pos = near;
+        effect.reach = run.len();
+        if effect.reach.raw() > 0 {
+            effect.dir = run.normalized();
+        }
+    }
+
     fn roll_the_ball(&mut self, effect: &mut Effect) {
         use moves::elementalist::AIR_BALL;
         let owner = effect.owner as usize;

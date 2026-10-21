@@ -371,6 +371,58 @@ fn the_carpet_hangs_in_front_of_her_along_her_look() {
     }
 }
 
+/// A carpet laid at `height`, pitched a little down, well away from her.
+fn carpet_at(w: &mut World, height: f32) {
+    let carpet = Effect::cast(
+        EffectKind::FireCarpet,
+        0,
+        Class::Elementalist,
+        e::FIRE_CARPET,
+        at(-8.0, height, -8.0),
+        V3::new(Fx::ONE, Fx::ratio(-1, 4), Fx::ZERO).normalized(),
+        metres(6.0),
+    );
+    place(w, carpet);
+}
+
+#[test]
+fn the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor() {
+    let sinks = as_f(t::carpet_sink()) * t::carpet_life() as f32 / 60.0;
+    assert!(
+        sinks > 1.0,
+        "it comes down a fair way over its life: {sinks} m"
+    );
+
+    // Low: the far end lands first, then the near one, and it lies there.
+    let mut w = elementalist();
+    carpet_at(&mut w, 2.5);
+    run(&mut w, t::carpet_life() as u32 - 2, 0);
+    let c = of_kind(&w, EffectKind::FireCarpet);
+    assert_eq!(c.len(), 1, "still burning near the end of its life");
+    let (a, b) = c[0].carpet_line();
+    let rest = c[0].field_radius();
+    for end in [a, b] {
+        let floor = w.terrain().floor_below(end);
+        assert!(
+            (as_f(end.y) - as_f(floor) - as_f(rest)).abs() < 0.05,
+            "an end rests on the floor: {} over {}",
+            as_f(end.y),
+            as_f(floor)
+        );
+    }
+    assert!(as_f(c[0].reach) > 5.5, "lying out nearly its whole length");
+
+    // High: lower than it was laid, by what the sink says, and still aloft.
+    let mut w = elementalist();
+    carpet_at(&mut w, 12.0);
+    run(&mut w, 120, 0);
+    let c = of_kind(&w, EffectKind::FireCarpet)[0];
+    let fell = 12.0 - as_f(c.pos.y);
+    let want = as_f(t::carpet_sink()) * 2.0;
+    assert!((fell - want).abs() < 0.1, "fell {fell} m, wanted {want}");
+    assert_eq!(c.reach, metres(6.0), "in the air its line is as laid");
+}
+
 #[test]
 fn a_gale_thrown_straight_down_the_carpet_comes_out_lit() {
     let mut w = elementalist();

@@ -172,8 +172,11 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
 
 **Fire carpet** (`EffectKind::FireCarpet`). A strip of fire laid out from a little ahead of her
 along the line the crosshair solved (`aim::skillshot_path`), its length the move's reach and
-its half-width the move's radius. It hangs for `Fire carpet, hangs for` and burns whoever
-touches it, on the tick. **It is fire**: a shot flown down it comes out lit
+its half-width the move's radius. It hangs for `Fire carpet, hangs for` (225 frames since
+2026-10-21, from 90) and burns whoever touches it, on the tick. **It sinks** (2026-10-21): each
+end comes down at `Fire carpet, sinks at` (0.8 m/s, about 3 m over its life) until it rests on
+the floor under it, so one laid low ends up lying on the ground and one laid high is still in
+the air when it goes out (`the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor`). **It is fire**: a shot flown down it comes out lit
 (`a_gale_thrown_straight_down_the_carpet_comes_out_lit`), and a Downdraft landed in it is a
 ring of fire. It is drawn as a stream of flames carried from the near end to the far one, so
 the fire is seen being pushed outward. One at a time. **Its recovery cancels** (2026-10-10):
