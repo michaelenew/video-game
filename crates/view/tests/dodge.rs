@@ -24,8 +24,8 @@ fn lowest_and_lift(class: Class, w: Way, frame: f32) -> (f32, f32) {
     let skeleton = skeleton_for(class);
     let pose = clip(class, w).at_fractional(frame);
     let skin = solve(&skeleton, &pose);
-    let (q, about) = turned(class, w, frame);
-    let low = lowest(&skin, &skeleton, q, about);
+    let t = turned(class, w, frame);
+    let low = lowest(&skin, &skeleton, t.over, t.about);
     (low, lift(floor(class, frame), low))
 }
 
@@ -57,12 +57,10 @@ fn a_rolled_body_keeps_its_back_on_the_floor() {
                     "{class:?} rolling {w:?} is drawn {:.2} m through the floor at frame {f}",
                     -drawn
                 );
-                if class != Class::DualMage {
-                    assert!(
-                        drawn < 0.03,
-                        "{class:?} rolling {w:?} is drawn {drawn:.2} m off the floor at frame {f}"
-                    );
-                }
+                assert!(
+                    drawn < 0.03,
+                    "{class:?} rolling {w:?} is drawn {drawn:.2} m off the floor at frame {f}"
+                );
             }
         }
     }
@@ -109,8 +107,8 @@ fn a_roll_starts_and_ends_upright() {
     let last = (length() - 1) as f32;
     for class in ALL_CLASSES {
         for w in WAYS {
-            let (start, _) = turned(class, w, 0.0);
-            let (end, _) = turned(class, w, last);
+            let start = turned(class, w, 0.0).whole();
+            let end = turned(class, w, last).whole();
             assert!(angle(start) < 0.01, "{class:?} {w:?} starts turned over");
             assert!(
                 angle(end) < 0.01,
@@ -119,7 +117,7 @@ fn a_roll_starts_and_ends_upright() {
             );
             // And properly goes over in between.
             let most = (0..length())
-                .map(|f| angle(turned(class, w, f as f32).0))
+                .map(|f| angle(turned(class, w, f as f32).over))
                 .fold(0.0f32, f32::max);
             assert!(most > 0.4, "{class:?} {w:?} never turns over");
         }
@@ -167,8 +165,7 @@ fn a_roll_goes_over_toward_the_travel() {
             }
         };
         for w in WAYS {
-            let (q, _) = turned(class, w, quarter);
-            let up = q.rotate([0.0, 1.0, 0.0]);
+            let up = turned(class, w, quarter).whole().rotate([0.0, 1.0, 0.0]);
             assert!(
                 math::dot(up, toward(w)) > 0.7,
                 "{class:?} rolling {w:?} turns its head {up:?} a quarter of the way round"
@@ -300,6 +297,32 @@ fn report_ball_middles() {
                 hi[1] - lo[1],
                 hi[2] - lo[2]
             );
+        }
+    }
+}
+
+#[test]
+fn a_roll_to_the_side_faces_its_travel_and_turns_back() {
+    // Nobody rolls over their own shoulder line and comes up on their feet:
+    // to the side the body turns to face the way it is going, rolls forward,
+    // and turns back to the front as it rises.
+    use std::f32::consts::FRAC_PI_2;
+    let last = (length() - 1) as f32;
+    for class in ALL_CLASSES {
+        let r = roll(class);
+        let mid = (r.from + r.upright()) as f32 / 2.0;
+        for (w, sign) in [(Way::Right, -1.0), (Way::Left, 1.0)] {
+            let t = turned(class, w, mid);
+            assert!(
+                (t.yaw - sign * FRAC_PI_2).abs() < 0.05,
+                "{class:?} rolling {w:?} faces {:.0} degrees off the front mid-roll",
+                t.yaw.to_degrees()
+            );
+            assert!(turned(class, w, last).yaw.abs() < 0.01);
+            assert!(turned(class, w, 0.0).yaw.abs() < 0.01);
+        }
+        for w in [Way::Forward, Way::Back] {
+            assert_eq!(turned(class, w, mid).yaw, 0.0);
         }
     }
 }

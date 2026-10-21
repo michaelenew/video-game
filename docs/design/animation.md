@@ -553,7 +553,7 @@ The root has fifty degrees of forward swing, which is a body that folds rather t
 that inverts, so **no clip turns a body over**. What does is the whole-body turn the
 renderer puts on top of the pose (`view::PlayerView::roll`, about `roll_about`): the
 Reaver's flips since 2026-10-10, and since 2026-10-21 **every class's grounded dodge**,
-which is a dive roll (`view::dodge`, [defense.md](defense.md#dodge)). The clip is what a
+which is a roll (`view::dodge`, [defense.md](defense.md#dodge)). The clip is what a
 body does *inside* the turn -- dive, ball, open, catch -- and authoring the turn there as
 well would be two.
 
@@ -563,8 +563,9 @@ floor (`view::dodge::lift`), fully while the body is over and not at all at the 
 where the feet are what is on the floor. So the point a roll turns about decides the arc
 and not whether the body is in the floor; it is set to the middle of the class's ball, and
 `cargo test -p view --test dodge report_ball_middles -- --ignored --nocapture` prints
-where that is after a clip is changed. The Dual mage's aerial is only kept out of the
-floor, never pulled down onto it.
+where that is after a clip is changed. A roll to the side is also turned, about the
+vertical through the feet, to face its travel (`PlayerView::roll_yaw`): it is the forward
+roll, and turns back to the front as it rises.
 
 ## The creature has its own rig
 

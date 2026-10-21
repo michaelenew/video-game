@@ -122,11 +122,16 @@ pub struct PlayerView {
     /// The point the body is turned over about, in character space: the hips
     /// for a flip in the air, the middle of the ball for a roll on the floor.
     pub roll_about: V3,
-    /// How the turned body is held to the floor: on it through a roll, above
-    /// it through the Dual mage's aerial, free through a flip. The renderer
+    /// How the turned body is held to the floor: on it through a roll, free
+    /// through a flip in the air. The renderer
     /// raises the drawn body by `dodge::lift` of it, measured off the pose it
     /// is drawing.
     pub roll_floor: crate::dodge::Floor,
+    /// How far the drawn body is turned about the vertical through its feet
+    /// for a roll, in radians, the engine's way round: a roll to the side
+    /// turns to face its travel, rolls forward and turns back
+    /// (`dodge::Turn::yaw`). `roll` is in that turned frame. Nought otherwise.
+    pub roll_yaw: f32,
     /// The ledge this fighter is holding, if any. See [`Hold`].
     pub ledge: Option<Hold>,
     /// On a wall slide, or just kicked off a wall, if either. See [`OnWall`].
@@ -187,13 +192,13 @@ pub struct Hold {
 /// eased in and out, so it starts and ends upright. `travel` is the body's own
 /// (`PlayerView::travel`), which is what picks a roll's direction -- the same
 /// reading that picks its clip (`dodge::way`).
-pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor) {
+pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor, f32) {
     use sim::moves::reaver as r;
     use std::f32::consts::TAU;
     // About the hips: a flip in the air goes over rather than cartwheeling
     // off its own toes.
     const HIPS: V3 = [0.0, 0.95, 0.0];
-    let upright = (Quat::IDENTITY, HIPS, Floor::Free);
+    let upright = (Quat::IDENTITY, HIPS, Floor::Free, 0.0);
     if let Action::Dodge { left } = p.action {
         // On the floor, and travelling under its own legs: the Reaver's dash
         // to her shadow is driven along its own line, up onto a dais if it
@@ -202,8 +207,8 @@ pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor) {
             return upright;
         }
         let frame = crate::dodge::length().saturating_sub(left) as f32;
-        let (turn, about) = crate::dodge::turned(p.class, crate::dodge::way(travel), frame);
-        return (turn, about, crate::dodge::floor(p.class, frame));
+        let t = crate::dodge::turned(p.class, crate::dodge::way(travel), frame);
+        return (t.over, t.about, crate::dodge::floor(p.class, frame), t.yaw);
     }
     if p.class != sim::Class::ShadowReaver {
         return upright;
@@ -234,7 +239,7 @@ pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor) {
         flip = ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
             * TAU;
     }
-    (Quat::from_x(flip), HIPS, Floor::Free)
+    (Quat::from_x(flip), HIPS, Floor::Free, 0.0)
 }
 
 /// The turn between two snapshots' turns, the short way round. Both are a
@@ -386,10 +391,15 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     // The turn of a roll, blended like everything else continuous: a whole
     // turn in a dozen frames is thirty degrees a tick, which steps visibly on
     // any screen faster than the simulation. The pivot is the newer one's.
-    let (roll, roll_about, roll_floor) = {
-        let (was, _, _) = roll_of(p, travel);
-        let (now, about, floor) = roll_of(c, travel);
-        (roll_between(was, now, a), about, floor)
+    let (roll, roll_about, roll_floor, roll_yaw) = {
+        let (was, _, _, yaw_was) = roll_of(p, travel);
+        let (now, about, floor, yaw) = roll_of(c, travel);
+        (
+            roll_between(was, now, a),
+            about,
+            floor,
+            lerp(yaw_was, yaw, a),
+        )
     };
 
     PlayerView {
@@ -424,6 +434,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         roll,
         roll_about,
         roll_floor,
+        roll_yaw,
         ledge: hold_of(p, c, facing),
         wall: wall_of(c, pos, facing),
     }

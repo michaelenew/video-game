@@ -4,19 +4,24 @@
 //! sentence have to be on screen, because a player who cannot see where the
 //! invulnerability ended cannot learn when to hold an attack back.
 //!
-//! ## A dive roll, and every class rolls its own (2026-10-21)
+//! ## A roll, and every class rolls its own (2026-10-21)
 //!
-//! The grounded dodge is a **dive roll**, and the body really goes over: the
-//! clips here are only what a body does *inside* a roll -- the push, the dive,
-//! the ball, the legs reaching for the floor, the catch -- and
+//! The grounded dodge is a **roll**, and the body really goes over: a hop off
+//! both feet, chin and knees to the chest, one turn along the floor, and up.
+//! The clips here are only what a body does *inside* it -- the push, the hop,
+//! the tuck, the ball, the legs reaching for the floor, the catch -- and
 //! `view::dodge::turned` turns the whole body over on top of them, about the
 //! middle of the ball. Authoring the turn here as well would be two turns, and
 //! the rig could not do it anyway: the root has fifty degrees of forward
 //! swing, which is a body that folds, not one that inverts.
 //!
+//! Back, it is a backward roll. **To the side it is the forward roll**: the
+//! body is turned to face the travel first and back as it rises, so a side
+//! clip is the forward one with a lean off the shoulder it goes over.
+//!
 //! Each class has its own set of four, built by one recipe from a [`Style`]:
 //! when it goes over and how hard it comes up are `view::dodge::roll`'s, and
-//! what its arms and legs do through it are here. The table of the six is in
+//! what its arms carry and how it lands are here. The table of the six is in
 //! `view::dodge`.
 //!
 //! ## The one thing these clips exist to communicate
@@ -115,7 +120,7 @@ fn ground_speed() -> f32 {
 }
 
 // ---------------------------------------------------------------------------
-// The dive roll
+// The roll
 // ---------------------------------------------------------------------------
 
 /// The beats of a roll, in order. A [`Style`] dresses each one.
@@ -123,9 +128,9 @@ fn ground_speed() -> f32 {
 enum Beat {
     /// Frame zero: already going, the only grounded frame at this end.
     Push,
-    /// Both feet leaving.
+    /// The hop: both feet off the floor, knees coming up.
     Off,
-    /// Going over: the dive onto the hands, the sit-back, the lean to the side.
+    /// Tucking: chin down, hands going to the shins, going over.
     Over,
     /// The ball, held unchanging to the last invulnerable frame.
     Ball,
@@ -139,90 +144,81 @@ enum Beat {
     Settle,
 }
 
-/// How one class rolls: what its body does at each beat, on top of the shared
-/// roll. `view::dodge::roll` owns *when* it goes over; this owns *how* it looks
-/// doing it.
+/// How one class rolls: what its arms carry and how it lands, on top of the
+/// shared roll. `view::dodge::roll` owns *when* it goes over.
 struct Style {
     looseness: Looseness,
     notes: &'static str,
-    /// Dress a beat. Given the shared pose, the way the roll is going and
-    /// which side that is (`1` right, `-1` left, `0` forward or back), returns
-    /// the class's.
-    dress: fn(Pose, Beat, Way, f32) -> Pose,
+    /// Dress a beat. Given the shared pose and the way the roll is going,
+    /// returns the class's.
+    dress: fn(Pose, Beat, Way) -> Pose,
 }
 
 fn style(class: Class) -> Style {
     match class {
         Class::Champion => Style {
             looseness: Looseness::MARTIAL,
-            notes: "The soldier's roll, and the shape the other five vary. A \
-                    dive onto the hands, one tight turn in a ball -- arms \
-                    wrapped, chin down -- held unchanging while the frames are \
-                    free, then the legs open for the floor on the frame the \
-                    cover runs out and he comes up in a low crouch with the \
+            notes: "The roll everyone shares, as the Champion does it: a hop \
+                    off both feet, chin and knees to the chest, one turn along \
+                    the floor in a round ball, held unchanging while the frames \
+                    are free; on the frame the cover runs out the legs open \
+                    for the floor and he comes up in a low crouch with the \
                     weapon hand forward. The turn itself is not here: \
                     `view::dodge` turns the whole body over about the middle \
-                    of the ball.",
+                    of the ball, and to the side turns him to face the travel \
+                    first, so a roll to the side is this roll.",
             dress: champion,
         },
         Class::Bulwark => Style {
             looseness: Looseness::HEAVY,
-            notes: "The shield roll. Later and heavier than anybody's -- he \
-                    starts over a frame after the Champion and is upright a \
-                    frame later -- and lower, tucked in behind the shield, the \
-                    shield arm across the ball the whole way round. He comes \
-                    up behind it rather than out of it: the shield is the first \
-                    thing back in front of him. HEAVY, because a big body \
+            notes: "The shared roll, heavier: he goes over a frame later and \
+                    is up a frame later, and the shield arm stays across the \
+                    front of the ball the whole way round. He comes up behind \
+                    the shield, deeper than anybody. HEAVY, because a big body \
                     carries past its marks.",
             dress: bulwark,
         },
         Class::ShadowReaver => Style {
             looseness: Looseness::CRISP,
-            notes: "The twisting dive. The first to go over and the first back \
-                    up, and a full twist through the turn on top of the roll \
-                    (`view::dodge::roll`'s `twist`), so going forward or back \
-                    she corkscrews. Long and flat into it with both blades \
-                    swept back, the blades held out wide through the ball, and \
-                    up light and low on the balls of her feet with them still \
-                    out. CRISP: the turn is fast and nothing trails it.",
+            notes: "The shared roll, quickest: she is first over and first up, \
+                    the blades swept back off the hop and tucked in for the \
+                    turn, and she comes up light and less deep, on the balls \
+                    of her feet with the blades out low. CRISP: nothing \
+                    trails a turn this fast.",
             dress: reaver,
         },
         Class::Elementalist => Style {
             looseness: Looseness::MARTIAL,
-            notes: "The earth roll. An ordinary roll that ends somewhere \
-                    different: out of the turn she does not stand, she slides \
-                    on, low on one knee, her lead hand dragged flat along the \
-                    floor she shapes, and only rises off it at the end. The \
-                    hand is placed against the ground the body is still \
-                    covering, so it drags rather than skates.",
+            notes: "The shared roll, ending somewhere different: out of the \
+                    turn she does not stand straight up, she slides on, low, \
+                    her lead hand dragged flat along the floor, and only rises \
+                    off it at the end.",
             dress: elementalist,
         },
         Class::BloodMage => Style {
             looseness: Looseness::MARTIAL,
-            notes: "The low tumble. The longest dive and the latest turn -- \
-                    she goes long and flat before she goes over -- and sunk \
-                    lower through the ball than anyone. The scythe arm never \
-                    comes in: it trails out wide through the turn like the \
-                    blade is dragging her round, and she unfurls low out of it \
-                    with the arm still out.",
+            notes: "The shared roll, late and low: she goes over last, and \
+                    unfurls low out of it with the scythe arm thrown out wide \
+                    behind her.",
             dress: blood,
         },
         Class::DualMage => Style {
             looseness: Looseness::FLOATY,
-            notes: "The aerial. She does not tuck: the body stays long, arched \
-                    a little, legs together and toes pointed, arms spread like \
-                    the wings she does not have yet, and `view::dodge` turns \
-                    her over about her waist rather than about a ball -- a \
-                    layout forward and back, a cartwheel to the side. The \
-                    slowest turn of the six and the softest landing, on one \
-                    foot and then the other. Even her blink, which travels \
-                    nothing, turns over where it arrives.",
+            notes: "The shared roll, lightest: unhurried in and out of the \
+                    ball, the slowest turn of the six, and up with her arms \
+                    opening wide like the wings she does not have yet.",
             dress: dual,
         },
     }
 }
 
 /// One class's roll, one way.
+///
+/// **To the side it is the forward roll.** `view::dodge::turned` turns the
+/// body to face the travel before it goes over and back as it rises, so the
+/// clip is the forward one, with only the head and the trunk leaning off the
+/// shoulder it goes over -- the difference between rolling over the right
+/// shoulder and the left.
 fn dive_roll(class: Class, way: Way) -> Recipe {
     let clip = view::dodge::clip(class, way);
     let len = clip.length();
@@ -232,44 +228,45 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
     let last = len - 1;
     let speed = ground_speed();
     let style = style(class);
-    let side = match way {
-        Way::Right => 1.0,
-        Way::Left => -1.0,
-        Way::Forward | Way::Back => 0.0,
+    // The body's own way, once it has turned to face the travel.
+    let body = if way == Way::Back {
+        Way::Back
+    } else {
+        Way::Forward
     };
     // The way a planted foot slides: against the travel.
-    let away = match way {
-        Way::Forward => [0.0, -1.0],
-        Way::Back => [0.0, 1.0],
-        Way::Right => [-1.0, 0.0],
-        Way::Left => [1.0, 0.0],
+    let away = if body == Way::Back {
+        [0.0, 1.0]
+    } else {
+        [0.0, -1.0]
     };
 
-    // The beats, placed against the turn. Over a frame after it starts, the
-    // ball two after that; both held clear of the break.
+    // The beats, placed against the turn: tucking a frame after it starts,
+    // balled two after that, both held clear of the break.
     let f_over = (roll.from + 1).clamp(3, brk.saturating_sub(4).max(3));
     let f_ball = (f_over + 2).min(brk - 2);
     let f_held = brk - 1;
     let f_catch = up.clamp(brk + 1, last - 4);
     let f_rise = f_catch + (last - f_catch) / 2;
 
-    let dress = |pose: Pose, beat: Beat| (style.dress)(pose, beat, way, side);
+    // Off the shoulder it goes over, rolling to the side.
+    let lean = |pose: Pose| shoulder(pose, way);
+    let dress = |pose: Pose, beat: Beat| (style.dress)(pose, beat, body);
 
     // The two feet the catch puts down, and where they have slid to by the
-    // rise and the last frame. The rise has the lead foot still down and the
-    // trailing one stepping under it.
-    let (lead, trail) = catch_feet(way);
+    // rise and the last frame.
+    let (lead, trail) = catch_feet(body);
     let lead_then = planted(lead, f_catch as f32, f_rise as f32, away, speed);
     let lead_last = planted(lead, f_catch as f32, last as f32, away, speed);
     let trail_then = planted(trail, f_catch as f32, f_rise as f32, away, speed);
 
     let keys = vec![
-        Key::eased(0, dress(push(way), Beat::Push), Ease::LINEAR),
-        Key::eased(1, dress(off(way), Beat::Off), Ease::LINEAR),
-        Key::eased(f_over, dress(over(way), Beat::Over), Ease::OUT),
-        Key::eased(f_ball, dress(ball(), Beat::Ball), Ease::HOLD),
-        Key::eased(f_held, dress(ball(), Beat::Ball), Ease::STRIKE),
-        Key::eased(brk, dress(open(way), Beat::Open), Ease::LINEAR),
+        Key::eased(0, dress(push(body), Beat::Push), Ease::LINEAR),
+        Key::eased(1, dress(off(body), Beat::Off), Ease::LINEAR),
+        Key::eased(f_over, lean(dress(over(body), Beat::Over)), Ease::OUT),
+        Key::eased(f_ball, lean(dress(ball(), Beat::Ball)), Ease::HOLD),
+        Key::eased(f_held, lean(dress(ball(), Beat::Ball)), Ease::STRIKE),
+        Key::eased(brk, dress(open(), Beat::Open), Ease::LINEAR),
         // The feet go down after the dressing, so a class that sinks lower
         // into its landing bends its knees for it rather than putting its
         // feet through the floor.
@@ -285,16 +282,15 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
         ),
         Key::eased(
             last,
-            settle(dress(settle_body(), Beat::Settle), lead_last, way),
+            settle(dress(settle_body(), Beat::Settle), lead_last, body),
             Ease::SMOOTH,
         ),
     ];
-    let keys = dedupe(keys);
     Recipe {
         clip,
         looseness: style.looseness,
         notes: style.notes.into(),
-        keys,
+        keys: dedupe(keys),
     }
 }
 
@@ -317,14 +313,28 @@ fn dedupe(keys: Vec<Key>) -> Vec<Key> {
     out
 }
 
-/// Mirror a pose across the body for a roll to the left, the rolls being
-/// authored to the right.
-fn sided(pose: Pose, way: Way) -> Pose {
-    if way == Way::Left {
-        pose.mirrored()
-    } else {
-        pose
-    }
+/// A shoulder roll's lean: going over the right shoulder the head tucks
+/// toward the left one and the trunk tips onto the right, so the round of the
+/// back runs from the right shoulder to the left hip. Mirrored for the left;
+/// nothing going straight forward or back.
+fn shoulder(pose: Pose, way: Way) -> Pose {
+    let s = match way {
+        Way::Right => 1.0,
+        Way::Left => -1.0,
+        Way::Forward | Way::Back => return pose,
+    };
+    let tip = |j: view::skeleton::Joint, side: f32, turn: f32| {
+        move |p: Pose| {
+            let mut q = p;
+            q.set_degrees(j, 1, p.degrees(j, 1) + side * s);
+            q.set_degrees(j, 2, p.degrees(j, 2) + turn * s);
+            q
+        }
+    };
+    use view::skeleton::Joint;
+    let pose = tip(Joint::Spine, 10.0, -8.0)(pose);
+    let pose = tip(Joint::Chest, 8.0, -10.0)(pose);
+    tip(Joint::Head, -20.0, 24.0)(pose)
 }
 
 // -- The shared beats --------------------------------------------------------
@@ -332,238 +342,166 @@ fn sided(pose: Pose, way: Way) -> Pose {
 /// Frame zero. The simulation hands out the whole velocity on the first frame
 /// of the action, so this is already going -- an anticipation pose here would
 /// be the body winding up for something it has already done.
-fn push(way: Way) -> Pose {
-    match way {
-        Way::Forward => stance()
-            .hips(0.0, -0.14, 0.04)
-            .root(20.0, 0.0, -6.0)
-            .spine(16.0, 0.0, 4.0)
-            .chest(8.0, 0.0, 5.0)
-            .head(-22.0, 0.0, 2.0)
-            .shoulder_l(30.0, 20.0, 0.0)
-            .elbow_l(50.0)
-            .shoulder_r(26.0, 18.0, 0.0)
-            .elbow_r(48.0)
-            .plant_l([L - 0.02, GROUND, 0.12])
-            .plant_r([R + 0.02, GROUND, -0.24])
-            .toe_l(-2.0)
-            .toe_r(10.0),
+fn push(body: Way) -> Pose {
+    match body {
         Way::Back => stance()
             .hips(0.0, -0.22, -0.04)
             .root(14.0, 0.0, -10.0)
             .spine(16.0, 0.0, 6.0)
             .chest(10.0, 0.0, 7.0)
-            .head(-12.0, 0.0, 4.0)
-            .shoulder_l(10.0, 20.0, 0.0)
+            .head(-6.0, 0.0, 4.0)
+            .shoulder_l(20.0, 20.0, 0.0)
             .elbow_l(70.0)
-            .shoulder_r(6.0, 18.0, 0.0)
+            .shoulder_r(16.0, 18.0, 0.0)
             .elbow_r(66.0)
             .plant_l([L - 0.03, GROUND, 0.10])
             .plant_r([R + 0.03, GROUND, -0.04])
             .toe_l(6.0)
             .toe_r(8.0),
-        Way::Left | Way::Right => sided(
-            stance()
-                .hips(0.03, -0.14, 0.0)
-                .root(10.0, 12.0, -8.0)
-                .spine(8.0, 10.0, 6.0)
-                .chest(4.0, 8.0, 8.0)
-                .head(-8.0, -6.0, 12.0)
-                .shoulder_l(-4.0, 24.0, 0.0)
-                .elbow_l(60.0)
-                .shoulder_r(22.0, 38.0, 0.0)
-                .elbow_r(52.0)
-                .plant_l([L - 0.07, GROUND, 0.06])
-                .plant_r([R + 0.07, GROUND, -0.06])
-                .toe_l(8.0)
-                .toe_r(2.0),
-            way,
-        ),
+        _ => stance()
+            .hips(0.0, -0.14, 0.04)
+            .root(18.0, 0.0, -6.0)
+            .spine(14.0, 0.0, 4.0)
+            .chest(8.0, 0.0, 5.0)
+            .head(-16.0, 0.0, 2.0)
+            .shoulder_l(30.0, 20.0, 0.0)
+            .elbow_l(50.0)
+            .shoulder_r(26.0, 18.0, 0.0)
+            .elbow_r(48.0)
+            .plant_l([L - 0.02, GROUND, 0.12])
+            .plant_r([R + 0.02, GROUND, -0.20])
+            .toe_l(-2.0)
+            .toe_r(10.0),
     }
 }
 
-/// One frame later, and both feet have left. Placed with `plant` at a raised
-/// ankle rather than by angles, because a foot keyed as angles this close to
-/// the floor ends up through it when the springs undershoot.
-fn off(way: Way) -> Pose {
-    match way {
-        Way::Forward => stance()
-            .hips(0.0, -0.18, 0.08)
-            .root(34.0, 0.0, -4.0)
-            .spine(24.0, 0.0, 3.0)
-            .chest(14.0, 0.0, 4.0)
-            .head(-30.0, 0.0, 1.0)
-            .shoulder_l(62.0, 18.0, 0.0)
-            .elbow_l(40.0)
-            .shoulder_r(56.0, 16.0, 0.0)
-            .elbow_r(38.0)
-            .plant_l([L - 0.02, GROUND + 0.12, 0.04])
-            .plant_r([R + 0.02, GROUND + 0.06, -0.32])
-            .toe_l(-10.0)
-            .toe_r(16.0),
+/// The hop. Both feet off the floor and the knees already coming up under a
+/// trunk leaning into the way it is going -- forward over the knees, or sat
+/// back behind them. Legs keyed as angles: nothing is on the floor to plant.
+fn off(body: Way) -> Pose {
+    match body {
         Way::Back => Pose::rest()
-            .hips(0.0, -0.24, -0.08)
+            .hips(0.0, -0.26, -0.08)
             .root(24.0, 0.0, -6.0)
-            .spine(24.0, 0.0, 4.0)
-            .chest(16.0, 0.0, 4.0)
-            .head(0.0, 0.0, 2.0)
-            .shoulder_l(30.0, 22.0, 0.0)
-            .elbow_l(80.0)
-            .shoulder_r(26.0, 20.0, 0.0)
-            .elbow_r(76.0)
-            .hip_l(62.0, 10.0, 0.0)
-            .knee_l(84.0)
-            .hip_r(54.0, 8.0, 0.0)
-            .knee_r(92.0)
+            .spine(26.0, 0.0, 4.0)
+            .chest(18.0, 0.0, 4.0)
+            .head(10.0, 0.0, 2.0)
+            .shoulder_l(40.0, 22.0, 0.0)
+            .elbow_l(84.0)
+            .shoulder_r(36.0, 20.0, 0.0)
+            .elbow_r(80.0)
+            .hip_l(66.0, 10.0, 0.0)
+            .knee_l(88.0)
+            .hip_r(58.0, 8.0, 0.0)
+            .knee_r(96.0)
             .toe_l(24.0)
             .toe_r(26.0),
-        Way::Left | Way::Right => sided(
-            stance()
-                .hips(0.06, -0.18, 0.0)
-                .root(14.0, 20.0, -6.0)
-                .spine(12.0, 16.0, 4.0)
-                .chest(6.0, 12.0, 6.0)
-                .head(0.0, -10.0, 14.0)
-                .shoulder_l(10.0, 28.0, 0.0)
-                .elbow_l(70.0)
-                .shoulder_r(36.0, 66.0, 0.0)
-                .elbow_r(36.0)
-                .plant_l([L - 0.11, GROUND + 0.16, 0.04])
-                .plant_r([R + 0.13, GROUND + 0.18, -0.02])
-                .toe_l(2.0)
-                .toe_r(0.0),
-            way,
-        ),
+        _ => Pose::rest()
+            .hips(0.0, -0.14, 0.06)
+            .root(26.0, 0.0, -4.0)
+            .spine(18.0, 0.0, 3.0)
+            .chest(12.0, 0.0, 4.0)
+            .head(-12.0, 0.0, 1.0)
+            .shoulder_l(52.0, 18.0, 0.0)
+            .elbow_l(44.0)
+            .shoulder_r(48.0, 16.0, 0.0)
+            .elbow_r(42.0)
+            .hip_l(56.0, 8.0, 0.0)
+            .knee_l(74.0)
+            .hip_r(24.0, 6.0, 0.0)
+            .knee_r(62.0)
+            .toe_l(20.0)
+            .toe_r(28.0),
     }
 }
 
-/// Going over. Forward it is the dive: flat, hands reaching down for the floor
-/// the shoulders are about to roll across. Back it is the sit: knees up, chin
-/// down, hands forward. To the side it is the lean, the lead arm reaching for
-/// the floor it is about to pass over.
-fn over(way: Way) -> Pose {
-    match way {
-        // A hip's swing is measured against the root, and the root is leaning
-        // forty-six degrees -- so a trailing leg is a small positive number,
-        // and arms swung a hundred and ten degrees off a chest leaning a
-        // hundred point at the floor, not ahead.
-        Way::Forward => Pose::rest()
-            .hips(0.0, -0.24, 0.14)
-            .root(46.0, 0.0, 0.0)
-            .spine(32.0, 0.0, 0.0)
-            .chest(20.0, 0.0, 0.0)
-            .head(-6.0, 0.0, 0.0)
-            .shoulder_l(108.0, 16.0, 0.0)
-            .elbow_l(26.0)
-            .shoulder_r(112.0, 14.0, 0.0)
-            .elbow_r(24.0)
-            .hip_l(30.0, 8.0, 0.0)
-            .knee_l(64.0)
-            .hip_r(20.0, 6.0, 0.0)
-            .knee_r(84.0)
-            .toe_l(30.0)
-            .toe_r(32.0),
-        Way::Back => Pose::rest()
-            .hips(0.0, -0.30, -0.10)
-            .root(30.0, 0.0, 0.0)
-            .spine(36.0, 0.0, 0.0)
-            .chest(26.0, 0.0, 0.0)
-            .head(28.0, 0.0, 0.0)
-            .shoulder_l(56.0, 20.0, 0.0)
-            .elbow_l(100.0)
-            .shoulder_r(52.0, 20.0, 0.0)
-            .elbow_r(104.0)
-            .hip_l(98.0, 12.0, 0.0)
-            .knee_l(118.0)
-            .hip_r(94.0, 10.0, 0.0)
-            .knee_r(122.0)
-            .toe_l(24.0)
-            .toe_r(24.0),
-        Way::Left | Way::Right => sided(
-            Pose::rest()
-                .hips(0.10, -0.28, 0.04)
-                .root(26.0, 22.0, 0.0)
-                .spine(24.0, 16.0, 0.0)
-                .chest(16.0, 10.0, 0.0)
-                .head(16.0, -8.0, 0.0)
-                .shoulder_l(60.0, 24.0, 0.0)
-                .elbow_l(100.0)
-                .shoulder_r(70.0, 58.0, 0.0)
-                .elbow_r(30.0)
-                .hip_l(76.0, 14.0, 0.0)
-                .knee_l(104.0)
-                .hip_r(84.0, 16.0, 0.0)
-                .knee_r(112.0)
-                .toe_l(22.0)
-                .toe_r(22.0),
-            way,
-        ),
+/// Tucking. The chin goes down, the back rounds, the knees come up and the
+/// hands go toward the shins: forward, with the hands still reaching a little
+/// for the floor the shoulders are about to roll across; back, with them in
+/// front of the knees.
+fn over(body: Way) -> Pose {
+    let base = Pose::rest()
+        .hips(0.0, -0.28, 0.02)
+        .root(28.0, 0.0, 0.0)
+        .spine(36.0, 0.0, 0.0)
+        .chest(28.0, 0.0, 0.0)
+        .head(32.0, 0.0, 0.0)
+        .hip_l(96.0, 12.0, 0.0)
+        .knee_l(116.0)
+        .hip_r(92.0, 10.0, 0.0)
+        .knee_r(120.0)
+        .toe_l(26.0)
+        .toe_r(26.0);
+    match body {
+        Way::Back => base
+            .hips(0.0, -0.32, -0.06)
+            .shoulder_l(58.0, 20.0, 0.0)
+            .elbow_l(104.0)
+            .shoulder_r(54.0, 20.0, 0.0)
+            .elbow_r(108.0),
+        _ => base
+            .shoulder_l(76.0, 18.0, 0.0)
+            .elbow_l(70.0)
+            .shoulder_r(80.0, 16.0, 0.0)
+            .elbow_r(66.0),
     }
 }
 
-/// The ball: knees to the chest, arms wrapped round the shins, chin down. The
-/// smallest the silhouette gets, and the same whichever way the roll goes --
-/// the turn is what tells forward from sideways now, not the curl. The trunk
-/// and the thighs both point ahead and lie along each other, which is what
-/// makes it a ball and not a crouch.
+/// The ball: chin on the chest, the back rounded, knees pulled up to it and the
+/// hands on the shins. **Round**, because it is what the body rolls on: the
+/// trunk curls down over thighs that come up to meet it, rather than both
+/// pointing ahead, so it is about as deep as it is tall. The same whichever way
+/// the roll goes; the turn is what tells forward from back.
 fn ball() -> Pose {
     Pose::rest()
-        .hips(0.0, -0.34, 0.10)
-        .root(44.0, 0.0, 0.0)
-        .spine(40.0, 0.0, 0.0)
-        .chest(30.0, 0.0, 0.0)
-        .head(36.0, 0.0, 0.0)
-        .shoulder_l(66.0, 24.0, 0.0)
-        .elbow_l(124.0)
-        .shoulder_r(70.0, 22.0, 0.0)
-        .elbow_r(126.0)
-        .hip_l(110.0, 12.0, 0.0)
-        .knee_l(138.0)
-        .hip_r(112.0, 10.0, 0.0)
-        .knee_r(140.0)
+        .hips(0.0, -0.36, 0.0)
+        .root(22.0, 0.0, 0.0)
+        .spine(42.0, 0.0, 0.0)
+        .chest(36.0, 0.0, 0.0)
+        .head(42.0, 0.0, 0.0)
+        .shoulder_l(58.0, 20.0, 0.0)
+        .elbow_l(128.0)
+        .shoulder_r(60.0, 18.0, 0.0)
+        .elbow_r(130.0)
+        .hip_l(118.0, 12.0, 0.0)
+        .knee_l(146.0)
+        .hip_r(118.0, 10.0, 0.0)
+        .knee_r(146.0)
         .toe_l(30.0)
         .toe_r(30.0)
 }
 
 /// The break. Most of the way round, the legs come out of the ball and reach
 /// along the body for the floor -- which, the body being over, is ahead of it
-/// going forward, behind it going back and below it to the side -- and the
-/// arms come off the shins. Everything that changes on this frame is the
-/// cover going.
-fn open(way: Way) -> Pose {
-    let base = Pose::rest()
-        .hips(0.0, -0.32, 0.06)
-        .root(30.0, 0.0, 0.0)
-        .spine(28.0, 0.0, 0.0)
-        .chest(16.0, 0.0, 0.0)
-        .head(10.0, 0.0, 0.0)
+/// going forward and behind it going back -- and the arms come off the shins.
+/// Everything that changes on this frame is the cover going.
+fn open() -> Pose {
+    Pose::rest()
+        .hips(0.0, -0.32, 0.02)
+        .root(26.0, 0.0, 0.0)
+        .spine(30.0, 0.0, 0.0)
+        .chest(18.0, 0.0, 0.0)
+        .head(14.0, 0.0, 0.0)
         .shoulder_l(30.0, 40.0, 0.0)
         .elbow_l(70.0)
         .shoulder_r(34.0, 38.0, 0.0)
         .elbow_r(66.0)
-        .hip_l(58.0, 12.0, 0.0)
-        .knee_l(96.0)
-        .hip_r(74.0, 10.0, 0.0)
-        .knee_r(110.0)
+        .hip_l(62.0, 12.0, 0.0)
+        .knee_l(100.0)
+        .hip_r(78.0, 10.0, 0.0)
+        .knee_r(114.0)
         .toe_l(4.0)
-        .toe_r(6.0);
-    match way {
-        Way::Forward | Way::Back => base,
-        // Sideways the far leg reaches out under the travel.
-        Way::Left | Way::Right => sided(base.hip_r(64.0, 26.0, 0.0), way),
-    }
+        .toe_r(6.0)
 }
 
 /// Where the catch puts the two feet down: the lead under the body, the other
-/// behind it, both on the floor.
-fn catch_feet(way: Way) -> ([f32; 3], [f32; 3]) {
+/// behind it, on the balls of both.
+fn catch_feet(body: Way) -> ([f32; 3], [f32; 3]) {
     // The ankles a few centimetres up: on the balls of the feet.
     const UP: f32 = GROUND + 0.07;
-    match way {
-        Way::Forward => ([R + 0.04, UP, 0.20], [L - 0.04, UP, -0.10]),
+    match body {
         Way::Back => ([L - 0.04, UP, -0.18], [R + 0.04, UP, 0.10]),
-        Way::Right => ([R + 0.16, UP, 0.04], [L - 0.02, UP, -0.06]),
-        Way::Left => ([L - 0.16, UP, 0.04], [R + 0.02, UP, -0.06]),
+        _ => ([R + 0.04, UP, 0.20], [L - 0.04, UP, -0.04]),
     }
 }
 
@@ -615,15 +553,15 @@ fn settle_body() -> Pose {
 }
 
 /// The settled feet: the lead where it slid to, the other the stance's.
-fn settle(pose: Pose, lead: [f32; 3], way: Way) -> Pose {
+fn settle(pose: Pose, lead: [f32; 3], body: Way) -> Pose {
     let pose = pose
         .plant_l([L - 0.03, GROUND, 0.16])
         .toe_l(0.0)
         .plant_r([R + 0.03, GROUND + 0.032, -0.15])
         .toe_floor_r();
-    match way {
-        Way::Back | Way::Left => pose.plant_l(lead).toe_l(2.0),
-        Way::Forward | Way::Right => pose.plant_r(lead).toe_r(2.0),
+    match body {
+        Way::Back => pose.plant_l(lead).toe_l(2.0),
+        _ => pose.plant_r(lead).toe_r(2.0),
     }
 }
 
@@ -650,9 +588,8 @@ fn feet(pose: Pose, lead: [f32; 3], trail: [f32; 3]) -> Pose {
 
 // -- The six ------------------------------------------------------------------
 
-/// The soldier's roll: the shared one, with the weapon hand coming up forward
-/// at the end.
-fn champion(pose: Pose, beat: Beat, _way: Way, _side: f32) -> Pose {
+/// The roll as everyone shares it, with the weapon hand coming up forward.
+fn champion(pose: Pose, beat: Beat, _body: Way) -> Pose {
     match beat {
         Beat::Catch => pose.shoulder_r(46.0, 20.0, 0.0).elbow_r(40.0),
         Beat::Rise => pose.shoulder_r(36.0, 18.0, 0.0).elbow_r(44.0),
@@ -664,196 +601,95 @@ fn champion(pose: Pose, beat: Beat, _way: Way, _side: f32) -> Pose {
 /// The shield arm across the front of whatever the body is doing: the
 /// forearm level across the chest, the shield on it facing out.
 fn shield(pose: Pose) -> Pose {
-    pose.shoulder_l(74.0, -20.0, 0.0)
-        .elbow_l(104.0)
+    pose.shoulder_l(66.0, -14.0, 0.0)
+        .elbow_l(110.0)
         .wrist_l(-6.0, 0.0, 0.0)
 }
 
-fn bulwark(pose: Pose, beat: Beat, _way: Way, _side: f32) -> Pose {
+fn bulwark(pose: Pose, beat: Beat, _body: Way) -> Pose {
     match beat {
         Beat::Push | Beat::Off => pose.shoulder_l(52.0, -6.0, 0.0).elbow_l(98.0),
-        Beat::Over => shield(pose),
-        // Lower and broader through the ball: he does not fold as small as a
-        // lighter body, so the knees sit wider and the head stays tucked in
-        // behind the shield rather than down between them.
-        Beat::Ball => shield(pose.hips(0.0, -0.38, 0.08).head(26.0, 0.0, 0.0))
-            .hip_l(104.0, 20.0, 0.0)
-            .hip_r(106.0, 18.0, 0.0),
-        Beat::Open => shield(pose),
+        Beat::Over | Beat::Ball | Beat::Open => shield(pose),
         // Up behind the shield, deeper than anyone.
         Beat::Catch => shield(pose.hips(0.0, -0.44, 0.0).root(22.0, 0.0, -6.0)),
-        Beat::Rise => shield(pose.hips(0.0, -0.30, 0.0)).shoulder_l(66.0, -14.0, 0.0),
+        Beat::Rise => shield(pose.hips(0.0, -0.30, 0.0)),
         Beat::Settle => pose.shoulder_l(44.0, -4.0, 0.0).elbow_l(96.0),
     }
 }
 
-fn reaver(pose: Pose, beat: Beat, way: Way, _side: f32) -> Pose {
-    // Both blades swept back and out: the arms behind the body and spread.
+fn reaver(pose: Pose, beat: Beat, body: Way) -> Pose {
+    // Both blades swept back off the hop, arms behind the body.
     let swept = |p: Pose| {
-        p.shoulder_l(-40.0, 56.0, 0.0)
-            .elbow_l(20.0)
-            .shoulder_r(-40.0, 56.0, 0.0)
-            .elbow_r(20.0)
-    };
-    // Held out wide through the turn, a blade at each side of the ball.
-    let wide = |p: Pose| {
-        p.shoulder_l(30.0, 84.0, 0.0)
-            .elbow_l(24.0)
-            .shoulder_r(30.0, 84.0, 0.0)
-            .elbow_r(24.0)
+        p.shoulder_l(-16.0, 36.0, 0.0)
+            .elbow_l(30.0)
+            .shoulder_r(-16.0, 36.0, 0.0)
+            .elbow_r(30.0)
     };
     match beat {
-        // Forward, longer and flatter than the soldier's dive -- the hips
-        // further ahead, the trunk lower -- with the blades swept back rather
-        // than reaching. Any other way the blades go straight out to the
-        // ball's: there are not the frames to sweep them back and out again.
-        Beat::Push | Beat::Off if way == Way::Forward => swept(pose),
-        Beat::Over if way == Way::Forward => {
-            swept(pose.hips(0.0, -0.25, 0.18).root(48.0, 0.0, 0.0))
-        }
-        // CRISP arrives fast, and the trunk's bend into a sideways roll in two
-        // frames is a shoulder over the motion ceiling; so she is already some
-        // of the way into it as her feet leave.
-        Beat::Off => pose.blend(&over(way), 0.55),
-        Beat::Push | Beat::Over => pose,
-        Beat::Ball => wide(pose),
-        Beat::Open => wide(pose),
+        Beat::Push | Beat::Off if body == Way::Forward => swept(pose),
         // Up light: not so deep, on the balls of the feet, blades out low.
         Beat::Catch => pose
             .hips(0.0, -0.30, 0.0)
-            .shoulder_l(-24.0, 50.0, 0.0)
-            .elbow_l(18.0)
-            .shoulder_r(-24.0, 50.0, 0.0)
-            .elbow_r(18.0)
-            .toe_l(12.0)
-            .toe_r(12.0),
+            .shoulder_l(-20.0, 46.0, 0.0)
+            .elbow_l(20.0)
+            .shoulder_r(-20.0, 46.0, 0.0)
+            .elbow_r(20.0),
         Beat::Rise => pose
-            .shoulder_l(-12.0, 46.0, 0.0)
-            .elbow_l(24.0)
-            .shoulder_r(-12.0, 46.0, 0.0)
-            .elbow_r(24.0),
-        Beat::Settle => pose,
+            .shoulder_l(-10.0, 42.0, 0.0)
+            .elbow_l(26.0)
+            .shoulder_r(-10.0, 42.0, 0.0)
+            .elbow_r(26.0),
+        _ => pose,
     }
 }
 
-fn elementalist(pose: Pose, beat: Beat, way: Way, side: f32) -> Pose {
-    // The hand that drags: the lead side's going sideways, otherwise her left.
-    let left = side <= 0.0;
+fn elementalist(pose: Pose, beat: Beat, body: Way) -> Pose {
     match beat {
-        // Out of the turn sliding on: one knee nearly down, the trunk forward
-        // over it, the hand flat on the floor beside the lead foot.
+        // Out of the turn sliding on: low, the trunk forward over the knees,
+        // her left hand flat on the floor beside the lead foot.
         Beat::Catch | Beat::Rise => {
             let (deep, lean) = if beat == Beat::Catch {
-                (-0.50, 34.0)
+                (-0.48, 34.0)
             } else {
                 (-0.40, 28.0)
             };
-            let hand = drag_hand(way, left);
-            let body = pose
-                .hips(0.0, deep, 0.0)
+            let z = if body == Way::Back { -0.10 } else { 0.24 };
+            pose.hips(0.0, deep, 0.0)
                 .root(lean, 0.0, -6.0)
-                .spine(22.0, 0.0, 0.0);
-            if left {
-                body.reach_l(hand).shoulder_r(10.0, 64.0, 0.0).elbow_r(30.0)
-            } else {
-                body.reach_r(hand).shoulder_l(10.0, 64.0, 0.0).elbow_l(30.0)
-            }
+                .spine(22.0, 0.0, 0.0)
+                .reach_l([L - 0.20, 0.06, z])
+                .shoulder_r(10.0, 64.0, 0.0)
+                .elbow_r(30.0)
         }
         _ => pose,
     }
 }
 
-/// Where her dragging hand is on the floor, in character space: low beside
-/// the lead foot, a little ahead of the hips.
-fn drag_hand(way: Way, left: bool) -> [f32; 3] {
-    let x = if left { L - 0.20 } else { R + 0.20 };
-    let z = match way {
-        Way::Back => -0.10,
-        _ => 0.24,
-    };
-    [x, 0.06, z]
-}
-
-fn blood(pose: Pose, beat: Beat, way: Way, side: f32) -> Pose {
-    // The scythe arm out wide and nearly straight, trailing.
-    let out = |p: Pose| p.shoulder_r(-10.0, 92.0, 0.0).elbow_r(12.0);
-    // Through the ball, out to the side is along the axis a roll forward or
-    // back turns about, so the blade sweeps round her; a roll to the side
-    // would sweep it through the floor, so going sideways it comes in for the
-    // turn and goes out again as she opens.
-    let trailing = move |p: Pose| if side == 0.0 { out(p) } else { p };
+fn blood(pose: Pose, beat: Beat, _body: Way) -> Pose {
+    // The scythe arm out wide and a little back, nearly straight.
+    let out = |p: Pose| p.shoulder_r(-10.0, 88.0, 0.0).elbow_r(12.0);
     match beat {
-        Beat::Push | Beat::Off => pose,
-        // Long and flat: she goes further before she goes over.
-        Beat::Over => match way {
-            Way::Forward => trailing(pose.hips(0.0, -0.30, 0.22).root(50.0, 0.0, 0.0)),
-            _ => trailing(pose.hips(0.0, -0.32, 0.06)),
-        },
-        // Sunk lower through the ball than anyone, the scythe arm never in.
-        Beat::Ball => trailing(pose.hips(0.0, -0.40, 0.12)),
-        Beat::Open => trailing(pose.hips(0.0, -0.36, 0.06)),
         // Unfurling low.
         Beat::Catch => out(pose.hips(0.0, -0.44, 0.0)),
         Beat::Rise => out(pose.hips(0.0, -0.32, 0.0)),
         Beat::Settle => pose.shoulder_r(-8.0, 50.0, 0.0).elbow_r(30.0),
+        _ => pose,
     }
 }
 
-fn dual(pose: Pose, beat: Beat, way: Way, side: f32) -> Pose {
-    // Laid out: long, arched a little, legs together and toes pointed, arms
-    // spread wide like wings. What she turns over in place of a ball.
-    let laid_out = Pose::rest()
-        .hips(0.0, 0.04, 0.0)
-        .root(-6.0, 0.0, 0.0)
-        .spine(-12.0, 0.0, 0.0)
-        .chest(-8.0, 0.0, 0.0)
-        .head(-10.0, 0.0, 0.0)
-        .shoulder_l(10.0, 96.0, 0.0)
-        .elbow_l(12.0)
-        .wrist_l(10.0, 0.0, 0.0)
-        .shoulder_r(10.0, 96.0, 0.0)
-        .elbow_r(12.0)
-        .wrist_r(10.0, 0.0, 0.0)
-        .hip_l(-4.0, 3.0, 0.0)
-        .knee_l(6.0)
-        .hip_r(-2.0, 3.0, 0.0)
-        .knee_r(8.0)
-        .toe_l(44.0)
-        .toe_r(44.0);
+fn dual(pose: Pose, beat: Beat, _body: Way) -> Pose {
+    // Both arms opening wide.
+    let wings = |p: Pose, spread: f32| {
+        p.shoulder_l(-4.0, spread, 0.0)
+            .elbow_l(18.0)
+            .shoulder_r(-4.0, spread, 0.0)
+            .elbow_r(18.0)
+    };
     match beat {
-        Beat::Push | Beat::Off => pose.shoulder_l(10.0, 60.0, 0.0).shoulder_r(10.0, 60.0, 0.0),
-        Beat::Over => laid_out.hips(0.0, 0.0, 0.0).spine(-6.0, 0.0, 0.0),
-        Beat::Ball => laid_out,
-        // Legs parting for the floor, one reaching down ahead of the other.
-        Beat::Open => {
-            let open = laid_out
-                .hips(0.0, 0.0, 0.0)
-                .hip_l(24.0, 6.0, 0.0)
-                .knee_l(20.0)
-                .hip_r(-14.0, 4.0, 0.0)
-                .knee_r(10.0);
-            if way == Way::Back || side < 0.0 {
-                open.mirrored()
-            } else {
-                open
-            }
-        }
-        // Down on one foot and then the other, the arms still out.
-        Beat::Catch => pose
-            .hips(0.0, -0.20, 0.0)
-            .root(10.0, 0.0, 0.0)
-            .head(-10.0, 0.0, 0.0)
-            .shoulder_l(0.0, 84.0, 0.0)
-            .elbow_l(16.0)
-            .shoulder_r(0.0, 84.0, 0.0)
-            .elbow_r(16.0),
-        Beat::Rise => pose
-            .hips(0.0, -0.12, 0.0)
-            .shoulder_l(-6.0, 64.0, 0.0)
-            .elbow_l(24.0)
-            .shoulder_r(-6.0, 64.0, 0.0)
-            .elbow_r(24.0),
-        Beat::Settle => pose,
+        Beat::Open => wings(pose, 60.0),
+        Beat::Catch => wings(pose.hips(0.0, -0.28, 0.0), 80.0),
+        Beat::Rise => wings(pose.hips(0.0, -0.16, 0.0), 66.0),
+        _ => pose,
     }
 }
 

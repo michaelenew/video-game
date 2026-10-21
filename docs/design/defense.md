@@ -63,21 +63,29 @@ vertical takeoff and dodge moved onto shift alone. See
 Dodge is the universal answer to a read you made correctly. It is punished by attacks
 that cover space or arrive late.
 
-**On the ground it is drawn as a dive roll, and every class rolls its own** (2026-10-21).
-The body really goes over -- `view::dodge` turns the whole drawn body about the middle of
-the ball the clip curls into, and holds it on the floor as it goes -- and it is a drawing
-only: the frames, the invulnerable window, the speed and the hurt volume are exactly what
-they were. The turn is mostly done on the frame the cover runs out, so the silhouette still
-opens on that frame. Each class's version, in its own clips (`crates/anim/src/clips/dodge.rs`):
+**On the ground it is drawn as a roll, and every class rolls its own** (2026-10-21).
+A hop off both feet, chin and knees to the chest, one turn along the floor and up -- the
+roll of a third-person action game. Back it is a backward roll; **to the side the body turns
+to face the travel, rolls forward over the lead shoulder and turns back as it rises**. The
+body really goes over -- `view::dodge` turns the whole drawn body about the middle of the
+ball and holds it on the floor as it goes -- and it is a drawing only: the frames, the
+invulnerable window, the speed and the hurt volume are exactly what they were. The turn is
+mostly done on the frame the cover runs out, so the silhouette still opens on that frame.
+The classes differ in timing, weight and what the arms carry
+(`crates/anim/src/clips/dodge.rs`):
 
-| Class | The roll |
+| Class | Its roll |
 | --- | --- |
-| Champion | The soldier's roll: a dive onto the hands, one tight turn, up in a low crouch with the weapon hand forward |
-| Bulwark | The shield roll: later, heavier and lower, tucked in behind the shield, up behind it |
-| Shadow Reaver | The twisting dive: long and flat with the blades swept back, a full twist through the turn with them held out, and the first up, light |
-| Elementalist | The earth roll: out of the turn sliding on one knee with a hand dragged along the floor |
-| Blood mage | The low tumble: the longest dive and the latest turn, sunk low, the scythe arm trailing out wide |
-| Dual mage | The aerial: no tuck -- laid out, arms spread, a layout or a cartwheel turned about her waist, in the air rather than on the floor |
+| Champion | The roll as it is; up with the weapon hand forward |
+| Bulwark | A frame later over and up, heavier, the shield arm across the ball, up behind the shield |
+| Shadow Reaver | Quickest over and up, blades swept back off the hop, up light and less deep |
+| Elementalist | Slides on out of it, low, a hand dragged along the floor |
+| Blood mage | Last over, unfurls low with the scythe arm thrown out wide |
+| Dual mage | Slowest and lightest, up with her arms opening wide |
+
+The first version the same day gave the Reaver a twist through the turn, the Dual mage a
+laid-out aerial and a cartwheel, and rolled sideways over the shoulder line; from play it
+"looked insane", and was replaced by the above.
 
 The class dodges that are not travel keep their own drawing underneath: the Dual mage's
 and the Blood mage's blinks arrive and then roll forward where they land, and the Reaver's

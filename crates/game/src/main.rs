@@ -7792,7 +7792,7 @@ fn drive_camera(
 fn body_frame(p: &view::PlayerView, turned: f32, lift: f32) -> (Vec3, Quat) {
     // Swimming, she is drawn sunk into her ground, a hump of her showing.
     let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY + lift, p.pos[2]);
-    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned);
+    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned + p.roll_yaw);
     if p.roll == view::math::Quat::IDENTITY {
         return (feet, turn);
     }

@@ -10,16 +10,24 @@
 //! only**: the hurt volume, the camera and the aim never turn over, and nothing
 //! here touches a frame of the dodge's data.
 //!
-//! Every class rolls, and each rolls the way it fights (2026-10-21):
+//! **One roll, the kind a third-person action game has** (2026-10-21, from
+//! play: the first version, with a twist, a cartwheel and a laid-out aerial,
+//! "looked insane"): a hop off both feet, chin and knees to the chest, one
+//! turn along the floor in a round ball, and up onto the feet. Back, it is a
+//! backward roll. **To the side the body turns to face the travel, rolls
+//! forward over the lead shoulder, and turns back as it rises** -- nobody
+//! goes over their own shoulder line and comes up on their feet.
 //!
-//! | Class | The roll |
+//! Each class rolls it its own way, in timing, weight and what the arms carry:
+//!
+//! | Class | Its roll |
 //! | --- | --- |
-//! | Champion | The soldier's roll: a dive onto the hands, one tight turn, up in a low crouch with the weapon forward |
-//! | Bulwark | The shield roll: late, heavy and low, tucked behind the shield, and up behind it |
-//! | Shadow Reaver | The twisting dive: long and flat, a full twist through the turn, blades held out, and the first up, light |
-//! | Elementalist | The earth roll: comes out of the turn sliding on one knee with a hand dragged on the floor |
-//! | Blood mage | The low tumble: the longest dive and the latest turn, sunk low, the scythe arm trailing out wide |
-//! | Dual mage | The aerial: no tuck at all -- laid out, arms spread like wings, turned about her waist, slowest of all |
+//! | Champion | The roll as it is; up with the weapon hand forward |
+//! | Bulwark | A frame later over and up, heavier, the shield arm across the ball, up behind the shield |
+//! | Shadow Reaver | Quickest over and up, blades swept back off the hop, up light and less deep |
+//! | Elementalist | Slides on out of it, low, a hand dragged along the floor |
+//! | Blood mage | Last over, unfurls low with the scythe arm thrown out wide |
+//! | Dual mage | Slowest and lightest, up with her arms opening wide |
 //!
 //! Two things are the same for everyone, because they are the dodge's rather
 //! than the class's. The turn is mostly done by the frame the invulnerability
@@ -73,18 +81,12 @@ pub struct Roll {
     /// How many frames after the cover runs out it is upright again (negative:
     /// before). The turn is eased in and out between the two.
     pub past_cover: i16,
-    /// Turns about its own long axis on top of a forward or backward roll: the
-    /// Reaver's twist. Nought for everybody else.
-    pub twist: f32,
     /// Where the body turns about, in character space (`+Y` up, `+Z` ahead):
     /// about the middle of the ball the clip curls into. It decides the arc;
     /// the height is then put right by [`lift`], which keeps whatever is
     /// lowest on the floor -- so a pivot a few centimetres out is a slightly
     /// different arc rather than a body in the floor.
     pub about: V3,
-    /// Over in the air rather than on the floor: kept out of it, never pulled
-    /// down onto it. The Dual mage's aerial.
-    pub aerial: bool,
 }
 
 /// The roll a class does. See the module's table.
@@ -93,44 +95,32 @@ pub const fn roll(class: Class) -> Roll {
         Class::Champion => Roll {
             from: 2,
             past_cover: 3,
-            twist: 0.0,
-            about: [0.0, 0.47, 0.41],
-            aerial: false,
+            about: [0.0, 0.47, 0.30],
         },
         Class::Bulwark => Roll {
             from: 3,
             past_cover: 4,
-            twist: 0.0,
-            about: [0.0, 0.39, 0.37],
-            aerial: false,
+            about: [0.0, 0.42, 0.28],
         },
         Class::ShadowReaver => Roll {
             from: 2,
             past_cover: 1,
-            twist: 1.0,
-            about: [0.0, 0.52, 0.41],
-            aerial: false,
+            about: [0.0, 0.52, 0.31],
         },
         Class::Elementalist => Roll {
             from: 2,
             past_cover: 2,
-            twist: 0.0,
-            about: [0.0, 0.49, 0.43],
-            aerial: false,
+            about: [0.0, 0.50, 0.32],
         },
         Class::BloodMage => Roll {
             from: 4,
             past_cover: 3,
-            twist: 0.0,
-            about: [0.0, 0.41, 0.42],
-            aerial: false,
+            about: [0.0, 0.44, 0.31],
         },
         Class::DualMage => Roll {
-            from: 1,
-            past_cover: 6,
-            twist: 0.0,
-            about: [0.0, 1.0, -0.1],
-            aerial: true,
+            from: 2,
+            past_cover: 5,
+            about: [0.0, 0.50, 0.33],
         },
     }
 }
@@ -194,24 +184,70 @@ pub const fn clip(class: Class, way: Way) -> Clip {
     }
 }
 
-/// The whole-body turn of a class's roll at a frame of the clip, in character
-/// space as the renderer draws it, and the point it turns about.
-///
-/// Forward and back go over the body's own side; left and right over its
-/// front, toward the travel. A pose is drawn with the body's right at `-X`
-/// (see `crate::hand_joint`), so a turn about `+Z` by a positive angle carries
-/// the head to the right.
-pub fn turned(class: Class, way: Way, frame: f32) -> (Quat, V3) {
-    let r = roll(class);
-    let k = r.through(frame);
-    let over = k * TAU;
-    let q = match way {
-        Way::Forward => Quat::from_x(over).mul(Quat::from_y(k * r.twist * TAU)),
-        Way::Back => Quat::from_x(-over).mul(Quat::from_y(-k * r.twist * TAU)),
-        Way::Right => Quat::from_z(over),
-        Way::Left => Quat::from_z(-over),
+/// A roll's whole-body turn at one frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Turn {
+    /// How far the body is turned to face the way it is rolling, in radians
+    /// about the vertical through its feet, the engine's way round: a roll to
+    /// the side turns to face the travel first, rolls forward, and turns back
+    /// as it comes up. Nought going forward or back.
+    pub yaw: f32,
+    /// The roll itself, in the body's own frame once it has turned: over its
+    /// own side, forward or back.
+    pub over: Quat,
+    /// The point it rolls about, in that frame.
+    pub about: V3,
+}
+
+impl Turn {
+    /// The whole rotation, character space to drawn: the yaw, then the roll.
+    pub fn whole(&self) -> Quat {
+        Quat::from_y(self.yaw).mul(self.over)
+    }
+}
+
+/// The share of a quarter turn a roll to the side is turned toward its travel,
+/// at a frame: in over the push, held through the roll, back out over the
+/// rise.
+fn facing_travel(r: &Roll, frame: f32) -> f32 {
+    let ease = |t: f32| {
+        let t = t.clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
     };
-    (q, r.about)
+    let last = length().saturating_sub(1) as f32;
+    let up = r.upright() as f32;
+    let into = ease(frame / (r.from as f32 + 1.0).max(1.0));
+    let out = ease((frame - up) / (last - up).max(1.0));
+    into * (1.0 - out)
+}
+
+/// The whole-body turn of a class's roll at a frame of the clip, in character
+/// space as the renderer draws it.
+///
+/// Forward and back go over the body's own side. **To the side it turns to
+/// face the travel and rolls forward**, the way anybody actually rolls
+/// sideways -- a body cannot go over its own shoulder line and come up on its
+/// feet -- and turns back to the front as it rises. A pose is drawn with the
+/// body's right at `-X` (see `crate::hand_joint`), so facing the right is a
+/// quarter turn the negative way about `+Y`.
+pub fn turned(class: Class, way: Way, frame: f32) -> Turn {
+    use std::f32::consts::FRAC_PI_2;
+    let r = roll(class);
+    let over = r.through(frame) * TAU;
+    let side = match way {
+        Way::Right => -FRAC_PI_2,
+        Way::Left => FRAC_PI_2,
+        Way::Forward | Way::Back => 0.0,
+    };
+    let over = match way {
+        Way::Back => Quat::from_x(-over),
+        _ => Quat::from_x(over),
+    };
+    Turn {
+        yaw: side * facing_travel(&r, frame),
+        over,
+        about: r.about,
+    }
 }
 
 /// How a turned-over body is held against the floor this frame.
@@ -223,8 +259,6 @@ pub enum Floor {
     /// (nought to one) -- all of it while the body is over, none at the two
     /// ends where the feet are what is on the floor.
     On(f32),
-    /// Going over above it: kept out of it by this much, never pulled down.
-    Above(f32),
 }
 
 /// How a class's roll is held to the floor at a frame of the clip.
@@ -232,13 +266,7 @@ pub fn floor(class: Class, frame: f32) -> Floor {
     let r = roll(class);
     let k = r.through(frame);
     let w = (2.0 * (k * std::f32::consts::PI).sin()).clamp(0.0, 1.0);
-    if w <= 0.0 {
-        Floor::Free
-    } else if r.aerial {
-        Floor::Above(w)
-    } else {
-        Floor::On(w)
-    }
+    if w <= 0.0 { Floor::Free } else { Floor::On(w) }
 }
 
 /// The lowest point of a posed body once it is turned over `turn` about
@@ -269,7 +297,6 @@ pub fn lift(floor: Floor, lowest: f32) -> f32 {
     match floor {
         Floor::Free => 0.0,
         Floor::On(w) => -lowest * w,
-        Floor::Above(w) => (-lowest).max(0.0) * w,
     }
 }
 

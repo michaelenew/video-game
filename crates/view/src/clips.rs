@@ -179,56 +179,56 @@ clips! {
     // -- Dodging -----------------------------------------------------------
     // Every class's grounded dodge is a **dive roll** (2026-10-21): the clip is
     // what the body does inside the roll, and `view::dodge` turns the whole
-    // body over on top of it. These four are the Champion's -- the soldier's
-    // roll -- and the five sets after them are the other classes' own.
+    // body over on top of it. These four are the Champion's, and the five sets
+    // after them are the other classes' own.
     DodgeForward,    "dodge_forward",   Dodge, "dodge", Length::Dodge, false,
-        "The soldier's roll, forward: a dive onto the hands, one tight turn, up in a low crouch. Tucked while invulnerable, opening the frame it ends.";
+        "A roll forward: a hop, chin and knees to the chest, one turn along the floor, up in a low crouch. Tucked while invulnerable, opening the frame it ends.";
     DodgeBack,       "dodge_back",      Dodge, "dodge", Length::Dodge, false,
-        "The soldier's roll, backward: sat down and rolled over the shoulders, up facing the same way.";
+        "A backward roll: sat back, tucked, over the shoulders and up facing the same way.";
     DodgeLeft,       "dodge_left",      Dodge, "dodge", Length::Dodge, false,
-        "The soldier's roll to the left: tucked and turned over sideways, toward the travel.";
+        "To the left: turned to face the travel, the forward roll over the left shoulder, turned back as it rises.";
     DodgeRight,      "dodge_right",     Dodge, "dodge", Length::Dodge, false,
-        "The soldier's roll to the right.";
+        "To the right: the same over the right shoulder.";
     BulwarkDodgeForward, "bulwark_dodge_forward", Dodge, "dodge", Length::Dodge, false,
-        "The shield roll: late, heavy and low, tucked in behind the shield and coming up behind it.";
+        "The shared roll, heavier: later over and up, the shield arm across the ball, up behind the shield.";
     BulwarkDodgeBack, "bulwark_dodge_back", Dodge, "dodge", Length::Dodge, false,
-        "The shield roll, back.";
+        "The Bulwark's roll, backward.";
     BulwarkDodgeLeft, "bulwark_dodge_left", Dodge, "dodge", Length::Dodge, false,
-        "The shield roll, left.";
+        "The Bulwark's roll to the left: turned to the travel, rolled forward, turned back.";
     BulwarkDodgeRight, "bulwark_dodge_right", Dodge, "dodge", Length::Dodge, false,
-        "The shield roll, right.";
+        "The Bulwark's roll to the right.";
     ReaverDodgeForward, "reaver_dodge_forward", Dodge, "dodge", Length::Dodge, false,
-        "The twisting dive: early, long and flat, a full twist through the turn with the blades held out, and up light.";
+        "The shared roll, quickest: blades swept back off the hop, up light with them out low.";
     ReaverDodgeBack, "reaver_dodge_back", Dodge, "dodge", Length::Dodge, false,
-        "The twisting dive, back.";
+        "The Reaver's roll, backward.";
     ReaverDodgeLeft, "reaver_dodge_left", Dodge, "dodge", Length::Dodge, false,
-        "The twisting dive, left.";
+        "The Reaver's roll to the left: turned to the travel, rolled forward, turned back.";
     ReaverDodgeRight, "reaver_dodge_right", Dodge, "dodge", Length::Dodge, false,
-        "The twisting dive, right.";
+        "The Reaver's roll to the right.";
     ElementalistDodgeForward, "elementalist_dodge_forward", Dodge, "dodge", Length::Dodge, false,
-        "The earth roll: out of the turn sliding on one knee, a hand dragged along the floor she shapes.";
+        "The shared roll, sliding on out of it low with a hand dragged along the floor.";
     ElementalistDodgeBack, "elementalist_dodge_back", Dodge, "dodge", Length::Dodge, false,
-        "The earth roll, back.";
+        "The Elementalist's roll, backward.";
     ElementalistDodgeLeft, "elementalist_dodge_left", Dodge, "dodge", Length::Dodge, false,
-        "The earth roll, left.";
+        "The Elementalist's roll to the left: turned to the travel, rolled forward, turned back.";
     ElementalistDodgeRight, "elementalist_dodge_right", Dodge, "dodge", Length::Dodge, false,
-        "The earth roll, right.";
+        "The Elementalist's roll to the right.";
     BloodDodgeForward, "blood_dodge_forward", Dodge, "dodge", Length::Dodge, false,
-        "The low tumble: the longest dive and the latest turn, sunk low, the scythe arm trailing out wide.";
+        "The shared roll, last over: unfurling low with the scythe arm thrown out wide.";
     BloodDodgeBack, "blood_dodge_back", Dodge, "dodge", Length::Dodge, false,
-        "The low tumble, back.";
+        "The Blood mage's roll, backward.";
     BloodDodgeLeft, "blood_dodge_left", Dodge, "dodge", Length::Dodge, false,
-        "The low tumble, left.";
+        "The Blood mage's roll to the left: turned to the travel, rolled forward, turned back.";
     BloodDodgeRight, "blood_dodge_right", Dodge, "dodge", Length::Dodge, false,
-        "The low tumble, right.";
+        "The Blood mage's roll to the right.";
     DualDodgeForward, "dual_dodge_forward", Dodge, "dodge", Length::Dodge, false,
-        "The aerial: no tuck -- laid out, arms spread like wings, turned over about her waist, slowest of all.";
+        "The shared roll, slowest and lightest: up with her arms opening wide.";
     DualDodgeBack, "dual_dodge_back", Dodge, "dodge", Length::Dodge, false,
-        "The aerial, back.";
+        "The Dual mage's roll, backward.";
     DualDodgeLeft, "dual_dodge_left", Dodge, "dodge", Length::Dodge, false,
-        "The aerial, left.";
+        "The Dual mage's roll to the left: turned to the travel, rolled forward, turned back.";
     DualDodgeRight, "dual_dodge_right", Dodge, "dodge", Length::Dodge, false,
-        "The aerial, right.";
+        "The Dual mage's roll to the right.";
     AirDodge,        "air_dodge",       Dodge, "dodge", Length::AirDodge, false,
         "A sideways commitment in mid-air, once per jump. Should read as a decision, not as flight.";
 
