@@ -217,7 +217,7 @@ def skin_and_gloves(body, r, gloved_to=None, bare_head=True):
 
 
 def hair(body, r, name="hair", gap=0.012, front=0.035, nape=-0.06, side=0.0, part=0.0,
-         grooves=9, depth=0.008, material="hair", faces=2600, close=0.02, lift=0.012):
+         grooves=9, depth=0.008, material="hair", faces=2600, close=0.02, lift=0.012, fall=0.0):
     """Hair as a painted figure's is: one sculpted mass over the skull, not
     strands. The head inflated by ``gap``, cut back from the face along a
     hairline ``front`` above the brows, down to ``nape`` at the back (metres
@@ -245,6 +245,13 @@ def hair(body, r, name="hair", gap=0.012, front=0.035, nape=-0.06, side=0.0, par
         # stands rather than lies.
         crown = np.clip((pp[:, 1] - (e[1] + 0.02)) / 0.08, 0, 1)
         pp = pp + nrm * (lift * crown ** 1.5)[:, None]
+        # A bob falls: below the brow the hair swings out from the head and
+        # down, rather than following the skull in to the nape.
+        if fall:
+            flat = rel * np.array([1.0, 0.0, 1.0])
+            out = flat / np.maximum(np.linalg.norm(flat, axis=1, keepdims=True), 1e-6)
+            low = np.clip((e[1] + 0.03 - pp[:, 1]) / 0.10, 0, 1)
+            pp = pp + out * (fall * low)[:, None] - np.array([0.0, 1.0, 0.0]) * (fall * 0.8 * low ** 2)[:, None]
         # Locks: grooves running back from a parting, each its own width and
         # depth and wandering a little, so they read as hair a painter laid
         # in rather than as rows.
