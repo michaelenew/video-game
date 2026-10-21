@@ -197,13 +197,17 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// fighters (`docs/design/stun.md`). With those two lines out, every hunt
 /// reproduced the pin above exactly: no rule of them reaches a creature's
 /// fight.
+/// **Every class again later still, deliberately: a heavy blow holds the
+/// creature too** (`Monster::frozen`, `state::freeze_on_the_creature`): a
+/// fighter's blow from a move with an impact freeze of at least
+/// `Impact freeze on a creature, a move's at least` freezes both bodies.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xc2f705a2763aac1d),
-    (Class::Bulwark, 0xf91179c141549863),
-    (Class::ShadowReaver, 0x27430b980165d9cf),
-    (Class::BloodMage, 0x1846765ec0e3ac51),
-    (Class::DualMage, 0x55307ee570d15601),
-    (Class::Elementalist, 0x198c66ddf7761b18),
+    (Class::Champion, 0xbd4cab44aeaa618d),
+    (Class::Bulwark, 0x6068f28dbace5003),
+    (Class::ShadowReaver, 0xe495206c7778d905),
+    (Class::BloodMage, 0x2c74c2988baf3681),
+    (Class::DualMage, 0x551d9cf70010beb1),
+    (Class::Elementalist, 0x2e82853948c438e8),
 ];
 
 #[test]

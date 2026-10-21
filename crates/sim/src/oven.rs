@@ -1278,6 +1278,11 @@ scalars! {
     // seven metres, over the Dual mage's six-metre hop. A map's own headroom
     // caps it (`versus::Hill::room`).
     HillColumn,           "Match",    "King of the hill, the point counts up to (m)",        Fixed, 0, fx(12,1);
+    // **A heavy blow holds a creature too** (2026-10-21, from play): a
+    // fighter's blow on a creature from a move whose impact freeze is at
+    // least this freezes both of them for it, as between two fighters.
+    // Lighter blows freeze nothing, as before.
+    FreezeHeavyOnCreature, "Offence", "Impact freeze on a creature, a move's at least",     Frames, 0, 30;
 }
 
 // ---------------------------------------------------------------------------

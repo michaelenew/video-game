@@ -9795,3 +9795,21 @@ seeds the Champion mirror spent 13,172 fighter-frames outside on main, 16,435 he
 Elementalist's 178 and 1,587), and the test's own seed had been a quiet one. "The arena is
 quite small, it makes sense they'd end up outside of it."
 
+
+### 2026-10-21 — a heavy blow holds the creature too
+
+From play: strong hits on a creature did not feel impactful. Since 2026-09-26 a blow between
+fighters froze both bodies for its move's `Impact freeze`, while a fighter's blow on a creature
+froze nobody, so a hammer and a sword cut landed on an animal with the same lack of weight.
+**Changed** a fighter's own blow that lands on a creature (not turned by its guard), from a move
+whose impact freeze is at least `Offence → Impact freeze on a creature, a move's at least`
+(8 frames), freezes both of them for that freeze (`Monster::frozen`,
+`state::freeze_on_the_creature`). About two dozen moves qualify: the hammer and its finishers,
+the Bulwark's Slam and Grapple, the Executioner, the Plunge and Gallows, and so on. The owner's
+call: both bodies, heavy hits only. Holding only the fighter would cost the hunter frames on
+every hit against an animal that paid none, which the 2026-09-13 stun branch measured as making
+the hunt unwinnable. Pinned by `tests/monster.rs`
+(`a_heavy_blow_freezes_the_creature_with_its_hunter`).
+**Verdict** open -- unplayed. Play for: whether a creature stopping mid-swing for a hammer's 9
+frames reads as weight or as a hitch, and whether 8 is the right line between heavy and light.
+
