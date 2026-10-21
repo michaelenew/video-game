@@ -649,7 +649,7 @@ impl Body {
     /// `state::hitbox` and [`Critter::body`], so what it shows is this.
     pub fn touched_by(&self, hb: &Hitbox) -> bool {
         if hb.flat {
-            let c = self.to_local(hb.centre());
+            let c = self.to_local(hb.flat_nearest(self.foot));
             return crate::math::flat_box_gap(c, self.min(), self.max()).raw() <= hb.radius.raw();
         }
         !self.out_of_reach(hb.from, hb.to, hb.radius)

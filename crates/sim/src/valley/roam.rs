@@ -266,9 +266,9 @@ fn walled(id: crate::arena::ArenaId) -> bool {
 fn door_of(atlas: &atlas::Atlas, id: crate::arena::ArenaId) -> Option<V3> {
     let d = atlas.doors.iter().find(|d| d.a.0 == id || d.b.0 == id)?;
     Some(V3::new(
-        math::half(d.cut.min.x.add(d.cut.max.x)),
+        math::midpoint(d.cut.min.x, d.cut.max.x),
         d.cut.min.y,
-        math::half(d.cut.min.z.add(d.cut.max.z)),
+        math::midpoint(d.cut.min.z, d.cut.max.z),
     ))
 }
 

@@ -87,7 +87,9 @@ body the ray passed through, which never stops it — and `aim::stoop` turns tha
 into how far below the shoulder a standing swing meets it: what makes a
 knee-high critter hittable (bestiary A1, [`docs/design/critters.md`](docs/design/critters.md)).
 `aim::line_clear` answers *is anything solid on this straight line*, which a pack
-asks when it cuts a ring round a fighter. Critters are on `aim::first_along`'s
+asks when it cuts a ring round a fighter, and `aim::room_along` *how far along one
+before something solid stops it* -- a creature's charge lane, and how far its
+spray may fly before a rock (2026-10-21). Critters are on `aim::first_along`'s
 list with the creatures (A2). `aim::sight_clear` answers *can something at this
 point see that one* -- `line_clear`, and no floor hazard that blocks sight
 (smoke) -- which a creature's perception filter asks from its head
@@ -380,9 +382,17 @@ desktop joining a page's room** (`./scripts/room-desktop.sh`, how a change to
 them, once, and is the only place the steps are written. A fifth, `desktop`,
 is not a tool but the one system library the **desktop build** itself needs
 on Linux: ALSA's headers, for the game's sound; a build error naming
-`alsa-sys` is that. The Pages workflow runs it; a
-cloud environment's setup script should run it too, so a session starts with
-them.
+`alsa-sys` is that. The Pages workflow runs it, and so does every cloud
+session as it opens: `.claude/hooks/session-start.sh`, a session start hook
+in `.claude/settings.json`, runs `setup-tools.sh desktop` when
+`CLAUDE_CODE_REMOTE` is set and logs to `target/setup-tools-desktop.log`.
+
+**If that hook is not needed, say so to the owner** (2026-10-21). Whenever it
+is doing work for nothing -- the environment's own setup script already
+installs ALSA, the image already has it, the desktop build no longer needs
+it, or it costs a session more than it saves -- tell the owner in your
+report, with what you saw, rather than leaving it running or removing it
+quietly.
 
 **Decide up front, install in the background, check before the step.** The
 install is a cargo build of about ninety seconds and an apt run, so it is never

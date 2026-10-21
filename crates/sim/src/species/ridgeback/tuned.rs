@@ -7,7 +7,7 @@
 //! the Ridgeback's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 270] = [
+pub const KNOBS: [i32; 294] = [
            65536, // ridgeback.size_(x) = 1
             7000, // ridgeback.health = 7000
              500, // ridgeback.breakable_part_health = 500
@@ -278,4 +278,28 @@ pub const KNOBS: [i32; 270] = [
              360, // ridgeback.spike_spray.lockout_after_use = 360
          3932160, // ridgeback.spike_spray.hit_travels_at = 60
              120, // ridgeback.spike_spray.roots_for = 120
+           98304, // ridgeback_·_senses.body_radius,_against_solids = 1.5
+           65536, // ridgeback_·_senses.steps_over_solids_under = 1
+               0, // ridgeback_·_senses.sight,_half-angle_(turns) = 0
+               0, // ridgeback_·_senses.blind_arc,_half-width_(turns) = 0
+               0, // ridgeback_·_senses.feels_a_body_within = 0
+               0, // ridgeback_·_senses.feels_a_body_no_higher_than = 0
+               0, // ridgeback_·_senses.hears_a_footfall_at = 0
+               0, // ridgeback_·_senses.hears_a_footfall_on_rock_at = 0
+               0, // ridgeback_·_senses.hears_a_landing_at = 0
+               0, // ridgeback_·_senses.landing,_more_per_metre_fallen = 0
+               0, // ridgeback_·_senses.landing,_at_most = 0
+               0, // ridgeback_·_senses.hears_a_dodge_at = 0
+               0, // ridgeback_·_senses.hears_a_hit_at = 0
+               0, // ridgeback_·_senses.hears_a_rush_at = 0
+               0, // ridgeback_·_senses.hears_a_stone_at = 0
+               0, // ridgeback_·_senses.hears_a_shield_planted_at = 0
+               0, // ridgeback_·_senses.hears_a_quake_at = 0
+           65536, // ridgeback_·_climb.gets_up_onto_(x_shoulder) = 1
+           81920, // ridgeback_·_climb.gets_down_off_(x_shoulder) = 1.25
+              24, // ridgeback_·_climb.getting_up,_frames = 24
+              12, // ridgeback_·_climb.getting_up,_frames_a_metre = 12
+           45875, // ridgeback_·_climb.getting_down_(x_getting_up) = 0.7
+            7864, // ridgeback_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.12
+            5243, // ridgeback_·_climb.settles_before_it_pushes_(x_shoulder) = 0.08
 ];

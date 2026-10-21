@@ -1537,6 +1537,66 @@ pub fn stun_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StunDecay))
 }
 
+/// What a class divides a fighter's knockback by. Above one is a heavy.
+///
+/// Knockback only, never hitstun: frame data is authored per move, and a
+/// class-dependent stun would make the frame table's "on hit" column stop
+/// being a property of the move. So a heavy takes the same stun and travels
+/// less far out of it -- heavies are combo food, which is the answer a
+/// platform fighter gives too. It divides blocked pushback as well, which is
+/// where `defense.md`'s "the Bulwark resists pushback" comes from without
+/// being written twice. Between fighters only. See `docs/design/stun.md`.
+pub fn weight_of(class: crate::class::Class) -> Fx {
+    use crate::class::Class;
+    let knob = match class {
+        Class::Bulwark => Scalar::WeightBulwark,
+        Class::Champion => Scalar::WeightChampion,
+        Class::ShadowReaver => Scalar::WeightReaver,
+        Class::Elementalist => Scalar::WeightElementalist,
+        Class::BloodMage => Scalar::WeightBloodMage,
+        Class::DualMage => Scalar::WeightDualMage,
+    };
+    Fx::from_raw(oven::scalar(knob)).max(Fx::ratio(1, 10))
+}
+
+/// **The swell**: how much a fighter's knockback grows by the time their bar
+/// is empty. One plus this, at death; one at full health. Smash's percent, for
+/// a bar that counts down.
+pub fn swell_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellKnockback))
+}
+
+/// What a fighter's shove is worth, against another fighter, at full
+/// health: the start of the swell's line. The line rises from here to the
+/// same multiple at death [`swell_knockback`] sets, so a higher start is a
+/// slower climb, not a higher ceiling. The shove only; a launch starts at one.
+pub fn swell_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellStart))
+}
+
+/// The second term of the knockback swell, per share of the victim's bar the
+/// blow itself took: a committed move grows harder against a hurt opponent
+/// than a poke does, so a jab never turns into a launcher just by being
+/// thrown late.
+pub fn swell_blow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellBlow))
+}
+
+/// How much a fighter's hitstun grows by the time their bar is empty. Far
+/// slower than [`swell_knockback`], and the gap between the two is the combo
+/// design: the stun grows and moves start to link, the knockback grows faster
+/// and throws the victim out of reach again.
+pub fn swell_hitstun() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellHitstun))
+}
+
+/// What each hit in a string keeps of the hitstun swell the hit before it had.
+/// A ranged move re-aims at wherever the victim landed, so distance cannot end
+/// its string; this does. Never below the move table's own hitstun.
+pub fn combo_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ComboDecay))
+}
+
 // ---------------------------------------------------------------------------
 // Stride
 // ---------------------------------------------------------------------------
@@ -4913,6 +4973,40 @@ pub fn morph_catch_up() -> Fx {
 /// The fastest a morph hurries after its seat, as a share of its walk.
 pub fn morph_hurry() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::KeepHurry))
+}
+
+/// **How a morph gets up and down** (`breed::climb::Rates`): shares of its
+/// own shoulder, and frames.
+pub fn morph_climb_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbReach))
+}
+
+pub fn morph_climb_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDrop))
+}
+
+pub fn morph_climb_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbStep))
+}
+
+pub fn morph_climb_frames() -> i32 {
+    oven::scalar(Scalar::MorphClimbFrames)
+}
+
+pub fn morph_climb_per_metre() -> i32 {
+    oven::scalar(Scalar::MorphClimbPerMetre)
+}
+
+pub fn morph_climb_down() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDown))
+}
+
+pub fn morph_climb_clear() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbClear))
+}
+
+pub fn morph_climb_dip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDip))
 }
 
 // ---------------------------------------------------------------------------

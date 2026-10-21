@@ -68,6 +68,13 @@ file, `crates/sim/src/species/<species>/tuned.rs`:
 - **Its own** — declared in the species' file with `species_knobs!`. The
   Ridgeback's are its hide (a multiplier per part) and its shake force.
 - **Its moves** — one row of `oven::MonsterField` per move.
+- **Its climb row** (2026-10-21) — `climb::ClimbField`, for every species
+  with a body, appended last so nothing before it moves: how high a ledge it
+  gets up and how deep a drop it gets down (shares of its shoulder height,
+  read off its skeleton), the frames it takes, and how its feet clear the lip.
+  Read only by a species that collides and keeps no height of its own
+  (`Monster::climber`); zero reach and drop is a species that never climbs.
+  See [monsters.md](monsters.md) §1b.
 
 `Knob::Species(SpeciesId, Tunable)` is the palette's handle on all three. The
 Oven keeps a row of cells per species id; the bake (`bake_tuning`, and the Bake

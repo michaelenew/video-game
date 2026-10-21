@@ -9652,3 +9652,146 @@ leaves its pillar for `Strike, a full one flashes for` (14 frames), never long e
 frames it is fire like any pillar -- it lights a stone, lights a shot through it, and Cataclysm
 could cut it loose -- to feel for.
 **Verdict** open -- unplayed.
+
+### 2026-10-21 — the Ridgeback meets the ground: it collides, and it gets up
+
+From play: "In the high plane the two ridgeback fight is really crazy. The ridgebacks clip
+into and out of the box they start next to just by walking, their spikes and charge are
+super inconsistent with how they interact with it. The collision and AI need to be fixed."
+And: "every monster needs a 'get up' and 'get down' animation and move ... the ridgebacks can
+get up things lower than their shoulders ... the ridgeback cannot go through other moves while
+getting up, so they get a window of opportunity."
+
+**Changed**
+- The Ridgeback collides (`FightDecl::collides`, with a senses row for its body radius 1.5 m
+  and step 1 m). It is fenced by discs along its length over each one's underside, stands on
+  what it steps onto, and walks round a rock between it and a fighter on the floor.
+- **Getting up and down** (`sim::climb`, `Doing::Climb`): a ledge over its step and under
+  `Gets up onto (x shoulder)` = 1 (4.5 m) is got up in `24 + 12 a metre` frames -- 72 up the
+  Sky Meadow's 4 m rock, 42 up the proving ground's 1.5 m platform -- and a drop under
+  1.25 shoulders got down in 0.7 of that. Not free, open, nothing out: the window.
+- A charge into a solid ends there and plays its recovery. The spray stops at the first
+  solid in its lane, and is smothered thrown from against one. A move that cannot reach a
+  fighter up a ledge, or whose lane is blocked, is not chosen; a fighter up a ledge is walked
+  right up to.
+- Placed at the start of a hunt, it stands on the highest top under its legs it could have
+  got up: the proving ground's spawn is astride the east platform, and it starts on it.
+- The same motion for a morph (`breed::climb`, the Oven's "Morph · Gets up onto" row), drawn
+  by the game as it follows you up a step bigger than a quarter of its shoulder.
+- `Solid::middle` takes a corner and half the size rather than half of each corner: a round
+  solid's middle was a sixty-thousandth off after a change of frame, which the Caverns'
+  Ridgebacks, now against its columns, found (`tests/valley.rs`).
+
+**Why** The fight on the plane was a body walking through the scenery it was placed beside.
+The climb is the owner's: pursuit up a box, paid for with a window.
+
+**Pins** `tests/ridgeback_pin.rs`, every class: the proving ground's Ridgeback starts on a
+platform and gets down, climbs the platforms after the hunters and walks round them. The
+proving ground's tests that measured pursuit and dodging through its middle (`hunted.rs`) run
+along a lane clear of the platforms now; two that stood it in the middle (`monster.rs`'s bite,
+`dual_spells.rs`'s curse) stand it on open floor.
+
+**Verdict** open -- unplayed. To feel for: whether 72 frames up a 4 m rock is a window worth
+having and not a tedium; whether 42 up the proving ground's platform makes the platforms a
+place to fight from; whether the walk-round reads as an animal or a robot; whether getting down
+after a fighter who jumped off is quick enough to be a threat.
+
+### 2026-10-21 — the Mireback, the Broodmother and the Siegeshell meet the ground too
+
+From the owner, after the Ridgeback: "Turn it on for the Mireback, Broodmother and Siegeshell
+too. Fix the bug you found. Small creatures I'm much less bothered about, it's fine if they have
+easy safe spots for now."
+
+**Changed**
+- All three collide and keep their own footing (a senses row each, for a body radius and a
+  step: Mireback 2.5 m and 0.5 m, Broodmother 2 m and 1 m, Siegeshell 6 m and 4.5 m), and get
+  up what is under their reach: 1.2 m, 3.6 m and 6.5 m (their climb rows, as baked before).
+- **A top is footing only where it is broad enough for the body** -- half its radius all round
+  the leg. Without it the Siegeshell rode up onto every boulder it stepped over. The Hollows'
+  stones are too narrow for the Broodmother to stand on: walls to her, not ledges.
+- Where to look for a ledge starts from the furthest-forward part of the body low enough to
+  meet one it could get up: the Broodmother's head meets a ledge before her forelegs do.
+- The Siegeshell's march and the Broodmother's pull along her line are handed back to the
+  ground (`Monster::keep_to_the_ground`); the march gets up what is across it. The Mireback's
+  flop arcs from the floor it left to the floor it lands on, not the arena's base height.
+- **The rounding bug, everywhere**: every middle of two places is `math::midpoint`, a corner
+  and half the span, never half of each end -- thirteen of them, the hanging test, a den's
+  middle and the Galewing's, Sandmaw's, Veilstalker's and the roaming doorways' among them.
+  `tests/midpoints.rs` checks it moves exactly with a shift and fails on the old spelling.
+
+**Pins** The Ridgeback hunts of the Elementalist and the Reaver moved for the breadth rule; no
+other pin moved, and every Mireback, Broodmother and Siegeshell test held.
+
+**Verdict** open -- unplayed. To feel for: whether the Mireback is fenced out of anything it used
+to reach; whether the Broodmother finds her way round the Hollows' stones or looks stuck behind
+them; whether the Siegeshell's march still reaches its siege line.
+
+
+### 2026-10-21 — knockback between fighters grows through a round
+
+The stun thread of 2026-09-13 (`claude/dreamy-hawking-sqnadm`, never merged), reimplemented on
+main. Its freeze and input buffer reached main separately on 2026-09-26; the rest is new here.
+See [stun.md](stun.md).
+**Changed** a blow from one fighter to another now (1) **swells**: knockback and launch are
+multiplied by `1 + hurt x (2 + 3 x the blow's share of the bar)` and hitstun by
+`1 + hurt x 1`, where `hurt` is the share of the victim's own bar already gone, read after the
+blow; (2) **fades through a string**: each hit taken without a turn back keeps 0.3 of the
+hitstun swell the last had, never below the table (`Player::taken`); (3) is **divided by the
+victim's weight**, blocked pushback included (Bulwark 1.35, Blood mage 1.05, Champion 1, Reaver
+0.92, Elementalist 0.85, Dual mage 0.78); (4) leaves a launched fighter their **air control**,
+with the flat speed put back afterwards so steering never shortens a launch; (5) **a grab
+banks its launch** for the release (`Player::thrown`; no move both grabs and launches yet).
+None of it reaches a blow from a creature, a critter or the world: `Hit::by` must be a fighter.
+New Oven family *Knockback*, ten knobs.
+**Why** from the owner: more and better knockback, for variety in a duel. A round that throws
+people further as it goes on is an arc: the middle opens up, and the last blow is seen.
+**Measured** (`tests/knockback.rs`): the Champion's hammer carries a fresh Champion 1.1 m, one
+at half 2.2 m, one at a fifth 2.8 m; a fresh Bulwark 0.8 m and a fresh Dual mage 1.4 m.
+**The branch's numbers were halved** for the knockback swell (+4.5 at death and +5 per blow
+share there, +2 and +3 here), because main's heavy hits shove twice what they did when it was
+measured. The stun swell, the decay and the weights are the branch's.
+**Re-pinned** `tests/ridgeback_pin.rs`: the two new fields are in `state_checksum`. With them out,
+every class's hunt reproduced its old pin exactly.
+**First tried** steering for every stunned fighter in the air, as the branch had it. It moved
+the Galewing's hunt (`it_throws_everything_it_has_from_the_air` never saw a Perch: a hunter
+thrown by it steered somewhere else). Narrowed to launches from a fighter, like the rest.
+**Verdict** open -- unplayed. Play for: whether the middle of a round throwing people twice as
+far reads as the fight heating up or as the rules changing; whether the Champion's strings link
+at a quarter bar where they did not; whether the Bulwark's 1.35 makes him feel planted or
+merely sluggish to fight.
+
+**Later the same day, from play**: "0 damage knockback doesn't feel like you can use it at
+all" -- knockback should start greater (not much greater) and climb more slowly to where it
+caps out now. **Changed** the shove's line starts at `Knockback at full health (x)`, 1.5, and
+rises straight to the same ceiling at death; the launch still starts at the table, because the
+air follow-ups are tuned to its height. **Measured**: the hammer carries a fresh Champion 1.6 m
+(was 1.1), one at half 2.4 m (2.2), one at a fifth 2.9 m (2.8); a fresh Bulwark 1.1 m, a fresh
+Dual mage 2.0 m. **Verdict** open.
+
+
+### 2026-10-21 — the Reave's cut reaches back to her
+
+From play: "the reaver's lclick doesn't seem to be consuming stacks against the sparring bot".
+**Found** the Reave's dash is a fixed 2.5 m and its disc sits 1.6 m past where the dash ends,
+reaching 0.1 m in front of her. Against the bot, which fights close and walks in, a Reave from
+close in carried her on to it and the disc landed beyond. Her blade whiffed, the only hit was
+the shadow's copy of the swing (12 damage), and a copy marks rather than spends. Against a
+target standing still it landed, which is why nothing caught it.
+**Changed** the Reave's volume is a flat strip from her body to the disc; everything that tests
+a flat volume asks `Hitbox::flat_nearest` (one point for every other disc, so nothing else
+moves). The sweet spot is still only the disc's middle.
+**Measured** against the Normal bot, Reaves from 1.2 m: 6 cashed and 11 landed only the copy on
+a bot in front of her; now 18 cash and none do. Three more land only the copy on a bot that
+stepped aside behind her, which is the bot getting out of the way. Pinned by
+`crates/hunt/tests/duel.rs` (`the_reave_spends_the_marks_on_the_bot`).
+**Verdict** open -- unplayed.
+
+**And the tests it moved** (the owner's calls, the same day). A Judgement from an empty bar
+takes 76 of 1000 rather than 80: its strike shoves the victim out of its own field two ticks
+sooner. Accepted as the cost of the bigger shove; `b3`'s floor is 7% rather than 8%.
+`hunt/tests/duel.rs`'s `every_class_fights` no longer asks the bots to stay inside the proving
+ground's walls: they go over them by their own jumps and rushes on main as well (across eight
+seeds the Champion mirror spent 13,172 fighter-frames outside on main, 16,435 here; the
+Elementalist's 178 and 1,587), and the test's own seed had been a quiet one. "The arena is
+quite small, it makes sense they'd end up outside of it."
+

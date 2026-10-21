@@ -7,7 +7,7 @@
 //! the Sentinel's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 421] = [
+pub const KNOBS: [i32; 428] = [
            65536, // sentinel.size_(x) = 1
             7000, // sentinel.health = 7000
              500, // sentinel.breakable_part_health = 500
@@ -429,4 +429,11 @@ pub const KNOBS: [i32; 421] = [
           131072, // sentinel.cart.speed,_escorted = 2
           393216, // sentinel.cart.escorted_within = 6
            65536, // sentinel.cart.takes_of_a_creature's_blow_(x) = 1
+               0, // sentinel_·_climb.gets_up_onto_(x_shoulder) = 0
+               0, // sentinel_·_climb.gets_down_off_(x_shoulder) = 0
+              20, // sentinel_·_climb.getting_up,_frames = 20
+              10, // sentinel_·_climb.getting_up,_frames_a_metre = 10
+           45875, // sentinel_·_climb.getting_down_(x_getting_up) = 0.7
+            6554, // sentinel_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.1
+            5243, // sentinel_·_climb.settles_before_it_pushes_(x_shoulder) = 0.08
 ];

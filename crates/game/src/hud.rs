@@ -1417,9 +1417,21 @@ pub fn update(
 
     for (tag, mut text) in states.iter_mut() {
         let p = &sim.cur.players[seat(&sim, tag.0)];
+        // Between fighters, how far the next blow throws this one, where Smash
+        // shows its percent: the number that decides whether a hit is a shove
+        // or a round ender. See `docs/design/stun.md`.
+        let name = if sim.cur.pvp() {
+            format!(
+                "{}   launch x{:.1}",
+                p.class.name(),
+                sim::state::launch_scale(p).to_f32_for_render()
+            )
+        } else {
+            p.class.name().to_string()
+        };
         set_text(
             &mut text,
-            format!("{}\n{}\n{}", p.class.name(), describe(p), mechanic(p)),
+            format!("{}\n{}\n{}", name, describe(p), mechanic(p)),
         );
     }
 
@@ -1922,7 +1934,7 @@ pub fn toggle_class_buttons(keys: Res<ButtonInput<KeyCode>>, mut show: ResMut<Sh
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sim::class::{ALL_CLASSES, Class};
+    use sim::class::{ALL_CLASSES, Class, ROTATION};
 
     #[test]
     fn the_hud_systems_touch_nothing_twice() {
@@ -1948,7 +1960,7 @@ mod tests {
         // Two pickers sharing one array is the obvious place to get an index
         // wrong, and the symptom would be changing the wrong fighter's class
         // mid-session -- confusing rather than obviously broken.
-        let start = [Class::Bulwark, Class::Elementalist];
+        let start = [Class::Champion, Class::Elementalist];
         let after = cycle_class(start, 0);
         assert_ne!(after[0], start[0], "the picker did not advance its player");
         assert_eq!(after[1], start[1], "it changed the other player too");
@@ -1959,15 +1971,15 @@ mod tests {
     }
 
     #[test]
-    fn cycling_reaches_every_class_and_comes_home() {
-        let start = [Class::Bulwark, Class::Bulwark];
+    fn cycling_reaches_every_class_on_offer_and_comes_home() {
+        let start = [Class::Champion, Class::Champion];
         let mut seen = vec![start[0]];
         let mut classes = start;
-        for _ in 1..ALL_CLASSES.len() {
+        for _ in 1..ROTATION.len() {
             classes = cycle_class(classes, 0);
             seen.push(classes[0]);
         }
-        for class in ALL_CLASSES {
+        for class in ROTATION {
             assert!(
                 seen.contains(&class),
                 "{class:?} is unreachable by clicking"
@@ -1978,24 +1990,23 @@ mod tests {
     }
 
     #[test]
-    fn the_champion_comes_first_and_the_bulwark_last() {
-        // The owner's order (2026-10-20): `sim::class::ROTATION`.
-        let mut classes = [Class::Bulwark, Class::Bulwark];
+    fn the_champion_comes_first_and_the_bulwark_never() {
+        // The owner's order (2026-10-20) and the Bulwark taken off it
+        // (2026-10-21): `sim::class::ROTATION`.
+        let mut classes = [Class::DualMage, Class::DualMage];
         classes = cycle_class(classes, 0);
         assert_eq!(
             classes[0],
             Class::Champion,
-            "the Bulwark goes round to the Champion"
+            "the cycle does not start on the Champion"
         );
-        for _ in 2..ALL_CLASSES.len() {
+        for _ in 0..2 * ALL_CLASSES.len() {
             classes = cycle_class(classes, 0);
-            assert_ne!(
-                classes[0],
-                Class::Bulwark,
-                "the Bulwark came before the end"
-            );
+            assert_ne!(classes[0], Class::Bulwark, "clicking reached the Bulwark");
         }
-        assert_eq!(cycle_class(classes, 0)[0], Class::Bulwark);
+        // A seat that is a Bulwark anyway (a fight built by name) steps onto
+        // the roster, not off the end of it.
+        assert_eq!(cycle_class([Class::Bulwark], 0)[0], Class::Champion);
     }
 
     #[test]

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 729] = [
+pub const SCALARS: [i32; 748] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -730,6 +730,25 @@ pub const SCALARS: [i32; 729] = [
            19661, // elementalist.fire_carpet,_each_hang_after = 0.3
            52429, // elementalist.fire_carpet,_sinks_at_(m/s) = 0.8
               14, // elementalist.strike,_a_full_one_flashes_for = 14
+           65536, // morph.gets_up_onto_(x_shoulder) = 1
+           81920, // morph.gets_down_off_(x_shoulder) = 1.25
+           16384, // morph.walks_up_a_step_under_(x_shoulder) = 0.25
+              20, // morph.getting_up,_frames = 20
+              10, // morph.getting_up,_frames_a_metre = 10
+           45875, // morph.getting_down_(x_getting_up) = 0.7
+            7864, // morph.feet_clear_the_lip_by_(x_shoulder) = 0.12
+            5243, // morph.settles_before_it_pushes_(x_shoulder) = 0.08
+           88474, // knockback.weight,_bulwark_(x) = 1.35
+           65536, // knockback.weight,_champion_(x) = 1
+           60293, // knockback.weight,_shadow_reaver_(x) = 0.92
+           55706, // knockback.weight,_elementalist_(x) = 0.85
+           68813, // knockback.weight,_blood_mage_(x) = 1.05
+           51118, // knockback.weight,_dual_mage_(x) = 0.78
+          131072, // knockback.swell,_knockback_added_at_death_(x) = 2
+          196608, // knockback.swell,_added_per_share_of_the_bar_a_blow_takes_(x) = 3
+           65536, // knockback.swell,_hitstun_added_at_death_(x) = 1
+           19661, // knockback.swell_kept_per_hit_in_a_string = 0.3
+           98304, // knockback.knockback_at_full_health_(x) = 1.5
              600, // match.king_of_the_hill,_point_unlocks_after = 600
              360, // match.king_of_the_hill,_a_capture_takes = 360
               50, // match.king_of_the_hill,_a_second_capper_adds_(%) = 50

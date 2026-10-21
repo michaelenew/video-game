@@ -296,9 +296,9 @@ fn spiral(m: &Monster, mind: &Mind, centre: V3) -> V3 {
     let reach = math::half(b.hi_x.sub(b.lo_x)).min(math::half(b.hi_z.sub(b.lo_z)));
     if wider.raw() > reach.raw() {
         let middle = V3::new(
-            math::half(b.lo_x.add(b.hi_x)),
+            math::midpoint(b.lo_x, b.hi_x),
             Fx::ZERO,
-            math::half(b.lo_z.add(b.hi_z)),
+            math::midpoint(b.lo_z, b.hi_z),
         );
         return orbit(m, mind, middle, Knob::CircleRadius.fx());
     }

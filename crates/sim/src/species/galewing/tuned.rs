@@ -7,7 +7,7 @@
 //! the Galewing's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 453] = [
+pub const KNOBS: [i32; 460] = [
            65536, // galewing.size_(x) = 1
             9000, // galewing.health = 9000
              500, // galewing.breakable_part_health = 500
@@ -461,4 +461,11 @@ pub const KNOBS: [i32; 453] = [
                0, // galewing_·_senses.hears_a_stone_at = 0
                0, // galewing_·_senses.hears_a_shield_planted_at = 0
                0, // galewing_·_senses.hears_a_quake_at = 0
+               0, // galewing_·_climb.gets_up_onto_(x_shoulder) = 0
+               0, // galewing_·_climb.gets_down_off_(x_shoulder) = 0
+               1, // galewing_·_climb.getting_up,_frames = 1
+               0, // galewing_·_climb.getting_up,_frames_a_metre = 0
+           65536, // galewing_·_climb.getting_down_(x_getting_up) = 1
+               0, // galewing_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0
+               0, // galewing_·_climb.settles_before_it_pushes_(x_shoulder) = 0
 ];

@@ -1036,7 +1036,14 @@ impl Species {
     /// everything that was there before**, so a species that brings none of
     /// them keeps every index it had and its baked file does not move.
     pub fn knob_count(&self) -> usize {
-        self.objective_base() + self.fight.objectives.len() * crate::objective::OBJECTIVE_FIELDS
+        // And last, for a species with a body, how it gets up and down
+        // (`crate::climb`).
+        self.climb_base()
+            + if self.has_body() {
+                crate::climb::CLIMB_FIELDS
+            } else {
+                0
+            }
     }
 
     /// Where the fight's rows start: after the pack's.

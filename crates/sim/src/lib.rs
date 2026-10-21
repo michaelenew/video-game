@@ -16,6 +16,7 @@ pub mod breed;
 pub mod bulwark;
 pub mod camera;
 pub mod class;
+pub mod climb;
 pub mod course;
 pub mod coursecheck;
 pub mod critcheck;

@@ -76,9 +76,9 @@ impl Zone {
     /// The middle of its floor plane, at its bottom.
     pub fn middle(&self) -> V3 {
         V3::new(
-            Fx::from_raw(self.min.x.raw() / 2 + self.max.x.raw() / 2),
+            crate::math::midpoint(self.min.x, self.max.x),
             self.min.y,
-            Fx::from_raw(self.min.z.raw() / 2 + self.max.z.raw() / 2),
+            crate::math::midpoint(self.min.z, self.max.z),
         )
     }
 }
@@ -380,9 +380,9 @@ pub fn cairns() -> &'static [u32] {
 /// The middle of a box's top, where a body stands on it.
 pub fn top_of(s: &Solid) -> V3 {
     V3::new(
-        Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2),
+        crate::math::midpoint(s.min.x, s.max.x),
         s.max.y,
-        Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2),
+        crate::math::midpoint(s.min.z, s.max.z),
     )
 }
 

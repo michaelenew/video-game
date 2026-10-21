@@ -280,9 +280,9 @@ fn round_posts(m: &Monster, mind: &Mind, goal: V3) -> V3 {
             continue;
         }
         let c = V3::new(
-            math::half(s.min.x.add(s.max.x)),
+            math::midpoint(s.min.x, s.max.x),
             Fx::ZERO,
-            math::half(s.min.z.add(s.max.z)),
+            math::midpoint(s.min.z, s.max.z),
         );
         let ahead = dir.dot(fight::flat(c.sub(m.pos)));
         if ahead.raw() <= 0 || ahead.raw() > math::wide_flat_dist(m.pos, goal).raw() {

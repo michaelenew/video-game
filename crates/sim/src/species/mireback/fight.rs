@@ -169,6 +169,11 @@ pub static FIGHT: FightDecl = FightDecl {
         objectives: 0,
         own: 8,
     },
+    // A body against the solids, with a footing of its own, since
+    // 2026-10-21 (`crate::climb`): its senses row is there for its body
+    // radius and its step.
+    row: true,
+    collides: true,
     hazards: &HAZARDS,
     lands_on_bodies: true,
     rolls_over: true,
@@ -958,15 +963,19 @@ fn act(w: &mut World, _slot: usize, m: &mut Monster) {
                 let t = Fx::from_int((air - left) as i32).div(Fx::from_int(air as i32));
                 let to = m.aimed_at();
                 let at = math::lerp3(from, to, t);
-                // Over its own arena's floor, wherever the world's frame is.
-                let rise = Knob::FlopHeight.fx().mul(math::hump(t)).add(w.den().off.y);
+                // From the floor it left to the floor it comes down on
+                // (2026-10-21: a stone it stood on, or the mire), wherever the
+                // world's frame is.
+                let ground = w.terrain();
+                let base = math::lerp(m.floor_at(&ground, from), m.floor_at(&ground, to), t);
+                let rise = Knob::FlopHeight.fx().mul(math::hump(t)).add(base);
                 m.pos = V3::new(at.x, rise, at.z);
                 m.speed = Fx::ZERO;
             }
         }
         Doing::Active { kind: FLOP, left } if left == m.sp().attack(FLOP).active => {
             let at = m.aimed_at();
-            let floor = w.den().off.y;
+            let floor = m.floor_at(&w.terrain(), at);
             m.pos = V3::new(at.x, floor, at.z);
             let a = m.sp().attack(FLOP);
             shatter(&mut w.lore, at, a.hit_radius);
