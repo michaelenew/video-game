@@ -7,7 +7,7 @@
 //! the Mireback's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 397] = [
+pub const KNOBS: [i32; 421] = [
            65536, // mireback.size_(x) = 1
            11000, // mireback.health = 11000
              600, // mireback.breakable_part_health = 600
@@ -349,6 +349,23 @@ pub const KNOBS: [i32; 397] = [
                0, // mireback.gag.lockout_after_use = 0
                0, // mireback.gag.hit_travels_at = 0
                0, // mireback.gag.roots_for = 0
+          163840, // mireback_·_senses.body_radius,_against_solids = 2.5
+           32768, // mireback_·_senses.steps_over_solids_under = 0.5
+               0, // mireback_·_senses.sight,_half-angle_(turns) = 0
+               0, // mireback_·_senses.blind_arc,_half-width_(turns) = 0
+               0, // mireback_·_senses.feels_a_body_within = 0
+               0, // mireback_·_senses.feels_a_body_no_higher_than = 0
+               0, // mireback_·_senses.hears_a_footfall_at = 0
+               0, // mireback_·_senses.hears_a_footfall_on_rock_at = 0
+               0, // mireback_·_senses.hears_a_landing_at = 0
+               0, // mireback_·_senses.landing,_more_per_metre_fallen = 0
+               0, // mireback_·_senses.landing,_at_most = 0
+               0, // mireback_·_senses.hears_a_dodge_at = 0
+               0, // mireback_·_senses.hears_a_hit_at = 0
+               0, // mireback_·_senses.hears_a_rush_at = 0
+               0, // mireback_·_senses.hears_a_stone_at = 0
+               0, // mireback_·_senses.hears_a_shield_planted_at = 0
+               0, // mireback_·_senses.hears_a_quake_at = 0
                0, // mireback.tar.lasts = 0
            16384, // mireback.tar.reaches_above_the_floor = 0.25
            26214, // mireback.tar.walk_speed_in_it_(x) = 0.4
@@ -405,4 +422,11 @@ pub const KNOBS: [i32; 397] = [
                0, // mireback.coals.solid,_height_a_layer = 0
                0, // mireback.coals.solid,_most_layers = 0
                0, // mireback.coals.most_at_once = 0
+           52429, // mireback_·_climb.gets_up_onto_(x_shoulder) = 0.8
+           65536, // mireback_·_climb.gets_down_off_(x_shoulder) = 1
+              20, // mireback_·_climb.getting_up,_frames = 20
+              10, // mireback_·_climb.getting_up,_frames_a_metre = 10
+           45875, // mireback_·_climb.getting_down_(x_getting_up) = 0.7
+            6554, // mireback_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.1
+            6554, // mireback_·_climb.settles_before_it_pushes_(x_shoulder) = 0.1
 ];

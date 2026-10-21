@@ -1229,6 +1229,18 @@ scalars! {
     // **A full Strike flashes** (2026-10-21, from play): the pillar it spent
     // shoots up and is gone over this many frames, never long enough to burn.
     StrikeFlash,          "Elementalist", "Strike, a full one flashes for",                   Frames, 1, 25;
+    // **A morph getting up and getting down** (2026-10-21, `breed::climb`):
+    // the creatures' one motion, for a body that is not a species and has no
+    // climb row of its own -- shares of its own shoulder, so it scales with
+    // what it grew into.
+    MorphClimbReach,      "Morph",    "Gets up onto (x shoulder)",                            Fixed, 0, fx(3,1);
+    MorphClimbDrop,       "Morph",    "Gets down off (x shoulder)",                           Fixed, 0, fx(3,1);
+    MorphClimbStep,       "Morph",    "Walks up a step under (x shoulder)",                   Fixed, 0, fx(1,1);
+    MorphClimbFrames,     "Morph",    "Getting up, frames",                                   Frames, 1, 240;
+    MorphClimbPerMetre,   "Morph",    "Getting up, frames a metre",                           Frames, 0, 120;
+    MorphClimbDown,       "Morph",    "Getting down (x getting up)",                          Fixed, fx(1,10), fx(2,1);
+    MorphClimbClear,      "Morph",    "Feet clear the lip by (x shoulder)",                   Fixed, 0, fx(1,2);
+    MorphClimbDip,        "Morph",    "Settles before it pushes (x shoulder)",                Fixed, 0, fx(1,2);
 }
 
 // ---------------------------------------------------------------------------
@@ -1832,6 +1844,9 @@ pub enum Tunable {
     Hazard(u8, crate::hazard::HazardField),
     /// One field of one of its objectives (`crate::objective`).
     Objective(u8, crate::objective::ObjectiveField),
+    /// One field of its climb row, for a species with a body
+    /// (`crate::climb`).
+    Climb(crate::climb::ClimbField),
 }
 
 impl Tunable {
@@ -1846,6 +1861,7 @@ impl Tunable {
             Tunable::Fight(f) => species.fight_index(f),
             Tunable::Hazard(kind, f) => species.hazard_index(kind as usize, f),
             Tunable::Objective(i, f) => species.objective_index(i as usize, f),
+            Tunable::Climb(f) => species.climb_index(f),
         }
     }
 
@@ -1898,6 +1914,16 @@ impl Tunable {
                 let (lo, hi) = f.range();
                 KnobDecl {
                     family: "",
+                    label: f.label(),
+                    unit: f.unit(),
+                    lo,
+                    hi,
+                }
+            }
+            Tunable::Climb(f) => {
+                let (lo, hi) = f.range();
+                KnobDecl {
+                    family: "climb",
                     label: f.label(),
                     unit: f.unit(),
                     lo,
@@ -2035,6 +2061,12 @@ fn species_baked(id: SpeciesId, index: usize) -> i32 {
         return crate::hazard::HazardField::ALL
             .get(field)
             .map_or(0, |f| f.neutral());
+    }
+    let climb = s.climb_base();
+    if index >= climb {
+        return crate::climb::ClimbField::ALL
+            .get(index - climb)
+            .map_or(0, |f| f.range().0);
     }
     let field = (index - objectives) % crate::objective::OBJECTIVE_FIELDS;
     crate::objective::ObjectiveField::ALL
@@ -2426,6 +2458,12 @@ pub fn species_knobs(s: &Species) -> Vec<Knob> {
     for i in 0..s.fight.objectives.len() {
         for field in crate::objective::ObjectiveField::ALL {
             out.push(Knob::Species(s.id, Tunable::Objective(i as u8, *field)));
+        }
+    }
+    // How it gets up and down, last, for a species with a body.
+    if s.has_body() {
+        for field in crate::climb::ClimbField::ALL {
+            out.push(Knob::Species(s.id, Tunable::Climb(*field)));
         }
     }
     out

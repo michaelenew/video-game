@@ -154,6 +154,11 @@ pub static FIGHT: FightDecl = FightDecl {
         objectives: 0,
         own: 6,
     },
+    // A body against the solids, with a footing of its own, since
+    // 2026-10-21 (`crate::climb`): its senses row is there for its body
+    // radius and its step.
+    row: true,
+    collides: true,
     hazards: &HAZARDS,
     // Nothing on her is somewhere to stand: her own knob says so.
     steepest: Some(Knob::Steepest as u16),
@@ -986,6 +991,9 @@ fn web_line(w: &mut World, m: &mut Monster) {
             let before = m.pos;
             if left_to_go.raw() > stop.add(step).raw() && gone.raw() < Knob::LineReach.fx().raw() {
                 m.pos = m.pos.add(math::wide_normalized(to).scale(step));
+                // Pulled along her line into nothing it could not walk into
+                // (`Monster::keep_to_the_ground`).
+                m.keep_to_the_ground(&w.terrain(), before, None);
                 m.speed = Fx::ZERO;
                 line_strikes(w, m, before);
             } else {

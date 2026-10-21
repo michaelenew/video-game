@@ -979,6 +979,16 @@ pub fn half(v: Fx) -> Fx {
     Fx::from_raw(v.raw() / 2)
 }
 
+/// **Halfway from `a` to `b`**: `a` and half the way, never half of each.
+/// Halving each rounds away the odd bit of both, so the middle of a box
+/// moved by a change of the world's frame (`World::shift`) landed a
+/// sixty-thousandth from where the shift put it, and a body against it was
+/// pushed differently in each frame (`tests/valley.rs`, 2026-10-21). This
+/// one moves with its ends exactly.
+pub fn midpoint(a: Fx, b: Fx) -> Fx {
+    a.add(half(b.sub(a)))
+}
+
 /// The square root of a fixed-point number: zero for anything not above it.
 /// For areas turned back into radii -- two pools of tar merging into one.
 pub fn sqrt(v: Fx) -> Fx {

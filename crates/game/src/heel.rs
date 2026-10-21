@@ -25,6 +25,28 @@ pub struct Heel {
     pub going: bool,
     /// Put beside its player yet: false outside the valley.
     pub placed: bool,
+    /// **Getting up a ledge or down off one** (2026-10-21,
+    /// `sim::breed::climb`): drawn from where it started, and moved on to
+    /// the top when it is done.
+    pub climb: Option<Climb>,
+}
+
+/// A morph getting up or down: how far (below nothing, down), how long it
+/// has been at it and how long it takes, in seconds, and how far forward it
+/// goes.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct Climb {
+    pub rise: f32,
+    pub t: f32,
+    pub total: f32,
+    pub advance: f32,
+}
+
+impl Climb {
+    /// How far through it is, nought to one, as the drive takes it.
+    pub fn progress(&self) -> sim::Fx {
+        fx((self.t / self.total.max(1e-3)).clamp(0.0, 1.0))
+    }
 }
 
 #[derive(Resource, Default)]
@@ -44,7 +66,7 @@ fn v3(v: sim::V3) -> Vec3 {
     )
 }
 
-fn fx(v: f32) -> sim::Fx {
+pub fn fx(v: f32) -> sim::Fx {
     sim::Fx::from_raw((v * 65536.0).round() as i32)
 }
 
@@ -117,11 +139,43 @@ pub fn follow(
         )
         .try_normalize()
         .unwrap_or(Vec3::Z);
+        // Getting up or down: it finishes that before it follows again.
+        if let Some(c) = h.climb.as_mut() {
+            c.t += dt;
+            if c.t >= c.total {
+                let dir = Vec3::new(
+                    (h.facing * std::f32::consts::TAU).cos(),
+                    0.0,
+                    (h.facing * std::f32::consts::TAU).sin(),
+                );
+                h.at += dir * c.advance;
+                h.at.y += c.rise;
+                h.climb = None;
+            }
+            continue;
+        }
+        let was = h.at;
         h.step(pos, ahead, near.flatten(), gait, dt, &Knobs::tuned());
-        // On the floor.
-        h.at.y = terrain
+        // On the floor -- and a ledge, or a drop, is got up or down
+        // (`sim::breed::climb::meets`) rather than popped onto.
+        let floor = terrain
             .ground_under(sim::V3::new(fx(h.at.x), fx(h.at.y), fx(h.at.z)))
             .to_f32_for_render();
+        let rise = floor - was.y;
+        let rates = sim::breed::climb::Rates::tuned();
+        match sim::breed::climb::meets(&gait.build, &rates, fx(rise)) {
+            Some(true) if h.going => {
+                h.at = was;
+                h.going = false;
+                h.climb = Some(Climb {
+                    rise,
+                    t: 0.0,
+                    total: sim::breed::climb::frames(&rates, fx(rise)) as f32 / sim::TICK_HZ as f32,
+                    advance: sim::breed::climb::advance(&gait.build).to_f32_for_render(),
+                });
+            }
+            _ => h.at.y = floor,
+        }
     }
 }
 
@@ -159,6 +213,8 @@ pub struct Walk {
     stride: f32,
     /// How far its body reaches from where it stands, on the flat, metres.
     radius: f32,
+    /// What getting up and down needs of it (`sim::breed::climb::build`).
+    build: sim::climb::Build,
 }
 
 impl Walk {
@@ -179,6 +235,7 @@ impl Walk {
             speed: gait.speed.to_f32_for_render().max(1.0),
             stride: gait.cycle.clamp(8, 240) as f32 / locomotion::FPS as f32,
             radius,
+            build: sim::breed::climb::build(&g, &q),
         }
     }
 }
@@ -249,6 +306,13 @@ mod tests {
         speed: 2.0,
         stride: 0.5,
         radius: 0.3,
+        build: sim::climb::Build {
+            shoulder: sim::Fx::ratio(1, 2),
+            front: sim::Fx::ratio(1, 4),
+            rear: sim::Fx::ratio(-1, 4),
+            nose: sim::Fx::ratio(1, 2),
+            tail: sim::Fx::ratio(-1, 2),
+        },
     };
 
     fn run(near: Option<Vec3>, walk: Walk) -> (Heel, Vec3) {

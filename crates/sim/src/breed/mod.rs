@@ -51,6 +51,7 @@
 //! | [`plan`] | what every major wants, the settle, the repair, the plausibility verdict |
 //! | [`posture`] | how a plan stands: balance over the feet, every foot on the floor, the head carried up |
 //! | [`build`] | the genome as a body (bones, parts, legs in metres) and a move set |
+//! | [`climb`] | getting up a ledge and down off one: the creatures' one motion, as a drive |
 //! | [`cross`] | breeding two genomes, grafting a trophy, mutation |
 //! | [`rear`] | an egg incubated, a hatchling fed and grown, the rebellion, the taming |
 //! | [`archetypes`] | the eleven creatures of the bestiary as genomes, and the trophies they drop |
@@ -64,6 +65,7 @@ pub mod actor;
 pub mod archetypes;
 pub mod brain;
 pub mod build;
+pub mod climb;
 pub mod cross;
 pub mod drive;
 pub mod locomotion;

@@ -502,9 +502,9 @@ pub fn circle_centre(w: &World) -> V3 {
     }
     let b = a.bounds;
     V3::new(
-        math::half(b.lo_x.add(b.hi_x)),
+        math::midpoint(b.lo_x, b.hi_x),
         Fx::ZERO,
-        math::half(b.lo_z.add(b.hi_z)),
+        math::midpoint(b.lo_z, b.hi_z),
     )
     .add(flat(off))
 }
@@ -540,9 +540,9 @@ pub fn base_of(ground: &crate::arena::Terrain) -> Fx {
     }
     let b = a.bounds;
     let c = V3::new(
-        math::half(b.lo_x.add(b.hi_x)),
+        math::midpoint(b.lo_x, b.hi_x),
         Fx::ZERO,
-        math::half(b.lo_z.add(b.hi_z)),
+        math::midpoint(b.lo_z, b.hi_z),
     );
     ground.ground_under(den.at(c))
 }

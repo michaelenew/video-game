@@ -1033,6 +1033,12 @@ fn apotheosis_alone_hits_nobody() {
 #[test]
 fn a_creature_is_cursed_and_purged_like_a_fighter() {
     let mut w = World::hunt([Class::DualMage, Class::Bulwark]);
+    // On the open floor: the proving ground's Ridgeback starts on the
+    // platform its spawn is astride (2026-10-21, `sim::climb`), and this is
+    // about the curse, not about a column aimed at a ledge.
+    if let Some(b) = w.monsters[0].as_mut() {
+        b.pos = V3::new(Fx::from_int(2), Fx::ZERO, Fx::from_int(8));
+    }
     let beast = w.monsters[0].expect("a creature");
     let to = beast.pos.sub(w.players[0].pos);
     let flat = V3::new(to.x, Fx::ZERO, to.z);
@@ -1055,13 +1061,14 @@ fn a_creature_is_cursed_and_purged_like_a_fighter() {
         b.curse = sim::dual::curse_of(4, 0);
         b.curse_clock = t::curse_fades();
     }
-    // Judgement on the ground it stands on: its column reaches the animal
-    // whatever part is over that spot, and it is light.
-    let ground = V3::new(
-        beast.pos.x,
-        w.terrain().ground_under(beast.pos),
-        beast.pos.z,
-    );
+    // Judgement on the ground under a foreleg: its column reaches the animal
+    // whatever part is over that spot, and it is light. (Under its middle was
+    // under its belly, which the column only reached while the platform it
+    // stood inside raised the column's foot.)
+    let knee = beast.rig().bone[sim::species::ridgeback::bones::FOREARM_L].at;
+    let ground = V3::new(knee.x, w.terrain().ground_under(knee), knee.z);
+    let at = ground.sub(w.players[0].pos);
+    let aim = (sim::math::atan2_turns(at.z, at.x).raw() as u32 & 0xffff) as u16;
     let down = sim::aim::look_onto_closely(
         w.players[0].pos,
         aim,

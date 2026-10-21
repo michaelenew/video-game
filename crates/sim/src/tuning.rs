@@ -4876,6 +4876,40 @@ pub fn morph_hurry() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::KeepHurry))
 }
 
+/// **How a morph gets up and down** (`breed::climb::Rates`): shares of its
+/// own shoulder, and frames.
+pub fn morph_climb_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbReach))
+}
+
+pub fn morph_climb_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDrop))
+}
+
+pub fn morph_climb_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbStep))
+}
+
+pub fn morph_climb_frames() -> i32 {
+    oven::scalar(Scalar::MorphClimbFrames)
+}
+
+pub fn morph_climb_per_metre() -> i32 {
+    oven::scalar(Scalar::MorphClimbPerMetre)
+}
+
+pub fn morph_climb_down() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDown))
+}
+
+pub fn morph_climb_clear() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbClear))
+}
+
+pub fn morph_climb_dip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDip))
+}
+
 // ---------------------------------------------------------------------------
 // Roaming (exploration 0023, `valley::roam`)
 // ---------------------------------------------------------------------------

@@ -2021,9 +2021,9 @@ impl World {
         let den = self.den();
         let b = den.home;
         let under = V3::new(
-            Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
+            crate::math::midpoint(b.lo_x, b.hi_x),
             den.off.y.add(Fx::from_int(-1000)),
-            Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
+            crate::math::midpoint(b.lo_z, b.hi_z),
         );
         let away = self.away;
         for (i, p) in self.players.iter_mut().enumerate() {
@@ -2351,9 +2351,9 @@ impl World {
         let (pos, facing) = match cairn {
             Some(top) => (
                 V3::new(
-                    Fx::from_raw(top.min.x.raw() / 2 + top.max.x.raw() / 2),
+                    crate::math::midpoint(top.min.x, top.max.x),
                     top.max.y,
-                    Fx::from_raw(top.min.z.raw() / 2 + top.max.z.raw() / 2),
+                    crate::math::midpoint(top.min.z, top.max.z),
                 ),
                 p.facing,
             ),
@@ -2450,6 +2450,7 @@ impl World {
         }
         let count = self.monsters.iter().flatten().count() as i32;
         let mut hunter_spawn = None;
+        let ground = self.terrain();
         for (slot, place) in self.monsters.iter_mut().enumerate() {
             let Some(old) = *place else { continue };
             let mut beast = Monster::new(old.species);
@@ -2471,6 +2472,7 @@ impl World {
                     beast.yaw = HALF_TURN;
                 }
             }
+            beast.settle(&ground);
             beast.brain.seen = self.players[0].pos;
             // And it takes a moment to notice you: it stands its ground,
             // turns to face you, and throws nothing until the moment is spent
@@ -11510,6 +11512,16 @@ fn hash_monster(h: &mut Fnv, slot: usize, m: &crate::monster::Monster) {
     if m.brain.aim != [0; 2] {
         h.write_u32(0x3A4C);
         h.write_u32(crate::lore::halves(m.brain.aim[0], m.brain.aim[1]));
+    }
+    // Getting up or down, and a spray a rock stopped: only when there is
+    // one, so a creature that never does either hashes as it did.
+    if let crate::monster::Doing::Climb { total, rise, .. } = m.doing {
+        h.write_u32(0xC1B | (total as u32) << 16);
+        h.write_i32(rise as i32);
+    }
+    if let Some(stop) = m.brain.stop {
+        h.write_u32(0x570B);
+        h.write_i32(stop as i32);
     }
     if m.own != [0; 4] {
         h.write_u32(0x0E);

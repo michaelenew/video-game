@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 538] = [
+pub const KNOBS: [i32; 562] = [
            65536, // siegeshell.size_(x) = 1
            30000, // siegeshell.health = 30000
             1200, // siegeshell.breakable_part_health = 1200
@@ -502,6 +502,23 @@ pub const KNOBS: [i32; 538] = [
               20, // siegeshell.gnawer.flinch_length = 20
            65536, // siegeshell.gnawer.knockback_taken_(x) = 1
              180, // siegeshell.gnawer.body_lies_for = 180
+          393216, // siegeshell_·_senses.body_radius,_against_solids = 6
+          294912, // siegeshell_·_senses.steps_over_solids_under = 4.5
+               0, // siegeshell_·_senses.sight,_half-angle_(turns) = 0
+               0, // siegeshell_·_senses.blind_arc,_half-width_(turns) = 0
+               0, // siegeshell_·_senses.feels_a_body_within = 0
+               0, // siegeshell_·_senses.feels_a_body_no_higher_than = 0
+               0, // siegeshell_·_senses.hears_a_footfall_at = 0
+               0, // siegeshell_·_senses.hears_a_footfall_on_rock_at = 0
+               0, // siegeshell_·_senses.hears_a_landing_at = 0
+               0, // siegeshell_·_senses.landing,_more_per_metre_fallen = 0
+               0, // siegeshell_·_senses.landing,_at_most = 0
+               0, // siegeshell_·_senses.hears_a_dodge_at = 0
+               0, // siegeshell_·_senses.hears_a_hit_at = 0
+               0, // siegeshell_·_senses.hears_a_rush_at = 0
+               0, // siegeshell_·_senses.hears_a_stone_at = 0
+               0, // siegeshell_·_senses.hears_a_shield_planted_at = 0
+               0, // siegeshell_·_senses.hears_a_quake_at = 0
                0, // siegeshell.grate.lasts = 0
            13107, // siegeshell.grate.reaches_above_the_floor = 0.2
            65536, // siegeshell.grate.walk_speed_in_it_(x) = 1
@@ -548,4 +565,11 @@ pub const KNOBS: [i32; 538] = [
                0, // siegeshell.the_wall.speed,_escorted = 0
                0, // siegeshell.the_wall.escorted_within = 0
            65536, // siegeshell.the_wall.takes_of_a_creature's_blow_(x) = 1
+           32768, // siegeshell_·_climb.gets_up_onto_(x_shoulder) = 0.5
+           39322, // siegeshell_·_climb.gets_down_off_(x_shoulder) = 0.6
+              30, // siegeshell_·_climb.getting_up,_frames = 30
+              16, // siegeshell_·_climb.getting_up,_frames_a_metre = 16
+           52429, // siegeshell_·_climb.getting_down_(x_getting_up) = 0.8
+            5243, // siegeshell_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.08
+            3277, // siegeshell_·_climb.settles_before_it_pushes_(x_shoulder) = 0.05
 ];

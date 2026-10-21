@@ -183,13 +183,22 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// `Player::spent_clicks`, her clicks waiting to come up. With that line out,
 /// every hunt reproduced its old pin exactly, merged onto main's carpet hang
 /// and push cancel, hers included.
+/// **Every class again 2026-10-21, deliberately: the Ridgeback meets the
+/// ground.** It collides with the proving ground's walls and platforms,
+/// starts on the platform its spawn is astride and gets down, gets up the
+/// platforms after the hunters and walks round them, and its charge and
+/// spray stop at what they run into (`sim::climb`, `docs/design/feel-log.md`).
+/// **And again the same day**: a top is footing only where it is broad enough
+/// for the body, so it stands differently where a top is narrow -- the
+/// platforms' edges, the Elementalist's stones. Re-pinned once more on merging
+/// main's Elementalist pass above.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x1a29978b38aa1cef),
-    (Class::Bulwark, 0xc9d4ba59f9ccdb9f),
-    (Class::ShadowReaver, 0xec71a0c72f3a2fec),
-    (Class::BloodMage, 0x3ef117c8d25b96c0),
-    (Class::DualMage, 0xeeb08b7ad232dceb),
-    (Class::Elementalist, 0xee53ebaa5320be09),
+    (Class::Champion, 0xc9aeada703d9903d),
+    (Class::Bulwark, 0x76869afd57557183),
+    (Class::ShadowReaver, 0xf38da36ffa8d8baf),
+    (Class::BloodMage, 0xf8141302e4e18fb1),
+    (Class::DualMage, 0x510e33528d365dc1),
+    (Class::Elementalist, 0xc32f72e9884a63d8),
 ];
 
 #[test]

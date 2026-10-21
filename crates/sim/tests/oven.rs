@@ -64,13 +64,21 @@ fn the_registry_covers_every_stored_value() {
             0
         } + s.fight.hazards.len() * sim::hazard::HazardField::ALL.len()
             + s.fight.objectives.len() * sim::objective::ObjectiveField::ALL.len();
+        // And last, for a species with a body, how it gets up and down
+        // (`sim::climb`).
+        let climb = if s.has_body() {
+            sim::climb::ClimbField::ALL.len()
+        } else {
+            0
+        };
         assert_eq!(
             s.knob_count(),
             sim::species::Common::ALL.len()
                 + s.own.len()
                 + s.moves.len() * MonsterField::ALL.len()
                 + pack
-                + fight,
+                + fight
+                + climb,
         );
         assert_eq!(
             s.tuned.len(),
