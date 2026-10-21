@@ -8,7 +8,9 @@ heroic ones a painted fantasy game draws people with.
 
 import mh
 
-BODY = mh.macro(gender="female", age="young", muscle=0.72, weight=0.32, proportions=1.0) + [
+BODY = mh.macro(gender="female", age="young", muscle=0.72, weight=0.32, proportions=1.0,
+                # Northern European.
+                races={"caucasian": 0.90, "african": 0.0, "asian": 0.10}) + [
     # Athletic, in a sports top (the owner, 2026-10-20): a small, firm,
     # close-set bust, carried high -- one compressed shape under the clothes
     # rather than two outlines out toward the arms.

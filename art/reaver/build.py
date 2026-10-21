@@ -31,7 +31,7 @@ CLASS = "Shadow Reaver"
 # arena's sun.
 COLOURS = {
     "knit": (0.035, 0.024, 0.06),
-    "knit/2": (0.50, 0.30, 0.22),      # skin, warm
+    "knit/2": (0.56, 0.38, 0.31),      # skin, fair
     "knit/4": (0.06, 0.03, 0.05),      # brows and the smudge round her eyes
     "knit/3": (0.07, 0.035, 0.05),     # glove
     "leather": (0.09, 0.035, 0.055),

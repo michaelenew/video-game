@@ -7,7 +7,9 @@ and her body should look as if it could not hold much more.
 
 import mh
 
-BODY = mh.macro(gender="female", age="young", muscle=0.40, weight=0.22, proportions=1.0) + [
+BODY = mh.macro(gender="female", age="young", muscle=0.40, weight=0.22, proportions=1.0,
+                # North African.
+                races={"caucasian": 0.60, "african": 0.30, "asian": 0.10}) + [
     ("breast/female-young-averagemuscle-minweight-mincup-averagefirmness.target", 0.4),
     ("head/head-invertedtriangular.target", 0.3),
 ]

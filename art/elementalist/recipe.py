@@ -7,7 +7,9 @@ forearms and hands that she drives into the ground.
 
 import mh
 
-BODY = mh.macro(gender="female", age="young", muscle=0.55, weight=0.30, proportions=1.0) + [
+BODY = mh.macro(gender="female", age="young", muscle=0.55, weight=0.30, proportions=1.0,
+                # East Asian.
+                races={"caucasian": 0.10, "african": 0.05, "asian": 0.85}) + [
     ("breast/female-young-averagemuscle-minweight-mincup-averagefirmness.target", 0.4),
     ("head/head-oval.target", 0.3),
 ]

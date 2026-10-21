@@ -22,7 +22,7 @@ CLASS = "Dual mage"
 # her left (obsidian, violet in its black) and its second her right (ivory).
 COLOURS = {
     "knit": (0.04, 0.035, 0.04),
-    "knit/2": (0.50, 0.33, 0.25),      # skin
+    "knit/2": (0.34, 0.20, 0.12),      # skin, olive
     "knit/4": (0.08, 0.03, 0.06),      # brows, lips, kohl
     "vessel": (0.022, 0.012, 0.05),
     "vessel/2": (0.52, 0.47, 0.38),

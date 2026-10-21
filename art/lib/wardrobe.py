@@ -217,7 +217,7 @@ def skin_and_gloves(body, r, gloved_to=None, bare_head=True):
 
 
 def hair(body, r, name="hair", gap=0.012, front=0.035, nape=-0.06, side=0.0, part=0.0,
-         grooves=9, depth=0.005, material="hair", faces=2600, close=0.02, lift=0.012):
+         grooves=9, depth=0.008, material="hair", faces=2600, close=0.02, lift=0.012):
     """Hair as a painted figure's is: one sculpted mass over the skull, not
     strands. The head inflated by ``gap``, cut back from the face along a
     hairline ``front`` above the brows, down to ``nape`` at the back (metres

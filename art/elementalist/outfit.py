@@ -81,7 +81,7 @@ def team_stole(body, r):
 
 def head_hair(body, r):
     e = r.eye
-    out = [hair(body, r, gap=0.007, front=0.045, nape=-0.09, side=-0.045, grooves=11, depth=0.005,
+    out = [hair(body, r, gap=0.007, front=0.045, nape=-0.09, side=-0.045, grooves=11, depth=0.008,
                 faces=2400)]
     # Gathered into a knot at the back of the head.
     out.append(stone("knot", e + np.array([0.0, 0.02, -0.15]), [0.045, 0.04, 0.035], "hair", "head",

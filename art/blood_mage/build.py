@@ -22,9 +22,9 @@ CLASS = "Blood mage"
 # with red in it, the leather the colour of old blood, ash-pale hair.
 COLOURS = {
     "knit": (0.03, 0.02, 0.02),
-    "knit/2": (0.50, 0.36, 0.32),      # skin, pale
+    "knit/2": (0.13, 0.065, 0.04),     # skin, deep brown
     "knit/3": (0.025, 0.012, 0.015),   # gloves
-    "knit/4": (0.09, 0.008, 0.02),     # lips, brows, the shadow round the eyes
+    "knit/4": (0.04, 0.006, 0.012),    # lips, brows, the shadow round the eyes
     "coat": (0.022, 0.008, 0.012),
     "leather": (0.12, 0.012, 0.022),
     "leather_dark": (0.035, 0.012, 0.012),

@@ -23,15 +23,15 @@ CLASS = "Champion"
 # Deep blue against his weapon's gold; pale breeches; warm leather.
 COLOURS = {
     "knit": (0.04, 0.035, 0.03),
-    "knit/2": (0.48, 0.30, 0.21),      # skin
+    "knit/2": (0.27, 0.15, 0.085),     # skin, warm brown
     "knit/3": (0.07, 0.04, 0.022),     # gloves
-    "knit/4": (0.05, 0.03, 0.02),      # brows
+    "knit/4": (0.025, 0.015, 0.01),    # brows
     "doublet": (0.018, 0.03, 0.085),
     "breeches": (0.26, 0.22, 0.17),
     "boot": (0.035, 0.022, 0.015),
     "leather": (0.10, 0.05, 0.022),
     "leather_dark": (0.04, 0.025, 0.015),
-    "hair": (0.045, 0.028, 0.016),
+    "hair": (0.016, 0.012, 0.010),
     "team": (0.80, 0.80, 0.80),
     "eye": (0.70, 0.68, 0.66),
     "eye/2": (0.12, 0.16, 0.22),

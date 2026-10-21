@@ -72,7 +72,7 @@ def neck(body, r):
 def head_hair(body, r):
     # A heavy bob to the jaw, parted to one side.
     return [hair(body, r, gap=0.010, front=0.04, nape=-0.13, side=0.01, part=0.03, grooves=10,
-                 depth=0.004, faces=2800, close=0.025)]
+                 depth=0.008, faces=2800, close=0.025)]
 
 
 GARMENTS = {

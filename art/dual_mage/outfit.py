@@ -74,7 +74,7 @@ def neck(body, r):
 def head_hair(body, r):
     # Cut to the jaw, a straight fringe: and split, white and black.
     return halves([hair(body, r, gap=0.009, front=0.025, nape=-0.10, side=0.02, grooves=13,
-                        depth=0.003, faces=2800, close=0.02)], r)
+                        depth=0.007, faces=2800, close=0.02)], r)
 
 
 GARMENTS = {
