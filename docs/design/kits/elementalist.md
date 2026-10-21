@@ -101,9 +101,12 @@ What the person reported from three replays, what the replays showed, and what c
   floor far below — often a course's void. Now the edge of the range, and the floor under a wall
   she pointed at, come back toward her to the last footing no more than
   `Placed, at most below her` (2 m) under her own (`aim::kept_up`). A crosshair *on* the floor
-  below still puts it there. A Fissure held from a stone up top runs along that ground and stops
-  at the edge (`aim::kept_along`), so its stone erupts at the lip, not in the pit; one started
-  down there runs down there. Landfall's slab never comes up off a ledge (`aim::planted_ahead`):
+  below still puts it there. A Fissure held from a stone up top runs along that ground to the
+  edge (`aim::kept_along`); *since 2026-10-21* its stone is then let go at the surge's speed and
+  goes over and falls to the floor below, rather than stopping on the lip; one started down
+  there runs down there. The same day: a Fissure held on any raised floor ran nowhere at all
+  (its wall check grazed the floor's own top), and the Fire pillar left this rule -- aimed off a
+  ledge, it goes to the floor below. Landfall's slab never comes up off a ledge (`aim::planted_ahead`):
   past one it comes back to her level, and with no footing between there is no slab. The Reaver's
   send, the Black spike and Judgement keep the plain rule — the send's refusal past an edge was
   decided from play on 2026-10-04.
@@ -127,6 +130,23 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
   fire bolt lights the stone that stops it, a lit shot the stones it passes, and
   burning wind (below) what it touches. It was only the pillar's footprint, on
   the frame it was cast.
+- **A Strike held past its charge is one Strike** (2026-10-21): released by
+  the cap with the button still down, the click is spent until it comes up
+  (`Player::spent_clicks`). It used to throw a second pillar's whole wind-up the
+  moment the first one's recovery ended -- the "double wind-up". Every click of
+  hers whose hold ends at its cap does the same.
+- **A full Strike flashes** (2026-10-21): spending the whole pillar, it left
+  nothing standing and so nothing to see, which read as a cast that never came
+  out. A Strike that leaves less than one burn tick now leaves its pillar for
+  `Strike, a full one flashes for` (14 frames): it shoots up to its full size and
+  is gone, short of a tick, so it never burns
+  (`a_full_strike_flashes_its_pillar_and_burns_nothing_more`).
+- **A full Strike flashes** (2026-10-21): spending the whole pillar, it left
+  nothing standing and so nothing to see, which read as a cast that never came
+  out. A Strike that leaves less than one burn tick now leaves its pillar for
+  `Strike, a full one flashes for` (14 frames): it shoots up to its full size and
+  is gone, short of a tick, so it never burns
+  (`a_full_strike_flashes_its_pillar_and_burns_nothing_more`).
 - **The pillar is half again as big and stands twice as long.** The Strike's
   worth was halved with it, so a full Strike is the hit it was.
 - **`Q` and `E` act on everything on their line at once.** The Bolt and
@@ -143,7 +163,14 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
   stands at its front is carried -- on their feet moved with it, off them given
   its speed along the line -- and that includes her: held at her own feet, the
   stone erupts under her and runs, and a jump timed out of the eruption leaves
-  with the stone's climb *and* the surge's run. Anybody else it reaches is
+  with the stone's climb *and* the surge's run. *Since 2026-10-21 that jump can
+  actually be thrown*: it had been locked until the move's recovery was over, by
+  which time the climb was long done. Space with her feet on a stone ends
+  Fissure from the frame after the surge is sent (`state::jump_off_the_crack`):
+  held through, she leaves at 6.7 m against a jump's 5.0 and is thrown ~19 m
+  along the line; timed to the climb's last frame, the eruption catches her
+  again for the structure jump's 25.9 m
+  (`a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump`). Anybody else it reaches is
   struck once and carried on: the row's damage at a tap, `1 +` `damage at a
   full hold` times it at a full one, and the same for knockback and the throw
   up. It no longer stops at the first body. The line is still rough terrain.
@@ -186,8 +213,11 @@ Fire carpet keeps its own window, which cuts into any move.
 
 **Fire carpet** (`EffectKind::FireCarpet`). A strip of fire laid out from a little ahead of her
 along the line the crosshair solved (`aim::skillshot_path`), its length the move's reach and
-its half-width the move's radius. It hangs for `Fire carpet, hangs for` and burns whoever
-touches it, on the tick. **It is fire**: a shot flown down it comes out lit
+its half-width the move's radius. It hangs for `Fire carpet, hangs for` (225 frames since
+2026-10-21, from 90) and burns whoever touches it, on the tick. **It sinks** (2026-10-21): each
+end comes down at `Fire carpet, sinks at` (0.8 m/s, about 3 m over its life) until it rests on
+the floor under it, so one laid low ends up lying on the ground and one laid high is still in
+the air when it goes out (`the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor`). **It is fire**: a shot flown down it comes out lit
 (`a_gale_thrown_straight_down_the_carpet_comes_out_lit`), and a Downdraft landed in it is a
 ring of fire. It is drawn as a stream of flames carried from the near end to the far one, so
 the fire is seen being pushed outward. One at a time. **Its recovery cancels** (2026-10-10):

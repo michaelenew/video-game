@@ -347,6 +347,60 @@ fn jumping_out_of_a_rolling_ball_keeps_its_speed() {
     );
 }
 
+#[test]
+fn a_strike_held_past_its_charge_is_one_strike_not_two() {
+    // From play, 2026-10-21: held past the hold's end, the Strike threw
+    // itself, and with the button still down a second pillar wound up the
+    // moment its recovery ended. The click has to come up first now.
+    let mut w = elementalist();
+    let m = sim::moves::get(Class::Elementalist, SLOT_SPECIAL);
+    let long = (m.startup + m.channel + m.active + m.recovery) as u32 * 2;
+    let mut starts = 0;
+    let mut was_winding = false;
+    for _ in 0..long {
+        step(&mut w, keys::FIRE);
+        let winding =
+            matches!(w.players[0].action, Action::Startup { kind, .. } if kind == SLOT_SPECIAL);
+        if winding && !was_winding {
+            starts += 1;
+        }
+        was_winding = winding;
+    }
+    assert_eq!(
+        starts, 1,
+        "one wind-up for one press, however long it is held"
+    );
+    // Let go, and the next press is a pillar again.
+    run(&mut w, 2, 0);
+    step(&mut w, keys::FIRE);
+    assert_eq!(doing(&w), Some(SLOT_SPECIAL), "a fresh press throws again");
+}
+
+#[test]
+fn a_full_strike_flashes_its_pillar_and_burns_nothing_more() {
+    // From play, 2026-10-21: a full Strike spends the whole pillar, and it
+    // left nothing to see -- it read as a cast that never came out.
+    let mut w = elementalist();
+    let m = sim::moves::get(Class::Elementalist, SLOT_SPECIAL);
+    run(&mut w, (m.startup + m.channel) as u32 + 4, keys::FIRE);
+    let mut seen = None;
+    for _ in 0..40 {
+        step(&mut w, 0);
+        if let Some(p) = of_kind(&w, EffectKind::FirePillar).first() {
+            seen = Some(*p);
+            break;
+        }
+    }
+    let pillar = seen.expect("a full Strike is seen: its pillar flashes up");
+    assert!(
+        pillar.life < t::effect_tick_frames(),
+        "and is gone before a tick, so it never burns: {} frames",
+        pillar.life
+    );
+    run(&mut w, pillar.life as u32 + 1, 0);
+    assert!(of_kind(&w, EffectKind::FirePillar).is_empty(), "then gone");
+}
+
 // ---------------------------------------------------------------------------
 // The Fire carpet and the Thermal
 // ---------------------------------------------------------------------------
@@ -369,6 +423,58 @@ fn the_carpet_hangs_in_front_of_her_along_her_look() {
         run(&mut w, 12, 0);
         assert!(of_kind(&w, EffectKind::FireCarpet).len() <= 1);
     }
+}
+
+/// A carpet laid at `height`, pitched a little down, well away from her.
+fn carpet_at(w: &mut World, height: f32) {
+    let carpet = Effect::cast(
+        EffectKind::FireCarpet,
+        0,
+        Class::Elementalist,
+        e::FIRE_CARPET,
+        at(-8.0, height, -8.0),
+        V3::new(Fx::ONE, Fx::ratio(-1, 4), Fx::ZERO).normalized(),
+        metres(6.0),
+    );
+    place(w, carpet);
+}
+
+#[test]
+fn the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor() {
+    let sinks = as_f(t::carpet_sink()) * t::carpet_life() as f32 / 60.0;
+    assert!(
+        sinks > 1.0,
+        "it comes down a fair way over its life: {sinks} m"
+    );
+
+    // Low: the far end lands first, then the near one, and it lies there.
+    let mut w = elementalist();
+    carpet_at(&mut w, 2.5);
+    run(&mut w, t::carpet_life() as u32 - 2, 0);
+    let c = of_kind(&w, EffectKind::FireCarpet);
+    assert_eq!(c.len(), 1, "still burning near the end of its life");
+    let (a, b) = c[0].carpet_line();
+    let rest = c[0].field_radius();
+    for end in [a, b] {
+        let floor = w.terrain().floor_below(end);
+        assert!(
+            (as_f(end.y) - as_f(floor) - as_f(rest)).abs() < 0.05,
+            "an end rests on the floor: {} over {}",
+            as_f(end.y),
+            as_f(floor)
+        );
+    }
+    assert!(as_f(c[0].reach) > 5.5, "lying out nearly its whole length");
+
+    // High: lower than it was laid, by what the sink says, and still aloft.
+    let mut w = elementalist();
+    carpet_at(&mut w, 12.0);
+    run(&mut w, 120, 0);
+    let c = of_kind(&w, EffectKind::FireCarpet)[0];
+    let fell = 12.0 - as_f(c.pos.y);
+    let want = as_f(t::carpet_sink()) * 2.0;
+    assert!((fell - want).abs() < 0.1, "fell {fell} m, wanted {want}");
+    assert_eq!(c.reach, metres(6.0), "in the air its line is as laid");
 }
 
 #[test]

@@ -661,7 +661,7 @@ scalars! {
     AirBallShrink,        "Elementalist", "Air ball, shrinks by (m/s)", Fixed, fx(1,20), fx(4,1);
     AirBallHolds,         "Elementalist", "Air ball, holds a body down to (m)", Fixed, 0, fx(2,1);
     AirBallCarriedShrink, "Elementalist", "Air ball, shrinks faster carrying (x)", Fixed, fx(1,1), fx(4,1);
-    CarpetLife,           "Elementalist", "Fire carpet, hangs for", Frames, 1, 240;
+    CarpetLife,           "Elementalist", "Fire carpet, hangs for", Frames, 1, 600;
     CarpetAhead,          "Elementalist", "Fire carpet, starts ahead of her (m)", Fixed, 0, fx(6,1);
     CarpetDamage,         "Elementalist", "Fire carpet, burn per tick", Int, 0, 120;
     ThermalLift,          "Elementalist", "Thermal, lift (m/s)", Fixed, 0, fx(60,1);
@@ -1222,6 +1222,13 @@ scalars! {
     // carpet's long hang is for the Updraft into it, not for a string of
     // carpets that never comes down. See `state::Player::carpets`.
     CarpetHangFalloff,    "Elementalist", "Fire carpet, each hang after",                      Fixed, 0, fx(1,1);
+    // **The Fire carpet sinks** (2026-10-21, from play): it comes down at
+    // this speed for as long as it hangs, and an end that meets the floor
+    // rests on it -- so one laid low enough ends up lying on the ground.
+    CarpetSink,           "Elementalist", "Fire carpet, sinks at (m/s)",                      Fixed, 0, fx(5,1);
+    // **A full Strike flashes** (2026-10-21, from play): the pillar it spent
+    // shoots up and is gone over this many frames, never long enough to burn.
+    StrikeFlash,          "Elementalist", "Strike, a full one flashes for",                   Frames, 1, 25;
 }
 
 // ---------------------------------------------------------------------------

@@ -9580,4 +9580,75 @@ lane 8 45.8 to 60.3, lane 9 55.8 to 61.9; lane 3 whole kit 62.3 to 56.6, lane 9 
 to 48.5. She still reaches further than she did: the first carpet's 24 frames are most of
 it. If the courses want less, the first hang itself is the knob, at the cost of the Updraft
 meeting it.
+
+
+### 2026-10-21 — the Fire carpet lasts, and sinks
+
+From play: the carpet should "last a lot longer (2-3x) and drift downward over time, eventually
+settling on the ground if it started low enough."
+**Changed** `Fire carpet, hangs for` 90 → 225 frames (2.5x; the slider's top 240 → 600), and a
+new knob, `Fire carpet, sinks at` (0.8 m/s): every frame it hangs, each end comes down by that
+much until it is the capsule's radius over the floor under it (`Terrain::floor_below`, so a
+stone or a ledge catches an end), and the strip lies between its ends wherever they are
+(`World::sink_the_carpet`). Over its life it comes down 3 m, so one laid from a short hop
+ends up lying on the ground along the slope it met; one laid from high up is still in the air
+when it burns out. Pinned by `tests/elementalist_clicks.rs`
+(`the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor`).
+**Consequences** to feel for: an Updraft or a shot aimed at a carpet laid a second ago meets it
+up to a metre lower than it was laid; a carpet on the floor is a burning strip to walk round, and
+a Thermal off it throws her along the slope it lies on (flat, on a flat floor).
+**Verdict** open -- unplayed.
+
+
+### 2026-10-21 — the Fire pillar off a ledge, and Fissure on a raised floor
+
+From play: "the fire pillar off of an edge has really weird aiming now. I can't seem to aim it
+down to the ground below when I'm standing on a raised area", suspected to be the Reaver's
+shadow edge rule bleeding into other moves; and "a charged lclick that would end up off of the
+current plane doesn't get kicked at all. The stone needs to proceed as far as it can, then fall
+off the edge."
+**Found** the shadow's rule (`aim::walk_toward`) is the send's alone and nothing else calls it;
+`aim.rs` had not changed since 2026-10-19. The pillar was under the Elementalist's own
+2026-10-09 rule (`aim::grounded_kept`), which brings a placement aimed past an edge -- out of
+range, or at the cliff's face -- back up to her level. Fissure had a separate bug: the run's
+wall check went along the floor at exactly the height of the box she stood on, grazed its top,
+and read as a wall at no distance, so a crack held on any raised floor never moved.
+**Changed** the Fire pillar (tap and Strike) takes the plain `aim::grounded_path`; her stones
+keep the rule. Fissure's wall check is asked `Step up` above the floor it runs on. A surge
+whose run ends at a lip lets its stone go at `Fissure surge, speed` (a kick, so it hits who it
+lands among), and it goes over and falls. Pinned by `tests/elementalist_playtest.rs`
+(`a_fire_pillar_aimed_off_the_dais_goes_to_the_floor_below`,
+`a_crack_held_toward_an_edge_runs_to_it_and_its_stone_goes_over`, which replaces
+`a_crack_held_toward_an_edge_stops_at_it`).
+**Consequences** to feel for: the stone let go at the lip travels on as a kicked stone does
+(the Bolt's kick range), which on the proving ground's dais lands it about 9 m past the edge --
+further than the hold bought; off a course's island it goes into the pit.
+**Verdict** open -- unplayed.
+
+
+### 2026-10-21 — a jump off Fissure's stone; one Strike per press
+
+From play: "let a jump cancel Fissure's recovery on the stone", and the held Fire pillar "has a
+really weird double-windup looking animation".
+**Changed** (1) Space with her feet on a stone ends Fissure from the frame after the surge is
+sent, and the ordinary jump takes off from the stone (`state::jump_off_the_crack`). Finding the
+stone under her needed `stones::under_in`'s skin widened by an erupting stone's climb, as it
+already was by a moving one's fall: her feet are a frame behind a top that rises 0.1--0.4 m a
+frame. Measured: a jump held through leaves at 6.7 m (a jump is 5.0) and is carried ~19 m along
+the surge; timed to the climb's last frame, 25.9 m, the structure jump's number.
+(2) The double wind-up was the Strike held past its 60-frame charge: the cap throws it, and
+with the button still down a fresh pillar began the frame her recovery ended. A click whose
+charge the cap released is now spent until it comes up (`Player::spent_clicks`), for every
+click of hers. Pinned by `tests/elementalist_qol.rs`
+(`a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump`) and
+`tests/elementalist_clicks.rs` (`a_strike_held_past_its_charge_is_one_strike_not_two`).
+**Found later the same day** (the person's own reading): the held pillar that "doesn't come out
+at all" was a *full* Strike, which spends the whole pillar and so drew nothing -- and the
+button still held then threw a tapped pillar, the double wind-up above. Not the box: the
+simulation struck from every box tried. **Changed**: a Strike leaving less than a burn tick
+leaves its pillar for `Strike, a full one flashes for` (14 frames), never long enough to burn
+(`a_full_strike_flashes_its_pillar_and_burns_nothing_more`; `elementalist_v2.rs`'s
+`the_strike_is_worth_exactly_the_burn_it_takes_off_the_pillar` now allows the flash). For those
+frames it is fire like any pillar -- it lights a stone, lights a shot through it, and Cataclysm
+could cut it loose -- to feel for.
 **Verdict** open -- unplayed.

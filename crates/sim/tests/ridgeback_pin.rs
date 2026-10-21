@@ -179,13 +179,17 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **Every class again the same day: only enough wall is a wall**
 /// (`Terrain::wall_face`). The proving ground's low walls and edges the
 /// random presses brush are no longer slid on or jumped off.
+/// **Every class again 2026-10-21, for the hash**: `state_checksum` holds
+/// `Player::spent_clicks`, her clicks waiting to come up. With that line out,
+/// every hunt reproduced its old pin exactly, merged onto main's carpet hang
+/// and push cancel, hers included.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x488936a9eef126bf),
-    (Class::Bulwark, 0xf68445ba591dfe6f),
-    (Class::ShadowReaver, 0xb70c8375aac8cb9c),
-    (Class::BloodMage, 0x520976d3f6cad020),
-    (Class::DualMage, 0x22b31e2bdcd3bb9b),
-    (Class::Elementalist, 0x6a513cb59ff3a1c9),
+    (Class::Champion, 0x1a29978b38aa1cef),
+    (Class::Bulwark, 0xc9d4ba59f9ccdb9f),
+    (Class::ShadowReaver, 0xec71a0c72f3a2fec),
+    (Class::BloodMage, 0x3ef117c8d25b96c0),
+    (Class::DualMage, 0xeeb08b7ad232dceb),
+    (Class::Elementalist, 0xee53ebaa5320be09),
 ];
 
 #[test]
