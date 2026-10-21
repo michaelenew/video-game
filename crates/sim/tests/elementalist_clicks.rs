@@ -347,6 +347,60 @@ fn jumping_out_of_a_rolling_ball_keeps_its_speed() {
     );
 }
 
+#[test]
+fn a_strike_held_past_its_charge_is_one_strike_not_two() {
+    // From play, 2026-10-21: held past the hold's end, the Strike threw
+    // itself, and with the button still down a second pillar wound up the
+    // moment its recovery ended. The click has to come up first now.
+    let mut w = elementalist();
+    let m = sim::moves::get(Class::Elementalist, SLOT_SPECIAL);
+    let long = (m.startup + m.channel + m.active + m.recovery) as u32 * 2;
+    let mut starts = 0;
+    let mut was_winding = false;
+    for _ in 0..long {
+        step(&mut w, keys::FIRE);
+        let winding =
+            matches!(w.players[0].action, Action::Startup { kind, .. } if kind == SLOT_SPECIAL);
+        if winding && !was_winding {
+            starts += 1;
+        }
+        was_winding = winding;
+    }
+    assert_eq!(
+        starts, 1,
+        "one wind-up for one press, however long it is held"
+    );
+    // Let go, and the next press is a pillar again.
+    run(&mut w, 2, 0);
+    step(&mut w, keys::FIRE);
+    assert_eq!(doing(&w), Some(SLOT_SPECIAL), "a fresh press throws again");
+}
+
+#[test]
+fn a_full_strike_flashes_its_pillar_and_burns_nothing_more() {
+    // From play, 2026-10-21: a full Strike spends the whole pillar, and it
+    // left nothing to see -- it read as a cast that never came out.
+    let mut w = elementalist();
+    let m = sim::moves::get(Class::Elementalist, SLOT_SPECIAL);
+    run(&mut w, (m.startup + m.channel) as u32 + 4, keys::FIRE);
+    let mut seen = None;
+    for _ in 0..40 {
+        step(&mut w, 0);
+        if let Some(p) = of_kind(&w, EffectKind::FirePillar).first() {
+            seen = Some(*p);
+            break;
+        }
+    }
+    let pillar = seen.expect("a full Strike is seen: its pillar flashes up");
+    assert!(
+        pillar.life < t::effect_tick_frames(),
+        "and is gone before a tick, so it never burns: {} frames",
+        pillar.life
+    );
+    run(&mut w, pillar.life as u32 + 1, 0);
+    assert!(of_kind(&w, EffectKind::FirePillar).is_empty(), "then gone");
+}
+
 // ---------------------------------------------------------------------------
 // The Fire carpet and the Thermal
 // ---------------------------------------------------------------------------
@@ -369,6 +423,58 @@ fn the_carpet_hangs_in_front_of_her_along_her_look() {
         run(&mut w, 12, 0);
         assert!(of_kind(&w, EffectKind::FireCarpet).len() <= 1);
     }
+}
+
+/// A carpet laid at `height`, pitched a little down, well away from her.
+fn carpet_at(w: &mut World, height: f32) {
+    let carpet = Effect::cast(
+        EffectKind::FireCarpet,
+        0,
+        Class::Elementalist,
+        e::FIRE_CARPET,
+        at(-8.0, height, -8.0),
+        V3::new(Fx::ONE, Fx::ratio(-1, 4), Fx::ZERO).normalized(),
+        metres(6.0),
+    );
+    place(w, carpet);
+}
+
+#[test]
+fn the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor() {
+    let sinks = as_f(t::carpet_sink()) * t::carpet_life() as f32 / 60.0;
+    assert!(
+        sinks > 1.0,
+        "it comes down a fair way over its life: {sinks} m"
+    );
+
+    // Low: the far end lands first, then the near one, and it lies there.
+    let mut w = elementalist();
+    carpet_at(&mut w, 2.5);
+    run(&mut w, t::carpet_life() as u32 - 2, 0);
+    let c = of_kind(&w, EffectKind::FireCarpet);
+    assert_eq!(c.len(), 1, "still burning near the end of its life");
+    let (a, b) = c[0].carpet_line();
+    let rest = c[0].field_radius();
+    for end in [a, b] {
+        let floor = w.terrain().floor_below(end);
+        assert!(
+            (as_f(end.y) - as_f(floor) - as_f(rest)).abs() < 0.05,
+            "an end rests on the floor: {} over {}",
+            as_f(end.y),
+            as_f(floor)
+        );
+    }
+    assert!(as_f(c[0].reach) > 5.5, "lying out nearly its whole length");
+
+    // High: lower than it was laid, by what the sink says, and still aloft.
+    let mut w = elementalist();
+    carpet_at(&mut w, 12.0);
+    run(&mut w, 120, 0);
+    let c = of_kind(&w, EffectKind::FireCarpet)[0];
+    let fell = 12.0 - as_f(c.pos.y);
+    let want = as_f(t::carpet_sink()) * 2.0;
+    assert!((fell - want).abs() < 0.1, "fell {fell} m, wanted {want}");
+    assert_eq!(c.reach, metres(6.0), "in the air its line is as laid");
 }
 
 #[test]
@@ -539,6 +645,67 @@ fn the_carpets_recovery_is_cut_short_by_a_move_asked_for_in_its_window() {
 }
 
 #[test]
+fn a_carpet_into_the_updraft_meets_it_where_she_laid_it() {
+    // The carpet hangs her long enough for the Updraft's wind-up, and the
+    // Updraft does not cut the hang short, so the column comes up round her
+    // where she laid the carpet -- through it, not a fall's height below it
+    // (2026-10-21, from play).
+    let mut w = carpet_laid();
+    let laid = w.players[0].pos.y;
+    step(&mut w, SPACE | keys::WIND);
+    assert_eq!(doing(&w), Some(e::UPDRAFT));
+    let mut column = None;
+    let mut thermal = false;
+    for _ in 0..40 {
+        step(&mut w, SPACE);
+        if column.is_none() && !of_kind(&w, EffectKind::Updraft).is_empty() {
+            column = Some(w.players[0].pos.y);
+        }
+        thermal |= w.players[0].vel.y.raw() > t::updraft_lift().raw();
+    }
+    let column = column.expect("the column came up");
+    assert!(
+        laid.sub(column).raw() < metres(0.5).raw(),
+        "she fell {} m between the carpet and the column",
+        as_f(laid.sub(column))
+    );
+    assert!(thermal, "and the column met the carpet: a Thermal");
+}
+
+#[test]
+fn each_carpet_in_one_jump_hangs_her_less() {
+    // The first carpet's long hang is for the Updraft into it; a string of
+    // carpets is not a way to stay up (2026-10-21, from play).
+    let mut w = elementalist();
+    run(&mut w, 12, SPACE);
+    let mut hangs = Vec::new();
+    for _ in 0..200 {
+        if w.players[0].grounded {
+            break;
+        }
+        let was = doing(&w);
+        step(&mut w, SPACE | keys::FIRE);
+        if doing(&w) == Some(e::FIRE_CARPET) && was != Some(e::FIRE_CARPET) {
+            hangs.push(w.players[0].air_stall);
+        }
+        step(&mut w, SPACE);
+    }
+    assert!(hangs.len() >= 3, "she laid several: {hangs:?}");
+    assert!(hangs[0] >= 20, "the first hangs her long: {hangs:?}");
+    for pair in hangs.windows(2) {
+        assert!(
+            pair[1] * 2 < pair[0].max(1),
+            "each after it a good deal less: {hangs:?}"
+        );
+    }
+    let total: u16 = hangs.iter().sum();
+    assert!(
+        total < hangs[0] * 3 / 2,
+        "and all of them together not much more than the first: {hangs:?}"
+    );
+}
+
+#[test]
 fn a_move_asked_for_after_the_carpets_window_waits_for_the_recovery() {
     let mut w = carpet_laid();
     run(
@@ -562,6 +729,112 @@ fn the_carpets_window_is_not_spent_on_a_second_carpet() {
     step(&mut w, SPACE | keys::FIRE);
     assert_eq!(doing(&w), Some(e::FIRE_CARPET));
     assert!(matches!(w.players[0].action, Action::Recovery { .. }));
+}
+
+/// An Elementalist who has just planted a Fire pillar (the fire click,
+/// tapped), on the first frame of its recovery.
+fn pillar_planted() -> World {
+    let mut w = elementalist();
+    step(&mut w, keys::FIRE);
+    for _ in 0..40 {
+        if matches!(w.players[0].action, Action::Recovery { .. }) {
+            return w;
+        }
+        step(&mut w, 0);
+    }
+    panic!("the pillar never reached its recovery");
+}
+
+#[test]
+fn q_cuts_the_recovery_of_what_she_just_made() {
+    let mut w = pillar_planted();
+    run(&mut w, t::push_cancel_from() as u32, 0);
+    assert!(matches!(w.players[0].action, Action::Recovery { .. }));
+    step(&mut w, keys::WEAK_PUSH);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Startup {
+                kind: SLOT_POKE,
+                ..
+            }
+        ),
+        "the Bolt's wind-up began now, not after the pillar's recovery: {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn e_cuts_the_recovery_of_what_she_just_made() {
+    let mut w = pillar_planted();
+    run(&mut w, t::push_cancel_from() as u32, 0);
+    step(&mut w, keys::STRONG_PUSH);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Startup {
+                kind: SLOT_HEAVY,
+                ..
+            }
+        ),
+        "Cataclysm's wind-up began now: {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn a_push_does_not_cut_a_push() {
+    // The Bolt then Cataclysm on one stone is two decisions, and the first
+    // is paid for in full.
+    let mut w = elementalist();
+    step(&mut w, keys::WEAK_PUSH);
+    for _ in 0..40 {
+        if matches!(w.players[0].action, Action::Recovery { .. }) {
+            break;
+        }
+        step(&mut w, 0);
+    }
+    run(&mut w, t::push_cancel_from() as u32, 0);
+    step(&mut w, keys::STRONG_PUSH);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Recovery {
+                kind: SLOT_POKE,
+                ..
+            }
+        ),
+        "the Bolt's recovery stands: {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn a_cancelled_recovery_is_still_punishable_on_block() {
+    // The cut buys an earlier push, never safety: whatever she threw that
+    // can be blocked, cut at the earliest frame into the quicker push, still
+    // leaves her minus.
+    let push = |kind| {
+        let m = sim::moves::get(Class::Elementalist, kind);
+        (m.startup + m.active + m.recovery) as i32
+    };
+    let quickest = push(SLOT_POKE).min(push(SLOT_HEAVY));
+    let table = sim::moves::table(Class::Elementalist);
+    for (kind, m) in table.iter().enumerate() {
+        let kind = kind as u8;
+        if kind == SLOT_POKE || kind == SLOT_HEAVY || m.damage == 0 || m.blockstun == 0 {
+            continue;
+        }
+        let busy = m.busy_after_contact() - m.recovery as i32
+            + (t::push_cancel_from() as i32).min(m.recovery as i32)
+            + quickest;
+        let on_block = m.blockstun as i32 - busy;
+        assert!(
+            on_block < 0,
+            "{} cut into a push is {on_block:+} on block",
+            m.name
+        );
+    }
 }
 
 #[test]

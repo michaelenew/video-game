@@ -7,7 +7,7 @@
 //! the Pair's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 496] = [
+pub const KNOBS: [i32; 503] = [
            65536, // pair.size_(x) = 1
             2400, // pair.health = 2400
              500, // pair.breakable_part_health = 500
@@ -504,4 +504,11 @@ pub const KNOBS: [i32; 496] = [
                0, // pair_·_senses.hears_a_stone_at = 0
                0, // pair_·_senses.hears_a_shield_planted_at = 0
                0, // pair_·_senses.hears_a_quake_at = 0
+           78643, // pair_·_climb.gets_up_onto_(x_shoulder) = 1.2
+           98304, // pair_·_climb.gets_down_off_(x_shoulder) = 1.5
+              12, // pair_·_climb.getting_up,_frames = 12
+               6, // pair_·_climb.getting_up,_frames_a_metre = 6
+           39322, // pair_·_climb.getting_down_(x_getting_up) = 0.6
+            7864, // pair_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.12
+            6554, // pair_·_climb.settles_before_it_pushes_(x_shoulder) = 0.1
 ];

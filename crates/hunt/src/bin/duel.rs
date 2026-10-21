@@ -42,18 +42,20 @@ fn level(name: &str) -> Level {
 fn main() {
     if std::env::args().any(|a| a == "--kits") {
         for c in ALL_CLASSES {
-            let kit = Kit::learn(c);
+            let kit = Kit::measure(c);
             let tools: Vec<String> = kit
                 .iter()
                 .map(|t| {
                     let m = sim::moves::get(c, t.kind);
                     format!(
-                        "{:#06x}->{} ({}f, {}, {:.1}m)",
+                        "{:#06x}->{} ({}f, {}, {:.1}m, hurt {} out to {:.1}m)",
                         t.bits,
                         m.name,
                         m.startup,
                         m.aim().name(),
-                        m.reach.to_f32_for_render()
+                        m.reach.to_f32_for_render(),
+                        t.hurt,
+                        t.far.to_f32_for_render()
                     )
                 })
                 .collect();
@@ -83,7 +85,7 @@ fn main() {
             .collect(),
     };
     println!(
-        "  {} against {}, {}s each\n\n  {:14} {:14} {:>7} {:>13} {:>13} {:>11} {:>11}",
+        "  {} against {}, {}s each\n\n  {:14} {:14} {:>7} {:>13} {:>13} {:>13} {:>11} {:>11}",
         lv.name(),
         lv2.name(),
         frames / 60,
@@ -92,6 +94,7 @@ fn main() {
         "rounds",
         "thrown",
         "landed",
+        "dealt",
         "dodges",
         "mechanic"
     );
@@ -125,7 +128,7 @@ fn main() {
             spar([a, b], [lv, lv2], frames, seed)
         };
         println!(
-            "  {:14} {:14} {:>3}-{:<3} {:>6}/{:<6} {:>6}/{:<6} {:>5}/{:<5} {:>5}/{:<5}",
+            "  {:14} {:14} {:>3}-{:<3} {:>6}/{:<6} {:>6}/{:<6} {:>6}/{:<6} {:>5}/{:<5} {:>5}/{:<5}",
             a.name(),
             b.name(),
             bout.rounds[0],
@@ -134,6 +137,8 @@ fn main() {
             bout.thrown[1],
             bout.landed[0],
             bout.landed[1],
+            bout.dealt[0],
+            bout.dealt[1],
             bout.dodges[0],
             bout.dodges[1],
             bout.mechanic[0],

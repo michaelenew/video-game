@@ -17,7 +17,7 @@ use sim::{Class, Fx, Input, V3, World};
 /// enough at that height.
 #[test]
 fn every_class_can_make_every_hop_on_paper() {
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let path = sim::envelope::off_the_edge(class, sim::envelope::Extra::Nothing);
         let reach = sim::envelope::path_apex(&path).add(sim::tuning::ledge_reach_high());
         for (piece, gap, rise) in waterfall::hops() {
@@ -75,7 +75,7 @@ fn top_in(piece: &waterfall::Piece, at: [i32; 3]) -> Solid {
 /// `at` in `arena` -- with the shore under the first.
 fn climb_everywhere(make: impl Fn(Class) -> World, at: [i32; 3], origin: impl Fn(&World) -> V3) {
     let mut failed = Vec::new();
-    for class in sim::class::ALL_CLASSES {
+    for class in sim::class::MOVERS {
         let mut w = make(class);
         let o = origin(&w);
         let local = |s: Solid| Solid {

@@ -9239,6 +9239,139 @@ whatever is going on, and rests you (health back) only out of a fight** -- so it
 not a place to stand and heal against the bird
 (`ranges::the_needles_top_cairn_counts_while_the_roost_is_awake`, which fails on the old rule).
 
+### 2026-10-20 — the wall jump, overhauled
+
+From the owner: "It's really hard to stick to a wall, really hard to get a wall jump, and
+even when I do it's really hard to have any momentum forward while jumping, so all the
+sections with horizontal wall jumps are barely possible and really frustrating (actually I just
+jump over them with class abilities because every real class can just do that). ... More
+obvious feedback when you're wall sliding, slower slide speed, easier to get into a slide, and
+easier to manipulate or keep forward momentum (meaning momentum non-orthogonal to the wall)
+while jumping."
+**Changed**, each against one of those:
+
+- *Slower slide.* `Wall slide, gravity` ×0.7 → ×0.35, `Wall slide, terminal velocity` ×0.7 →
+  ×0.2 (12.6 m/s → 3.6 m/s). And a fall faster than that is **grabbed** down to it, 0.3 of the
+  excess a frame (`Wall slide, grabs of a faster fall, a frame`, new) -- under a third of a full
+  fall's speed within twelve frames -- rather than snapped or left at speed.
+- *Easier into a slide.* Touching a wall while falling is a slide unless the stick pushes away
+  from it: along the wall and let go start one now, where only into it did since the 16th.
+- *Easier to get the jump.* The grace after leaving a wall 4 → 8 frames, and a press up to 6
+  frames *before* the wall is kept and becomes the wall jump the frame the wall is there (`Wall
+  jump, pressed before the wall and kept`, new; a new `Player::wall_press`). A press the air
+  spent on the Dual mage's wing beat is not kept.
+- *Momentum along the wall.* The slide keeps the run it brought (×0.99 a frame, `Wall slide,
+  keeps of its speed along, a frame`, new) where it used to bleed it to the stick's 2 m/s within
+  a few frames; the stick along the wall steers up to 5 m/s (was 2) and never brakes a faster
+  run. The jump carries the body the way the stick points along the wall at least 6 m/s,
+  scaled by the stick's share along the face (`Wall jump, along where the stick points at`,
+  new): along a gully with forward held, every kick goes out *and* forward.
+- *Feedback*: drawn and heard, in the same change (the slide's pose, dust at the hands and
+  feet, a scrape; a kick off the wall).
+
+Unchanged: the rise (0.6 of a takeoff), the push (7 m/s), the same-wall drop (1 m) and the
+falloff (×0.7) -- the two ladder rules stand as they were.
+**Why the old numbers failed**, as far as reading them goes: a slide at ×0.7 is 12.6 m/s, so
+a wall reached at speed is passed in a few frames; the stick had to be *into* the wall, so a
+player steering forward along a gully touched it and fell past; and the slide's grip took the
+forward speed away, so the kick that followed went straight across. The gully's own doc said
+as much ("a slide bleeds the run away -- forward is the stick").
+**Tests**: `tests/wall_jump.rs` -- the slide is under 0.35 of a fall but over 2 m/s (it was
+"a little slower, no slower than half"), a fast fall is grabbed, along and let go start a
+slide and away does not, a slide keeps the run, the jump goes the stick's way, and a press
+before the wall is kept.
+**Verdict** open -- unplayed. To feel for: whether 3.6 m/s is now a perch in practice (it
+never stops, but a tall wall is a long time to think), whether "touching is enough" catches
+people brushing past a pillar who did not mean to slide (away is the way off), and whether 6 m/s
+along is too much carry out of an inside corner.
+
+### 2026-10-20 — jump sections at the Sky Road's difficulty, and two past it
+
+**Changed** The owner: "There's a section from the needle over to the high meadow that's the
+only thing resembling challenging. I want more jump sections to be closer to that difficulty,
+and a few that are more difficult still than that. It's an actually fun challenge because
+there's variety in the jumps and it forces you to learn class's mobility tools." With the
+Bulwark no longer a mover, nothing is sized to its catch any more:
+
+- **The Hanging Stones' column**: fifty identical stones 4.2 m apart round a six-metre square
+  → forty hops round a square west of the foot, 41 → 203 m: plain catches 3–5.5 m out at
+  +3 to +5 (the Champion's and the Blood mage's catch, landed by the best jumpers), twelve
+  precision stones a metre across, a drop, five **high** hops of +9 m and two **long** ones
+  of 12–13 m, each with a rest and a cairn in front of it.
+- **The span**: four stretches of identical steps and four gullies → twenty-eight hops and three
+  gullies: long hops of 14, 17 and 15 m rising 2 to 5, a zig-zag of precision stones, three
+  high hops up the mountainside where the land rises a metre for a metre, rests between.
+- **The Waterfall** (the main road): tops 3–4 m along the face → 2.3–2.7 m, gaps 1.5–4.7 m →
+  2–6.4 m, every one still inside every mover's plain catch with half a metre to spare.
+- **New, harder than the Sky Road**: **the Crown**, fourteen hops off the High Plane's floor to
+  an island fifty metres over it (15–22 m onto one- and two-metre stones, two of +10, one
+  rest); **the High Line**, a shortcut of seven 19–22 m hops across the Sky Road's middle on
+  one- and two-metre stones.
+- Every route but the Sky Road is a table of hops that says what each asks
+  (`heights::Need`): plain, held to every mover's plain catch on paper and jumped by the
+  stand-in player, or a tool's, held past every plain jump with its airdodge and inside the
+  measured tools' reach (`tests/heights.rs`).
+
+**Why** The Sky Road is fun because no two hops are alike and the long ones need a tool. A
+column of fifty identical catches is neither. The tool hops come in two shapes so different
+tools answer them: *high* (the Elementalist's stone, the Champion's vault, the Dual mage's
+second jump, the Reaver's Gallows, the Blood mage's wings) and *long* (the second jump, the
+vault, the Reaver's and the Blood mage's reach). The Waterfall stays plain because it is the
+main road. The Needle's stair and the Deep's shafts were left alone: the stair is how
+somebody without a tool yet reaches the Sky Road, and a shaft is the way out of a dungeon.
+
+**Verdict** Unplayed. Every difficulty is a guess. `sim::envelope` measures only the Dual
+mage's second jump, the Champion's vault and the Elementalist's straight-up stone; the Reaver's
+and the Blood mage's tools are taken on the owner's word, so whether *they* make each tool hop
+is the first thing to play. Things to watch: the +9 hops ask the Champion's vault for all but
+30 cm of its height; the Crown's +10s are past the vault, so by the numbers they are the
+Elementalist's and the Dual mage's; the precision
+stones are a metre across, which the stand-in player lands but a person on a camera might not.
+
+### 2026-10-20 — the wall slide seen and heard
+
+From the owner: "It's really hard to stick to a wall ... More obvious feedback when you're wall
+sliding." Nothing at all was drawn or played for a slide or a wall jump: nothing outside `sim`
+read `sliding`, `wall_since` or `wall_jumps`, so a body on a slide looked exactly like one falling
+past a wall, and there was no way to tell whether the stick had done anything.
+
+**Changed** no gameplay number; the slide itself is being changed separately (slower, easier to
+start). What is new is what shows it:
+
+- **Two clips** (`crates/anim/src/clips/wall.rs`), chosen by `view::play::on_the_wall` off a new
+  `interp::OnWall`, only while `sliding` is set -- falling past a wall without the slide gets
+  none of it, on purpose. `wall_slide` (12 frames) is the body side-on to the wall and turned a
+  little back to it, the near hand flat on the face at the shoulder and the near foot on it, the
+  far leg braced and the far arm out; the hand and foot **stick and slip**, riding up the body for
+  seven frames as it slides on under them and letting go in two. It loops on the simulation's
+  frame and is blended in from its still frame by speed down the wall (full at 4 m/s), so a
+  slide held nearly still is a still press. `wall_kick` (14 frames) is indexed by **distance off
+  the face** over 1.2 m (`play::KICK_REACH`) and blends into the flight as it runs out. Both cut
+  for a wall on her left, mirrored for the right.
+- **The drawn body turns** side-on to the wall (`OnWall::turn`), eased by `Crossfade::turn` over
+  about a tenth of a second; which way round is the way she is going along the wall, else the
+  way she is looking, else one fixed by the wall so it cannot flick. The camera, the aim and the
+  facing never turn.
+- **Dust** (`game::scrape`) off the hand and the foot, in the face's colour ground pale
+  (`look::Palette::dust`), up to 25 motes a second a contact, hanging where it was left as the body
+  goes on down; a burst of fourteen off a kick. It first came out in the shade's blue and vanished
+  into a shaded face, so it gives off a little of its own colour.
+- **Sound** (`sound::cue::wall`): a light slap of the hand on to the face as the slide starts,
+  then a `Scrape` grain every few frames -- the face's own band broken into stick-and-slip
+  catches, brighter, quicker and louder the faster -- and a hard foot on the face and a short
+  swing on a kick. The face's material is the solid there (`Terrain::material_of_face`, a new
+  read-only query), rock on the land's own walls.
+
+Captured with `SHOT_AT=20,6.55,7.5 SHOT_FALL=1 SHOT_PRESS=A:600 SHOT_FRAME=24 DEMO=1`, `--arena
+range`: the slide pose on the tower's north face with dust off the hand and foot. In that capture
+the body was falling at 14.5 m/s on the slide, near full gravity, which is the other change's
+business.
+**Not done** the kick's dust cannot be seen in a still capture (it lives 0.6 s of real time and the
+frozen frame lays no more), and none of it has been played with a stick. The slide's judder full
+size (4 m/s) and the scrape's (6 m/s) were picked against today's fall cap; once the slower slide
+lands they may want bringing down to it.
+**Verdict** open -- unplayed.
+
 ### 2026-10-20 — the camera keeps out of large things only
 
 **Changed** The camera used to keep out of every box: the drawn arm pulled in, and the
@@ -9253,3 +9386,342 @@ stepping on and off blocks threw it around, and in a tight space with something 
 small mouse movements zoomed it in and out. Camera-affecting geometry should be convex, large
 and smooth. Of the valley's 1,607 drawn boxes, 1,156 are small by this rule.
 **Verdict** open -- to be played. Both thresholds are in the Oven (F7) to try.
+
+### 2026-10-20 — the Champion: a press, not a held button; a tempo bar; one, two, three
+
+**Changed**
+- **Only a press throws a link.** A weapon button held down throws the one move it was
+  pressed for -- held, its finisher -- and nothing after it. It used to run the string by
+  itself: held, the sword threw Sword, Crescent, then Sword, Backcut, Upcut, Sword ... for as
+  long as the button was down. `Fury::fresh` is the press, kept for `Chain, a press waits for
+  its link` (new, 10 frames) after it whether or not the button is still down, and spent by
+  the move it throws.
+- **A tempo bar** under the momentum bar (`hud::update_tempo`, read off
+  `sim::state::tempo`): three pips -- filled when that hit landed, a red edge when it
+  missed -- and a timeline per link from where it lands. On it, in order: the Beat (pale
+  gold, the sweet spot: pressed there, the next link is a true link, and it comes out at the
+  first frame it may), a red stretch where a press is forgotten before the link may come out,
+  a dim stretch where it is kept, a half-bright stretch where a different weapon comes out
+  at once (the same one is still kept), and the open window until the string dies, cold white
+  into the second hit and **gold into the third**. While the third hit or a finisher runs the
+  whole bar is gold. **The same day, from a first look**: the pips' numerals went (too small
+  to read, and odd), and the same weapon's mark stopped being a white tick inside the bright
+  window -- it read as a mark the colours did not line up with. It is the edge between the
+  half-bright and the bright stretch now, so every edge on the bar means something and the
+  only line is now.
+  **And simpler again, the same day**: the bar is one colour -- the colour of the hit the
+  next press throws, dull, warmer, vivid for the first, second and third -- the same size as
+  the momentum bar, emptying from the left, with two ticks round the Beat and nothing else.
+  The pips moved under it beside *Hit:*, each in its hit's colour and empty (the game shows
+  through) until that hit lands, so landing one moves the colour from the bar into the pip.
+  The lost, kept and swap stretches are gone: the owner's call -- early and late is a lot to
+  read off a bar, and the swing and the sound can reward it later.
+- **The three hits look different.** The trail of the first is a thin outer band and never
+  quite solid; the second's is the weapon's own band; the third's -- and a finisher's -- is a
+  thick slab reaching further in, drawn **gold** whatever weapon threw it. A gold flare grows
+  at the weapon's head through the third hit's wind-up and burns through its swing
+  (`place_third_flare`).
+
+**Why** From play: the hold "ruins the rhythm of the playstyle and doesn't seem to build
+towards the third attacks ever", and the third hit "doesn't always feel fair -- I'll count my
+attacks but mistime a click and not get the third". Both are the same thing seen from two
+sides. A string a held button ran gave nothing to count; and with the string run on the
+button being *down*, a tap let go during the last link's recovery -- a perfectly good
+press, a few frames early -- was simply never seen, so the count in the player's head and the
+count in the game parted silently. A kept press closes the second gap for any press within
+ten frames of the frame the link may start; the bar shows the rest -- a press in the red
+stretch, a whiff that owed its whole recovery (the pip's red edge), a string that ran out of
+window -- so a missed third is something you can see the reason for.
+
+The Ridgeback hunt's pin moved for the Champion (`ridgeback_pin.rs`): its random presses held
+buttons, which now throw one move rather than a string. The movement search's Champion lines
+were searched again (`envelope --class Champion`): three of the old programs leaned on a held
+button and no longer land, and the new search reached further on every one of those lanes;
+each lane keeps whichever line crosses further.
+
+**Verdict** open -- to be played. The bar is a training aid; whether a version of it stays is
+the open question. Worth watching: whether ten frames of kept press makes clicking early
+feel like it "works anyway" so the Beat stops being learned (lower the knob), or whether the
+red stretch shows up often enough to feel like a trap (raise it).
+
+### 2026-10-20 — the Champion: the Beat is a rhythm, not a race
+
+**Changed**
+- **The sweet spot moved off the impact freeze** to a fixed stretch of the window for the next
+  hit: `Beat, falls at` 33 % of the window, `Beat, lasts` 6 frames -- with the window at 26
+  frames, frames 5 to 10 after he may act again. The same frames for every weapon.
+- **The window counts from the moment he may act again** -- a landed link's earliest cancel
+  (the different-weapon one), a whiffed link's end -- rather than from the end of the
+  recovery. Before, a landed hammer link left 18 frames of recovery plus the 26, so the
+  window was a different length for every weapon; now it is 26 for all of them, and a bar
+  of it means the same thing whatever is in his hands. The cost: a landed link's string now
+  dies sooner if you wait, by whatever recovery was left after its cancel.
+- **Only the gap's first press counts**, judged when it is made: a press before the sweet
+  spot spends it (`Fury::early`), so the link it throws -- or the next one if it was lost --
+  is ordinary. The press made in the sweet spot is a true link even if its link comes out a
+  frame or two later (a repeated weapon may still owe a few frames of recovery).
+- **It carries through the third.** The window runs on after the third hit; a press throws
+  the next string's first hit, and on the beat that first hit is a true link. The tempo bar
+  drains in the first hit's colour there.
+- The press held through the freeze for him (`hold_the_beat`) is gone with the freeze beat.
+
+**Why** From play: "is the sweet spot just 'as soon as possible'? I think that's less of a
+rhythm challenge and more of a spamming challenge." It was: any press inside the freeze
+counted and earlier ones cost nothing, so clicking every four frames found the sword's three
+frames three times in four, and the hammer's every time. The owner's rules: the sweet spot
+about a third of the way through the timer; one rhythm for the class, counted from when he
+may act, not one per weapon -- "a hammer is slower by virtue of the swing being slower"; and
+the tempo kept through the third hit into the next first. Measured: pressing two frames into
+the sweet spot every gap throws a true link on every hit after the opener for all three
+weapons, the next string's first included; mashing every 2 to 5 frames and pressing as soon
+as possible throw none (`champion_rework.rs`).
+
+**Verdict** open -- to be played. Watch whether 5 to 10 frames after he may act is a beat a
+hand finds, and whether the shorter window for landed links is felt.
+
+
+### 2026-10-20 — only enough wall is a wall
+
+From play, the day the slide got its pose: "Wall sliding needs to be limited to only places
+where there's actually enough wall to slide on. I am getting the slide animation on very thin
+platforms where I wouldn't be able to slide at all." Since the overhaul made touching a wall
+enough to start a slide, brushing the side of a floating stone or a slab started one.
+**Changed**: a face is a wall -- slid on, jumped off, drawn and heard as one -- only where
+the solids just behind the body cover at least 1.7 m of its 1.8 m height (`Walls, a face
+covers the body at least`), at its middle and 0.4 m either side along the face (`Walls, a
+face is at least this wide`, 0.8 m). Stacked boxes on one face count together
+(`Terrain::wall_face`). Anything less still stops the body as it always did. Pinned by
+`tests/wall_jump.rs` (`a_post_or_a_short_face_is_not_slid_on_or_jumped_off`: the range's
+wooden posts and its 1.5 m wall), which fails with both knobs at nought.
+**Consequences** to feel for: a slide now ends when the feet are within 1.7 m of a wall's
+bottom, a drop that short; the Sky Road's stones (1.2–1.5 m thick) and the courses' islands'
+sides are never walls; a slab 2 m thick is a wall for the 0.3 m the body is wholly beside it.
+**Verdict** open -- unplayed.
+**What it cost the search** (`tests/fixtures/envelope.txt`): four stored lines had been kicking
+off or sliding down the lab's ledges where the 3 m slab covered only part of the body; they were
+re-searched (`envelope search --class`) and replaced, every other line kept. The Elementalist's
+best onto the +8 m ledge fell from 33.4 m to 27.7 m (shared blocks 32.2 to 20.5); the Champion's
+two moved by under a metre. One Blood mage line lost 2 cm.
+
+
+### 2026-10-21 — the Elementalist's pushes cut her recovery
+
+From play: "I think the elementalist's q and e should animation cancel her other abilities, or
+at least somehow be able to be cast faster after they come out. It's hard to use q and e right
+now because they are effectively two moves of frame data and about 4x longer effective windup."
+**Changed**: `Q` (the Bolt) or `E` (Cataclysm) asked for in the recovery of any other move of
+hers ends that recovery and comes out at once (`state::cancel_into_a_push`, the carpet's cancel
+made general). New knob `Q and E, cut a recovery from` (0 frames into the recovery); the window
+runs to the end of the recovery. Not from a push into a push. A pillar into the Bolt now puts
+the line out 7 frames after the pillar's recovery starts instead of 31, into Cataclysm 24
+instead of 48.
+**Why** her pushes only act on what she made, so the push nearly always follows a making move,
+and the long wind-up the push has is the part meant to be read -- the recovery in front of it
+was just waiting.
+**Safety**: the cut never makes a blocked move safe. The Fire pillar (-12 on block) cut at
+frame 0 into the Bolt (22 frames start to finish, against the pillar's 24 of recovery) is -10;
+everything else is longer (`a_cancelled_recovery_is_still_punishable_on_block`).
+**Verdict** open -- unplayed. Watch whether a push straight out of a placement reads to the
+opponent at all, and whether the cut wants a few frames' delay (`cut a recovery from`) so the
+placing move is seen to finish.
+**Re-pinned** the Elementalist's Ridgeback hunt (`tests/ridgeback_pin.rs`): its random inputs
+press `Q` and `E` in her recoveries, which now cut them.
+**What it cost the search** (`tests/fixtures/envelope.txt`): two of her stored lines (lanes 2
+and 8, whole kit) pressed `Q` inside a recovery and timed a kick around the old wait; they
+were re-searched (`envelope search --class Elementalist`) and replaced, every other line
+kept. Both got longer: 45.6 m to 50.3 m, and 45.8 m to 49.8 m.
+
+
+### 2026-10-21 — the Fire carpet hangs her into the Updraft
+
+From play: "Right now it's still not possible or at least very difficult to get a fire carpet
+into updraft where the two visually connect." Measured: off a held jump, carpet then Updraft
+in the carpet's cancel window, the column came up 2 m below where she laid the carpet. Two
+causes: the carpet's hang (8 frames) was over before the cancel, and the Updraft, which has no
+hang of its own, cut whatever hang was left, so she fell through its 14-frame wind-up.
+**Changed**: the carpet's `Aerial hang` 8 to 24 frames; an Updraft thrown inside a hang leaves
+it running (`state::arm_aerial`; every other move with no hang still cuts it). Now she has
+fallen about 0.1 m when the column rises, and the column runs through the carpet.
+Tried: 16, 20, 28. At 16 she still fell about 0.9 m; 28 bought only about a tenth of a metre more than
+24.
+**Still true**: an Updraft asked for after the cancel window (6 frames) waits out the
+carpet's 16-frame recovery, and she has fallen 3.5 m or more by then, about the column's
+height. If the cancel window is what is hard to hit, `Fire carpet, cancel open for` is the
+knob.
+**Verdict** open -- unplayed.
+**What it cost the search, and what it bought** (`tests/fixtures/envelope.txt`): nine of her
+stored lines were timed round the old 8-frame hang and stopped landing or fell short. They were
+re-searched (`envelope search --class Elementalist --budget 4000 --restarts 6`) and replaced,
+every other line kept. The new lines lay the carpet three to five times in one jump: with
+each hang worth 0.55 of the last, the most the carpet can hang her in one airtime went from
+about 18 frames to about 53, and her reach went with it -- lane 1, shared blocks, 43.6 m to
+63.2 m; lane 4, whole kit, 45.4 to 69.0; lane 7, 47.6 to 68.0; lane 9, 55.8 to 66.3. Lane 3,
+whole kit, came out at 60.9 m against 62.3 stored, within what one search finds and the next
+does not. **If that much float is too much for the courses**, the hang could be the carpet's
+first in an airtime only, or `Aerial hang, each one after` could be steeper for it.
+
+
+### 2026-10-21 — each carpet in a jump hangs her less
+
+From play, on the entry above: "subsequent carpets in the same jump need to give diminishing
+returns on the hang time so she can't stall forever."
+**Changed**: the carpet's hang now falls off by the carpets before it in the same airtime alone
+(`Player::carpets`, reset with `air_stalls`), at a new knob `Fire carpet, each hang after`
+(0.3): 24, 7, 2, then nothing -- 33 frames in a whole jump of carpets, against about 53 under
+the shared falloff (0.55). Counted on its own so that a Gale or a Cinder spray first does not
+take the long hang off the carpet the Updraft is for. Every other aerial keeps the shared
+falloff, and carpets still count towards it.
+**The search** (`tests/fixtures/envelope.txt`): nine of her lines laid three to five carpets a
+jump and fell short. Re-searched at `--budget 4000 --restarts 6`; each lane took the better of
+the new line and the old one re-claimed at what it now crosses, and lane 3's whole kit takes
+its shared line, as the tool does. Against this morning, before the carpet's hang was raised
+at all: lane 1 shared 43.6 to 65.8 m, lane 4 whole kit 45.4 to 68.3, lane 7 47.6 to 64.9,
+lane 8 45.8 to 60.3, lane 9 55.8 to 61.9; lane 3 whole kit 62.3 to 56.6, lane 9 shared 49.1
+to 48.5. She still reaches further than she did: the first carpet's 24 frames are most of
+it. If the courses want less, the first hang itself is the knob, at the cost of the Updraft
+meeting it.
+
+
+### 2026-10-21 — the Fire carpet lasts, and sinks
+
+From play: the carpet should "last a lot longer (2-3x) and drift downward over time, eventually
+settling on the ground if it started low enough."
+**Changed** `Fire carpet, hangs for` 90 → 225 frames (2.5x; the slider's top 240 → 600), and a
+new knob, `Fire carpet, sinks at` (0.8 m/s): every frame it hangs, each end comes down by that
+much until it is the capsule's radius over the floor under it (`Terrain::floor_below`, so a
+stone or a ledge catches an end), and the strip lies between its ends wherever they are
+(`World::sink_the_carpet`). Over its life it comes down 3 m, so one laid from a short hop
+ends up lying on the ground along the slope it met; one laid from high up is still in the air
+when it burns out. Pinned by `tests/elementalist_clicks.rs`
+(`the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor`).
+**Consequences** to feel for: an Updraft or a shot aimed at a carpet laid a second ago meets it
+up to a metre lower than it was laid; a carpet on the floor is a burning strip to walk round, and
+a Thermal off it throws her along the slope it lies on (flat, on a flat floor).
+**Verdict** open -- unplayed.
+
+
+### 2026-10-21 — the Fire pillar off a ledge, and Fissure on a raised floor
+
+From play: "the fire pillar off of an edge has really weird aiming now. I can't seem to aim it
+down to the ground below when I'm standing on a raised area", suspected to be the Reaver's
+shadow edge rule bleeding into other moves; and "a charged lclick that would end up off of the
+current plane doesn't get kicked at all. The stone needs to proceed as far as it can, then fall
+off the edge."
+**Found** the shadow's rule (`aim::walk_toward`) is the send's alone and nothing else calls it;
+`aim.rs` had not changed since 2026-10-19. The pillar was under the Elementalist's own
+2026-10-09 rule (`aim::grounded_kept`), which brings a placement aimed past an edge -- out of
+range, or at the cliff's face -- back up to her level. Fissure had a separate bug: the run's
+wall check went along the floor at exactly the height of the box she stood on, grazed its top,
+and read as a wall at no distance, so a crack held on any raised floor never moved.
+**Changed** the Fire pillar (tap and Strike) takes the plain `aim::grounded_path`; her stones
+keep the rule. Fissure's wall check is asked `Step up` above the floor it runs on. A surge
+whose run ends at a lip lets its stone go at `Fissure surge, speed` (a kick, so it hits who it
+lands among), and it goes over and falls. Pinned by `tests/elementalist_playtest.rs`
+(`a_fire_pillar_aimed_off_the_dais_goes_to_the_floor_below`,
+`a_crack_held_toward_an_edge_runs_to_it_and_its_stone_goes_over`, which replaces
+`a_crack_held_toward_an_edge_stops_at_it`).
+**Consequences** to feel for: the stone let go at the lip travels on as a kicked stone does
+(the Bolt's kick range), which on the proving ground's dais lands it about 9 m past the edge --
+further than the hold bought; off a course's island it goes into the pit.
+**Verdict** open -- unplayed.
+
+
+### 2026-10-21 — a jump off Fissure's stone; one Strike per press
+
+From play: "let a jump cancel Fissure's recovery on the stone", and the held Fire pillar "has a
+really weird double-windup looking animation".
+**Changed** (1) Space with her feet on a stone ends Fissure from the frame after the surge is
+sent, and the ordinary jump takes off from the stone (`state::jump_off_the_crack`). Finding the
+stone under her needed `stones::under_in`'s skin widened by an erupting stone's climb, as it
+already was by a moving one's fall: her feet are a frame behind a top that rises 0.1--0.4 m a
+frame. Measured: a jump held through leaves at 6.7 m (a jump is 5.0) and is carried ~19 m along
+the surge; timed to the climb's last frame, 25.9 m, the structure jump's number.
+(2) The double wind-up was the Strike held past its 60-frame charge: the cap throws it, and
+with the button still down a fresh pillar began the frame her recovery ended. A click whose
+charge the cap released is now spent until it comes up (`Player::spent_clicks`), for every
+click of hers. Pinned by `tests/elementalist_qol.rs`
+(`a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump`) and
+`tests/elementalist_clicks.rs` (`a_strike_held_past_its_charge_is_one_strike_not_two`).
+**Found later the same day** (the person's own reading): the held pillar that "doesn't come out
+at all" was a *full* Strike, which spends the whole pillar and so drew nothing -- and the
+button still held then threw a tapped pillar, the double wind-up above. Not the box: the
+simulation struck from every box tried. **Changed**: a Strike leaving less than a burn tick
+leaves its pillar for `Strike, a full one flashes for` (14 frames), never long enough to burn
+(`a_full_strike_flashes_its_pillar_and_burns_nothing_more`; `elementalist_v2.rs`'s
+`the_strike_is_worth_exactly_the_burn_it_takes_off_the_pillar` now allows the flash). For those
+frames it is fire like any pillar -- it lights a stone, lights a shot through it, and Cataclysm
+could cut it loose -- to feel for.
+**Verdict** open -- unplayed.
+
+### 2026-10-21 — the Ridgeback meets the ground: it collides, and it gets up
+
+From play: "In the high plane the two ridgeback fight is really crazy. The ridgebacks clip
+into and out of the box they start next to just by walking, their spikes and charge are
+super inconsistent with how they interact with it. The collision and AI need to be fixed."
+And: "every monster needs a 'get up' and 'get down' animation and move ... the ridgebacks can
+get up things lower than their shoulders ... the ridgeback cannot go through other moves while
+getting up, so they get a window of opportunity."
+
+**Changed**
+- The Ridgeback collides (`FightDecl::collides`, with a senses row for its body radius 1.5 m
+  and step 1 m). It is fenced by discs along its length over each one's underside, stands on
+  what it steps onto, and walks round a rock between it and a fighter on the floor.
+- **Getting up and down** (`sim::climb`, `Doing::Climb`): a ledge over its step and under
+  `Gets up onto (x shoulder)` = 1 (4.5 m) is got up in `24 + 12 a metre` frames -- 72 up the
+  Sky Meadow's 4 m rock, 42 up the proving ground's 1.5 m platform -- and a drop under
+  1.25 shoulders got down in 0.7 of that. Not free, open, nothing out: the window.
+- A charge into a solid ends there and plays its recovery. The spray stops at the first
+  solid in its lane, and is smothered thrown from against one. A move that cannot reach a
+  fighter up a ledge, or whose lane is blocked, is not chosen; a fighter up a ledge is walked
+  right up to.
+- Placed at the start of a hunt, it stands on the highest top under its legs it could have
+  got up: the proving ground's spawn is astride the east platform, and it starts on it.
+- The same motion for a morph (`breed::climb`, the Oven's "Morph · Gets up onto" row), drawn
+  by the game as it follows you up a step bigger than a quarter of its shoulder.
+- `Solid::middle` takes a corner and half the size rather than half of each corner: a round
+  solid's middle was a sixty-thousandth off after a change of frame, which the Caverns'
+  Ridgebacks, now against its columns, found (`tests/valley.rs`).
+
+**Why** The fight on the plane was a body walking through the scenery it was placed beside.
+The climb is the owner's: pursuit up a box, paid for with a window.
+
+**Pins** `tests/ridgeback_pin.rs`, every class: the proving ground's Ridgeback starts on a
+platform and gets down, climbs the platforms after the hunters and walks round them. The
+proving ground's tests that measured pursuit and dodging through its middle (`hunted.rs`) run
+along a lane clear of the platforms now; two that stood it in the middle (`monster.rs`'s bite,
+`dual_spells.rs`'s curse) stand it on open floor.
+
+**Verdict** open -- unplayed. To feel for: whether 72 frames up a 4 m rock is a window worth
+having and not a tedium; whether 42 up the proving ground's platform makes the platforms a
+place to fight from; whether the walk-round reads as an animal or a robot; whether getting down
+after a fighter who jumped off is quick enough to be a threat.
+
+### 2026-10-21 — the Mireback, the Broodmother and the Siegeshell meet the ground too
+
+From the owner, after the Ridgeback: "Turn it on for the Mireback, Broodmother and Siegeshell
+too. Fix the bug you found. Small creatures I'm much less bothered about, it's fine if they have
+easy safe spots for now."
+
+**Changed**
+- All three collide and keep their own footing (a senses row each, for a body radius and a
+  step: Mireback 2.5 m and 0.5 m, Broodmother 2 m and 1 m, Siegeshell 6 m and 4.5 m), and get
+  up what is under their reach: 1.2 m, 3.6 m and 6.5 m (their climb rows, as baked before).
+- **A top is footing only where it is broad enough for the body** -- half its radius all round
+  the leg. Without it the Siegeshell rode up onto every boulder it stepped over. The Hollows'
+  stones are too narrow for the Broodmother to stand on: walls to her, not ledges.
+- Where to look for a ledge starts from the furthest-forward part of the body low enough to
+  meet one it could get up: the Broodmother's head meets a ledge before her forelegs do.
+- The Siegeshell's march and the Broodmother's pull along her line are handed back to the
+  ground (`Monster::keep_to_the_ground`); the march gets up what is across it. The Mireback's
+  flop arcs from the floor it left to the floor it lands on, not the arena's base height.
+- **The rounding bug, everywhere**: every middle of two places is `math::midpoint`, a corner
+  and half the span, never half of each end -- thirteen of them, the hanging test, a den's
+  middle and the Galewing's, Sandmaw's, Veilstalker's and the roaming doorways' among them.
+  `tests/midpoints.rs` checks it moves exactly with a shift and fails on the old spelling.
+
+**Pins** The Ridgeback hunts of the Elementalist and the Reaver moved for the breadth rule; no
+other pin moved, and every Mireback, Broodmother and Siegeshell test held.
+
+**Verdict** open -- unplayed. To feel for: whether the Mireback is fenced out of anything it used
+to reach; whether the Broodmother finds her way round the Hollows' stones or looks stuck behind
+them; whether the Siegeshell's march still reaches its siege line.

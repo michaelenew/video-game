@@ -661,7 +661,7 @@ scalars! {
     AirBallShrink,        "Elementalist", "Air ball, shrinks by (m/s)", Fixed, fx(1,20), fx(4,1);
     AirBallHolds,         "Elementalist", "Air ball, holds a body down to (m)", Fixed, 0, fx(2,1);
     AirBallCarriedShrink, "Elementalist", "Air ball, shrinks faster carrying (x)", Fixed, fx(1,1), fx(4,1);
-    CarpetLife,           "Elementalist", "Fire carpet, hangs for", Frames, 1, 240;
+    CarpetLife,           "Elementalist", "Fire carpet, hangs for", Frames, 1, 600;
     CarpetAhead,          "Elementalist", "Fire carpet, starts ahead of her (m)", Fixed, 0, fx(6,1);
     CarpetDamage,         "Elementalist", "Fire carpet, burn per tick", Int, 0, 120;
     ThermalLift,          "Elementalist", "Thermal, lift (m/s)", Fixed, 0, fx(60,1);
@@ -1061,6 +1061,25 @@ scalars! {
     WallSlideFlip,        "Air",      "Wall slide, on or off no faster than",                Frames, 0, 60;
     WallSlideSteer,       "Air",      "Wall slide, steered along at (m/s)",                  Fixed, 0, fx(10,1);
     WallSlideGrip,        "Air",      "Wall slide, steering arrives per frame (x)",          Fixed, fx(1,100), fx(1,1);
+    // **The wall jump, overhauled** (2026-10-20, the owner: "really hard to
+    // stick to a wall, really hard to get a wall jump, and even when I do
+    // it's really hard to have any momentum forward"). A slide keeps the
+    // speed it brought along the wall, losing only this much a frame; it
+    // grabs a fall faster than its own cap down to it over a few frames,
+    // which is what being caught by the wall feels like; the stick along
+    // the wall at the jump carries the body that way at least this fast;
+    // and a press this many frames before the wall is kept until it arrives.
+    WallSlideKeep,        "Air",      "Wall slide, keeps of its speed along, a frame (x)",   Fixed, fx(9,10), fx(1,1);
+    WallSlideCatch,       "Air",      "Wall slide, grabs of a faster fall, a frame (x)",     Fixed, 0, fx(1,1);
+    WallJumpCarry,        "Air",      "Wall jump, along where the stick points at (m/s)",    Fixed, 0, fx(15,1);
+    WallJumpBuffer,       "Air",      "Wall jump, pressed before the wall and kept",         Frames, 0, 30;
+    // **Only a wall is a wall** (2026-10-20, from play: "I am getting the
+    // slide animation on very thin platforms where I wouldn't be able to
+    // slide at all"). A face is slid on and jumped off only where it covers
+    // this much of the body's height, and this much across it, behind the
+    // body: the side of a slab or a narrow post is not one.
+    WallFaceHigh,         "Air",      "Walls, a face covers the body at least (m)",          Fixed, 0, fx(3,1);
+    WallFaceWide,         "Air",      "Walls, a face is at least this wide (m)",             Fixed, 0, fx(3,1);
     // **The ledge grab** (2026-10-16). A forgiving way up that is plainly not
     // the quick one: a body fully off an edge, not leaving it fast, with the
     // top at its hands and the stick not pushing away, catches it; the climb
@@ -1185,6 +1204,43 @@ scalars! {
     // full tally plays. Presentation that lives in the snapshot, because its
     // clock has to survive a rollback.
     ReapingLife,          "Reaver",   "Cash-in, the Reaping plays for",                       Frames, 20, 180;
+    // **Only a press throws a link** (2026-10-20): a held weapon button no
+    // longer runs the string. A press made a little before the next link may
+    // start is kept this long and comes out when it may.
+    PressKept,            "Champion", "Chain, a press waits for its link",                    Frames, 0, 30;
+    // **The Beat is a rhythm** (2026-10-20, from play): its sweet spot is a
+    // stretch of the window counted from the moment he may act again, the
+    // same place for every weapon, never as soon as possible.
+    BeatAt,               "Champion", "Beat, falls at (% of the window)",                     Percent, 0, 100;
+    BeatLasts,            "Champion", "Beat, lasts",                                          Frames, 1, 30;
+    // **The Elementalist's pushes cut her recovery** (2026-10-21, from play):
+    // `Q` or `E` asked for this far into the recovery of anything else she
+    // throws comes out at once, so the push onto what she just made is not
+    // two moves of waiting. See `state::cancel_into_a_push`.
+    PushCancelFrom,       "Elementalist", "Q and E, cut a recovery from",                     Frames, 0, 30;
+    // **Each carpet in a jump hangs her less** (2026-10-21, from play): the
+    // carpet's long hang is for the Updraft into it, not for a string of
+    // carpets that never comes down. See `state::Player::carpets`.
+    CarpetHangFalloff,    "Elementalist", "Fire carpet, each hang after",                      Fixed, 0, fx(1,1);
+    // **The Fire carpet sinks** (2026-10-21, from play): it comes down at
+    // this speed for as long as it hangs, and an end that meets the floor
+    // rests on it -- so one laid low enough ends up lying on the ground.
+    CarpetSink,           "Elementalist", "Fire carpet, sinks at (m/s)",                      Fixed, 0, fx(5,1);
+    // **A full Strike flashes** (2026-10-21, from play): the pillar it spent
+    // shoots up and is gone over this many frames, never long enough to burn.
+    StrikeFlash,          "Elementalist", "Strike, a full one flashes for",                   Frames, 1, 25;
+    // **A morph getting up and getting down** (2026-10-21, `breed::climb`):
+    // the creatures' one motion, for a body that is not a species and has no
+    // climb row of its own -- shares of its own shoulder, so it scales with
+    // what it grew into.
+    MorphClimbReach,      "Morph",    "Gets up onto (x shoulder)",                            Fixed, 0, fx(3,1);
+    MorphClimbDrop,       "Morph",    "Gets down off (x shoulder)",                           Fixed, 0, fx(3,1);
+    MorphClimbStep,       "Morph",    "Walks up a step under (x shoulder)",                   Fixed, 0, fx(1,1);
+    MorphClimbFrames,     "Morph",    "Getting up, frames",                                   Frames, 1, 240;
+    MorphClimbPerMetre,   "Morph",    "Getting up, frames a metre",                           Frames, 0, 120;
+    MorphClimbDown,       "Morph",    "Getting down (x getting up)",                          Fixed, fx(1,10), fx(2,1);
+    MorphClimbClear,      "Morph",    "Feet clear the lip by (x shoulder)",                   Fixed, 0, fx(1,2);
+    MorphClimbDip,        "Morph",    "Settles before it pushes (x shoulder)",                Fixed, 0, fx(1,2);
 }
 
 // ---------------------------------------------------------------------------
@@ -1788,6 +1844,9 @@ pub enum Tunable {
     Hazard(u8, crate::hazard::HazardField),
     /// One field of one of its objectives (`crate::objective`).
     Objective(u8, crate::objective::ObjectiveField),
+    /// One field of its climb row, for a species with a body
+    /// (`crate::climb`).
+    Climb(crate::climb::ClimbField),
 }
 
 impl Tunable {
@@ -1802,6 +1861,7 @@ impl Tunable {
             Tunable::Fight(f) => species.fight_index(f),
             Tunable::Hazard(kind, f) => species.hazard_index(kind as usize, f),
             Tunable::Objective(i, f) => species.objective_index(i as usize, f),
+            Tunable::Climb(f) => species.climb_index(f),
         }
     }
 
@@ -1854,6 +1914,16 @@ impl Tunable {
                 let (lo, hi) = f.range();
                 KnobDecl {
                     family: "",
+                    label: f.label(),
+                    unit: f.unit(),
+                    lo,
+                    hi,
+                }
+            }
+            Tunable::Climb(f) => {
+                let (lo, hi) = f.range();
+                KnobDecl {
+                    family: "climb",
                     label: f.label(),
                     unit: f.unit(),
                     lo,
@@ -1991,6 +2061,12 @@ fn species_baked(id: SpeciesId, index: usize) -> i32 {
         return crate::hazard::HazardField::ALL
             .get(field)
             .map_or(0, |f| f.neutral());
+    }
+    let climb = s.climb_base();
+    if index >= climb {
+        return crate::climb::ClimbField::ALL
+            .get(index - climb)
+            .map_or(0, |f| f.range().0);
     }
     let field = (index - objectives) % crate::objective::OBJECTIVE_FIELDS;
     crate::objective::ObjectiveField::ALL
@@ -2382,6 +2458,12 @@ pub fn species_knobs(s: &Species) -> Vec<Knob> {
     for i in 0..s.fight.objectives.len() {
         for field in crate::objective::ObjectiveField::ALL {
             out.push(Knob::Species(s.id, Tunable::Objective(i as u8, *field)));
+        }
+    }
+    // How it gets up and down, last, for a species with a body.
+    if s.has_body() {
+        for field in crate::climb::ClimbField::ALL {
+            out.push(Knob::Species(s.id, Tunable::Climb(*field)));
         }
     }
     out

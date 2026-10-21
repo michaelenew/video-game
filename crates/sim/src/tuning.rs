@@ -572,12 +572,15 @@ pub fn air_stall_falloff() -> Fx {
 
 /// What gravity is multiplied by while sliding down a wall.
 ///
-/// **A little slower than a fall, not a ledge.** The slide is a partial
+/// **Plainly slower than a fall, never a ledge.** The slide is a partial
 /// recovery -- reaching a wall buys some control back and the fall rule's
-/// footing (`state::cling_to_the_wall`) -- so it has to be felt, but a slide
-/// slow enough to be a perch would make every wall a place to wait. Gravity
-/// and the cap are both scaled because a short fall never reaches the cap,
-/// and a slide that only changed the cap would do nothing on one.
+/// footing (`state::cling_to_the_wall`) -- so it has to be felt, and since
+/// 2026-10-20 it is felt hard (the owner: "slower slide speed"): a third of
+/// gravity and a fifth of the fall cap, a slide of a few metres a second.
+/// It still never stops, so a wall is a place to choose a jump from, not a
+/// place to wait. Gravity and the cap are both scaled because a short fall
+/// never reaches the cap, and a slide that only changed the cap would do
+/// nothing on one.
 pub fn wall_slide_gravity() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideGravity))
 }
@@ -585,6 +588,14 @@ pub fn wall_slide_gravity() -> Fx {
 /// What the fall cap is multiplied by while sliding down a wall.
 pub fn wall_slide_fall() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideFall))
+}
+
+/// **How fast a slide goes down a wall**, at its cap, in metres a second and
+/// positive: the universal fall cap times [`wall_slide_fall`]. What the
+/// drawn slide, its dust and its scrape count as going at full pace, so a
+/// slide tuned slower or faster is drawn and heard at its own pace.
+pub fn wall_slide_speed() -> Fx {
+    fall_cap().mul(wall_slide_fall()).abs()
 }
 
 /// How fast a slide holds a body into the wall it is on.
@@ -689,6 +700,68 @@ pub fn wall_slide_steer() -> Fx {
 /// away rather than stopping dead.
 pub fn wall_slide_grip() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideGrip))
+}
+
+/// **What a slide keeps of its speed along the wall, a frame** (2026-10-20).
+///
+/// Until then a slide bled whatever it carried along the wall down to the
+/// stick's little steer within a few frames, so a run into a wall stopped
+/// dead on it and the jump off it went straight out -- the owner's "really
+/// hard to have any momentum forward". Now the run is kept, losing this
+/// share a frame to friction, and the stick only ever adds to it
+/// (`state::hold_to_the_wall`).
+pub fn wall_slide_keep() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideKeep))
+}
+
+/// **How much of a fall faster than the slide's cap the wall takes off, a
+/// frame** (2026-10-20). A body arriving at a wall at full fall speed is
+/// caught by it over a few frames rather than snapped to the slide's speed
+/// in one, or left to fall past at the old one: the grab is the first thing
+/// that says "you are on the wall".
+pub fn wall_slide_catch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSlideCatch))
+}
+
+/// **How fast a wall jump carries the body along the wall the way the stick
+/// points**, at least, in metres a second (2026-10-20).
+///
+/// Scaled by how much of the stick is along the wall: straight away from it
+/// carries nothing, along it the whole of this, between the two its share.
+/// Speed already going that way faster is kept. So the jump goes where the
+/// stick says, out and forward, rather than straight out of the face.
+pub fn wall_jump_carry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallJumpCarry))
+}
+
+/// **How many frames a press of jump in the air is kept for a wall**
+/// (2026-10-20): pressed this soon before the body reaches one, it is a wall
+/// jump the frame the wall is there. With the grace after
+/// ([`wall_jump_grace`]) the press has a window round the touch both ways.
+/// A press the air spent on something else -- the Dual mage's wing beat --
+/// is not kept.
+pub fn wall_jump_buffer() -> u8 {
+    oven::scalar(Scalar::WallJumpBuffer).clamp(0, 200) as u8
+}
+
+/// **How much of the body's height a face has to cover to be a wall**, in
+/// metres (2026-10-20, from play: the slide was drawn "on very thin
+/// platforms where I wouldn't be able to slide at all"). The side of a slab
+/// a body brushes in the air stops it as it always did, but it is not slid
+/// on, jumped off or drawn as a wall unless the face behind the body is at
+/// least this tall, counted over the body from the feet to the head
+/// (`Terrain::wall_face`). So the slide also ends as the feet pass the
+/// bottom of a wall, with the rest of the face too short to hold a body.
+pub fn wall_face_high() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallFaceHigh))
+}
+
+/// **How wide a face has to be to be a wall**, across the body, in metres
+/// (2026-10-20): the face is measured at the body's middle and half this
+/// either side along it, and the shortest of the three is what counts. A
+/// post, or the end of a narrow stone, is not slid on.
+pub fn wall_face_wide() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallFaceWide))
 }
 
 /// **How fast a body may be moving away from an edge and still catch it**,
@@ -1539,9 +1612,8 @@ pub fn shoulder_freeze() -> u16 {
 }
 
 /// **The Beat** (exploration 0015, C2): what a true link -- the next link
-/// pressed inside the freeze of one that landed -- adds to its damage, as a
-/// percentage, and to its freeze, in frames. The window is the freeze itself,
-/// so it is the weapon's weight: wide on the hammer, tight on the sword.
+/// pressed on the beat, see [`beat_from`] -- adds to its damage, as a
+/// percentage, and to its freeze, in frames.
 pub fn true_link_damage() -> u16 {
     oven::scalar(Scalar::TrueLinkDamage).max(0) as u16
 }
@@ -1796,9 +1868,42 @@ pub fn thrust_extend() -> Fx {
 /// string is something you commit to rather than something you can leave lying
 /// around. Parked at full for as long as a link is actually running, so a slow
 /// finisher cannot time its own chain out from under itself -- see
-/// `state::step_mechanic`.
+/// `state::step_mechanic`. **Counted from the moment he may act again**
+/// (2026-10-20): a landed link's earliest cancel, a whiffed one's end -- so
+/// it is the same window for every weapon, and the Beat sits in it.
 pub fn chain_grace() -> u16 {
     oven::scalar(Scalar::ChainGrace) as u16
+}
+
+/// **Only a press throws a link** (2026-10-20, from play): how long a weapon
+/// press is kept for, waiting for the link it asked for to be allowed out.
+/// A press made this close before the recovery may be cut comes out on the
+/// frame it may; one made earlier than that is lost. A held button is one
+/// press, never a string.
+pub fn press_kept() -> u16 {
+    oven::scalar(Scalar::PressKept).clamp(0, u8::MAX as i32) as u16
+}
+
+/// **The Beat is a rhythm, not a race** (2026-10-20, from play). The window
+/// for the next hit -- [`chain_grace`] frames, counted from the moment he may
+/// act again -- has a sweet spot `Beat, falls at` of the way along it, and
+/// `Beat, lasts` wide: the frames since he could act that it runs from and
+/// to (exclusive). The same frames for every weapon, so a slow weapon is slow
+/// by its swing and never by its beat. It was the impact freeze, which is as
+/// soon as possible, and mashing found it. Never the window's first frame.
+pub fn beat_from() -> u16 {
+    let lasts = beat_lasts();
+    let middle = chain_grace() as i32 * oven::scalar(Scalar::BeatAt).clamp(0, 100) / 100;
+    (middle - lasts as i32 / 2).clamp(1, chain_grace().max(1) as i32) as u16
+}
+
+/// The end of the Beat, exclusive. See [`beat_from`].
+pub fn beat_to() -> u16 {
+    (beat_from() + beat_lasts()).min(chain_grace())
+}
+
+fn beat_lasts() -> u16 {
+    oven::scalar(Scalar::BeatLasts).clamp(1, u8::MAX as i32) as u16
 }
 
 /// How much of a connected link's recovery you serve before the next link may
@@ -3299,6 +3404,19 @@ pub fn carpet_life() -> u16 {
     oven::scalar(Scalar::CarpetLife).max(1) as u16
 }
 
+/// How long the pillar a full Strike spent is still seen, shooting up and
+/// gone: always less than a burn tick, so it never burns. See `World::advance`
+/// where the Strike spends the pillar.
+pub fn strike_flash() -> u16 {
+    oven::scalar(Scalar::StrikeFlash).max(1) as u16
+}
+
+/// How fast a Fire carpet comes down while it hangs, in metres a second.
+/// Each end stops on the floor under it. See `state::World::sink_the_carpet`.
+pub fn carpet_sink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetSink)).max(Fx::ZERO)
+}
+
 /// How far in front of her the carpet starts, along her look.
 pub fn carpet_ahead() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CarpetAhead)).max(Fx::ZERO)
@@ -3346,6 +3464,18 @@ pub fn carpet_cancel_from() -> u16 {
 /// recovery is paid in full. Zero turns the cancel off.
 pub fn carpet_cancel_for() -> u16 {
     oven::scalar(Scalar::CarpetCancelFor).max(0) as u16
+}
+
+/// How many frames of the recovery of anything but a push she must wait out
+/// before `Q` or `E` may cut the rest short. See `state::cancel_into_a_push`.
+pub fn push_cancel_from() -> u16 {
+    oven::scalar(Scalar::PushCancelFrom).max(0) as u16
+}
+
+/// What each Fire carpet after the first in one airtime hangs her for, as a
+/// share of the one before. See `state::Player::carpets`.
+pub fn carpet_hang_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetHangFalloff))
 }
 
 /// How long the Fire fountain's wash burns where she took off.
@@ -4744,6 +4874,40 @@ pub fn morph_catch_up() -> Fx {
 /// The fastest a morph hurries after its seat, as a share of its walk.
 pub fn morph_hurry() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::KeepHurry))
+}
+
+/// **How a morph gets up and down** (`breed::climb::Rates`): shares of its
+/// own shoulder, and frames.
+pub fn morph_climb_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbReach))
+}
+
+pub fn morph_climb_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDrop))
+}
+
+pub fn morph_climb_step() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbStep))
+}
+
+pub fn morph_climb_frames() -> i32 {
+    oven::scalar(Scalar::MorphClimbFrames)
+}
+
+pub fn morph_climb_per_metre() -> i32 {
+    oven::scalar(Scalar::MorphClimbPerMetre)
+}
+
+pub fn morph_climb_down() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDown))
+}
+
+pub fn morph_climb_clear() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbClear))
+}
+
+pub fn morph_climb_dip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MorphClimbDip))
 }
 
 // ---------------------------------------------------------------------------

@@ -622,8 +622,23 @@ cast")
 - `MACH-1` The Guillotine passes over a 0.6 m body: lower `lotus_height`
   (changes versus), or let it be the Big One's tool?
 - `MACH-2` Lunges run through critters (fighters pass through them): right?
-- `MACH-3` The Ridgeback does not collide with solids (turning it on is a new
-  fight): keep?
+- `MACH-3` **Resolved 2026-10-21, from play: the Ridgeback collides, stands on
+  what it steps onto, and gets up and down ledges.** "In the high plane the two
+  ridgeback fight is really crazy. The ridgebacks clip into and out of the box
+  they start next to just by walking, their spikes and charge are super
+  inconsistent with how they interact with it." It is fenced along its length
+  (discs from its hind legs to its nose, each over its own underside, so a head
+  held over a rock is not in it), a charge into a solid stops there and leaves
+  its recovery, a spray stops at the first solid in its lane, and a move whose
+  volume cannot reach a fighter up a ledge -- or whose lane a solid blocks -- is
+  not chosen. A ledge under its shoulders is got up as a move (`Doing::Climb`,
+  `sim::climb`), in which it throws nothing: the window. **The Mireback, the
+  Broodmother and the Siegeshell the same day**, from the owner: each collides
+  and keeps its own footing, and gets up what is under its reach (1.2 m, 3.6 m,
+  6.5 m). A top is footing only where it is broad enough for the body, so the
+  Siegeshell steps over the valley's boulders and the Broodmother walks round
+  the Hollows' narrow stones rather than perching on them. Unplayed.
+  [monsters.md](monsters.md) §1b, `tests/ledges.rs`.
 - `MACH-4` Hazards reach a creature by its centre (the Mireback opts into its
   footprint): keep the shared rule?
 - `MACH-5` A Reaver's shadow starts at the versus mark in a hunt and eases

@@ -87,7 +87,9 @@ body the ray passed through, which never stops it — and `aim::stoop` turns tha
 into how far below the shoulder a standing swing meets it: what makes a
 knee-high critter hittable (bestiary A1, [`docs/design/critters.md`](docs/design/critters.md)).
 `aim::line_clear` answers *is anything solid on this straight line*, which a pack
-asks when it cuts a ring round a fighter. Critters are on `aim::first_along`'s
+asks when it cuts a ring round a fighter, and `aim::room_along` *how far along one
+before something solid stops it* -- a creature's charge lane, and how far its
+spray may fly before a rock (2026-10-21). Critters are on `aim::first_along`'s
 list with the creatures (A2). `aim::sight_clear` answers *can something at this
 point see that one* -- `line_clear`, and no floor hazard that blocks sight
 (smoke) -- which a creature's perception filter asks from its head
@@ -188,6 +190,21 @@ dry-stone dyke, cordwood, a log, a column, a floating island -- chosen from
 its material and shape, built inside its box. The town's buildings and props
 are tables in `sim::arena::hearth` that its collision is made from and
 `game::town` draws from; a building is never a box drawn by its material.
+
+## The Bulwark is not a mover: no movement section is built for it
+
+**The Bulwark is not to be considered for any mobility section** (the owner,
+2026-10-20): it is by far the least developed class and its movement is poor,
+so no jump, gully, climb, wall-jump run or course is sized to its jump, and no
+test asks it to finish one. A movement section is built for
+`sim::class::MOVERS` -- the other five -- and a test that walks a route "with
+every class" walks it with `MOVERS`, never `ALL_CLASSES`. Do not narrow a gap,
+lower a ledge or add a catch so the Bulwark can make it, and do not add the
+Bulwark back to a traversal test; where an older document says "inside the
+Bulwark's catch", that is history, not a constraint. Its own fights, kit and
+everything that is not movement are unchanged. Enforced by the traversal tests
+themselves (`tests/waterfall.rs`, `heights.rs`, `spire.rs`, `deep.rs`,
+`wood.rs`, `valley.rs`), which loop over `MOVERS`.
 
 ## Tuning: every magnitude is a knob in the Oven
 
@@ -382,9 +399,17 @@ them, once, and is the only place the steps are written. (`art`, which only
 rebuilding a character's model needs, is there too.) A fifth, `desktop`,
 is not a tool but the one system library the **desktop build** itself needs
 on Linux: ALSA's headers, for the game's sound; a build error naming
-`alsa-sys` is that. The Pages workflow runs it; a
-cloud environment's setup script should run it too, so a session starts with
-them.
+`alsa-sys` is that. The Pages workflow runs it, and so does every cloud
+session as it opens: `.claude/hooks/session-start.sh`, a session start hook
+in `.claude/settings.json`, runs `setup-tools.sh desktop` when
+`CLAUDE_CODE_REMOTE` is set and logs to `target/setup-tools-desktop.log`.
+
+**If that hook is not needed, say so to the owner** (2026-10-21). Whenever it
+is doing work for nothing -- the environment's own setup script already
+installs ALSA, the image already has it, the desktop build no longer needs
+it, or it costs a session more than it saves -- tell the owner in your
+report, with what you saw, rather than leaving it running or removing it
+quietly.
 
 **Decide up front, install in the background, check before the step.** The
 install is a cargo build of about ninety seconds and an apt run, so it is never

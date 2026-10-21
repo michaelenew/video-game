@@ -385,6 +385,23 @@ rotating fast or slow. Frame zero of a turn clip must be neutral and its last
 frame a full committed turn; the renderer picks the frame from how fast the body
 is actually rotating and layers the difference over whatever the legs are doing.
 
+**The wall slide's judder loops on the simulation's frame; only its size
+follows the speed** (2026-10-20). The slide is its still press (frame 0)
+blended into its own stick-and-slip loop by how fast the body is going down
+the wall. A cadence that followed the speed would jump whenever the speed did,
+which is the stride's lesson again. The kick off a wall is indexed by **distance
+off the face** (`interp::OnWall::kick`, over `play::KICK_REACH`), the way the
+stride is by ground covered, and blends into the flight as it runs out. Both
+are cut for a wall on her left and mirrored at playback for one on her right:
+`Pose::mirrored` on a drawn pose is the same body on the other side.
+
+**The drawn body can turn off its facing**, and only for that. Side-on to a
+wall is a quarter turn or more from where the mouse points, more than the
+root's own twist can give, so `interp::OnWall::turn` turns the whole drawn
+body about the vertical and the renderer eases into and out of it
+(`Crossfade::turn`, renderer-local for the reason the fade is). The camera, the
+aim and the simulation's facing never turn with it.
+
 ### Cross-fading
 
 `pose_for` switches clips; it does not fade between them. The fade lives in

@@ -119,6 +119,39 @@ pub struct PlayerView {
     pub roll: [f32; 2],
     /// The ledge this fighter is holding, if any. See [`Hold`].
     pub ledge: Option<Hold>,
+    /// On a wall slide, or just kicked off a wall, if either. See [`OnWall`].
+    pub wall: Option<OnWall>,
+}
+
+/// **A fighter on a wall, as the renderer draws it** (2026-10-20): sliding
+/// down it (`sim::state::Player::sliding`), or kicking off it, read off
+/// `wall_jumps` and how far the body has got from where it jumped
+/// (`wall_jumped`). Nothing here is new state: the simulation had all of it,
+/// and until this nothing drew any of it, so a slide looked exactly like a
+/// fall that happened to be beside a wall.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OnWall {
+    /// The wall is on her **left** in the drawn pose. The clips are cut for a
+    /// wall on the left and mirrored for one on the right.
+    pub left: bool,
+    /// How far the drawn body is turned off `facing` to stand side-on to the
+    /// wall, in radians about the vertical: the engine's yaw, so a facing of
+    /// yaw `a` is drawn at `a + turn`. **Presentation only** -- the camera,
+    /// the aim and the simulation's facing never turn -- and eased into by
+    /// `play::Crossfade::turn`, so starting a slide is a turn, not a snap.
+    pub turn: f32,
+    /// Metres a second down the wall; never negative. How hard the hand and
+    /// foot judder, how thick the dust is, how loud the scrape.
+    pub down: f32,
+    /// `None` on the slide. Kicking off, how far off the face she has got,
+    /// nought (on it) to one (`play::KICK_REACH`): the kick clip is indexed
+    /// by it.
+    pub kick: Option<f32>,
+    /// Out of the wall, flat and unit, in the arena.
+    pub normal: [f32; 3],
+    /// The point on the face she is against (or left), level with her feet,
+    /// in the arena: where the dust comes off.
+    pub contact: [f32; 3],
 }
 
 /// **A fighter on a ledge, as the renderer needs it** (`sim::state::Ledge`):
@@ -344,7 +377,87 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         shudder: shudder_of(c),
         roll: roll_of(c),
         ledge: hold_of(p, c, facing),
+        wall: wall_of(c, pos, facing),
     }
+}
+
+/// On the wall, or just off it. See [`OnWall`].
+fn wall_of(c: &sim::state::Player, pos: [f32; 3], facing: [f32; 3]) -> Option<OnWall> {
+    if c.grounded || c.ledge.is_some() || c.health <= 0 {
+        return None;
+    }
+    let (wall, kick) = if c.sliding && c.wall.is_some() {
+        (c.wall, None)
+    } else if c.wall_jumps > 0
+        && c.wall_jumped.is_some()
+        && c.wall_since == u8::MAX
+        && c.vel.y.raw() > 0
+    {
+        // Off the face, along its normal, since the jump: the kick is drawn
+        // by distance, so it is the same kick at any push the Oven gives it.
+        let n = c.wall_jumped.normal;
+        let at = c.wall_jumped.at;
+        let off = (pos[0] - fx(at.x)) * fx(n.x) + (pos[2] - fx(at.z)) * fx(n.z);
+        let k = (off / crate::play::KICK_REACH).max(0.0);
+        if k >= 1.0 {
+            return None;
+        }
+        (c.wall_jumped, Some(k))
+    } else {
+        return None;
+    };
+    let n = [fx(wall.normal.x), 0.0, fx(wall.normal.z)];
+    // The two ways to stand side-on to it: the wall on her left, facing
+    // `(n.z, -n.x)`, or on her right, facing the other way. Whichever way she
+    // is going along it; with nothing to say that, whichever her facing is
+    // nearer; facing straight into or out of it, one fixed by the wall
+    // itself, so a slide with the mouse on the face does not flick from side
+    // to side.
+    let on_left = [n[2], 0.0, -n[0]];
+    let along = fx(c.vel.x) * on_left[0] + fx(c.vel.z) * on_left[2];
+    let looking = facing[0] * on_left[0] + facing[2] * on_left[2];
+    let left = if along.abs() > ALONG_DECIDES {
+        along > 0.0
+    } else if looking.abs() > LOOK_DECIDES {
+        looking > 0.0
+    } else {
+        n[0] + 0.5 * n[2] >= 0.0
+    };
+    let drawn = if left {
+        on_left
+    } else {
+        [-on_left[0], 0.0, -on_left[2]]
+    };
+    let yaw = |v: [f32; 3]| v[0].atan2(v[2]);
+    let turn = wrap(yaw(drawn) - yaw(facing));
+    let r = fx(sim::tuning::body_radius());
+    Some(OnWall {
+        left,
+        turn,
+        down: (-fx(c.vel.y)).max(0.0),
+        kick,
+        normal: n,
+        contact: match kick {
+            None => [pos[0] - n[0] * r, pos[1], pos[2] - n[2] * r],
+            Some(_) => [
+                fx(wall.at.x) - n[0] * r,
+                fx(wall.at.y),
+                fx(wall.at.z) - n[2] * r,
+            ],
+        },
+    })
+}
+
+/// How fast along a wall a slide has to be going for that to say which way
+/// she turns side-on to it, in metres a second; and how far her facing has to
+/// be off straight into the wall (the cosine along it) for that to.
+const ALONG_DECIDES: f32 = 0.8;
+const LOOK_DECIDES: f32 = 0.35;
+
+/// An angle into half a turn either side of zero.
+fn wrap(a: f32) -> f32 {
+    use std::f32::consts::{PI, TAU};
+    (a + PI).rem_euclid(TAU) - PI
 }
 
 /// The ledge held between two snapshots. See [`Hold`].
@@ -506,6 +619,14 @@ impl TickClock {
             self.accumulator = 0.0; // drop the backlog rather than spiralling
         }
         ticks
+    }
+
+    /// Hold the picture `alpha` of the way between the two snapshots, for a
+    /// clock that is no longer fed: a screenshot stopped on a frame
+    /// (`SHOT_ALPHA`), which would otherwise land wherever the last picture
+    /// left the accumulator.
+    pub fn hold(&mut self, alpha: f32) {
+        self.accumulator = alpha.clamp(0.0, 1.0) * crate::TICK_SECONDS;
     }
 
     /// How far between the previous and current snapshot to draw, in 0..1.

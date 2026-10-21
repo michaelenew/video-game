@@ -597,7 +597,7 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                 _ => {}
             }
         }
-        Doing::Prowl | Doing::Flinch { .. } | Doing::Stumble { .. } => {
+        Doing::Prowl | Doing::Flinch { .. } | Doing::Stumble { .. } | Doing::Climb { .. } => {
             if !aloft {
                 // Landed or perched: held where it stands, turning on the
                 // spot with the shared steer.
@@ -804,7 +804,7 @@ pub fn clip(m: &Monster) -> Option<Pose> {
     }
     let sp = &SPECIES;
     match m.doing {
-        Doing::Prowl | Doing::Flinch { .. } | Doing::Stumble { .. } => {
+        Doing::Prowl | Doing::Flinch { .. } | Doing::Stumble { .. } | Doing::Climb { .. } => {
             let phase = Fx::from_raw(m.beat as i32);
             if fight::flags(m) & BEATING != 0 {
                 Some(beast::sample(sp, Clip::Fly as usize, phase))

@@ -1012,9 +1012,18 @@ Oven is a desync on the first frame — an error message instead of a mystery.
 
 ### Class pickers
 
-A click-to-cycle button beside each health bar, showing that player's class. **F8**, and on
-under `--dev`. They sit next to the health bars because that is where you are already looking
-to know who is who, and the button *is* the class name, so it labels itself.
+A click-to-cycle button beside your health bar, showing your class. **F8**, and on
+under `--dev`. It sits next to the health bar because that is where you are already looking,
+and the button *is* the class name, so it labels itself.
+
+There is one, not one per player (2026-10-20). The HUD used to mirror a second set -- health,
+picker, class meters, frame readout -- on the right, for two people at one keyboard, which
+nobody does. The other fighter (the dummy, the sparring bot, a person online) has one bar,
+centred under the round counter the way a creature's is. Its class, what it does (the sparring
+bot's difficulty among it, five levels), and whether
+it is in a hunt or the valley's peaceful places at all are the Esc menu's *Training dummy*
+section (`menu::dummy`); a duel always has it. Online,
+the top-left set is whichever seat is yours (`hud::seat`).
 
 They need a free cursor, which is what the Oven gives you — and they route through the same
 `UiFocus` the Oven does, so clicking one neither throws a poke nor re-grabs the mouse for the

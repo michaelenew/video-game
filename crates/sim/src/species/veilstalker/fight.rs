@@ -655,9 +655,11 @@ pub const fn strikes(kind: u8) -> bool {
 /// and the real animal through a mimic are cloaked.
 pub fn veil(m: &Monster) -> Fx {
     match m.doing {
-        Doing::Dead | Doing::Flinch { .. } | Doing::Stumble { .. } | Doing::Toppled { .. } => {
-            Fx::ONE
-        }
+        Doing::Dead
+        | Doing::Flinch { .. }
+        | Doing::Stumble { .. }
+        | Doing::Toppled { .. }
+        | Doing::Climb { .. } => Fx::ONE,
         Doing::Prowl => Fx::ZERO,
         Doing::Startup { kind, left } => match kind {
             MIMIC | CLIMB | SMOKE => Fx::ZERO,

@@ -306,6 +306,11 @@ pub static FIGHT: FightDecl = FightDecl {
         objectives: 1,
         own: OWN_CELLS,
     },
+    // A body against the solids, with a footing of its own, since
+    // 2026-10-21 (`crate::climb`): its senses row is there for its body
+    // radius and its step.
+    row: true,
+    collides: true,
     hazards: &HAZARDS,
     objectives: &OBJECTIVES,
     frame: Some(frame),
@@ -554,8 +559,15 @@ fn walk(w: &mut World, slot: usize) {
     }
     let speed = gait::pace(&m, phase(&m));
     let forward = V3::from_turns(m.yaw);
+    let was = m.pos;
     m.pos = m.pos.add(forward.scale(speed.mul(DT)));
-    m.pos.y = Fx::ZERO;
+    // Against the solids and on the floor under its legs, as the shared walk
+    // it holds would have put it, and up or down what is across its march
+    // (2026-10-21, `Monster::keep_to_the_ground`): it was set to nought,
+    // through whatever stood in the valley.
+    let past = crate::climb::probe(m.sp()).add(crate::climb::advance(m.sp()));
+    let ahead = m.pos.add(forward.scale(past));
+    m.keep_to_the_ground(&w.terrain(), was, Some(ahead));
     let before = m.stride;
     let covered = speed.mul(DT).div(gait_len);
     m.stride = m.stride.wrapping_add(covered.raw().clamp(0, 65535) as u16);

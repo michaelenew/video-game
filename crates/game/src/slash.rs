@@ -223,8 +223,19 @@ pub fn spawn(
 
 /// Whether a fighter's blades are cutting: the last frames of a wind-up,
 /// where the swing comes down; a move out; or the first frames of its
-/// recovery.
+/// recovery. Not a swing's: the arc of a swing is the sweep of its whole
+/// volume (`swing::emit_volume_swings`), which reads from further away than
+/// the steel's, and the two together were two trails of one cut.
 fn cutting(p: &sim::state::Player) -> bool {
+    let swung = p.action.attack_kind().is_some_and(|k| {
+        matches!(
+            sim::moves::get(p.class, k).shape,
+            sim::moves::Shape::Swing(_)
+        )
+    });
+    if swung {
+        return false;
+    }
     match p.action {
         Action::Startup { left, .. } => left <= 3,
         Action::Active { .. } => true,

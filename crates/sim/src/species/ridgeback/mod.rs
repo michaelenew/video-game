@@ -628,5 +628,20 @@ pub static SPECIES: Species = Species {
     tuned: &tuned::KNOBS,
     tuned_path: "crates/sim/src/species/ridgeback/tuned.rs",
     pack: None,
-    fight: &crate::species::FightDecl::PLAIN,
+    fight: &FIGHT,
+};
+
+/// **What it brings to a fight besides its body**: a body against the
+/// solids, and a footing of its own (2026-10-21). Until then it was
+/// `FightDecl::PLAIN`, kept inside its bounds and nothing else, which on the
+/// High Plane walked it into and out of the rock it grazes beside and let its
+/// charge and its spray pass through four metres of stone (review.md
+/// `MACH-3`). Now it walks into what is taller than its step, stands on what
+/// it steps onto, and gets up what is lower than its shoulders
+/// (`crate::climb`). Its senses row is there for its body radius and its
+/// step; the rest of the row is unread, because it sees everybody.
+pub static FIGHT: crate::species::FightDecl = crate::species::FightDecl {
+    row: true,
+    collides: true,
+    ..crate::species::FightDecl::PLAIN
 };

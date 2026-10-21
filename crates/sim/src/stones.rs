@@ -675,8 +675,14 @@ pub fn under_in(field: &Field, feet: V3) -> Option<usize> {
         let apart = V3::new(stone.at.x.sub(feet.x), Fx::ZERO, stone.at.z.sub(feet.z));
         let over = apart.flat_len().raw() <= stone.radius().add(t::body_radius()).raw();
         // The arena's skin, widened by how far the stone moved this frame: a
-        // body on a stone in the air is a frame behind it.
-        let skin = arena::SKIN.add(stone.vel.y.abs().mul(DT));
+        // body on a stone in the air is a frame behind it, and so is one on a
+        // stone still erupting (2026-10-21), by its climb.
+        let moving = if stone.phase() == Phase::Erupting {
+            stone.vel.y.abs().max(stone.surface_speed().abs())
+        } else {
+            stone.vel.y.abs()
+        };
+        let skin = arena::SKIN.add(moving.mul(DT));
         let on = feet.y.sub(stone.top()).abs().raw() <= skin.raw();
         (over && on && stone.standing_height().raw() > 0).then_some(index)
     })

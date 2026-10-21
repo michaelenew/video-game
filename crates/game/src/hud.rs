@@ -77,6 +77,50 @@ pub struct MomentumRow(pub usize);
 #[derive(Component)]
 pub struct MomentumFill(pub usize);
 
+/// **The Champion's tempo bar** (2026-10-20, from play): under his momentum
+/// and the same size, the time he has left to throw the next hit of his
+/// string, read off `sim::state::tempo`, with two ticks round the Beat -- the
+/// sweet spot. Under it, *Hit:* and three pips, one a hit of the string. A
+/// training aid for the beat the class is built on; hidden for every other
+/// class.
+///
+/// **One colour, by the hit that is coming.** The bar is the colour of the
+/// hit the next press throws -- [`hit_colour`], dull for the first, warmer for
+/// the second, vivid for the third -- and pip N is that same colour, filled
+/// when hit N lands: landing the hit moves the colour off the bar into its
+/// pip. It says nothing about early or late; that is the swing's and the
+/// sound's to reward, later.
+#[derive(Component)]
+pub struct TempoRow(pub usize);
+
+/// The *Hit:* line under it: the label and the three pips.
+#[derive(Component)]
+pub struct TempoPips(pub usize);
+
+/// One of the three pips: which fighter's, and which hit.
+#[derive(Component)]
+pub struct TempoPip(pub usize, pub u8);
+
+/// The time left: from now to the end of the window, so it empties from the
+/// left and its edge sweeps through the Beat's ticks.
+#[derive(Component)]
+pub struct TempoFill(pub usize);
+
+/// One of the two ticks round the Beat: its start (`false`) or its end.
+#[derive(Component)]
+pub struct TempoTick(pub usize, pub bool);
+
+/// The colour of the `n`th hit of his string (0, 1, 2): one hue, more vivid
+/// the further into the string it is. The bar wears the one coming next;
+/// the pips wear their own.
+pub fn hit_colour(n: u8) -> Color {
+    match n {
+        0 => Color::srgb(0.66, 0.60, 0.50),
+        1 => Color::srgb(0.90, 0.66, 0.34),
+        _ => Color::srgb(1.0, 0.62, 0.04),
+    }
+}
+
 #[derive(Component)]
 pub struct HealthBar {
     pub who: usize,
@@ -176,27 +220,54 @@ pub fn setup(mut commands: Commands) {
             ..default()
         })
         .with_children(|root| {
-            // Top: health bars either side of the round counter.
+            // Top: your health, and the round counter beside it. There was a
+            // second player's set mirrored on the right once, for two people
+            // at one keyboard, which nobody does (2026-10-20): the other
+            // fighter -- the dummy, the bot, a person online -- has one bar in
+            // the middle, under the round counter, the way a creature does.
+            // One column, so the root's spacing does not push the two
+            // apart and the bar down onto the valley's line.
             root.spawn(Node {
                 width: Val::Percent(100.0),
-                column_gap: Val::Px(18.0),
-                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
                 ..default()
             })
-            .with_children(|top| {
-                spawn_class_button(top, 0, P1);
-                spawn_health(top, 0, P1);
-                top.spawn((
-                    Text::new("0 - 0"),
-                    TextFont {
-                        font_size: 26.0,
+            .with_children(|head| {
+                head.spawn(Node {
+                    width: Val::Percent(100.0),
+                    column_gap: Val::Px(18.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                })
+                .with_children(|top| {
+                    spawn_class_button(top, 0, P1);
+                    spawn_health(top, 0, P1);
+                    top.spawn((
+                        Text::new("0 - 0"),
+                        TextFont {
+                            font_size: 26.0,
+                            ..default()
+                        },
+                        TextColor(INK),
+                        RoundText,
+                    ));
+                });
+
+                // The other fighter's health, centred, the creature's shape.
+                head.spawn((
+                    Node {
+                        width: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        margin: UiRect::top(Val::Px(4.0)),
                         ..default()
                     },
-                    TextColor(INK),
-                    RoundText,
-                ));
-                spawn_health(top, 1, P2);
-                spawn_class_button(top, 1, P2);
+                    Visibility::Hidden,
+                    RivalRow,
+                ))
+                .with_children(|row| {
+                    spawn_meter(row, 10.0, P2, RivalBar);
+                });
             });
 
             // The third and fourth fighters, when there are any: the same
@@ -240,7 +311,8 @@ pub fn setup(mut commands: Commands) {
                                 spawn_health(line, seat, colour);
                             });
                         spawn_bar(column, seat);
-                        spawn_momentum(column, seat);
+                        spawn_momentum(column, seat, 34.0);
+                        spawn_tempo(column, seat, 34.0);
                         spawn_heart(column, seat);
                     });
                 }
@@ -259,7 +331,6 @@ pub fn setup(mut commands: Commands) {
             })
             .with_children(|row| {
                 spawn_bar(row, 0);
-                spawn_bar(row, 1);
             });
 
             // The Champion's momentum, under whichever fighter has it, the
@@ -273,8 +344,18 @@ pub fn setup(mut commands: Commands) {
                 ..default()
             })
             .with_children(|row| {
-                spawn_momentum(row, 0);
-                spawn_momentum(row, 1);
+                // His tempo just under it, in one column with it: the root
+                // spreads its rows out, and the two are read together.
+                row.spawn(Node {
+                    width: Val::Percent(34.0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(3.0),
+                    ..default()
+                })
+                .with_children(|column| {
+                    spawn_momentum(column, 0, 100.0);
+                    spawn_tempo(column, 0, 100.0);
+                });
             });
 
             // The Blood mage's heart meter, under whichever fighter has one:
@@ -289,7 +370,6 @@ pub fn setup(mut commands: Commands) {
             })
             .with_children(|row| {
                 spawn_heart(row, 0);
-                spawn_heart(row, 1);
             });
 
             // The creature's bars, under the fighters' own. Hidden entirely in
@@ -385,15 +465,6 @@ pub fn setup(mut commands: Commands) {
                     },
                     TextColor(STEP),
                     StepText,
-                ));
-                bottom.spawn((
-                    Text::new("free"),
-                    TextFont {
-                        font_size: 18.0,
-                        ..default()
-                    },
-                    TextColor(P2),
-                    StateText(1),
                 ));
             });
         });
@@ -681,12 +752,13 @@ fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
         });
 }
 
-/// The momentum bar: a track, its fill, and a tick at each third.
-fn spawn_momentum(parent: &mut ChildSpawnerCommands, who: usize) {
+/// The momentum bar: a track, its fill, and a tick at each third. `width`
+/// is the share of its parent it spans.
+fn spawn_momentum(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
     parent
         .spawn((
             Node {
-                width: Val::Percent(34.0),
+                width: Val::Percent(width),
                 height: Val::Px(9.0),
                 border: UiRect::all(Val::Px(2.0)),
                 ..default()
@@ -753,7 +825,7 @@ pub fn update_momentum(
     mut fills: Query<(&MomentumFill, &mut Node, &mut BackgroundColor)>,
 ) {
     for (row, mut visible, mut border) in rows.iter_mut() {
-        let has = momentum_of(&sim.cur.players[row.0]);
+        let has = momentum_of(&sim.cur.players[seat(&sim, row.0)]);
         *visible = if has.is_some() {
             Visibility::Inherited
         } else {
@@ -765,11 +837,178 @@ pub fn update_momentum(
         };
     }
     for (fill, mut node, mut colour) in fills.iter_mut() {
-        let Some((share, tier)) = momentum_of(&sim.cur.players[fill.0]) else {
+        let Some((share, tier)) = momentum_of(&sim.cur.players[seat(&sim, fill.0)]) else {
             continue;
         };
         node.width = Val::Percent(100.0 * share);
         colour.0 = momentum_colour(tier);
+    }
+}
+
+/// The tempo bar, under the momentum bar and the same size: a track, the
+/// time left, and the two ticks of the Beat.
+fn spawn_tempo(parent: &mut ChildSpawnerCommands, who: usize, width: f32) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(width),
+                height: Val::Px(9.0),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            TempoRow(who),
+        ))
+        .with_children(|track| {
+            track.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(0.0),
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(Color::NONE),
+                TempoFill(who),
+            ));
+            for end in [false, true] {
+                track.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(0.0),
+                        width: Val::Px(2.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                    TempoTick(who, end),
+                ));
+            }
+        });
+    // *Hit:* and the three pips, under the bar. No fill until full: the game
+    // shows through an empty one.
+    parent
+        .spawn((
+            Node {
+                column_gap: Val::Px(4.0),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            Visibility::Hidden,
+            TempoPips(who),
+        ))
+        .with_children(|line| {
+            line.spawn((
+                Text::new("Hit:"),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                TextColor(INK),
+            ));
+            for hit in 0..3u8 {
+                line.spawn((
+                    Node {
+                        width: Val::Px(18.0),
+                        height: Val::Px(10.0),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                    BorderColor(hit_colour(hit)),
+                    TempoPip(who, hit),
+                ));
+            }
+        });
+}
+
+/// The Beat's two edges on the tempo bar, as shares of the track.
+pub type Beat = (f32, f32);
+
+/// What the tempo bar draws: where now is, as a share of the window -- the
+/// time left fills from there to the end -- the Beat's two edges as shares
+/// of the track, and the colour: the hit the next press throws. `None`
+/// when there is no window to time: no string running, or a finisher
+/// swinging.
+pub fn tempo_bar(t: &sim::state::Tempo) -> Option<(f32, Option<Beat>, Color)> {
+    if t.finishing || t.end == 0 {
+        return None;
+    }
+    let at = |f: u16| 100.0 * f.min(t.end) as f32 / t.end as f32;
+    let beat = (t.beat_to > t.beat_from).then(|| (at(t.beat_from), at(t.beat_to)));
+    Some((at(t.now), beat, hit_colour(t.next)))
+}
+
+/// The tempo bars: shown for a Champion, the time left in the colour of the
+/// hit coming, and the pips filled for the hits that landed.
+#[allow(clippy::type_complexity)]
+pub fn update_tempo(
+    sim: Res<crate::Sim>,
+    mut rows: Query<(&TempoRow, &mut Visibility), Without<TempoPips>>,
+    mut lines: Query<(&TempoPips, &mut Visibility), Without<TempoRow>>,
+    mut pips: Query<(&TempoPip, &mut BackgroundColor), (Without<TempoFill>, Without<TempoTick>)>,
+    mut fills: Query<
+        (&TempoFill, &mut Node, &mut BackgroundColor),
+        (Without<TempoPip>, Without<TempoTick>),
+    >,
+    mut ticks: Query<
+        (&TempoTick, &mut Node, &mut BackgroundColor),
+        (Without<TempoPip>, Without<TempoFill>),
+    >,
+) {
+    let shown = |who: usize| {
+        if sim::state::tempo(&sim.cur.players[seat(&sim, who)]).is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        }
+    };
+    for (row, mut visible) in rows.iter_mut() {
+        *visible = shown(row.0);
+    }
+    for (line, mut visible) in lines.iter_mut() {
+        *visible = shown(line.0);
+    }
+    for (pip, mut fill) in pips.iter_mut() {
+        let Some(t) = sim::state::tempo(&sim.cur.players[seat(&sim, pip.0)]) else {
+            continue;
+        };
+        fill.0 = if t.landed & 1 << pip.1 != 0 {
+            hit_colour(pip.1)
+        } else {
+            Color::NONE
+        };
+    }
+    for (fill, mut node, mut colour) in fills.iter_mut() {
+        match sim::state::tempo(&sim.cur.players[seat(&sim, fill.0)])
+            .as_ref()
+            .and_then(tempo_bar)
+        {
+            Some((now, _, c)) => {
+                node.left = Val::Percent(now);
+                node.width = Val::Percent(100.0 - now);
+                colour.0 = c;
+            }
+            None => {
+                node.width = Val::Percent(0.0);
+                colour.0 = Color::NONE;
+            }
+        }
+    }
+    for (tick, mut node, mut colour) in ticks.iter_mut() {
+        let beat = sim::state::tempo(&sim.cur.players[seat(&sim, tick.0)])
+            .as_ref()
+            .and_then(tempo_bar)
+            .and_then(|(_, beat, _)| beat);
+        match beat {
+            Some((from, to)) => {
+                node.left = Val::Percent(if tick.1 { to } else { from });
+                colour.0 = ASCENDED;
+            }
+            None => colour.0 = Color::NONE,
+        }
     }
 }
 
@@ -822,7 +1061,7 @@ pub fn update_heart(
     mut fills: Query<(&HeartFill, &mut Node, &mut BackgroundColor)>,
 ) {
     for (row, mut visible, mut border) in rows.iter_mut() {
-        let p = &sim.cur.players[row.0];
+        let p = &sim.cur.players[seat(&sim, row.0)];
         *visible = if p.class == sim::Class::BloodMage {
             Visibility::Inherited
         } else {
@@ -832,7 +1071,7 @@ pub fn update_heart(
     }
     let full = sim::tuning::heart_meter_full().max(1) as f32;
     for (fill, mut node, mut colour) in fills.iter_mut() {
-        let p = &sim.cur.players[fill.0];
+        let p = &sim.cur.players[seat(&sim, fill.0)];
         node.width = Val::Percent(100.0 * (p.heart_meter as f32 / full).clamp(0.0, 1.0));
         colour.0 = if p.heart_ready() {
             HEART_FULL
@@ -1029,7 +1268,7 @@ pub fn update(
     for (bar, mut node) in bars.iter_mut() {
         // Against this fighter's own full bar, which is per class now -- see
         // `sim::tuning::health_of`.
-        let p = &sim.cur.players[bar.who];
+        let p = &sim.cur.players[seat(&sim, bar.who)];
         let share = if bar.grey { p.grey } else { p.health };
         node.width = Val::Percent(100.0 * share.max(0) as f32 / p.full_health().max(1) as f32);
     }
@@ -1038,7 +1277,7 @@ pub fn update(
     // question the player is asking constantly: how high are the two, how far
     // apart are they, and which force am I carrying.
     for (tag, mut visible) in meter_rows.iter_mut() {
-        let carrying = meter_of(&sim.cur.players[tag.0]);
+        let carrying = meter_of(&sim.cur.players[seat(&sim, tag.0)]);
         *visible = if carrying.is_some() {
             Visibility::Inherited
         } else {
@@ -1046,7 +1285,7 @@ pub fn update(
         };
     }
     for (tag, mut border) in meter_tracks.iter_mut() {
-        let Some((_, _, colour, ascending)) = meter_of(&sim.cur.players[tag.0]) else {
+        let Some((_, _, colour, ascending)) = meter_of(&sim.cur.players[seat(&sim, tag.0)]) else {
             continue;
         };
         // The border is which force she is *carrying*, which is not the same as
@@ -1063,7 +1302,8 @@ pub fn update(
         };
     }
     for (tag, mut node, mut fill) in meter_fills.iter_mut() {
-        let Some((dark, light, _, ascending)) = meter_of(&sim.cur.players[tag.who]) else {
+        let Some((dark, light, _, ascending)) = meter_of(&sim.cur.players[seat(&sim, tag.who)])
+        else {
             continue;
         };
         let bar = match tag.force {
@@ -1138,7 +1378,7 @@ pub fn update(
     }
 
     for (tag, mut text) in states.iter_mut() {
-        let p = &sim.cur.players[tag.0];
+        let p = &sim.cur.players[seat(&sim, tag.0)];
         set_text(
             &mut text,
             format!("{}\n{}\n{}", p.class.name(), describe(p), mechanic(p)),
@@ -1180,6 +1420,54 @@ pub fn update(
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
         };
         set_text(&mut t, line);
+    }
+}
+
+/// **Which seat a line of the HUD shows.** The HUD is laid out for the
+/// player at this machine in the first place, so slot 0 is your seat --
+/// seat 0 offline, whichever seat the wire gave you online -- and the seat it
+/// displaced takes your slot.
+fn seat(sim: &crate::Sim, slot: usize) -> usize {
+    let you = sim.local_player();
+    if slot == 0 {
+        you
+    } else if slot == you {
+        0
+    } else {
+        slot
+    }
+}
+
+/// The other fighter's health, in the middle under the round counter: the
+/// dummy, the sparring bot, a person online. One bar, like a creature's,
+/// because it is somebody to hit rather than somebody you are playing.
+#[derive(Component)]
+pub struct RivalRow;
+
+#[derive(Component)]
+pub struct RivalBar;
+
+/// The other fighter's bar: shown while that seat is played, in its colour.
+pub fn update_rival(
+    sim: Res<crate::Sim>,
+    mut rows: Query<&mut Visibility, With<RivalRow>>,
+    mut bars: Query<(&mut Node, &mut BackgroundColor), With<RivalBar>>,
+) {
+    let who = seat(&sim, 1);
+    let want = if sim.cur.is_present(who) {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut seen in rows.iter_mut() {
+        if *seen != want {
+            *seen = want;
+        }
+    }
+    let p = &sim.cur.players[who];
+    for (mut node, mut colour) in bars.iter_mut() {
+        node.width = Val::Percent(100.0 * p.health.max(0) as f32 / p.full_health().max(1) as f32);
+        colour.0 = SEAT_COLOURS[who];
     }
 }
 
@@ -1417,9 +1705,7 @@ fn locked(p: &sim::state::Player) -> Option<String> {
 /// Separated from the click handling so the rule can be tested without a
 /// window, a cursor, or a rendered frame.
 pub fn cycle_class<const N: usize>(mut classes: [sim::Class; N], who: usize) -> [sim::Class; N] {
-    let all = sim::class::ALL_CLASSES;
-    let next = (classes[who] as usize + 1) % all.len();
-    classes[who] = all[next];
+    classes[who] = classes[who].next_in_rotation();
     classes
 }
 
@@ -1461,14 +1747,15 @@ pub fn class_buttons(
     for (interaction, button, _) in buttons.iter() {
         // Against a person, only your own: their class is theirs to pick.
         if *interaction != Interaction::Pressed
-            || sim.driver.online() && button.0 != sim.local_player()
+            || sim.driver.online() && seat(&sim, button.0) != sim.local_player()
         {
             continue;
         }
         // Asked for on the wire, as Tab is, so a peer restarts on the same
         // frame.
-        let classes = cycle_class(sim.cur.players.map(|p| p.class), button.0);
-        sim.travel = sim::input::Travel::class(button.0, classes[button.0]);
+        let who = seat(&sim, button.0);
+        let classes = cycle_class(sim.cur.players.map(|p| p.class), who);
+        sim.travel = sim::input::Travel::class(who, classes[who]);
     }
 }
 
@@ -1500,7 +1787,7 @@ pub fn update_class_buttons(
         };
     }
     for (label, mut text) in labels.iter_mut() {
-        let name = sim.cur.players[label.0].class.name();
+        let name = sim.cur.players[seat(&sim, label.0)].class.name();
         if text.0 != name {
             *text = Text::new(name);
         }
@@ -1538,7 +1825,7 @@ pub fn toggle_class_buttons(keys: Res<ButtonInput<KeyCode>>, mut show: ResMut<Sh
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sim::class::{ALL_CLASSES, Class};
+    use sim::class::{ALL_CLASSES, Class, ROTATION};
 
     #[test]
     fn the_hud_systems_touch_nothing_twice() {
@@ -1555,6 +1842,8 @@ mod tests {
         buttons.initialize(&mut world);
         let mut heart = IntoSystem::into_system(update_heart);
         heart.initialize(&mut world);
+        let mut rival = IntoSystem::into_system(update_rival);
+        rival.initialize(&mut world);
     }
 
     #[test]
@@ -1562,7 +1851,7 @@ mod tests {
         // Two pickers sharing one array is the obvious place to get an index
         // wrong, and the symptom would be changing the wrong fighter's class
         // mid-session -- confusing rather than obviously broken.
-        let start = [Class::Bulwark, Class::Elementalist];
+        let start = [Class::Champion, Class::Elementalist];
         let after = cycle_class(start, 0);
         assert_ne!(after[0], start[0], "the picker did not advance its player");
         assert_eq!(after[1], start[1], "it changed the other player too");
@@ -1573,15 +1862,15 @@ mod tests {
     }
 
     #[test]
-    fn cycling_reaches_every_class_and_comes_home() {
-        let start = [Class::Bulwark, Class::Bulwark];
+    fn cycling_reaches_every_class_on_offer_and_comes_home() {
+        let start = [Class::Champion, Class::Champion];
         let mut seen = vec![start[0]];
         let mut classes = start;
-        for _ in 1..ALL_CLASSES.len() {
+        for _ in 1..ROTATION.len() {
             classes = cycle_class(classes, 0);
             seen.push(classes[0]);
         }
-        for class in ALL_CLASSES {
+        for class in ROTATION {
             assert!(
                 seen.contains(&class),
                 "{class:?} is unreachable by clicking"
@@ -1589,6 +1878,26 @@ mod tests {
         }
         classes = cycle_class(classes, 0);
         assert_eq!(classes[0], start[0], "the cycle does not wrap");
+    }
+
+    #[test]
+    fn the_champion_comes_first_and_the_bulwark_never() {
+        // The owner's order (2026-10-20) and the Bulwark taken off it
+        // (2026-10-21): `sim::class::ROTATION`.
+        let mut classes = [Class::DualMage, Class::DualMage];
+        classes = cycle_class(classes, 0);
+        assert_eq!(
+            classes[0],
+            Class::Champion,
+            "the cycle does not start on the Champion"
+        );
+        for _ in 0..2 * ALL_CLASSES.len() {
+            classes = cycle_class(classes, 0);
+            assert_ne!(classes[0], Class::Bulwark, "clicking reached the Bulwark");
+        }
+        // A seat that is a Bulwark anyway (a fight built by name) steps onto
+        // the roster, not off the end of it.
+        assert_eq!(cycle_class([Class::Bulwark], 0)[0], Class::Champion);
     }
 
     #[test]
@@ -1631,6 +1940,39 @@ mod tests {
             let p = sim::state::Player::new(class);
             assert_eq!(locked(&p), None, "{} starts locked", class.name());
         }
+    }
+
+    #[test]
+    fn the_tempo_bar_wears_the_colour_of_the_hit_coming() {
+        // A sword string, tapped: the bar is only ever the colour of the hit
+        // the next press throws, and now and the Beat's ticks sit inside
+        // the track.
+        let mut w = sim::World::with_classes([Class::Champion, Class::Bulwark]);
+        for _ in 0..90 {
+            w.advance([sim::Input::new(sim::Input::W), sim::Input::default()]);
+        }
+        let mut seen = [false; 3];
+        for f in 0..120 {
+            let tap = if f % 5 == 0 { sim::Input::LEFT } else { 0 };
+            w.advance([sim::Input::new(tap), sim::Input::default()]);
+            let t = sim::state::tempo(&w.players[0]).expect("a Champion has a tempo");
+            let Some((now, beat, colour)) = tempo_bar(&t) else {
+                continue;
+            };
+            assert!((0.0..=100.0).contains(&now), "{t:?}");
+            if let Some((from, to)) = beat {
+                assert!(0.0 <= from && from < to && to <= 100.0, "{t:?}");
+            }
+            let n = (0..3)
+                .position(|n| hit_colour(n) == colour)
+                .expect("a hit's colour");
+            assert_eq!(n as u8, t.next, "{t:?}");
+            seen[n] = true;
+        }
+        assert!(
+            seen.iter().all(|s| *s),
+            "the windows into each hit: {seen:?}"
+        );
     }
 
     #[test]

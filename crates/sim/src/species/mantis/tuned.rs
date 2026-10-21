@@ -7,7 +7,7 @@
 //! the Mantis's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 501] = [
+pub const KNOBS: [i32; 508] = [
            65536, // mantis.size_(x) = 1
             7000, // mantis.health = 7000
              700, // mantis.breakable_part_health = 700
@@ -509,4 +509,11 @@ pub const KNOBS: [i32; 501] = [
                0, // mantis_·_senses.hears_a_stone_at = 0
                0, // mantis_·_senses.hears_a_shield_planted_at = 0
                0, // mantis_·_senses.hears_a_quake_at = 0
+           52429, // mantis_·_climb.gets_up_onto_(x_shoulder) = 0.8
+           65536, // mantis_·_climb.gets_down_off_(x_shoulder) = 1
+              14, // mantis_·_climb.getting_up,_frames = 14
+               8, // mantis_·_climb.getting_up,_frames_a_metre = 8
+           45875, // mantis_·_climb.getting_down_(x_getting_up) = 0.7
+            7864, // mantis_·_climb.feet_clear_the_lip_by_(x_shoulder) = 0.12
+            3932, // mantis_·_climb.settles_before_it_pushes_(x_shoulder) = 0.06
 ];

@@ -494,9 +494,10 @@ impl Solid {
 
     /// The middle of its box in the floor plane.
     pub fn middle(&self) -> (Fx, Fx) {
+        // Never half of each corner: see `math::midpoint`.
         (
-            Fx::from_raw(self.min.x.raw() / 2 + self.max.x.raw() / 2),
-            Fx::from_raw(self.min.z.raw() / 2 + self.max.z.raw() / 2),
+            crate::math::midpoint(self.min.x, self.max.x),
+            crate::math::midpoint(self.min.z, self.max.z),
         )
     }
 
@@ -971,9 +972,9 @@ impl Bounds {
     /// Its middle, on the floor plane.
     pub fn middle(&self) -> V3 {
         V3::new(
-            Fx::from_raw(self.lo_x.raw() / 2 + self.hi_x.raw() / 2),
+            crate::math::midpoint(self.lo_x, self.hi_x),
             Fx::ZERO,
-            Fx::from_raw(self.lo_z.raw() / 2 + self.hi_z.raw() / 2),
+            crate::math::midpoint(self.lo_z, self.hi_z),
         )
     }
 }
@@ -1920,8 +1921,8 @@ impl Terrain {
         match self.atlas {
             None => s.hangs(),
             Some(_) => {
-                let x = Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2);
-                let z = Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2);
+                let x = crate::math::midpoint(s.min.x, s.max.x);
+                let z = crate::math::midpoint(s.min.z, s.max.z);
                 s.min.y.raw() > self.relief_at(x, z).raw()
             }
         }
@@ -2065,6 +2066,65 @@ impl Terrain {
     /// [`Arena::material_under`], with the raised solids' tops.
     pub fn material_under(&self, pos: V3) -> Material {
         material_among(self, pos)
+    }
+
+    /// **How much of a wall stands behind a body** (2026-10-20): the height
+    /// of face, from `feet` up to `feet + height`, that solids cover just
+    /// behind a body at `at` against a face looking along `normal` -- the
+    /// shortest of three columns, at the body's middle and `half_wide`
+    /// either side along the face. Several solids stacked up one face are
+    /// counted together. What `state::cling_to_the_wall` asks before a face
+    /// is slid on or jumped off: the side of a thin slab covers a hand's
+    /// height of the body, and a post's side is narrow.
+    pub fn wall_face(&self, at: V3, normal: V3, radius: Fx, height: Fx, half_wide: Fx) -> Fx {
+        let (feet, head) = (at.y, at.y.add(height));
+        let mid = feet.add(height.mul(Fx::ratio(1, 2)));
+        let depth = radius.add(SKIN).add(SKIN);
+        let behind = V3::new(
+            at.x.sub(normal.x.mul(depth)),
+            at.y,
+            at.z.sub(normal.z.mul(depth)),
+        );
+        let across = V3::new(normal.z.neg(), Fx::ZERO, normal.x);
+        let mut least = height;
+        for k in [-1, 0, 1] {
+            let side = half_wide.mul(Fx::from_int(k));
+            let (x, z) = (
+                behind.x.add(across.x.mul(side)),
+                behind.z.add(across.z.mul(side)),
+            );
+            let mut covered = Fx::ZERO;
+            for s in self.around(V3::new(x, at.y, z), SKIN) {
+                if !s.covers_at(x, z, mid, Fx::ZERO) {
+                    continue;
+                }
+                let lo = s.min.y.max(feet);
+                let hi = s.max.y.min(head);
+                if hi.raw() > lo.raw() {
+                    covered = covered.add(hi.sub(lo));
+                }
+            }
+            least = least.min(covered);
+        }
+        least.min(height)
+    }
+
+    /// **What a wall is made of**, at a point on its face: the material of
+    /// the solid whose side covers that point within `pad`, or `None` where
+    /// the wall is the land's own (a rim, a crag's slope), which is rock.
+    /// Read-only, and asked only by what draws and sounds a wall slide
+    /// (2026-10-20): the simulation never needs to know.
+    pub fn material_of_face(&self, at: V3, pad: Fx) -> Option<Material> {
+        let mut found = None;
+        for s in self.around(at, pad) {
+            if s.covers_at(at.x, at.z, at.y, pad)
+                && at.y.raw() >= s.min.y.sub(pad).raw()
+                && at.y.raw() <= s.max.y.add(pad).raw()
+            {
+                found = Some(s.material);
+            }
+        }
+        found
     }
 
     /// **The lowest ceiling near a point, sloped**: for every solid hanging

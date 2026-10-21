@@ -22,8 +22,9 @@
 
 use super::{After, Duelist, Gesture, Seen, Tool, back, by_the_wall, flat};
 use sim::class::{Force, Mechanic, Shield};
+use sim::effects::EffectKind;
 use sim::fixed::Fx;
-use sim::moves;
+use sim::moves::{self, elementalist};
 use sim::state::{self, Action, Player, SLOT_MECHANIC, SLOT_SPECIAL};
 use sim::{Class, Input, V3, World};
 
@@ -46,6 +47,9 @@ pub(super) struct Cues {
     pub pool_by_them: bool,
     /// One of the Elementalist's standing stones is between her and them.
     pub stone_between: bool,
+    /// Her fire -- a pillar, a cloud of embers, a carpet -- is on the line
+    /// to them, or round them: a Bolt shot through it comes out a fire bolt.
+    pub fire_between: bool,
     /// They are guarding.
     pub guarding: bool,
     /// How full the Bulwark's shield is, in percent.
@@ -68,6 +72,20 @@ const STONE_RISE: i32 = 14;
 const RUSH_REACH: Fx = Fx::ratio(63, 10);
 /// Frames of jump held after raising a stone to ride it up.
 const STONE_RIDE: u16 = 30;
+/// How far inside the walls a stone is ridden from. A jump off a stone is
+/// half as high again as one off the floor, and her retreat carries on
+/// through it: from a jump's clearance it took her over the proving ground's
+/// wall, once the bot raised the stone with the right button (2026-10-20).
+const STONE_RIDE_CLEAR: Fx = Fx::from_int(8);
+
+/// How close to the line her fire has to be for a Bolt to pass through it:
+/// a pillar's girth and a little.
+const FIRE_NEAR: Fx = Fx::ratio(15, 10);
+
+/// Is this one of the Elementalist's two pushes?
+fn pushes(bits: u16) -> bool {
+    bits == elementalist::keys::WEAK_PUSH || bits == elementalist::keys::STRONG_PUSH
+}
 
 impl Duelist {
     /// Read what the class-specific weighing needs.
@@ -88,11 +106,21 @@ impl Duelist {
             let line = flat(them.pos.sub(me.pos));
             let dist = line.flat_len();
             let dir = line.normalized();
-            cues.stone_between = stones.iter().flatten().any(|s| {
-                let rel = flat(s.at.sub(me.pos));
+            let on_the_line = |at: V3, within: Fx| {
+                let rel = flat(at.sub(me.pos));
                 let along = rel.dot(dir);
                 let off = rel.sub(dir.scale(along)).flat_len();
-                along.raw() > 0 && along.raw() < dist.raw() && off.raw() < Fx::ONE.raw()
+                along.raw() > 0 && along.raw() < dist.add(within).raw() && off.raw() < within.raw()
+            };
+            cues.stone_between = stones.iter().flatten().any(|s| on_the_line(s.at, Fx::ONE));
+            let who = self.who as u8;
+            cues.fire_between = w.effects.iter().flatten().any(|e| {
+                e.owner == who
+                    && matches!(
+                        e.kind,
+                        EffectKind::FirePillar | EffectKind::Embers | EffectKind::FireCarpet
+                    )
+                    && on_the_line(e.pos, FIRE_NEAR)
             });
         }
         self.cues = cues;
@@ -109,7 +137,34 @@ impl Duelist {
     }
 
     /// How much it wants this move right now, in percent. Zero refuses it.
+    ///
+    /// **A move that hurt nobody when it was tried is refused** -- the kit
+    /// measured it ([`super::Kit::measure`]) -- unless the class has a reason
+    /// for it here: the Elementalist's pushes with a stone in the line.
     pub(super) fn tool_bias(&self, me: &Player, t: Tool) -> i32 {
+        let bias = self.class_bias(me, t);
+        if t.hurt > 0 || self.wants_harmless(me, t) {
+            bias
+        } else {
+            0
+        }
+    }
+
+    /// The Elementalist's two pushes go through a body and act on what she
+    /// built: worth throwing at somebody only with one of her stones between
+    /// her and them, to kick into them (the Bolt) or break into debris on
+    /// them (Cataclysm) -- or, for the Bolt, her fire on the line, which it
+    /// comes out of as a fire bolt. That is what the creature hunter does
+    /// with it, a pillar under the work and the Bolt through it, and without
+    /// it her hunts do half the damage (2026-10-20).
+    fn wants_harmless(&self, me: &Player, t: Tool) -> bool {
+        me.class == Class::Elementalist
+            && pushes(t.bits)
+            && (self.cues.stone_between
+                || self.cues.fire_between && t.bits == elementalist::keys::WEAK_PUSH)
+    }
+
+    fn class_bias(&self, me: &Player, t: Tool) -> i32 {
         let cues = self.cues;
         match me.class {
             Class::Bulwark => {
@@ -140,12 +195,15 @@ impl Duelist {
                 }
             }
             Class::Elementalist => {
-                let m = moves::get(me.class, t.kind);
-                if cues.stone_between && t.bits == Input::LEFT {
-                    // The beam kicks a stone along the line it was shot on.
+                if cues.stone_between && pushes(t.bits) {
+                    // A push kicks a stone along the line it was shot on.
                     400
-                } else if m.effect != 0 && t.bits == Input::SPECIAL {
-                    120
+                } else if cues.fire_between && t.bits == elementalist::keys::WEAK_PUSH {
+                    // The Bolt, through her fire: a fire bolt.
+                    300
+                } else if t.bits == elementalist::keys::FIRE {
+                    // The pillar: her damage, and the field's fire.
+                    150
                 } else {
                     100
                 }
@@ -158,7 +216,7 @@ impl Duelist {
                 if m.cost > 2 && red < 30 {
                     bias = 30;
                 }
-                if t.bits == Input::MECHANIC {
+                if t.kind == moves::blood::BLACK_SPIKE {
                     // The spike, on a pool at their feet, erupts.
                     bias = if cues.pool_by_them {
                         bias * 4
@@ -166,7 +224,7 @@ impl Duelist {
                         bias / 3
                     };
                 }
-                if t.bits == Input::LEFT && me.grey_share().raw() > Fx::ratio(3, 10).raw() {
+                if moves::blood::scythe(t.kind) && me.grey_share().raw() > Fx::ratio(3, 10).raw() {
                     // The scythe is longer with grey on the bar.
                     bias *= 2;
                 }
@@ -204,7 +262,7 @@ impl Duelist {
             Mechanic::Shadow(_) => self.reaver(me, seen, dist),
             Mechanic::Structures(_) => self.elementalist(me, seen, dist, toward),
             Mechanic::Blood => self.blood(me, seen, w, dist),
-            Mechanic::Meter { .. } => self.dual(me, dist, toward, &mut out),
+            Mechanic::Meter { .. } => self.dual(me, seen, dist, toward, &mut out),
         }
         out
     }
@@ -440,8 +498,16 @@ impl Duelist {
         }
     }
 
-    /// Stones: up under them, up in front of her, under her own feet.
+    /// Stones: up under them, up in front of her, under her own feet, and
+    /// up between them to push into them.
+    ///
+    /// **Her buttons since 2026-10-09**: left click is earth (Raise on the
+    /// floor, Landfall in the air), and `Q` and `E` are the two pushes, which
+    /// go through a body and hurt nobody on their own -- they are for the
+    /// stones. The bot pressed `E` for Raise until 2026-10-20, so all of this
+    /// threw Cataclysm at air.
     fn elementalist(&mut self, me: &Player, seen: &Seen, dist: Fx, toward: V3) {
+        let earth = elementalist::keys::EARTH;
         let them = &seen.them;
         if !me.grounded {
             // Landfall, from above them.
@@ -450,7 +516,7 @@ impl Duelist {
                 && self.ready(me)
                 && self.chance(30)
             {
-                self.gesture = Some(Gesture::press(Input::MECHANIC, them.pos).free());
+                self.gesture = Some(Gesture::press(earth, them.pos).free());
                 self.cool(40, 80);
             }
             return;
@@ -463,11 +529,11 @@ impl Duelist {
         let pressed = dist.raw() < Fx::ratio(25, 10).raw();
         // Ride a stone up and out of trouble.
         if (red < 40 || pressed)
-            && !by_the_wall(me.pos, super::JUMP_CLEAR, &self.bounds)
+            && !by_the_wall(me.pos, STONE_RIDE_CLEAR, &self.bounds)
             && self.chance(self.style.caution / 6 + self.style.air / 8)
         {
             self.gesture = Some(
-                Gesture::press(Input::MECHANIC, me.pos)
+                Gesture::press(earth, me.pos)
                     .free()
                     .then(After::Jump(STONE_RIDE)),
             );
@@ -478,9 +544,29 @@ impl Duelist {
         if pressed && matches!(self.plan, super::Plan::Retreat | super::Plan::Zone) {
             if self.chance(35) {
                 let at = me.pos.add(toward.scale(Fx::ratio(18, 10)));
-                self.gesture = Some(Gesture::press(Input::MECHANIC, at).free());
+                self.gesture = Some(Gesture::press(earth, at).free());
                 self.cool(60, 150);
             }
+            return;
+        }
+        // **A stone in the lane, then the push.** Raised a third of the way
+        // to them and kicked along the line into them by the Bolt, or broken
+        // over them by Cataclysm: the two pushes are what the stones are for.
+        let lane = dist.raw() > Fx::from_int(4).raw() && dist.raw() < Fx::from_int(10).raw();
+        let push = self.pick_push(me);
+        if lane
+            && let Some(push) = push
+            && self.chance(20 + self.style.zoning / 4)
+        {
+            let at = me
+                .pos
+                .add(toward.scale(dist.div(Fx::from_int(3)).min(reach)));
+            self.gesture = Some(
+                Gesture::press(earth, at)
+                    .free()
+                    .then(After::Swing(push, STONE_RISE as u16)),
+            );
+            self.cool(70, 160);
             return;
         }
         // Up under their feet, where they will be when it rises.
@@ -489,9 +575,22 @@ impl Duelist {
             && self.chance(15 + self.style.aggression / 4)
         {
             let at = self.lead(seen, STONE_RISE);
-            self.gesture = Some(Gesture::press(Input::MECHANIC, at).free());
+            self.gesture = Some(Gesture::press(earth, at).free());
             self.cool(70, 180);
         }
+    }
+
+    /// One of her two pushes, ready: the Bolt more often, since it is quick
+    /// and only kicks the stone, and Cataclysm sometimes, since it breaks it.
+    fn pick_push(&mut self, me: &Player) -> Option<Tool> {
+        let weak = elementalist::keys::WEAK_PUSH;
+        let strong = elementalist::keys::STRONG_PUSH;
+        let first = if self.chance(65) { weak } else { strong };
+        let ready = |t: &Tool| me.mechanic_ready(t.kind) && !me.locked_out(t.kind);
+        let mine = self.mine;
+        mine.iter()
+            .find(|t| t.bits == first && ready(t))
+            .or_else(|| mine.iter().find(|t| pushes(t.bits) && ready(t)))
     }
 
     /// Pools: blink to one by them to swing, or one far from them to get out.
@@ -530,7 +629,10 @@ impl Duelist {
             && dist.raw() > Fx::from_int(5).raw()
             && self.chance(self.style.aggression / 3)
         {
-            let sweep = self.mine.iter().find(|t| t.bits == Input::LEFT);
+            let sweep = self
+                .mine
+                .iter()
+                .find(|t| t.bits == moves::blood::keys::SCYTHE);
             let blink = self.blink(me, at, sweep.map(|t| After::Swing(t, 3)));
             self.gesture = Some(blink);
             self.cool(60, 140);
@@ -545,8 +647,9 @@ impl Duelist {
     }
 
     /// The bars are kept level by `dual_bias`. This is the body they unlock:
-    /// the second jump, and going all in once the wings are out.
-    fn dual(&mut self, me: &Player, dist: Fx, toward: V3, out: &mut ClassOut) {
+    /// the second jump, going all in once the wings are out, and both majors
+    /// back to back once the bars are deep.
+    fn dual(&mut self, me: &Player, seen: &Seen, dist: Fx, toward: V3, out: &mut ClassOut) {
         // **Off the floor near a wall, back toward the middle** (2026-10-13):
         // with the second jump and the slow fall most of a fight, her drift
         // carried her over the proving ground's low wall, and a bot that only
@@ -578,6 +681,39 @@ impl Duelist {
         let near_the_line = Fx::from_int(sim::tuning::meter_band() * 3 / 4);
         if gap.raw() > near_the_line.raw() && dist.raw() > Fx::ratio(25, 10).raw() {
             out.want = Some(toward);
+        }
+        // **Both majors, one after the other** (2026-10-20). Each spends the
+        // whole of its bar, so one alone leaves the other bar running away
+        // and `dual_bias` refuses it; the Abyss and then Judgement spend both
+        // and leave her level -- the turn the kit is written around, and the
+        // biggest numbers she has, grown by how full the bars were.
+        let deep = Fx::from_int(sim::tuning::tier_jump());
+        let judgement = self
+            .mine
+            .iter()
+            .find(|t| t.bits == moves::dual::keys::LIGHT_MAJOR);
+        let abyss = moves::get(me.class, moves::dual::ABYSS);
+        if let Some(judgement) = judgement
+            && lower.raw() >= deep.raw()
+            && me.grounded
+            && dist.raw() < self.mine.reach_of(judgement, Some(me)).raw()
+            && self.ready(me)
+            && me.mechanic_ready(moves::dual::ABYSS)
+            && !me.locked_out(moves::dual::ABYSS)
+            && !me.locked_out(judgement.kind)
+            && self.chance(25 + self.style.aggression / 3)
+        {
+            let after = abyss.startup + abyss.active + abyss.recovery;
+            self.gesture = Some(
+                Gesture::press(
+                    moves::dual::keys::DARK_MAJOR,
+                    self.lead(seen, abyss.startup as i32),
+                )
+                .free()
+                .then(After::Swing(judgement, after)),
+            );
+            self.cool(90, 180);
+            return;
         }
         let tier = sim::dual::tier(me);
         if tier >= sim::dual::Tier::Jump

@@ -470,6 +470,16 @@ pub struct Player {
     /// purpose, so the falloff is what keeps the floatiest poke in the game
     /// from being a hover. See `tuning::air_stall_falloff`.
     pub air_stalls: u8,
+    /// How many Fire carpets have hung the Elementalist this airtime. Reset
+    /// with `air_stalls`.
+    ///
+    /// **Her carpet hangs her long**, so the Updraft into it comes up through
+    /// it, and the shared falloff alone let a jump of carpets float her most
+    /// of a second. Each carpet after the first is worth
+    /// `tuning::carpet_hang_falloff` of the one before, counted on its own,
+    /// so another aerial first does not take the long hang off the first
+    /// carpet (2026-10-21, from play).
+    pub carpets: u8,
     /// An airdodge has been spent this airtime. Reset on landing.
     ///
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
@@ -494,8 +504,13 @@ pub struct Player {
     /// How many wall jumps this airtime, for `tuning::wall_jump_falloff`.
     /// Reset on landing.
     pub wall_jumps: u8,
+    /// **A press of jump kept for a wall** (`tuning::wall_jump_buffer`):
+    /// frames it has left, or zero. Set by a press in the air that did
+    /// nothing else, spent by the wall jump it becomes.
+    pub wall_press: u8,
     /// **On a wall slide**, as the stick last left it (`keep_sliding`):
-    /// started by pushing into the wall, ended by pushing away from it.
+    /// started by touching a wall while falling with the stick anywhere but
+    /// away from it, ended by pushing away from it.
     pub sliding: bool,
     /// Frames before the slide may start or end again
     /// (`tuning::wall_slide_flip`).
@@ -676,6 +691,13 @@ pub struct Player {
     /// Frames left of the parry flourish. A parry costs the defender nothing
     /// and is easy to miss; this is what lets them see that they got it.
     pub parried: u16,
+    /// Clicks that must come up before they count again: one whose charge
+    /// released itself at its cap with the button still down (2026-10-21,
+    /// from play). Without it, holding a full Strike threw it, and then threw
+    /// a second pillar's whole wind-up the moment the first one's recovery
+    /// ended. Input bits; cleared as each button comes up. The
+    /// Elementalist's only, so far: see `step_channel`.
+    pub spent_clicks: u16,
     /// Frames spent crouching, saturating. Zero while standing.
     ///
     /// `crouching` is a bool, and a bool cannot say how long it has been true --
@@ -1488,11 +1510,13 @@ impl Default for Player {
             haul_to: V3::ZERO,
             haul_speed: Fx::ZERO,
             air_stalls: 0,
+            carpets: 0,
             air_dodged: false,
             wall: Wall::NONE,
             wall_since: u8::MAX,
             wall_jumped: Wall::NONE,
             wall_jumps: 0,
+            wall_press: 0,
             sliding: false,
             slide_flip: 0,
             ledge: Ledge::NONE,
@@ -1527,6 +1551,7 @@ impl Default for Player {
             air_frames: 0,
             since_landed: 0,
             parried: 0,
+            spent_clicks: 0,
             crouched_for: 0,
             stun_total: 0,
             frozen: 0,
@@ -1996,9 +2021,9 @@ impl World {
         let den = self.den();
         let b = den.home;
         let under = V3::new(
-            Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
+            crate::math::midpoint(b.lo_x, b.hi_x),
             den.off.y.add(Fx::from_int(-1000)),
-            Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
+            crate::math::midpoint(b.lo_z, b.hi_z),
         );
         let away = self.away;
         for (i, p) in self.players.iter_mut().enumerate() {
@@ -2326,9 +2351,9 @@ impl World {
         let (pos, facing) = match cairn {
             Some(top) => (
                 V3::new(
-                    Fx::from_raw(top.min.x.raw() / 2 + top.max.x.raw() / 2),
+                    crate::math::midpoint(top.min.x, top.max.x),
                     top.max.y,
-                    Fx::from_raw(top.min.z.raw() / 2 + top.max.z.raw() / 2),
+                    crate::math::midpoint(top.min.z, top.max.z),
                 ),
                 p.facing,
             ),
@@ -2425,6 +2450,7 @@ impl World {
         }
         let count = self.monsters.iter().flatten().count() as i32;
         let mut hunter_spawn = None;
+        let ground = self.terrain();
         for (slot, place) in self.monsters.iter_mut().enumerate() {
             let Some(old) = *place else { continue };
             let mut beast = Monster::new(old.species);
@@ -2446,6 +2472,7 @@ impl World {
                     beast.yaw = HALF_TURN;
                 }
             }
+            beast.settle(&ground);
             beast.brain.seen = self.players[0].pos;
             // And it takes a moment to notice you: it stands its ground,
             // turns to face you, and throws nothing until the moment is spent
@@ -3315,8 +3342,16 @@ impl World {
                         .mul(Fx::ONE.sub(p.channelled))
                         .to_int()
                         .max(0) as u16;
-                    if born.life < t::effect_tick_frames() {
-                        continue;
+                    // **Less than a tick left is a flash** (2026-10-21, from
+                    // play): it used to leave nothing at all, so a full Strike
+                    // had no picture and read as a cast that never came out.
+                    // The pillar shoots up to its full size over these few
+                    // frames (`Effect::progress` is its age over its life) and
+                    // is gone, shorter than a tick so it never burns: the
+                    // Strike's hit was the whole burn already.
+                    let tick = t::effect_tick_frames().max(1);
+                    if born.life < tick {
+                        born.life = born.life.max(t::strike_flash()).min(tick - 1);
                     }
                 }
                 // **How long a thing she leaves behind lasts is where she was
@@ -5871,33 +5906,36 @@ fn weapon_bits(input: Input) -> u8 {
         | (input.has(Input::RIGHT) as u8) << 2
 }
 
-/// **The Beat** (exploration 0015, C2): a weapon pressed -- not held over --
-/// inside the impact freeze of a chain link that landed makes the next link a
-/// true link. Read off the raw input, before the freeze swallows it.
-///
-/// The window is the freeze itself, so it is the weapon's mass: the hammer's
-/// is wide and forgiving, the sword's three frames are precise. Nothing about
-/// how many buttons are pressed changes; when they are pressed does.
+/// Read the weapon buttons: the presses kept for him (`Fury::fresh`), a hold
+/// let go, and a press made before the Beat. Off the raw input, before an
+/// impact freeze swallows it.
 fn find_the_beat(p: &mut Player, input: Input) {
-    let frozen = p.frozen > 0;
-    let in_a_link = p
-        .action
-        .attack_kind()
-        .is_some_and(moves::champion::in_string);
     let winding = match p.action {
         Action::Startup { kind, .. } | Action::Channel { kind, .. } => Some(kind),
         _ => None,
     };
-    let Mechanic::Forms {
-        chain_hit, fury, ..
-    } = &mut p.mechanic
-    else {
+    let clock = beat_clock(p);
+    let in_string = champion_chain(p).0 > 0;
+    let early = in_string && clock < t::beat_from();
+    let on_beat = in_string && clock >= t::beat_from() && clock < t::beat_to();
+    let Mechanic::Forms { fury, .. } = &mut p.mechanic else {
         return;
     };
     let now = weapon_bits(input);
     let fresh = now & !fury.clicks;
     fury.clicks = now;
-    fury.fresh = (fury.fresh | fresh) & now;
+    // **Only a press throws a link** (2026-10-20, from play): a press is kept
+    // for `press_kept` frames whether or not the button is still down, and
+    // then forgotten. Holding the button is not pressing it again.
+    if fresh != 0 {
+        fury.fresh |= fresh;
+        fury.fresh_left = t::press_kept().min(u8::MAX as u16) as u8;
+    } else if fury.fresh_left > 0 {
+        fury.fresh_left -= 1;
+    }
+    if fury.fresh_left == 0 {
+        fury.fresh = 0;
+    }
     // **A hold is one press, held** (2026-10-13, from play): let go of the
     // button a link was pressed for and that link can no longer be held, so
     // the next click of a string -- pressed during this one's wind-up -- is
@@ -5908,30 +5946,36 @@ fn find_the_beat(p: &mut Player, input: Input) {
             fury.may_hold = false;
         }
     }
-    if frozen && fresh != 0 && *chain_hit && in_a_link {
-        fury.beat = fresh;
+    // **The Beat is judged on the click**, the one thing the player times:
+    // the gap's first press in the sweet spot makes the link it throws a
+    // true link, even if that link comes out a frame or two after. A press
+    // before it spends it for the gap -- the link it throws, or the next if
+    // it was lost, is ordinary -- so mashing never finds it.
+    if fresh != 0 && early {
+        fury.early = true;
+    }
+    if fresh != 0 && on_beat && !fury.early {
+        fury.on_beat = true;
     }
 }
 
-/// The weapon pressed on the beat, held down for him until the link it asked
-/// for comes out: a press inside a three-frame freeze is over before the
-/// chain will take it, and the beat is the whole of the skill -- it should
-/// not also have to be held. Any other input is passed through.
-fn hold_the_beat(p: &Player, input: Input) -> Input {
-    let Mechanic::Forms { fury, .. } = p.mechanic else {
-        return input;
-    };
-    let mut bits = input.bits;
-    if fury.beat & 1 != 0 {
-        bits |= Input::LEFT;
+/// **The Beat's clock** (2026-10-20, from play): frames since he could act
+/// again in the gap between two links of his string -- nought while a link
+/// is still running and owes its recovery, then counting up. The string's
+/// window counts down on the same frames (`tuning::chain_grace`), so this is
+/// how far along it he is. Nought outside a string.
+///
+/// **The Beat** (exploration 0015, C2; a rhythm since 2026-10-20): the
+/// gap's first press, made `tuning::beat_from` to `beat_to` frames along --
+/// the same frames for every weapon -- throws a **true link**: it hits
+/// harder and sticks longer. It used to be a press inside the last link's
+/// impact freeze, which is as soon as possible, and mashing found it.
+/// Carried through the third hit into the next string's first.
+fn beat_clock(p: &Player) -> u16 {
+    match champion_chain(p) {
+        (0, _) => 0,
+        (_, left) => t::chain_grace().saturating_sub(left),
     }
-    if fury.beat & 2 != 0 {
-        bits |= Input::MIDDLE;
-    }
-    if fury.beat & 4 != 0 {
-        bits |= Input::RIGHT;
-    }
-    Input { bits, ..input }
 }
 
 /// Drive a Champion `reach` along `dir` at `speed`, on the Rush's own
@@ -6161,7 +6205,6 @@ fn step_player(
     scene: &Scene,
     carrying: bool,
 ) {
-    let input = hold_the_beat(p, input);
     // The repeat lockouts run down first, and above the rider branch so they
     // run exactly once a frame on either tick. Before the input is read rather
     // than after, so a lockout of `n` costs `n` frames and not `n + 1`.
@@ -6172,6 +6215,8 @@ fn step_player(
     // frame it was meant to come back.
     let out = p.abilities_out(who, scene);
     p.tick_repeat_locks(&out);
+    // A spent click counts again once it has come up (`Player::spent_clicks`).
+    p.spent_clicks &= input.bits;
     // **What the floor does to the feet** (bestiary P4): a dodge from inside
     // tar carries half as far, a jump from inside web hardly leaves it. The
     // walk is slowed through the ordinary slow (`World::feel_the_floor`);
@@ -6197,6 +6242,7 @@ fn step_player(
         p.wall_since = u8::MAX;
         p.wall_jumped = Wall::NONE;
         p.wall_jumps = 0;
+        p.wall_press = 0;
         p.sliding = false;
         p.slide_flip = 0;
         p.ledge_regrab = 0;
@@ -6369,13 +6415,15 @@ fn step_player(
     rise_out_of_a_swing(p, who, pressed_space, input, scene);
     refresh_the_rise(p);
     bank_the_leap(p, pressed_space);
-    chain_cancel(p, input);
+    chain_cancel(p);
     cancel_the_carpet(
         p,
         input,
         &out,
         [pressed_mechanic, pressed_f, pressed_r, pressed_side_b],
     );
+    cancel_into_a_push(p, input, &out, pressed_mechanic);
+    jump_off_the_crack(p, input, scene);
 
     queue_the_shadow(p, input);
     follow_the_shadow(p, input);
@@ -6895,15 +6943,24 @@ fn step_player(
     // second jump is ahead of the takeoff: one press, one jump. Against a
     // wall, or a few frames off one, a press is a jump off it rather than
     // the class's own thing in the air. See `cling_to_the_wall`.
-    let wall_jump = pressed_space
+    //
+    // **A press kept for the wall** (`tuning::wall_jump_buffer`, 2026-10-20):
+    // a press in the air that did nothing else waits that many frames for a
+    // wall, and is a wall jump the first frame one is under the hand. With
+    // the grace after leaving one, the press has a window round the touch
+    // both ways, rather than the frame of it.
+    let kept = p.wall_press > 0 && on_wall;
+    p.wall_press = p.wall_press.saturating_sub(1);
+    let wall_jump = (pressed_space && near_wall || kept)
         && !p.grounded
-        && near_wall
         && !carrying
         && p.action.actionable()
         && may_wall_jump(p);
     if wall_jump {
-        jump_off_the_wall(p, mob.jump);
+        jump_off_the_wall(p, mob.jump, input);
+        p.wall_press = 0;
     }
+    let mut beat = false;
     if pressed_space
         && !wall_jump
         && !p.grounded
@@ -6913,6 +6970,10 @@ fn step_player(
         p.vel.y = t::jump_speed().mul(mob.jump).mul(t::second_jump());
         p.jump_hold = 0;
         dual::spend_wing_beat(p);
+        beat = true;
+    }
+    if pressed_space && !wall_jump && !beat && !p.grounded {
+        p.wall_press = t::wall_jump_buffer();
     }
 
     // Not on the frame a banked dash jump fires: the dash jump below is that
@@ -7055,7 +7116,15 @@ fn step_player(
                 floor = floor.max(Fx::ZERO.sub(t::sail_fall()));
             }
             if p.vel.y.raw() < floor.raw() {
-                p.vel.y = floor;
+                // **The wall's grab** (`tuning::wall_slide_catch`): a fall
+                // faster than the slide is brought down to it over a few
+                // frames, not in one.
+                p.vel.y = if sliding {
+                    let over = p.vel.y.sub(floor);
+                    floor.add(over.mul(Fx::ONE.sub(t::wall_slide_catch())))
+                } else {
+                    floor
+                };
             }
         }
     }
@@ -7158,6 +7227,7 @@ fn step_player(
         p.jump_hold = 0;
         p.air_stall = 0;
         p.air_stalls = 0;
+        p.carpets = 0;
         p.leap_used = false;
         dual::feet_down(p);
     }
@@ -7167,15 +7237,19 @@ fn step_player(
 /// side of a solid in the air gets from it, and the record of which wall.
 ///
 /// ```text
-///   against a wall, falling   the slide: gravity and terminal velocity a
-///                             little lower (`wall_slide_gravity`,
-///                             `wall_slide_fall`), held to the wall at
-///                             `wall_stick` unless steering away, for as far
-///                             as the wall goes. Footing for the fall rule:
-///                             a fall is measured from where it let go.
-///   space, on one or just off  the wall jump: `wall_jump_rise` of a takeoff
-///                             straight up, `wall_jump_push` away from it.
-///                             Off the same wall again only from
+///   against a wall, falling   the slide, unless the stick is away: gravity
+///                             and terminal velocity much lower
+///                             (`wall_slide_gravity`, `wall_slide_fall`), a
+///                             faster fall grabbed down to it
+///                             (`wall_slide_catch`), held to the wall at
+///                             `wall_stick`, the run along it kept
+///                             (`wall_slide_keep`), for as far as the wall
+///                             goes. Footing for the fall rule: a fall is
+///                             measured from where it let go.
+///   space, on one, just off   the wall jump: `wall_jump_rise` of a takeoff
+///   or just before one        straight up, `wall_jump_push` away from it,
+///                             and `wall_jump_carry` the way the stick points
+///                             along it. Off the same wall again only from
 ///                             `wall_jump_drop` below the last, and each one
 ///                             in an airtime worth `wall_jump_falloff` of
 ///                             the one before.
@@ -7183,8 +7257,9 @@ fn step_player(
 ///
 /// **A wall is reached, not given.** The slide is a partial recovery -- some
 /// control back, and the fall's height reset to where you let go, so a wall
-/// slid all the way down costs nothing to land from -- and it is only a
-/// little slower than falling, so a wall is never a perch. The jump does not
+/// slid all the way down costs nothing to land from -- and it never stops,
+/// so a wall is never a perch. (Until 2026-10-20 it was only a little slower
+/// than a fall; the owner found it barely felt, and asked for it slower.) The jump does not
 /// give back the airdodge, the jump attack or anything else an airtime
 /// spends: it is height and a direction, and nothing more.
 ///
@@ -7204,6 +7279,18 @@ fn cling_to_the_wall(p: &mut Player, normal: V3, ground: &Terrain) {
     if p.grounded || p.aboard() || normal == V3::ZERO {
         return;
     }
+    // **Only a wall is a wall** (2026-10-20): the side of a thin slab or a
+    // post stops the body, but is not slid on or jumped off.
+    let face = ground.wall_face(
+        p.pos,
+        normal,
+        t::body_radius(),
+        t::body_height(),
+        t::wall_face_wide().mul(Fx::ratio(1, 2)),
+    );
+    if face.raw() < t::wall_face_high().raw() {
+        return;
+    }
     p.wall = Wall { at: p.pos, normal };
     p.wall_since = 0;
     if p.sliding && slides(p) {
@@ -7217,10 +7304,12 @@ fn slides(p: &Player) -> bool {
     p.vel.y.raw() <= 0 && !p.action.stunned() && p.slam.raw() <= 0
 }
 
-/// **On the slide or off it, by the stick** (2026-10-16): pushing into the
-/// wall a body is falling beside starts a slide, pushing away from it ends
-/// one, and anything else keeps whichever it is -- nothing pressed hangs on to
-/// the slide, as it hangs on to a ledge. Neither change comes faster than
+/// **On the slide or off it, by the stick** (2026-10-16): a body falling
+/// against a wall is on a slide unless the stick pushes away from it, and
+/// pushing away ends one. Since 2026-10-20 (the owner: "easier to get into a
+/// slide") the stick along the wall, or let go, starts one too, where until
+/// then only into it did: touching a wall is enough, and the only way to
+/// fall past one is to mean to. Neither change comes faster than
 /// `tuning::wall_slide_flip` after the last (see there for why). A wall gone,
 /// a rise, a throw or the floor ends a slide outright, with no debounce: that
 /// is the world deciding, not the stick.
@@ -7231,11 +7320,7 @@ fn keep_sliding(p: &mut Player, on_wall: bool, input: Input) -> bool {
         return false;
     }
     if p.slide_flip == 0 {
-        let want = match lean_against(input, p.wall.normal) {
-            Lean::Into => true,
-            Lean::Away => false,
-            Lean::Still | Lean::Along(_) => p.sliding,
-        };
+        let want = lean_against(input, p.wall.normal) != Lean::Away;
         if want != p.sliding {
             p.sliding = want;
             p.slide_flip = t::wall_slide_flip();
@@ -7245,20 +7330,36 @@ fn keep_sliding(p: &mut Player, on_wall: bool, input: Input) -> bool {
 }
 
 /// Hold a sliding body to its wall: its speed into the wall becomes
-/// `tuning::wall_stick`, and along it the stick steers a little
-/// (`tuning::wall_slide_steer`, arrived at by `wall_slide_grip` a frame), so
-/// whatever it carried on to the wall bleeds away. Into the wall does nothing
-/// more than hold it; away from it, until the slide ends (`keep_sliding`),
-/// holds it too.
+/// `tuning::wall_stick`, and **what it carried along the wall is kept**
+/// (2026-10-20), losing `tuning::wall_slide_keep`'s share a frame to
+/// friction. The stick along the wall steers it toward
+/// `tuning::wall_slide_steer` that way, arrived at by `wall_slide_grip` a
+/// frame -- but only ever up to it: speed already going the stick's way
+/// faster is the run, and the stick does not brake it. Into the wall, let go,
+/// or away from it until the slide ends (`keep_sliding`), only holds it.
+///
+/// Until 2026-10-20 the slide bled the run down to the steer within a few
+/// frames, so a jump off a wall run into at an angle went straight out of it.
 fn hold_to_the_wall(p: &mut Player, input: Input) {
     let n = p.wall.normal;
     let across = V3::new(n.z.neg(), Fx::ZERO, n.x);
-    let along = p.vel.x.mul(across.x).add(p.vel.z.mul(across.z));
-    let want = match lean_against(input, n) {
-        Lean::Along(dir) => dir.dot(across).mul(t::wall_slide_steer()),
-        _ => Fx::ZERO,
-    };
-    let along = along.add(want.sub(along).mul(t::wall_slide_grip()));
+    let mut along = p
+        .vel
+        .x
+        .mul(across.x)
+        .add(p.vel.z.mul(across.z))
+        .mul(t::wall_slide_keep());
+    if let Lean::Along(dir) = lean_against(input, n) {
+        let want = dir.dot(across).mul(t::wall_slide_steer());
+        let beyond = if want.raw() >= 0 {
+            along.raw() >= want.raw()
+        } else {
+            along.raw() <= want.raw()
+        };
+        if !beyond {
+            along = along.add(want.sub(along).mul(t::wall_slide_grip()));
+        }
+    }
     let into = t::wall_stick().neg();
     p.vel.x = across.x.mul(along).add(n.x.mul(into));
     p.vel.z = across.z.mul(along).add(n.z.mul(into));
@@ -7505,7 +7606,14 @@ fn may_wall_jump(p: &Player) -> bool {
 /// **Jump off the wall**: a fresh rise, never less than the body already
 /// has, and a push away from the face, keeping the speed along it. `jump` is
 /// the class's takeoff multiplier.
-fn jump_off_the_wall(p: &mut Player, jump: Fx) {
+///
+/// **And the way the stick points along the wall** (2026-10-20): the body is
+/// carried that way at least `tuning::wall_jump_carry`, scaled by how much of
+/// the stick is along the face -- so a jump off a wall goes out *and
+/// forward*, where the player is steering, and a run carried on to the wall
+/// faster than that keeps its own speed. The stick straight away from the
+/// wall, into it or let go carries nothing more than the run.
+fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input) {
     let mut rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
     for _ in 0..p.wall_jumps {
         rise = rise.mul(t::wall_jump_falloff());
@@ -7516,6 +7624,29 @@ fn jump_off_the_wall(p: &mut Player, jump: Fx) {
     let off = t::wall_jump_push().sub(away.min(Fx::ZERO));
     p.vel.x = p.vel.x.add(n.x.mul(off));
     p.vel.z = p.vel.z.add(n.z.mul(off));
+    let (ax, az) = input.move_axis();
+    if ax != 0 || az != 0 {
+        let stick = move_dir(input.aim_turns(), ax, az);
+        let out = stick.x.mul(n.x).add(stick.z.mul(n.z));
+        // The stick less its part through the face: along it, as long as
+        // the sine of its angle from the normal.
+        let side = V3::new(
+            stick.x.sub(n.x.mul(out)),
+            Fx::ZERO,
+            stick.z.sub(n.z.mul(out)),
+        );
+        let share = side.flat_len();
+        if share.raw() > 0 {
+            let way = side.normalized();
+            let carried = p.vel.x.mul(way.x).add(p.vel.z.mul(way.z));
+            let least = t::wall_jump_carry().mul(share);
+            if carried.raw() < least.raw() {
+                let more = least.sub(carried);
+                p.vel.x = p.vel.x.add(way.x.mul(more));
+                p.vel.z = p.vel.z.add(way.z.mul(more));
+            }
+        }
+    }
     p.jump_hold = 0;
     p.wall_jumped = Wall {
         at: p.pos,
@@ -7573,7 +7704,13 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // along the crosshair like the auto. And both clicks mean something
         // different once her feet leave the floor, which is the *row* rather
         // than a fifth exception: see `elementalist_move`.
-        Class::Elementalist => elementalist_move(p, input),
+        Class::Elementalist => elementalist_move(
+            p,
+            Input {
+                bits: input.bits & !p.spent_clicks,
+                ..input
+            },
+        ),
         // **Shift is only ever a dodge now**, so on the five classes that kept
         // the shared grammar a click is a poke and nothing modifies it. That
         // strands `SLOT_COMMITTED` on the three that have one and nowhere else
@@ -8239,13 +8376,25 @@ pub fn carrying(p: &Player) -> Force {
 ///
 /// Left before middle before right, so a player mashing two buttons gets an
 /// attack rather than silence.
-const fn champion_weapon(input: Input) -> Option<u8> {
+///
+/// **A press, not a button that is down** (2026-10-20, from play): only a
+/// weapon pressed and not yet spent asks for anything -- `Fury::fresh`, kept
+/// a few frames. Holding the button used to run the string by itself, sword
+/// after sword, and the rhythm the three hits are built on was something a
+/// held button did for you rather than something you played. The press is
+/// read off `Fury`, where `find_the_beat` put it this frame, so one already
+/// let go still counts while it is kept.
+fn champion_weapon(p: &Player) -> Option<u8> {
     use moves::champion as c;
-    if input.has(Input::LEFT) {
+    let Mechanic::Forms { fury, .. } = p.mechanic else {
+        return None;
+    };
+    let pressed = fury.fresh;
+    if pressed & 1 != 0 {
         Some(c::SWORD)
-    } else if input.has(Input::MIDDLE) {
+    } else if pressed & 2 != 0 {
         Some(c::HAMMER)
-    } else if input.has(Input::RIGHT) {
+    } else if pressed & 4 != 0 {
         Some(c::SPEAR)
     } else {
         None
@@ -8274,7 +8423,7 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
     if p.class != Class::Champion {
         return None;
     }
-    let weapon = champion_weapon(input)?;
+    let weapon = champion_weapon(p)?;
     if rushing(p).is_some() {
         // Right click during a Rush is two moves told apart by where you are
         // pointing, which is the honest separator: a pole vault *is* a spear
@@ -8321,7 +8470,7 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
         // often, 187 times against 258 across 24 hunts.
         return Some(c::IN_THE_AIR + weapon);
     }
-    Some(c::link(champion_chain(p).0, weapon))
+    Some(c::link(string_stage(p), weapon))
 }
 
 /// How deep the grounded chain is, and how long it has left to live.
@@ -8334,6 +8483,17 @@ fn champion_chain(p: &Player) -> (u8, u16) {
             chain, chain_left, ..
         } => (chain, chain_left),
         _ => (0, 0),
+    }
+}
+
+/// How many hits of the string are behind the next one: 0, 1 or 2. Past the
+/// third the window runs on into the next string (2026-10-20, from play:
+/// keeping the beat is rewarded through the third), and the next hit is
+/// that string's first.
+fn string_stage(p: &Player) -> u8 {
+    match champion_chain(p).0 {
+        c if c >= moves::champion::DEPTH => 0,
+        c => c,
     }
 }
 
@@ -8489,7 +8649,7 @@ fn arm_takeoff(p: &mut Player, input: Input) {
 /// "strong when played linearly" half of the design, and mixing is the half
 /// that pays a little better. The two knobs are the whole of that decision and
 /// setting them equal turns it off -- see `tuning::chain_cancel_swapped`.
-fn chain_cancel(p: &mut Player, input: Input) {
+fn chain_cancel(p: &mut Player) {
     use moves::champion as c;
     if p.class != Class::Champion {
         return;
@@ -8513,17 +8673,11 @@ fn chain_cancel(p: &mut Player, input: Input) {
     if chain >= c::DEPTH || chain_left == 0 {
         return;
     }
-    let Some(next) = champion_weapon(input) else {
+    let Some(next) = champion_weapon(p) else {
         return;
     };
     let m = moves::get(p.class, kind);
-    let share = if next == c::weapon(kind) {
-        t::chain_cancel_repeated()
-    } else {
-        t::chain_cancel_swapped()
-    };
-    let owed = (m.recovery as u32 * share as u32 / 100) as u16;
-    if m.recovery.saturating_sub(left) < owed {
+    if m.recovery.saturating_sub(left) < recovery_owed(kind, next != c::weapon(kind)) {
         return;
     }
     // Free rather than straight into the next link: the ordinary input path is
@@ -8531,6 +8685,91 @@ fn chain_cancel(p: &mut Player, input: Input) {
     // lockout, the aim and the animation. A second way to start a move is a
     // second way for one of those to be forgotten.
     p.action = Action::Free;
+}
+
+/// **The Champion's tempo** (2026-10-20, from play): the window for the next
+/// hit of his string and its sweet spot, as the HUD's tempo bar draws it. A
+/// read of the state, never a second statement of a rule: the window is the
+/// chain's own clock (`tuning::chain_grace`, counted from the moment he may
+/// act again) and the sweet spot is the Beat's (`tuning::beat_from`).
+///
+/// ```text
+///   0 ───── beat_from ── beat_to ────────────────── end
+///   │ he may act │ the Beat │ the string still lives │ over
+/// ```
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Tempo {
+    /// The hit the next press throws: 0, 1 or 2 for the first, second and
+    /// third -- after the third, the next string's first.
+    pub next: u8,
+    /// Which hits of the string landed, as bits: the first hit is bit 0.
+    pub landed: u8,
+    /// A finisher is running: the string is over, there is no window.
+    pub finishing: bool,
+    /// The window, in frames since he could act again: its sweet spot, its
+    /// end, and now. `end` is zero outside a string; `now` is nought while
+    /// a link still runs.
+    pub beat_from: u16,
+    pub beat_to: u16,
+    pub end: u16,
+    pub now: u16,
+}
+
+/// The Champion's [`Tempo`]; `None` for every other class.
+pub fn tempo(p: &Player) -> Option<Tempo> {
+    let Mechanic::Forms { chain, fury, .. } = p.mechanic else {
+        return None;
+    };
+    let finishing = p.action.attack_kind().is_some_and(moves::champion::is_full);
+    if chain == 0 {
+        return Some(Tempo {
+            finishing,
+            ..Tempo::default()
+        });
+    }
+    Some(Tempo {
+        next: string_stage(p),
+        landed: fury.landed,
+        finishing,
+        beat_from: t::beat_from(),
+        beat_to: t::beat_to(),
+        end: t::chain_grace(),
+        now: beat_clock(p),
+    })
+}
+
+/// Has the link running now reached the frame the next one may cut its
+/// recovery at? The rule [`chain_cancel`] cuts on, asked of the earliest
+/// weapon -- a different one -- and never of the third, which has no next.
+fn may_cancel(p: &Player) -> bool {
+    use moves::champion as c;
+    let Action::Recovery { kind, left } = p.action else {
+        return false;
+    };
+    let Mechanic::Forms {
+        chain,
+        chain_hit: true,
+        ..
+    } = p.mechanic
+    else {
+        return false;
+    };
+    c::in_string(kind)
+        && chain < c::DEPTH
+        && moves::get(p.class, kind).recovery.saturating_sub(left) >= recovery_owed(kind, true)
+}
+
+/// How much of a connected link's recovery is served before the next link may
+/// start: a share of its own, smaller into a `swapped` weapon. The one
+/// statement of it -- [`chain_cancel`] cuts the recovery here, and the tempo
+/// bar draws its marks here (`tempo`).
+fn recovery_owed(kind: u8, swapped: bool) -> u16 {
+    let share = if swapped {
+        t::chain_cancel_swapped()
+    } else {
+        t::chain_cancel_repeated()
+    };
+    (moves::get(Class::Champion, kind).recovery as u32 * share as u32 / 100) as u16
 }
 
 /// Cut the **Fire carpet's** recovery short into whatever she throws next.
@@ -8588,6 +8827,80 @@ fn cancel_the_carpet(
     }
 }
 
+/// **A jump cuts Fissure short while she stands on a stone** (2026-10-21,
+/// from play). Held at her own feet, the stone erupts under her on the move's
+/// first active frame and climbs, carrying her -- and the move's last active
+/// frames and its recovery kept the jump locked until the climb was long
+/// over, so the structure jump the surge was meant to be never came out.
+/// From the frame after the surge is sent (`hit_used`, which
+/// `World::race_the_crack` sets), space with her feet on a stone ends the
+/// move, and the ordinary jump below takes off from the stone with its climb.
+/// The surge is already out, so nothing it does is given up.
+fn jump_off_the_crack(p: &mut Player, input: Input, scene: &Scene) {
+    if p.class != Class::Elementalist || !input.has(Input::SPACE) || !p.grounded {
+        return;
+    }
+    let kind = match p.action {
+        Action::Active { kind, .. } | Action::Recovery { kind, .. } => kind,
+        _ => return,
+    };
+    if kind != SLOT_COMMITTED || !p.hit_used {
+        return;
+    }
+    if stones::under_in(scene.stones, p.pos).is_some() {
+        p.action = Action::Free;
+    }
+}
+
+/// Cut the recovery of anything the **Elementalist** throws short into `Q` or
+/// `E`, the two pushes.
+///
+/// The clicks are what she makes and the keys are what she does to it, so
+/// nearly every push follows something she has just put down. Waiting out the
+/// whole recovery first made every push two moves of frames -- the stone's
+/// recovery and then the push's own wind-up -- and the second wind-up is the
+/// part the opponent was meant to read (2026-10-21, from play).
+///
+/// **From anything but a push**, from `tuning::push_cancel_from` frames into
+/// its recovery to the end of it. Recovery only, as the carpet's: the thing is
+/// already out. Not a push into a push: the Bolt then Cataclysm is two
+/// decisions about one stone, and paying for the first is the price of
+/// making it. Only into a push that would come out, so the cancel is never
+/// spent on nothing. What it cannot buy is safety: she is still in the
+/// push's own frames, which are about as long as any recovery they cut
+/// (`a_cancelled_recovery_is_still_punishable_on_block`).
+///
+/// `Q` is read held and `E` on its press (`pressed_e`), as the input below
+/// reads them.
+fn cancel_into_a_push(
+    p: &mut Player,
+    input: Input,
+    out: &[bool; moves::MAX_SLOTS],
+    pressed_e: bool,
+) {
+    if p.class != Class::Elementalist {
+        return;
+    }
+    let Action::Recovery { kind, left } = p.action else {
+        return;
+    };
+    if kind == SLOT_POKE || kind == SLOT_HEAVY {
+        return;
+    }
+    if moves::get(p.class, kind).recovery.saturating_sub(left) < t::push_cancel_from() {
+        return;
+    }
+    let asked = [
+        input.has(Input::SPECIAL).then(|| keyed_q(p)).flatten(),
+        pressed_e.then(|| keyed_move(p)).flatten(),
+    ];
+    if asked.into_iter().flatten().any(|k| p.can_throw(k, out)) {
+        // Free, as `cancel_the_carpet` does: the input below throws it, and
+        // reads `Q` and `E` before anything else.
+        p.action = Action::Free;
+    }
+}
+
 /// Record that a chain link landed, so its recovery may be cut short.
 ///
 /// Called from the one place a hit is resolved, and a no-op for everything that
@@ -8607,10 +8920,12 @@ fn confirm_chain(p: &mut Player, blocked: bool) {
         chain_hit,
         recharge,
         rush,
+        fury,
         ..
     } = &mut p.mechanic
     {
         *chain_hit = true;
+        fury.landed |= 1 << link.min(moves::champion::DEPTH - 1);
         // **The refund** (exploration 0015, C1): a third hit that lands gives
         // the Rush back, so the way out -- or back in -- is already there when
         // the string is over. Not mid-dash: a Rush cannot refill itself.
@@ -8631,19 +8946,24 @@ fn advance_chain(p: &mut Player, kind: u8) {
     use moves::champion as c;
     let stage = match c::link_of(kind) {
         Some(link) => link + 1,
-        None if c::in_string(kind) => (champion_chain(p).0 + 1).min(c::DEPTH),
+        None if c::in_string(kind) => (string_stage(p) + 1).min(c::DEPTH),
         None => 0,
     };
     if let Mechanic::Forms {
         chain,
         chain_left,
         chain_hit,
+        fury,
         ..
     } = &mut p.mechanic
     {
         *chain = stage;
         *chain_left = if stage > 0 { t::chain_grace() } else { 0 };
         *chain_hit = false;
+        // A new string starts with nothing landed.
+        if stage <= 1 {
+            fury.landed = 0;
+        }
     }
 }
 
@@ -8686,18 +9006,21 @@ fn begin_champion(p: &mut Player, kind: u8) {
     // beat on nothing. See `find_the_beat`.
     // Where in the string this move stands: a link's own place, or for an
     // aerial or a takeoff the hits already behind it.
-    let place = c::link_of(kind).unwrap_or(champion_chain(p).0.min(c::DEPTH - 1));
+    let place = c::link_of(kind).unwrap_or(string_stage(p));
     if let Mechanic::Forms { fury, .. } = &mut p.mechanic {
-        fury.true_link = fury.beat != 0 && c::in_string(kind) && place > 0;
-        fury.beat = 0;
+        fury.true_link = c::in_string(kind) && fury.on_beat;
+        fury.on_beat = false;
+        fury.early = false;
         if c::in_string(kind) {
             fury.place = place;
         }
         // A move may be held only if its button was pressed for it. The press
-        // is spent here, so a button held on into the next link runs the
-        // string as it always did rather than charging it.
+        // is spent here, so a button held on past this link throws nothing
+        // more: the next link wants a press of its own (2026-10-20).
+        // Kept a few frames after it went down (`Fury::fresh`), a press may
+        // already be let go when its link starts: then it is a tap.
         let bit = 1u8 << c::weapon(kind);
-        fury.may_hold = c::holdable(kind) && fury.fresh & bit != 0;
+        fury.may_hold = c::holdable(kind) && fury.fresh & fury.clicks & bit != 0;
         fury.fresh &= !bit;
     }
     p.channelled = Fx::ZERO;
@@ -9642,6 +9965,11 @@ fn step_channel(
     // Released. The aim locks now, on the frame the wind-up becomes a move,
     // which is where every other move locks it too.
     aim_channel(p, who, kind, held, input, scene);
+    // Released by the cap with the button still down: that press is spent,
+    // and the button has to come up before it throws anything else.
+    if p.class == Class::Elementalist && input.has(channel_button(p.class, kind)) {
+        p.spent_clicks |= channel_button(p.class, kind);
+    }
     match charge {
         // **The Dual mage's long holds** (2026-10-12): held to the end, the
         // spell comes out on its own; let go sooner and the click was a tap,
@@ -9932,9 +10260,11 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
     let m = moves::get(p.class, kind);
     p.stoop = Fx::ZERO;
     p.aim_path = match m.aim() {
-        // Hers stay at her level when she did not point down
-        // (`aim::grounded_kept`); everybody else's are the plain rule.
-        aim::Kind::Grounded if p.class == Class::Elementalist => {
+        // Her stones stay at her level when she did not point down
+        // (`aim::grounded_kept`); everybody else's are the plain rule, and so
+        // is her Fire pillar (2026-10-21, from play): fire is not footing, and
+        // from a ledge she means the floor below it.
+        aim::Kind::Grounded if p.class == Class::Elementalist && kind != SLOT_SPECIAL => {
             aim::grounded_kept(who, input, reach, scene)
         }
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
@@ -10086,8 +10416,19 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     let full = moves::get(p.class, kind).air_stall;
     if full > 0 {
         let mut worth = Fx::from_int(full as i32);
-        for _ in 0..p.air_stalls {
-            worth = worth.mul(t::air_stall_falloff());
+        // The Fire carpet's falls off by the carpets before it alone, and
+        // steeply: see `Player::carpets`.
+        let carpet = p.class == Class::Elementalist && kind == moves::elementalist::FIRE_CARPET;
+        let (before, falloff) = if carpet {
+            (p.carpets, t::carpet_hang_falloff())
+        } else {
+            (p.air_stalls, t::air_stall_falloff())
+        };
+        for _ in 0..before {
+            worth = worth.mul(falloff);
+        }
+        if carpet {
+            p.carpets = p.carpets.saturating_add(1);
         }
         // And the Reaver's Fan wears down on its own as she keeps throwing it,
         // landing or not. See `shadow::fan_hang`.
@@ -10096,7 +10437,11 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
         }
         p.air_stall = worth.to_int().max(0) as u16;
         p.air_stalls = p.air_stalls.saturating_add(1);
-    } else {
+    } else if !(p.class == Class::Elementalist && kind == moves::elementalist::UPDRAFT) {
+        // A move with no hang of its own ends one still running -- except the
+        // Updraft, which only ever pushes up: the Fire carpet's hang carries
+        // her through its wind-up, so the column comes up through the carpet
+        // rather than a fall's height below it (2026-10-21, from play).
         p.air_stall = 0;
     }
 
@@ -10375,6 +10720,11 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
             // Free, on the floor or off it: a jump no longer ends a string
             // (2026-10-13), since a jump is how the next hit of one arrives.
             let standing = p.action.actionable();
+            // **The window opens when he may act again** (2026-10-20): at a
+            // landed link's earliest cancel, still in its recovery, so it is
+            // the same window -- and the Beat the same place in it -- for
+            // every weapon.
+            let cancellable = may_cancel(p);
             let stunned = p.action.stunned();
             let charging = winding_a_hold(p);
             if let Mechanic::Forms {
@@ -10391,22 +10741,25 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                 *rush = if stunned { 0 } else { rush.saturating_sub(1) };
                 *recharge = recharge.saturating_sub(1);
                 *takeoff = takeoff.saturating_sub(1);
-                if live {
+                if *chain == 0 {
+                    *chain_left = 0;
+                } else if live && !cancellable {
                     *chain_left = t::chain_grace();
-                } else if standing && *chain < moves::champion::DEPTH {
+                } else if standing || cancellable {
+                    // Past the third, too (2026-10-20, from play): the
+                    // window runs on, and the next string's first hit keeps
+                    // the beat. A press throws that first hit.
                     *chain_left = chain_left.saturating_sub(1);
                 } else {
-                    // Either the fighter is doing something a string does not
-                    // survive, or the string has spent its third hit. There is
-                    // no fourth: a chain that has finished is over on the frame
-                    // its finisher stops running, and the next press opens a
-                    // new one.
+                    // The fighter is doing something a string does not
+                    // survive.
                     *chain_left = 0;
                 }
                 if *chain_left == 0 {
                     *chain = 0;
                     *chain_hit = false;
-                    fury.beat = 0;
+                    fury.early = false;
+                    fury.on_beat = false;
                 }
                 if !live {
                     fury.true_link = false;
@@ -10732,7 +11085,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                     | (fury.shouldered as u32) << 1
                     | (fury.true_link as u32) << 3
                     | (fury.clicks as u32) << 8
-                    | (fury.beat as u32) << 16
+                    | (fury.early as u32) << 16
+                    | (fury.on_beat as u32) << 17
                     | (fury.fresh as u32) << 20
                     | (fury.may_hold as u32) << 24
                     | (fury.place as u32) << 25,
@@ -10741,6 +11095,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(
                 fury.last_weapon as u32 | (fury.spent as u32) << 8 | (fury.clash_by as u32) << 16,
             );
+            h.write_u32(fury.fresh_left as u32 | (fury.landed as u32) << 16);
             h.write_u32(liquid.raw());
         }
         Mechanic::Shadow(shadow) => {
@@ -11005,9 +11360,15 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.haul as u32);
     hash_v3(h, &p.haul_to);
     h.write_i32(p.haul_speed.raw());
-    h.write_u32(p.air_stalls as u32);
+    // The carpets in the byte above, so a fighter who never lays one hashes
+    // as before.
+    h.write_u32(p.air_stalls as u32 | (p.carpets as u32) << 8);
     // Only once a wall has been touched: a fight that never meets one
     // hashes as it did before there were wall jumps.
+    if p.wall_press != 0 {
+        h.write_u32(0x3A12);
+        h.write_u32(p.wall_press as u32);
+    }
     if p.wall.is_some() || p.wall_jumped.is_some() || p.wall_jumps != 0 {
         h.write_u32(0x3A11);
         hash_v3(h, &p.wall.at);
@@ -11038,6 +11399,7 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.air_frames as u32);
     h.write_u32(p.since_landed as u32);
     h.write_u32(p.parried as u32);
+    h.write_u32(p.spent_clicks as u32);
     h.write_u32(p.crouched_for as u32);
     h.write_u32(p.stun_total as u32);
     h.write_u32(p.frozen as u32);
@@ -11150,6 +11512,16 @@ fn hash_monster(h: &mut Fnv, slot: usize, m: &crate::monster::Monster) {
     if m.brain.aim != [0; 2] {
         h.write_u32(0x3A4C);
         h.write_u32(crate::lore::halves(m.brain.aim[0], m.brain.aim[1]));
+    }
+    // Getting up or down, and a spray a rock stopped: only when there is
+    // one, so a creature that never does either hashes as it did.
+    if let crate::monster::Doing::Climb { total, rise, .. } = m.doing {
+        h.write_u32(0xC1B | (total as u32) << 16);
+        h.write_i32(rise as i32);
+    }
+    if let Some(stop) = m.brain.stop {
+        h.write_u32(0x570B);
+        h.write_i32(stop as i32);
     }
     if m.own != [0; 4] {
         h.write_u32(0x0E);
@@ -13493,6 +13865,7 @@ impl World {
             // What it is *for* is the shot flown down it and the Thermal
             // thrown along it; the burn is what makes it a thing in the way.
             EffectKind::FireCarpet => {
+                self.sink_the_carpet(effect);
                 if effect.ticks_now() {
                     let (a, b) = effect.carpet_line();
                     let radius = effect.field_radius();
@@ -15244,7 +15617,7 @@ fn rider_acts(
     // live on the creature's back and cancels the same way it does on the
     // floor. There is no takeoff up here: jumping is how you *leave*, and a
     // move that spent the jump on an attack would take that away.
-    chain_cancel(p, input);
+    chain_cancel(p);
     queue_the_shadow(p, input);
     // And the Reaver's strike on arrival, for a shadow left standing on the
     // creature's back -- the same cut as on the floor.
@@ -15362,6 +15735,7 @@ fn mount_on(p: &mut Player, slot: usize, beast: &Monster, part: usize, top: Fx) 
     p.jump_hold = 0;
     p.air_stall = 0;
     p.air_stalls = 0;
+    p.carpets = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }
@@ -15410,6 +15784,7 @@ fn meet_the_critters(p: &mut Player, crowd: &Critters) {
         p.jump_hold = 0;
         p.air_stall = 0;
         p.air_stalls = 0;
+        p.carpets = 0;
         p.grip_vel = V3::ZERO;
         p.grip_settle = t::mount_settle() as u8;
         return;
@@ -15545,6 +15920,7 @@ pub fn put_inside(p: &mut Player, slot: usize, beast: &Monster, part: usize) {
     p.jump_hold = 0;
     p.air_stall = 0;
     p.air_stalls = 0;
+    p.carpets = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }
@@ -15911,7 +16287,17 @@ impl World {
         // Along the floor it was raised on: stopped at an edge rather than
         // run off it into the floor below (`aim::kept_along`), and at a wall.
         let path = aim::kept_along(p.aim_path, &scene);
-        let length = aim::first_along(path, Fx::ZERO, i as u8, &scene, Targets::none().walls())
+        // Walls asked a step up off the floor it runs on (2026-10-21): along
+        // the floor itself the line grazes the top of the box it was raised
+        // on, which read as a wall at no distance, and a crack held on any
+        // raised floor never went anywhere. A step she would walk up is not a
+        // wall to it either.
+        let lift = V3::new(Fx::ZERO, t::step_up(), Fx::ZERO);
+        let probe = aim::Path {
+            from: path.from.add(lift),
+            to: path.to.add(lift),
+        };
+        let length = aim::first_along(probe, Fx::ZERO, i as u8, &scene, Targets::none().walls())
             .map_or(path.length(), |c| c.dist());
         let dir = path.dir();
         let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
@@ -15999,6 +16385,22 @@ impl World {
         if let Some(index) = (effect.banked as usize).checked_sub(1) {
             if running {
                 stones::slide_to(&mut self.players, index, front, &ground);
+            }
+            // **Off the end of her level, over the edge** (2026-10-21, from
+            // play): the run stops at a lip (`aim::kept_along`), and a stone
+            // that got there is let go at the surge's speed rather than left
+            // standing on it, so it goes on over and falls to the floor below.
+            // A run that ended at a wall, or on more floor, keeps its stone.
+            let end = effect.pos.add(effect.dir.scale(effect.reach));
+            // Its last frame, too: its life is the run rounded to frames, and
+            // can end a hair short of the end.
+            if front == end || effect.age.saturating_add(1) >= effect.life {
+                let past = front.add(flat.scale(t::body_radius()));
+                let below = ground.floor_below(V3::new(past.x, front.y.add(arena::SKIN), past.z));
+                if below.raw() < front.y.sub(t::placement_drop()).raw() {
+                    stones::shove(&mut self.players, index, flat, speed);
+                    effect.banked = 0;
+                }
             }
         }
         let m = effect.source();
@@ -18391,6 +18793,45 @@ impl World {
     /// it is given its speed, so it leaves with it. A ball smaller than
     /// `tuning::air_ball_holds` holds nobody, so the rider is put down a
     /// moment before the ball vanishes rather than dropped when it does.
+    /// The Fire carpet comes down while it hangs (2026-10-21, from play), at
+    /// `tuning::carpet_sink`, each end on its own: an end that reaches the
+    /// floor under it rests there, its capsule's radius up, and the other
+    /// keeps coming until it does too. So a carpet laid low enough ends up
+    /// lying on the ground, along the slope it landed on, and one laid high
+    /// is still in the air when it burns out. The floor is
+    /// `Terrain::floor_below`, so a stone or a ledge under an end catches it.
+    fn sink_the_carpet(&self, effect: &mut Effect) {
+        let drop = t::carpet_sink().mul(DT);
+        if drop == Fx::ZERO {
+            return;
+        }
+        let terrain = self.terrain();
+        let rest = effect.field_radius();
+        let lower = |end: V3| {
+            let floor = terrain.floor_below(end).add(rest);
+            let y = end.y.sub(drop).max(floor).min(end.y);
+            V3::new(end.x, y, end.z)
+        };
+        let (a, b) = effect.carpet_line();
+        let (near, far) = (lower(a), lower(b));
+        if near.y == a.y.sub(drop) && far.y == b.y.sub(drop) {
+            // Both ends still falling: the strip comes down whole, its line
+            // as it was laid.
+            effect.pos = near;
+            return;
+        }
+        if near == a && far == b {
+            return;
+        }
+        // An end has landed: the strip lies between where its ends are now.
+        let run = far.sub(near);
+        effect.pos = near;
+        effect.reach = run.len();
+        if effect.reach.raw() > 0 {
+            effect.dir = run.normalized();
+        }
+    }
+
     fn roll_the_ball(&mut self, effect: &mut Effect) {
         use moves::elementalist::AIR_BALL;
         let owner = effect.owner as usize;

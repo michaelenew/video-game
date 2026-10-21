@@ -41,6 +41,14 @@ have I got" rather than "do I have anything". See
 [combat-kernel.md](combat-kernel.md) §"The repeat lockout" for why that is not the thing this
 line rules out.
 
+**Movement sections are for five classes** (2026-10-20). The Bulwark is not
+considered for any jump, climb, gully or course: none is sized to it and no test asks it
+to finish one (`sim::class::MOVERS`; [courses.md](courses.md) §0). **Tab steps through the
+classes Champion first** (`sim::class::ROTATION`), and the Champion is who you are when no
+class is named. **The Bulwark is not on offer** (2026-10-21): it is too far behind the other
+five, with no clear way yet to make it fit, so no picker, menu or `--p1` reaches it. Its code
+stays in the game, and putting it back is adding it to `ROTATION`.
+
 **Time to kill.** ~60 seconds versus. 1–20 minutes coop, by fight difficulty.
 
 **Defense splits into two verbs.** Dodge is universal and evasive. Block is shield-gated and
@@ -105,7 +113,7 @@ waiting, and never free.** Accepted 2026-10-03 from the jump courses
 ([courses.md](courses.md) §0): a tool that reaches far with no timing, or reaches far after
 standing still long enough, is the thing to fix.
 
-**Roster.** Six classes. The Gatekeeper is retired and not backfilled — a missing long-range
+**Roster.** Six classes, five on offer (the Bulwark is set aside, above). The Gatekeeper is retired and not backfilled — a missing long-range
 poke is a design choice in a closed arena, not a gap.
 
 ## 2 · The roster
@@ -185,11 +193,11 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [courses.md](courses.md) | **Jump courses**: nine hand-authored floating-island courses to play (two easy; the Spiral, the Falls, the Slalom, the Fork and the Waterfall -- the valley's basalt cliff, also on its road -- hard; the Spire and the Gulf barely possible -- every tier an unplayed guess; `--arena falls`, `N` steps through them), big jumps in them for the class mechanics, the Reach (a proving ground of marked distances, `--arena reach`), the corner-clip fix, and the round-two/three measuring tools kept but not used as design inputs | **Built 2026-10-03, hand-authored 2026-10-04, big jumps and the Reach 2026-10-04, the Waterfall 2026-10-10**; for play |
 | [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30**; W0 (the picker), W1 (trophies) and W2 (tempers) built 2026-10-01; the valley built 2026-10-08, as [valley.md](valley.md) |
 | [atlas.md](atlas.md) | **One map, read a tile at a time**: places laid out on one map with their doorways cut, square tiles so a query reads only what is near it (no 64-box cap on the map), the world running in the coordinates of the place it is in and moving with the fighters, rooms whose hunts start when you walk in, and distance loading in the renderer | **Built 2026-10-09**, unplayed; every doorway walked by a test, SyncTest clean across a crossing |
-| [valley.md](valley.md) | **The valley**: where the game starts now. Hearth, its Ring for fighting each other, and five reaches climbing to the Saddle, the creatures' arenas as rooms off them; seams you walk into together, waystones lit by what the pair has beaten, cairns, no dying and no friendly fire outside the Ring, climbs by ledge and wall jump (no vines since 2026-10-16), updrafts, and the replay's report of a pair's run | **Built 2026-10-08**, unplayed |
+| [valley.md](valley.md) | **The valley**: where the game starts now. Hearth, its Ring for fighting each other, and five reaches climbing to the Saddle, the creatures' arenas as rooms off them; seams you walk into together, waystones lit by what the pair has beaten, cairns, no dying and no friendly fire outside the Ring, climbs by ledge and wall jump (no vines since 2026-10-16), the routes to the High Plane at the Sky Road's difficulty and two past it -- the Crown and the High Line -- sized to need a class's tools (2026-10-20, §3), updrafts, and the replay's report of a pair's run | **Built 2026-10-08**, unplayed |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [web.md](web.md) | The browser build: what a page cannot do, and what it does instead; playing a friend from a link (rooms on public brokers, WebRTC, the three seams in `net::meet`), sealed rooms, and a desktop joining a page's room | Decided; rooms built 2026-10-03, sealed and open to desktops 2026-10-05 |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
-| [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match | **Built 2026-09-26**, unplayed |
+| [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match, a kit measured on a body, five levels | **Built 2026-09-26**, unplayed; measured kits and the menu's Difficulty 2026-10-20 |
 | [forms.md](forms.md) | **Forms**: the collision box stays the truth and the form is drawn inside it -- rounded fighters and creature parts, rocks and the Elementalist's stones pulled inward by noise, soft earth, dressed stone chamfered; and **relief**, four arenas' floors with hills and hollows the simulation stands on | Three passes built 2026-10-08, unplayed |
 | [sound.md](sound.md) | **Sound, derived**: a sound is an excitation shaped by a resonator, and the simulation's own numbers decide both -- a blow's weight is its impact freeze, a telegraph is as long as its startup, a footfall is the floor's material, a struck thing rings by its size. Nothing recorded; a sheet of every sound in a second; one frame sounded once under rollback | **Built 2026-10-08**, unheard |
 | [replays.md](replays.md) | **Replays**: a fight as its start and every frame's inputs, always being recorded (`Y`, the Esc menu, `--record`), played back in the game (`--replay`), and judged by the creature's report over a person's frames (`cargo run -p hunt --bin replay`) -- how a fight somebody played reaches the harness. Online, the tape keeps the link a second at a time, and the judgement says where a match got laggy and why (§6) | **Built 2026-10-08**, link 2026-10-10 |
@@ -275,7 +283,7 @@ also needs ALSA's headers** (`libasound2-dev` on Debian and Ubuntu; `./scripts/s
 desktop` installs them), since 2026-10-08 when the game got sound ([sound.md](sound.md)); an
 error from `alsa-sys` is that. The browser build does not: a page's audio is the browser's.
 
-**Working on it:** `./scripts/dev.sh` — hitbox wireframes, the Oven, and a class picker beside each health bar. Extra
+**Working on it:** `./scripts/dev.sh` — hitbox wireframes, the Oven, and a class picker beside your health bar. Extra
 arguments pass through, so `./scripts/dev.sh --p1 champion` works.
 
 **What can I type?** `./scripts/help.sh`, or `cargo run -p game -- --help`. Every command,

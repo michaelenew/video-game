@@ -7,11 +7,12 @@
 //! at the size it hits at** -- so that what both players read is a thing in
 //! the world, not a number. This module is that rule, in two halves. The
 //! **weapon** is iron and one size: it is drawn at the row's reach, never
-//! longer, and rides her hands. The **volume** -- [`swing_volume`] -- is the
-//! hit test's own capsule, reach and radius both grown by her grey, and the
-//! renderer draws it in the same stuff as the essence pools: it is the life
-//! force doing the swinging, and the more of it she has let out, the more of
-//! it there is around the blade. Both are pure functions of simulation state
+//! longer, and rides her hands. The **reach** -- [`reach_share`] -- is how
+//! far the hit test's volume goes, reach and radius both grown by her grey,
+//! and the renderer draws the trail behind the blade out to it in the colour
+//! of the essence pools (`game::swing`): it is the life force doing the
+//! swinging, and the more of it she has let out, the further it runs past
+//! the blade and the brighter. Both are pure functions of simulation state
 //! so `tests/kinematics.rs` can hold them to the hit test without a renderer,
 //! the way `game::effect_piece` is held to the effects.
 //!
@@ -37,69 +38,6 @@
 
 use crate::math::{self, V3};
 use sim::state::{self, Player};
-
-/// The hit volume of a swing, as the renderer draws it: the same capsule the
-/// hit test reads, and a fade for the moment after it.
-///
-/// `fade` is one on every active frame and runs down over the first
-/// [`GHOST`] frames of the recovery, where the volume is where it was on the
-/// last active frame: a swing that vanished on the frame it stopped hitting
-/// was a flicker, and the trail of it is what shows the arc.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Volume {
-    pub from: V3,
-    pub to: V3,
-    pub radius: f32,
-    pub fade: f32,
-}
-
-/// How many recovery frames the volume lingers for, fading.
-pub const GHOST: u16 = 8;
-
-/// The volume of a scythe swing this frame, if there is one to draw.
-///
-/// The hit test's own capsule on an active frame, and its last shape fading
-/// through the first frames of recovery. Nothing during the wind-up, because
-/// nothing is out.
-///
-/// **Hers only.** A move is a number within its class, and `blood::scythe`
-/// asks of the number: unasked of the class, the Reaver's Plunge and Gallows
-/// came out as a scythe's capsule round her, in the pools' violet -- the
-/// "purple cylinder" (2026-10-20).
-pub fn swing_volume(p: &Player) -> Option<Volume> {
-    if p.class != sim::Class::BloodMage {
-        return None;
-    }
-    match p.action {
-        sim::state::Action::Active { kind, .. } if sim::moves::blood::scythe(kind) => {
-            let hb = state::hitbox(p)?;
-            Some(Volume {
-                from: fx3(hb.from),
-                to: fx3(hb.to),
-                radius: crate::fx(hb.radius),
-                fade: 1.0,
-            })
-        }
-        sim::state::Action::Recovery { kind, left } if sim::moves::blood::scythe(kind) => {
-            let m = sim::moves::get(p.class, kind);
-            let gone = m.recovery.saturating_sub(left);
-            if gone >= GHOST {
-                return None;
-            }
-            // The last active frame, re-asked of the hit test.
-            let mut last = *p;
-            last.action = sim::state::Action::Active { kind, left: 1 };
-            let hb = state::hitbox(&last)?;
-            Some(Volume {
-                from: fx3(hb.from),
-                to: fx3(hb.to),
-                radius: crate::fx(hb.radius),
-                fade: 1.0 - gone as f32 / GHOST as f32,
-            })
-        }
-        _ => None,
-    }
-}
 
 /// The scythe, as five points in the arena and the plane its blade lies in.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -169,6 +107,21 @@ const LEANS: V3 = [0.94, 0.35, 0.0];
 /// `anim::clips::blood::gripping` -- and is the one it stands under at rest,
 /// so the left is free to throw and to cast without the weapon following it.
 pub fn scythe(p: &Player, left: V3, right: V3) -> Option<Scythe> {
+    scythe_between(p, p, 1.0, left, right)
+}
+
+/// [`scythe`], drawn `alpha` of the way from the last simulated frame `prev`
+/// to the current one `p`, the way the body is: while the volume is out the
+/// tip points at its far end, which the simulation moves once a frame, and
+/// between pictures it turns about her hand from where it pointed on the
+/// frame before, so a swing sweeps rather than ticking round.
+pub fn scythe_between(
+    prev: &Player,
+    p: &Player,
+    alpha: f32,
+    left: V3,
+    right: V3,
+) -> Option<Scythe> {
     if p.class != sim::Class::BloodMage {
         return None;
     }
@@ -201,13 +154,18 @@ pub fn scythe(p: &Player, left: V3, right: V3) -> Option<Scythe> {
         // which is exactly the volume's end when no grey is open; otherwise
         // the tip is that length along the hands' line.
         let hands = math::normalize_or(math::sub(right, left), facing);
-        let tip = match state::hitbox(p) {
+        let tip_of = |p: &Player| match state::hitbox(p) {
             Some(hb) => {
                 let toward = math::sub(fx3(hb.to), right);
                 let share = if live > 0.0 { reach / live } else { 1.0 };
                 math::add(right, math::scale(toward, share))
             }
             None => math::add(right, math::scale(hands, reach)),
+        };
+        let tip = if alpha < 1.0 {
+            math::turn_about(tip_of(prev), tip_of(p), right, alpha)
+        } else {
+            tip_of(p)
         };
         let axis = math::normalize_or(math::sub(tip, right), hands);
         let apart = math::length(math::sub(right, left));
@@ -248,6 +206,27 @@ pub fn scythe(p: &Player, left: V3, right: V3) -> Option<Scythe> {
     let tip = math::add(neck, math::scale(leans, haft * HEAD));
     // The blade's flat lies in the plane of her facing, bowing forward.
     Some(set(butt, grip, neck, tip, facing, width, breadth))
+}
+
+/// **How far out her swing hits**, as a share of the weapon's own length:
+/// the volume's far end and its radius beyond that, so one and a little with
+/// no grey open, more as her grey buys reach and width. The trail behind the
+/// scythe (`game::swing`) is drawn out to it, so what the essence reaches is
+/// seen, as the capsule it replaced showed it.
+pub fn reach_share(p: &Player) -> f32 {
+    let row = p
+        .action
+        .attack_kind()
+        .filter(|k| sim::moves::blood::scythe(*k) && *k != sim::moves::blood::RISING_REAP)
+        .unwrap_or(sim::moves::blood::SWEEP);
+    let sweep = sim::moves::get(p.class, row);
+    let reach = crate::fx(sweep.reach);
+    let live = crate::fx(state::live_reach(p, &sweep)) + crate::fx(state::live_radius(p, &sweep));
+    if reach > 0.0 {
+        (live / reach).max(1.0)
+    } else {
+        1.0
+    }
 }
 
 /// The part of `v` square to `axis`, unit, or `None` if there is none.

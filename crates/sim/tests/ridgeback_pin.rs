@@ -165,13 +165,40 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// up, the dash jump was cut to three quarters, the Fan's hang wears down and
 /// the shadow rests after a dash collects it -- the random presses throw all
 /// four. See `docs/design/feel-log.md`.
+/// **And the Champion's on 2026-10-20, deliberately**: only a press throws a
+/// link, kept a few frames, and a held button throws one move rather than
+/// the string over and over. His random presses hold buttons; his tempo
+/// bar's clocks went into the hash with the rest of `Fury`. And again the
+/// same day: the Beat is a rhythm a third of the way along a window counted
+/// from when he may act, and the window runs on past the third hit.
+/// **Every class moved 2026-10-20, deliberately: the wall jump's
+/// overhaul** (the Champion's merged with his Beat, above). The random presses jump in the air all the time, and a press
+/// there is now kept for a wall (`Player::wall_press`, in `state_checksum`
+/// while not nought); and those that brush the proving ground's walls slide
+/// now where they used to fall past, and slide slower.
+/// **Every class again the same day: only enough wall is a wall**
+/// (`Terrain::wall_face`). The proving ground's low walls and edges the
+/// random presses brush are no longer slid on or jumped off.
+/// **Every class again 2026-10-21, for the hash**: `state_checksum` holds
+/// `Player::spent_clicks`, her clicks waiting to come up. With that line out,
+/// every hunt reproduced its old pin exactly, merged onto main's carpet hang
+/// and push cancel, hers included.
+/// **Every class again 2026-10-21, deliberately: the Ridgeback meets the
+/// ground.** It collides with the proving ground's walls and platforms,
+/// starts on the platform its spawn is astride and gets down, gets up the
+/// platforms after the hunters and walks round them, and its charge and
+/// spray stop at what they run into (`sim::climb`, `docs/design/feel-log.md`).
+/// **And again the same day**: a top is footing only where it is broad enough
+/// for the body, so it stands differently where a top is narrow -- the
+/// platforms' edges, the Elementalist's stones. Re-pinned once more on merging
+/// main's Elementalist pass above.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xde36cc574ef51ff7),
-    (Class::Bulwark, 0xd12b055c26db8afb),
-    (Class::ShadowReaver, 0xf62e51af6026ca5e),
-    (Class::BloodMage, 0x07c2f689e32197d2),
-    (Class::DualMage, 0x810a930f65195268),
-    (Class::Elementalist, 0x405a4e207b063bea),
+    (Class::Champion, 0xc9aeada703d9903d),
+    (Class::Bulwark, 0x76869afd57557183),
+    (Class::ShadowReaver, 0xf38da36ffa8d8baf),
+    (Class::BloodMage, 0xf8141302e4e18fb1),
+    (Class::DualMage, 0x510e33528d365dc1),
+    (Class::Elementalist, 0xc32f72e9884a63d8),
 ];
 
 #[test]

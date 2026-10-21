@@ -36,6 +36,7 @@ use crate::beast::MarkMaterial;
 use crate::ink::InkMaterial;
 use crate::paint::Paint;
 use crate::still::SkinMaterial;
+use crate::swing::SwingMaterial;
 
 /// How many frames a primer stays: one to be extracted, one to be
 /// specialised, and one spare.
@@ -56,6 +57,7 @@ impl Plugin for WarmPlugin {
                 prime::<MarkMaterial>,
                 prime::<SkinMaterial>,
                 prime::<InkMaterial>,
+                prime::<SwingMaterial>,
                 retire,
             )
                 .before(bevy::render::view::VisibilitySystems::CheckVisibility),
@@ -158,6 +160,11 @@ impl Warm for InkMaterial {
     fn key(&self, h: &mut DefaultHasher) {
         self.base.key(h);
     }
+}
+
+/// One form: blended, both sides, nothing else to choose.
+impl Warm for SwingMaterial {
+    fn key(&self, _h: &mut DefaultHasher) {}
 }
 
 impl Warm for MarkMaterial {

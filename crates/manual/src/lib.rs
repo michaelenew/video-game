@@ -66,7 +66,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --bot <level>",
-                "Start against the sparring bot: easy, normal or hard. 5, 6 and 7 switch to it in game.",
+                "Start against the sparring bot: beginner, easy, normal, hard or expert. 5, 6 and 7 switch to it in game; the Esc menu has all five.",
             ),
             e(
                 "cargo run -p game -- --record",
@@ -165,7 +165,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "?bot=<level>",
-                "Start against the sparring bot: easy, normal or hard.",
+                "Start against the sparring bot: beginner, easy, normal, hard or expert.",
             ),
             e(
                 "?dev",
@@ -666,7 +666,7 @@ pub const SECTIONS: &[Section] = &[
             e("4", "Dummy is a second player on the keys above."),
             e(
                 "5 6 7",
-                "Dummy is a sparring bot -- easy, normal, hard. It sees late, aims imperfectly, and picks a new personality every time you press one.",
+                "Dummy is a sparring bot -- easy, normal, hard. It sees late, aims imperfectly, and picks a new personality every time you press one. Beginner and expert are in the Esc menu's Training dummy section.",
             ),
             e(
                 "Tab",
@@ -982,6 +982,18 @@ pub const SECTIONS: &[Section] = &[
                 "Run to exactly frame n and stop. Makes two captures comparable.",
             ),
             e(
+                "SHOT_ALPHA=<a>",
+                "With SHOT_FRAME, draw the stopped frame a (0 to 1) of the way on from the one before it, the way a picture between two frames is drawn in play. Without it the share is wherever the clock stopped, usually 0.",
+            ),
+            e(
+                "SHOT_SLOW=<n>[,<from>]",
+                "Run one frame every n pictures, each picture a 1/n share further between frames, from frame from on (from the start without it). A slow renderer then still draws every moment between frames, and what the renderer remembers between pictures, like the arc behind the Champion's blade, comes out as it would on a fast machine.",
+            ),
+            e(
+                "SHOT_SWING=uv|alpha",
+                "Draw the arc of the Champion's cut solid: uv paints how recently the blade was there in red and which edge it is near in green; alpha paints how opaque the shader made it. For seeing where the arc is and why it looks the way it does.",
+            ),
+            e(
                 "SHOT_BARS=<dark>,<light>",
                 "Start a Dual mage with her two bars there, so a capture can look at the wings without playing up to them. Ignored for any other class.",
             ),
@@ -1004,6 +1016,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_AT=<x>,<z>",
                 "Stand player one at that point of the place the world is in (metres, decimals allowed), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A third number is the height to look down from. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
+            ),
+            e(
+                "SHOT_CLIMB=up",
+                "Start a hunt with the creature at the proving ground's west platform, side on to the camera, already getting up it; SHOT_CLIMB=down has it on the platform, getting down. Pair it with SHOT_FRAME to land partway through, and DEMO=0.",
             ),
             e(
                 "SHOT_FALL=1",

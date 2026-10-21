@@ -661,8 +661,8 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
     grounded(who, look, reach, scene, false)
 }
 
-/// [`grounded_path`] for the Elementalist's placements -- Raise, the Fire
-/// pillar, Quake, the Air ball's spot: **a point she did not point down at
+/// [`grounded_path`] for the Elementalist's placements -- Raise, Quake, the
+/// Air ball's spot: **a point she did not point down at
 /// stays at her own level** ([`kept_up`]). The edge of the range past a
 /// ledge, or the side of an island across a pit, comes back toward her to
 /// the last footing within `tuning::placement_drop` of hers rather than
@@ -673,7 +673,9 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
 /// Hers only, for now: the Reaver's send has its own answer to the same
 /// edge -- a short forgiveness and then a refusal (`footing_toward`) --
 /// decided from play on 2026-10-04, and the other grounded casts were not
-/// part of the report.
+/// part of the report. Her Fire pillar left this rule on 2026-10-21, from
+/// play: aimed down off a ledge it kept coming back up to her feet, and a
+/// pillar is not footing, so it takes the plain [`grounded_path`].
 pub fn grounded_kept(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
     grounded(who, look, reach, scene, true)
 }
@@ -1506,6 +1508,24 @@ pub fn line_clear(a: V3, b: V3, scene: &Scene) -> bool {
     nothing_between(a, b, scene)
 }
 
+/// **How far along a straight line before something solid stops it**: from
+/// `from` along `dir`, up to `reach`, against the ground's solids -- and
+/// `reach` when nothing does. What a creature asks of the lane a charge or a
+/// spray would run down, and how far a spray already thrown may fly
+/// (`Monster::spare_the_lane`, 2026-10-21): a rock in the way is cover, not a
+/// thing the spikes pass through.
+pub fn room_along(from: V3, dir: V3, reach: Fx, arena: &Terrain) -> Fx {
+    let mut room = reach;
+    for solid in arena.along(from, dir, reach, Fx::ONE) {
+        if let Some(d) = crate::math::ray_hits_solid(from, dir, &solid, Fx::ZERO) {
+            if d.raw() < room.raw() {
+                room = d.max(Fx::ZERO);
+            }
+        }
+    }
+    room
+}
+
 /// **Can something at `a` see `b`?** [`line_clear`] -- nothing solid between
 /// them -- and no floor hazard that blocks sight (smoke) on the way.
 ///
@@ -1983,8 +2003,9 @@ pub fn kept_up(from: V3, to: V3, stones: &Field, arena: &Terrain) -> Option<V3> 
 /// **A crack along the floor stops at an edge**: `path` cut short where the
 /// floor under it first falls more than `tuning::placement_drop` below the
 /// floor it started on. Fissure's, held from a stone up top: the crack runs
-/// along the ground it was raised on, and the stone that erupts at its end
-/// erupts at the lip rather than in the pit below (2026-10-09, from play).
+/// along the ground it was raised on to the lip (2026-10-09, from play), and
+/// since 2026-10-21 the stone it carries is let go there at its speed and
+/// goes over (`state::World::step_the_surge`).
 /// The direction is untouched; only the length is.
 pub fn kept_along(path: Path, scene: &Scene) -> Path {
     let open = past_structures(scene);

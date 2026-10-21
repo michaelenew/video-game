@@ -329,15 +329,21 @@ fn low_beside_the_face() -> World {
     w
 }
 
+/// **Touching a wall slides, unless pushing away** (2026-10-20; until then
+/// only pushing into it did, and nothing pressed fell past).
 #[test]
-fn only_pushing_into_a_wall_starts_a_slide() {
+fn touching_a_wall_slides_unless_pushing_away() {
     let mut w = low_beside_the_face();
     w.players[0].vel.z = Fx::from_int(-2);
     press(&mut w, 0, SOUTH, 10);
-    assert!(!w.players[0].sliding, "slid with nothing pressed");
+    assert!(w.players[0].sliding, "nothing pressed fell past the wall");
     let mut w = low_beside_the_face();
     press(&mut w, Input::W, SOUTH, 6);
     assert!(w.players[0].sliding, "pushing in did not slide");
+    let mut w = low_beside_the_face();
+    w.players[0].vel.z = Fx::from_int(-2);
+    press(&mut w, Input::W, NORTH, 10);
+    assert!(!w.players[0].sliding, "pushing away slid");
 }
 
 #[test]
