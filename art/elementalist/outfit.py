@@ -15,7 +15,7 @@ narrow figure in earth colours, a long robe, bare hands.
 import numpy as np
 
 import character
-from wardrobe import (body_masks, boots, coat_tails, covered, eyes, hair, jerkin, piece, sleeves,  # noqa: F401
+from wardrobe import (body_masks, boots, coat_tails, covered, eyes, hair, hair_cards, jerkin, piece, sleeves,  # noqa: F401
                       stone, straps, trousers, w, belt)
 
 
@@ -81,12 +81,14 @@ def team_stole(body, r):
 
 def head_hair(body, r):
     e = r.eye
-    out = [hair(body, r, gap=0.007, front=0.045, nape=-0.09, side=-0.045, grooves=11, depth=0.008,
-                faces=2400)]
-    # Gathered into a knot at the back of the head.
-    out.append(stone("knot", e + np.array([0.0, 0.02, -0.15]), [0.045, 0.04, 0.035], "hair", "head",
-                     seed=7, rough=0.6))
-    return out
+    scalp = hair(body, r, gap=0.004, front=0.045, nape=-0.09, side=-0.045, grooves=11, depth=0.003,
+                 faces=2400, lift=0.003)
+    knot = e + np.array([0.0, 0.02, -0.15])
+    # Drawn back from the face into a knot at the back of the head.
+    return [scalp,
+            hair_cards(scalp, r, style="knot", knot=knot, length=0.16, width=0.024,
+                       layers=(0.003, 0.007, 0.011), counts=(45, 60, 70), seed=12),
+            stone("knot", knot, [0.045, 0.04, 0.035], "hair", "head", seed=7, rough=0.6)]
 
 
 GARMENTS = {

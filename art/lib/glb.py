@@ -181,6 +181,9 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
             gm["emissiveFactor"] = [1.0, 1.0, 1.0]
         if m.get("double"):
             gm["doubleSided"] = True
+        if m.get("mask"):
+            gm["alphaMode"] = "MASK"
+            gm["alphaCutoff"] = m["mask"]
         gl_mats.append(gm)
 
     primitives = []

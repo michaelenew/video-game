@@ -16,7 +16,7 @@ import numpy as np
 import character
 import garment as g
 from wardrobe import (LEFT, belt, body_masks, boots, cape, coat_tails, collar, covered, eyes,  # noqa: F401
-                      hair, jerkin, sleeves, trousers, vambraces)
+                      hair, hair_cards, jerkin, sleeves, trousers, vambraces)
 
 
 def doublet(body, r):
@@ -66,8 +66,10 @@ def neck(body, r):
 
 def head_hair(body, r):
     # Short, swept back from a high forehead, close at the sides.
-    return [hair(body, r, gap=0.006, front=0.05, nape=-0.07, side=-0.075, grooves=10, depth=0.008,
-                 faces=2200)]
+    scalp = hair(body, r, gap=0.004, front=0.05, nape=-0.07, side=-0.075, grooves=10, depth=0.003,
+                 faces=2200, lift=0.004)
+    return [scalp, hair_cards(scalp, r, style="back", length=0.055, width=0.022,
+                              layers=(0.003, 0.007, 0.011), counts=(45, 60, 70), seed=11)]
 
 
 GARMENTS = {

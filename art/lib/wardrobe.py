@@ -615,3 +615,171 @@ def stone(name, at, radii, material, joint, seed=0, facets=1, rough=0.25):
 def band(body, r, a, b, at, width, gap, name, material):
     """A hard band round a limb -- a bracelet, an armlet: a strap, stiffer."""
     return straps(body, r, a, b, at, width, gap, name, material, tilt=0.0)
+
+
+# --- Hair cards ---------------------------------------------------------------
+#
+# What real-time hair is in every game that has it: strips of painted strands
+# ("cards") with gaps between the strands, laid in layers over a scalp along
+# the way the hair is combed. The cut-out edges and the layers over one
+# another are what read as hair; a sculpted mass, however it is combed, reads
+# as a helmet (the first three tries, 2026-10-21). The scalp (``hair``) stays,
+# slimmer, so nothing bald shows between cards.
+
+CARD_VARIANTS = 4
+
+
+def hair_cards(scalp, r, style="back", length=0.07, layers=(0.004, 0.009, 0.014),
+               counts=(40, 55, 65), width=0.024, part=0.0, fringe=False, knot=None,
+               jaw=-0.085, seed=1, split=False):
+    """Cards over ``scalp`` (a hair piece), combed by ``style``:
+
+    - ``back``: swept back off the forehead and down at the nape, short;
+    - ``bob``: falling from a parting at ``part`` to ``jaw`` below the eyes,
+      with a ``fringe`` forward over the brow if asked;
+    - ``knot``: drawn back to ``knot`` (a point), where a bun sits.
+
+    ``split``: cards on her right use the texture's second colour.
+    Returned as one object, its material ``hair_cards``, carried by the
+    head."""
+    import bmesh
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+
+    rnd = np.random.default_rng(seed)
+    e = r.eye
+    c = r.o["head"] + np.array([0.0, 0.10, -0.01])
+    co = np.zeros(len(scalp.data.vertices) * 3)
+    scalp.data.vertices.foreach_get("co", co)
+    pts = g.b2g(co.reshape(-1, 3))
+    tris = []
+    for poly in scalp.data.polygons:
+        v = list(poly.vertices)
+        for k in range(1, len(v) - 1):
+            tris.append((v[0], v[k], v[k + 1]))
+    tris = np.array(tris)
+    a, b, cc = pts[tris[:, 0]], pts[tris[:, 1]], pts[tris[:, 2]]
+    area = 0.5 * np.linalg.norm(np.cross(b - a, cc - a), axis=1)
+    prob = area / area.sum()
+    tree = BVHTree.FromPolygons([Vector(p) for p in pts], tris.tolist())
+    right = np.sign(r.o[f"arm.{RIGHT}"][0])
+
+    def surface(p):
+        loc, nrm, _, dist = tree.find_nearest(Vector(p))
+        return np.array(loc), np.array(nrm)
+
+    def flow(p):
+        rel = p - c
+        if style == "knot" and knot is not None:
+            d = np.asarray(knot) - p
+        elif style == "bob":
+            if fringe and rel[2] > 0.035 and p[1] > e[1] + 0.01:
+                d = np.array([0.0, -0.6, 1.0])
+            else:
+                away = np.array([p[0] - part, 0.0, 0.0])
+                d = away / max(np.linalg.norm(away), 0.02) * 0.6 + np.array([0.0, -1.0, -0.15])
+        else:
+            d = np.array([0.0, -0.25, -1.0]) if p[1] > e[1] else np.array([0.0, -1.0, -0.3])
+        return d / np.linalg.norm(d)
+
+    verts, faces, uvs, sides = [], [], [], []
+    for li, (lift, count) in enumerate(zip(layers, counts)):
+        pick = rnd.choice(len(tris), size=count, p=prob)
+        for t in pick:
+            w1, w2 = rnd.random(2)
+            if w1 + w2 > 1:
+                w1, w2 = 1 - w1, 1 - w2
+            p = a[t] + (b[t] - a[t]) * w1 + (cc[t] - a[t]) * w2
+            loc, n = surface(p)
+            p = loc + n * lift
+            reach = length * (0.75 + 0.5 * rnd.random()) * (1.0 - 0.15 * li)
+            if style == "knot" and knot is not None:
+                reach = min(reach, np.linalg.norm(np.asarray(knot) - p) + 0.01)
+            step = 0.008
+            line = [p]
+            travelled = 0.0
+            while travelled < reach:
+                d = flow(line[-1])
+                q = line[-1] + d * step
+                loc, n2 = surface(q)
+                off = (q - loc) @ n2
+                if off < lift:
+                    q = q + n2 * (lift - off)
+                if style == "bob" and q[1] < e[1] + jaw:
+                    break
+                line.append(q)
+                travelled += step
+            if len(line) < 3:
+                continue
+            line = np.array(line)
+            wid = width * (0.7 + 0.6 * rnd.random())
+            on_right = (line[0][0] - c[0]) * right > 0
+            variant = int(rnd.integers(0, CARD_VARIANTS // 2)) + (CARD_VARIANTS // 2 if (split and on_right) else 0)
+            if not split:
+                variant = int(rnd.integers(0, CARD_VARIANTS))
+            u0 = variant / CARD_VARIANTS
+            twist = rnd.normal() * 0.25
+            base = len(verts)
+            m = len(line)
+            for i, q in enumerate(line):
+                tng = line[min(i + 1, m - 1)] - line[max(i - 1, 0)]
+                tng /= np.linalg.norm(tng)
+                _, nn = surface(q)
+                across = np.cross(tng, nn)
+                across /= max(np.linalg.norm(across), 1e-6)
+                across = across * np.cos(twist) + nn * np.sin(twist)
+                s = i / (m - 1)
+                half = wid * (1.0 - 0.45 * s) / 2
+                verts += [q - across * half, q + across * half]
+                uvs += [(u0 + 0.02 / CARD_VARIANTS, 1 - s), (u0 + 0.98 / CARD_VARIANTS, 1 - s)]
+            for i in range(m - 1):
+                k = base + 2 * i
+                faces.append((k, k + 1, k + 3, k + 2))
+    ob = stage.mesh_object("cards", g.g2b(np.array(verts)), faces)
+    uvl = ob.data.uv_layers.new(name="UVMap")
+    lv = np.zeros(len(ob.data.loops), int)
+    ob.data.loops.foreach_get("vertex_index", lv)
+    uvl.data.foreach_set("uv", np.array(uvs)[lv].ravel())
+    for p in ob.data.polygons:
+        p.use_smooth = True
+    ob.data.materials.append(bpy.data.materials.new("hair_cards"))
+    print(f"    {len(faces)} card quads")
+    return rigid(ob, "head")
+
+
+def strand_texture(colour, second=None, size=1024, seed=5):
+    """The cards' texture: ``CARD_VARIANTS`` columns, each a lock of strands
+    from root (top) to tip (bottom) -- thin, swaying a little, each its own
+    shade, darker at the root, a band of sheen a third of the way down, and
+    tapering to nothing at uneven tips. Alpha is the strands; between them,
+    the colour is kept so a cut edge never fringes dark. Linear RGBA."""
+    rnd = np.random.default_rng(seed)
+    h = w = size
+    rgb = np.zeros((h, w, 3))
+    alpha = np.zeros((h, w))
+    shade = np.ones((h, w))
+    col_w = w // CARD_VARIANTS
+    yy = np.arange(h)[:, None] / h
+    for v in range(CARD_VARIANTS):
+        x0 = v * col_w
+        base = np.asarray(second if (second is not None and v >= CARD_VARIANTS // 2) else colour, float)
+        rgb[:, x0:x0 + col_w] = base
+        for _ in range(110):
+            cx = x0 + col_w * (0.06 + 0.88 * rnd.random())
+            sway = rnd.normal() * 3.0
+            phase = rnd.random() * 6.28
+            thick = 0.6 + 1.6 * rnd.random()
+            end = 0.55 + 0.45 * rnd.random()
+            tone = 0.7 + 0.6 * rnd.random()
+            xs = cx + sway * np.sin(yy[:, 0] * 5.0 + phase) + (yy[:, 0] ** 2) * rnd.normal() * 6.0
+            xi = np.arange(x0, x0 + col_w)[None, :]
+            d = np.abs(xi - xs[:, None])
+            strand = np.clip(1.0 - (d - thick * (1 - 0.6 * yy)) / 1.0, 0, 1)
+            strand *= (yy < end) * np.clip((end - yy) / 0.12, 0, 1) ** 0.6
+            region = alpha[:, x0:x0 + col_w]
+            alpha[:, x0:x0 + col_w] = np.maximum(region, strand)
+            shade[:, x0:x0 + col_w] = np.where(strand > 0.3, tone, shade[:, x0:x0 + col_w])
+    root = 0.55 + 0.45 * np.clip(yy / 0.25, 0, 1)
+    sheen = 1.0 + 0.9 * np.exp(-((yy - 0.32) / 0.06) ** 2)
+    out = np.concatenate([rgb * (shade * root * sheen)[..., None], alpha[..., None]], 2)
+    return out

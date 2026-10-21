@@ -14,7 +14,7 @@ across the arena: one figure, two halves, and which hand is which.
 
 import character
 from wardrobe import (RIGHT, LEFT, band, belt, body_masks, boots, coat_tails, collar, covered, eyes,  # noqa: F401
-                      hair, jerkin, side_mask, sleeves, trousers)
+                      hair, hair_cards, jerkin, side_mask, sleeves, trousers)
 
 
 def halves(pieces, r):
@@ -73,8 +73,11 @@ def neck(body, r):
 
 def head_hair(body, r):
     # Cut to the jaw, a straight fringe: and split, white and black.
-    return halves([hair(body, r, gap=0.009, front=0.025, nape=-0.10, side=0.02, grooves=13,
-                        depth=0.007, faces=2800, close=0.02, fall=0.028)], r)
+    scalp = halves([hair(body, r, gap=0.004, front=0.025, nape=-0.10, side=0.02, grooves=13,
+                         depth=0.003, faces=2800, close=0.02, lift=0.004)], r)[0]
+    return [scalp, hair_cards(scalp, r, style="bob", fringe=True, part=0.0, jaw=-0.085, length=0.19,
+                              width=0.026, layers=(0.004, 0.009, 0.014), counts=(45, 60, 75), seed=14,
+                              split=True)]
 
 
 GARMENTS = {

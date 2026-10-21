@@ -384,7 +384,12 @@ def to_png(arr, path, srgb=True, quality=None):
     h, w = a.shape[:2]
     img = bpy.data.images.new("out", w, h, alpha=True)
     rgba = np.ones((h, w, 4))
-    rgba[:, :, :3] = a[::-1] if a.ndim == 3 else a[::-1, :, None]
+    if a.ndim == 3 and a.shape[2] == 4:
+        # Straight alpha, kept linear: only the colour is a colour.
+        rgba[:, :, :3] = a[::-1, :, :3]
+        rgba[:, :, 3] = np.clip(arr[::-1, :, 3], 0, 1)
+    else:
+        rgba[:, :, :3] = a[::-1] if a.ndim == 3 else a[::-1, :, None]
     img.colorspace_settings.name = "Non-Color"
     img.pixels[:] = rgba.ravel()
     img.filepath_raw = path

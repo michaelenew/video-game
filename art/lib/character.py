@@ -73,7 +73,10 @@ def finish(spec, bo, br, size):
     objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and not o.hide_render]
     body = bpy.data.objects["body"]
     team = [o for o in objs if o.name.startswith(("sash", "team"))]
-    costume = [o for o in objs if o is not body and o not in team]
+    # Hair cards are not painted: their texture is the strands
+    # (``wardrobe.strand_texture``), cut out where there are none.
+    cards = [o for o in objs if o.name.startswith("cards")]
+    costume = [o for o in objs if o is not body and o not in team and o not in cards]
     for o in costume + team:
         g.group_to_colour(o, ["hem", "edge"])
     costume = g.join(costume, "costume")
@@ -128,7 +131,14 @@ def finish(spec, bo, br, size):
             poly.material_index = 0
     if high:
         bpy.data.objects.remove(high)
-    prims = glb.gather([body, costume, team])
+    parts = [body, costume, team]
+    if cards:
+        cards = g.join(cards, "cards")
+        strands = wardrobe.strand_texture(spec.COLOURS["hair"], spec.COLOURS.get("hair/2"))
+        images.append(paint.to_png(strands, os.path.join(tex, "hair_cards.png")))
+        materials["hair_cards"] = {"color": len(images) - 1, "double": True, "mask": 0.4}
+        parts.append(cards)
+    prims = glb.gather(parts)
     paint.ensure_dir(out)
     glb.write(out, prims, materials, images, bo, br, name=spec.NAME, extras=wardrobe.EXTRAS)
     print("wrote", out, os.path.getsize(out) // 1024, "KiB",
