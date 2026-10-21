@@ -98,11 +98,42 @@ pub struct Stream {
     trees: crate::land::Trees,
     /// The grown giants (`Atlas::trees`) drawn, by index.
     groves: HashMap<usize, Entity>,
-    /// Each giant's meshes, its wood and its leaves, and how far it
-    /// reaches: built once, the first time it comes near, and kept.
-    grown: HashMap<usize, (Handle<Mesh>, Handle<Mesh>, f32)>,
+    /// Each drawn giant's meshes, its wood and its leaves: built when it
+    /// comes within reach and let go with it. A giant is a hundred thousand
+    /// triangles; kept for the session once seen, the Wood's fourteen were
+    /// a couple of hundred megabytes nobody was looking at
+    /// (`docs/design/exploration/0024_distant_detail.md`).
+    grown: HashMap<usize, (Handle<Mesh>, Handle<Mesh>)>,
+    /// How far each giant reaches from its foot, worked out the first time
+    /// it is asked: what it is loaded by, so it is kept when its meshes go.
+    spreads: HashMap<usize, f32>,
     ground: Option<Handle<Paint>>,
     water: Option<Handle<StandardMaterial>>,
+    /// One tile's water surface, shared by every tile that has water.
+    pond: Option<Handle<Mesh>>,
+}
+
+/// What is streamed in, for `--profile`'s census.
+pub struct Census {
+    pub places: usize,
+    pub boxes: usize,
+    pub tiles: usize,
+    pub giants: usize,
+    /// Every mesh of every giant built.
+    pub built: Vec<AssetId<Mesh>>,
+}
+
+/// **A mesh made to be drawn and nothing else**: let go of in main memory
+/// once the graphics card has it (`RenderAssetUsages::RENDER_WORLD`), rather
+/// than held twice. Gone from `Assets<Mesh>` at the end of the frame it is
+/// made, so it is for a mesh spawned that same frame and never handed out
+/// again later: Bevy works out what is on screen from bounds it reads off
+/// the mesh the frame an entity gets it, and so does the warm-up
+/// (`crate::warm`); a handle given to a new entity a frame later has nothing
+/// left to read. `--profile`'s census weighs it as it is made.
+pub fn drawn_only(mut mesh: Mesh) -> Mesh {
+    mesh.asset_usage = bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD;
+    mesh
 }
 
 impl Stream {
@@ -115,6 +146,21 @@ impl Stream {
     /// How many places and boxes are drawn: what the dev overlay shows.
     pub fn loaded(&self) -> (usize, usize, usize) {
         (self.places.len(), self.solids.len(), self.tiles.len())
+    }
+
+    /// What is streamed in, counted.
+    pub fn census(&self) -> Census {
+        Census {
+            places: self.places.len(),
+            boxes: self.solids.len(),
+            tiles: self.tiles.len(),
+            giants: self.groves.len(),
+            built: self
+                .grown
+                .values()
+                .flat_map(|(wood, leaves)| [wood.id(), leaves.id()])
+                .collect(),
+        }
     }
 }
 
@@ -189,6 +235,7 @@ pub fn stream(
         st.gates.clear();
         st.tiles.clear();
         st.groves.clear();
+        st.grown.clear();
         st.origin = None;
         st.at = None;
         return;
@@ -459,8 +506,8 @@ pub fn stream(
 }
 
 /// **Load and drop the grown giants** (`crate::grove`): a tree is drawn
-/// while its crown is within reach, its meshes built the first time and
-/// kept. One built a frame; true if more wait.
+/// while its crown is within reach, its meshes built as it comes and let go
+/// as it goes. One built a frame; true if more wait.
 #[allow(clippy::too_many_arguments)]
 fn groves(
     commands: &mut Commands,
@@ -482,14 +529,17 @@ fn groves(
             tree.base[2] as f32 / 100.0,
         );
         let flat = Vec2::new(foot.x - at.x, foot.z - at.z).length();
-        // How far it reaches, before it is built: what the trees grow to.
-        let spread = st.grown.get(&k).map_or(110.0, |g| g.2);
+        let spread = *st
+            .spreads
+            .entry(k)
+            .or_insert_with(|| crate::grove::reach(tree));
         let d = (flat - spread).max(0.0);
         let loaded = st.groves.contains_key(&k);
         if loaded && d > reach + SLACK {
             if let Some(e) = st.groves.remove(&k) {
                 commands.entity(e).despawn();
             }
+            st.grown.remove(&k);
             continue;
         }
         if loaded || d > reach {
@@ -518,14 +568,10 @@ fn groves(
             let (wood, leaves) = crate::grove::meshes(tree, &look.palette);
             st.grown.insert(
                 k,
-                (
-                    meshes.add(wood),
-                    meshes.add(leaves),
-                    crate::grove::reach(tree),
-                ),
+                (meshes.add(drawn_only(wood)), meshes.add(drawn_only(leaves))),
             );
         }
-        let (wood, leaves, spread) = st.grown[&k].clone();
+        let (wood, leaves) = st.grown[&k].clone();
         let e = commands
             .spawn((
                 Mesh3d(wood.clone()),
@@ -700,13 +746,17 @@ fn land_tiles(
         let corner = Vec3::new(t.0 as f32 * size, 0.0, t.1 as f32 * size);
         let e = commands
             .spawn((
-                Mesh3d(meshes.add(mesh)),
+                Mesh3d(meshes.add(drawn_only(mesh))),
                 MeshMaterial3d(ground.clone()),
                 Transform::from_translation(corner),
                 bevy::pbr::NotShadowCaster,
                 ChildOf(root),
             ))
             .id();
+        let pond = st
+            .pond
+            .get_or_insert_with(|| meshes.add(Plane3d::default().mesh().size(size, size)))
+            .clone();
         let w = water.map(|surface| {
             let colour = st
                 .water
@@ -724,7 +774,7 @@ fn land_tiles(
                 .clone();
             commands
                 .spawn((
-                    Mesh3d(meshes.add(Plane3d::default().mesh().size(size, size))),
+                    Mesh3d(pond),
                     MeshMaterial3d(colour),
                     Transform::from_translation(
                         corner + Vec3::new(size * 0.5, surface, size * 0.5),

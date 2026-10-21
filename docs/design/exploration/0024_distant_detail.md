@@ -256,13 +256,83 @@ the way a mesh does, so it comes last.
 - If the far Wood is rarely in view (the fog's reach in its sky is short),
   step 1 alone may be most of the win.
 
+## 5. Steps 0 and 1, as built (2026-10-21)
+
+**Step 0.** `--profile`'s census now prints, every two seconds:
+
+```
+mesh memory: 7155 meshes, 139.5 MB on the GPU; 1003 of them also in main memory, 20.2 MB
+streamed: 22 places, 1069 boxes, 5007 land tiles, 14 giants drawn, their 28 meshes 73.3 MB
+process memory: 1069 MB
+```
+
+Each mesh is weighed (triangles and bytes) the frame it is made, from
+`AssetEvent<Mesh>` (`profile::weigh`), because a mesh made only to be drawn
+is gone from `Assets<Mesh>` by the next frame; the list of the heaviest
+meshes reads those weights too. Process memory is `platform::memory_bytes`:
+resident memory on Linux, the program's memory in the browser (which only
+grows, so it is the tab's high-water mark), not read on macOS or Windows yet.
+
+**Step 1.**
+- A giant's meshes are let go of when it is dropped (`Stream::grown`), not kept
+  for the session; how far each reaches is kept on its own (`Stream::spreads`),
+  since that is what it is loaded by.
+- Streamed meshes -- the giants, the land's tiles, every box drawn by
+  `arenas::draw_solid` -- are made with `stream::drawn_only`
+  (`RenderAssetUsages::RENDER_WORLD`): held on the graphics card only. The
+  rule that comes with it: such a mesh is spawned the frame it is made and its
+  handle never handed to an entity later, because Bevy reads an entity's
+  bounds off the mesh in main memory, and so does the warm-up.
+- The water over a tile is one shared plane, not one each.
+
+**Measured** with `--profile` and `--open`, headless (Xvfb and lavapipe, 1280×760),
+the same build with step 1 taken back out as the "before":
+
+| Where | | Meshes in main memory | Process memory |
+| --- | --- | ---: | ---: |
+| Hearth's square | before | 6,387 meshes, 158.3 MB | 1,258 MB |
+| | after | 972 meshes, 19.9 MB | 1,130 MB |
+| In the Wood (`SHOT_AT=12,-210`) | before | 6,846 meshes, 138.7 MB | 1,233 MB |
+| | after | 1,003 meshes, 20.2 MB | 1,069 MB |
+
+Screenshots of both, in the town and in the Wood, are the same picture but
+for a critter that wanders.
+
+What the numbers say:
+
+- **All fourteen giants are drawn from Hearth's square.** The Wood is 250–460 m
+  south of the town, inside the 600 m reach, so a player in town is carrying the
+  73 MB of the giants they cannot see through the fog. Letting a giant go when
+  it is dropped does not help there -- it never is. That is what step 2 (the
+  far levels) is for, and it makes step 2 the next thing.
+- **The land is ~4,400–5,000 tiles**, as section 1 guessed. The ~66 MB of
+  mesh that is not the giants is the land, the boxes and the town together;
+  the census does not yet split it by kind. Step 3 is about the count more
+  than the bytes.
+- **Most of the process is not meshes.** About a gigabyte remains. Under
+  lavapipe the "graphics card" is main memory, so the 140 MB on the GPU is in
+  that figure too; the rest (shadow maps, the still world's maps, textures,
+  Bevy itself) is not yet broken down, and on a real graphics card the process
+  figure will be lower. Breaking it down is the next measurement if memory
+  stays the complaint.
+- **Frame time did not move** (≈150 ms a frame either way under the software
+  rasteriser): step 1 is memory, not speed.
+
+**Not exercised at run time:** dropping a giant when it goes out of reach. The
+headless run cannot walk away from the Wood, and from both starting points every
+giant stays in reach. It is three lines (`stream::groves`) and the tree is
+rebuilt the next time it comes within reach.
+
 ## Open questions
 
 - **LOD-1.** Is a hard switch acceptable for the giants until `paint.wgsl`
-  has the dither, or should the dither come first?
+  has the dither, or should the dither come first? **Decided (the owner,
+  2026-10-21): a hard switch is fine.** The dither is not a prerequisite.
 - **LOD-2.** Should the far levels obey the painted look's brush size rather
   than the pixel — prune to what one *stroke* covers, which is coarser and
-  cheaper again?
+  cheaper again? **Decided (the owner, 2026-10-21): the brush stroke, in the
+  painted looks.** The threshold is the stroke's size at that distance
+  (`splats.rs`); the pixel stays the threshold where no brush is drawn.
 
 ## Sources
 
