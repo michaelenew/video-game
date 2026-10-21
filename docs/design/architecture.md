@@ -317,9 +317,22 @@ back, four bilinear readings half a texel apart soften the edge over two texels;
 reading was a visible stair at 20 cm a texel.
 
 What it costs: two maps of 16 MB each, and a camera's picture and depth (48 MB) only
-while a map is being drawn. Outside the valley, and in a browser
-(`platform::bakes_shadows`), nothing changes: the maps are a texel each and the cascades
-hold everything as they did.
+while a map is being drawn. In a browser (`platform::bakes_shadows`) nothing changes:
+the maps are a texel each and the cascades hold everything as they did.
+
+**An arena fought on alone has it too** (2026-10-21). Its still world is its scenery
+(`arenas::Scenery` and everything under it), in the world's own coordinates. Until then
+every fight outside the valley kept its rim's trees, bushes and boulders in Bevy's
+cascades every frame, and on the King of the Hill maps, whose rims are large, the two far
+cascades alone were 70 ms of the frame:
+
+| Lavapipe, 1280x760, the last readings of a 40 s `--profile` | Before | After |
+| --- | --- | --- |
+| The proving ground | 145 ms | 112 ms |
+| The Quarry (King of the Hill) | 172 ms | 107 ms |
+| The Henge (King of the Hill; also its stones as rock, not masonry) | 248 ms | 119 ms |
+| The Anvil (a floating duel stage) | 182 ms | 131 ms |
+| For scale: the valley, a hunt in the Commons | 176 ms, 150 ms | |
 
 ### The valley's simulation (measured 2026-10-14, callgrind)
 

@@ -572,16 +572,16 @@ const HENGE_REGIONS: [Region; 3] = [
     // Chalk worn bare inside the circle.
     Region {
         area: Area::disc_cm(0, 0, 800),
-        material: Ground,
+        material: Sand,
     },
     // Each start, trodden.
     Region {
         area: Area::disc_cm(-3400, 0, 450),
-        material: Ground,
+        material: Rock,
     },
     Region {
         area: Area::disc_cm(3400, 0, 450),
-        material: Ground,
+        material: Rock,
     },
 ];
 
