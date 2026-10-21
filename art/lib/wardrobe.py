@@ -197,7 +197,9 @@ def skin_and_gloves(body, r, gloved_to=None, bare_head=True):
     body.data.vertices.foreach_get("co", co)
     p = g.b2g(co.reshape(-1, 3))
     head = W[:, J["head"]] + W[:, J["neck"]]
-    skin = np.clip((head - 0.5) * 4, 0, 1) if bare_head else np.zeros(len(p))
+    # Down to the collar: the neck is skin wherever the head and neck carry
+    # a fifth of it, or a band of grey shows between the jaw and the collar.
+    skin = np.clip((head - 0.2) * 3, 0, 1) if bare_head else np.zeros(len(p))
     glove = np.zeros(len(p))
     for s in "lr":
         hand = W[:, J[f"hand.{s}"]]
