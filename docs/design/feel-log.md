@@ -9652,3 +9652,37 @@ leaves its pillar for `Strike, a full one flashes for` (14 frames), never long e
 frames it is fire like any pillar -- it lights a stone, lights a shot through it, and Cataclysm
 could cut it loose -- to feel for.
 **Verdict** open -- unplayed.
+
+
+### 2026-10-21 — knockback between fighters grows through a round
+
+The stun thread of 2026-09-13 (`claude/dreamy-hawking-sqnadm`, never merged), reimplemented on
+main. Its freeze and input buffer reached main separately on 2026-09-26; the rest is new here.
+See [stun.md](stun.md).
+**Changed** a blow from one fighter to another now (1) **swells**: knockback and launch are
+multiplied by `1 + hurt x (2 + 3 x the blow's share of the bar)` and hitstun by
+`1 + hurt x 1`, where `hurt` is the share of the victim's own bar already gone, read after the
+blow; (2) **fades through a string**: each hit taken without a turn back keeps 0.3 of the
+hitstun swell the last had, never below the table (`Player::taken`); (3) is **divided by the
+victim's weight**, blocked pushback included (Bulwark 1.35, Blood mage 1.05, Champion 1, Reaver
+0.92, Elementalist 0.85, Dual mage 0.78); (4) leaves a launched fighter their **air control**,
+with the flat speed put back afterwards so steering never shortens a launch; (5) **a grab
+banks its launch** for the release (`Player::thrown`; no move both grabs and launches yet).
+None of it reaches a blow from a creature, a critter or the world: `Hit::by` must be a fighter.
+New Oven family *Knockback*, ten knobs.
+**Why** from the owner: more and better knockback, for variety in a duel. A round that throws
+people further as it goes on is an arc: the middle opens up, and the last blow is seen.
+**Measured** (`tests/knockback.rs`): the Champion's hammer carries a fresh Champion 1.1 m, one
+at half 2.2 m, one at a fifth 2.8 m; a fresh Bulwark 0.8 m and a fresh Dual mage 1.4 m.
+**The branch's numbers were halved** for the knockback swell (+4.5 at death and +5 per blow
+share there, +2 and +3 here), because main's heavy hits shove twice what they did when it was
+measured. The stun swell, the decay and the weights are the branch's.
+**Re-pinned** `tests/ridgeback_pin.rs`: the two new fields are in `state_checksum`. With them out,
+every class's hunt reproduced its old pin exactly.
+**First tried** steering for every stunned fighter in the air, as the branch had it. It moved
+the Galewing's hunt (`it_throws_everything_it_has_from_the_air` never saw a Perch: a hunter
+thrown by it steered somewhere else). Narrowed to launches from a fighter, like the rest.
+**Verdict** open -- unplayed. Play for: whether the middle of a round throwing people twice as
+far reads as the fight heating up or as the rules changing; whether the Champion's strings link
+at a quarter bar where they did not; whether the Bulwark's 1.35 makes him feel planted or
+merely sluggish to fight.

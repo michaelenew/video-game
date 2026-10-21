@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 722] = [
+pub const SCALARS: [i32; 732] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -730,6 +730,16 @@ pub const SCALARS: [i32; 722] = [
            19661, // elementalist.fire_carpet,_each_hang_after = 0.3
            52429, // elementalist.fire_carpet,_sinks_at_(m/s) = 0.8
               14, // elementalist.strike,_a_full_one_flashes_for = 14
+           88474, // knockback.weight,_bulwark_(x) = 1.35
+           65536, // knockback.weight,_champion_(x) = 1
+           60293, // knockback.weight,_shadow_reaver_(x) = 0.92
+           55706, // knockback.weight,_elementalist_(x) = 0.85
+           68813, // knockback.weight,_blood_mage_(x) = 1.05
+           51118, // knockback.weight,_dual_mage_(x) = 0.78
+          131072, // knockback.swell,_knockback_added_at_death_(x) = 2
+          196608, // knockback.swell,_added_per_share_of_the_bar_a_blow_takes_(x) = 3
+           65536, // knockback.swell,_hitstun_added_at_death_(x) = 1
+           19661, // knockback.swell_kept_per_hit_in_a_string = 0.3
 ];
 
 #[rustfmt::skip]

@@ -183,13 +183,17 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// `Player::spent_clicks`, her clicks waiting to come up. With that line out,
 /// every hunt reproduced its old pin exactly, merged onto main's carpet hang
 /// and push cancel, hers included.
+/// **Every class again later on 2026-10-21, for the hash**: `state_checksum`
+/// holds `Player::thrown` and `Player::taken`, the knockback rules between
+/// fighters (`docs/design/stun.md`). With those two lines out, every hunt
+/// reproduced its old pin exactly: no rule of them reaches a creature's fight.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x1a29978b38aa1cef),
-    (Class::Bulwark, 0xc9d4ba59f9ccdb9f),
-    (Class::ShadowReaver, 0xec71a0c72f3a2fec),
-    (Class::BloodMage, 0x3ef117c8d25b96c0),
-    (Class::DualMage, 0xeeb08b7ad232dceb),
-    (Class::Elementalist, 0xee53ebaa5320be09),
+    (Class::Champion, 0x92ff80b36a38d4af),
+    (Class::Bulwark, 0xd6e58b8060b39a1f),
+    (Class::ShadowReaver, 0x8696a6096736b54c),
+    (Class::BloodMage, 0x45e8bf0483d43cc0),
+    (Class::DualMage, 0x6ee3a90e4e7f67cb),
+    (Class::Elementalist, 0xb9b1288dcf0ce709),
 ];
 
 #[test]
