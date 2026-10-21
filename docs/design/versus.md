@@ -94,10 +94,10 @@ over a drop (`drop: true`), with land and woods far below.
 
 | Stage | Theme | What is in it |
 | --- | --- | --- |
-| **Anvil** (`anvil`) | A basalt slab over a sea of embers at dusk | 20 × 13 m face; a low boss in the middle; two stone slabs hovering 2.2 m over it to fight down from; at each end **the horn**, a tongue a metre lower than the face, out over the drop on three sides |
-| **Ziggurat** (`ziggurat`) | A temple's top risen into the desert sky | Three tiers a metre each -- court, terrace, a 4 m crown -- so whoever holds the crown fights downhill; an obelisk at two corners; a stepping stone hung off each long side |
+| **Anvil** (`anvil`) | A basalt slab over a sea of embers at dusk | 20 × 13 m face; a low boss in the middle; two stone slabs hovering with 3.3 m of air under them to fight down from; off each end **the horn**, a rock of its own across a 4 m gap and a metre lower than the face |
+| **Ziggurat** (`ziggurat`) | A temple's top risen into the desert sky | Three tiers a metre each -- court, terrace, a 4 m crown -- so whoever holds the crown fights downhill; an obelisk at two corners; a stepping stone hung 3.5 m off each long side, 1.5 m down |
 | **Caldera** (`caldera`) | A volcano's crater torn loose | 20 m square ash floor inside a 1.2 m lip that stands only at the corners: six metres of nothing at the middle of each side, four ways out; a drum of rock in the middle |
-| **Twin Isles** (`twin_isles`) | Two snowy islands at dawn | Two 10 × 14 m isles five metres apart, a 3 m bridge between them; a knoll on each; a stone hung over the gap north and south of the bridge, a way across that is not the bridge |
+| **Twin Isles** (`twin_isles`) | Two snowy islands at dawn | Two 10 × 14 m isles seven metres apart, a 3 m bridge between them; a knoll on each; a stone hung over the gap north and south of the bridge with 3.3 m of air under it, a way across that is not the bridge |
 
 ## 3 · The King of the Hill maps (`arena/hills.rs`)
 
@@ -234,5 +234,10 @@ dressing in `game::arenas::stages`, and a sky each in `look::skies`.
   it instead of climbing it. And a cairn in the middle of the Twin Isles'
   bridge was taken out: it tripped bodies and added nothing.
 - **The sides' bodies are not yet coloured by side** (§1).
+- **More room between the floating stages' pieces** (from play): every
+  separate piece is across a real gap now -- the Anvil's horns 4 m out,
+  the Ziggurat's stones 3.5 m, the Twin Isles 7 m apart -- and everything
+  hovering has 3.3 m of air under it, where it had 2.2. Every one is still
+  reached by every class that moves (`tests/versus.rs`).
 - **Nothing here has been played.** Every size, every clock and every height
   is a first guess, judged by the walking test and by screenshots.

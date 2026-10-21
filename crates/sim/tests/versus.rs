@@ -95,7 +95,7 @@ fn a_floating_stage_hangs_wholly_above_its_pit_and_starts_you_on_it() {
 fn knocked_off_a_floating_stage_is_out() {
     let mut w = World::versus_in([Class::Champion, Class::Bulwark], ArenaId::ANVIL);
     // Off the edge, in the air beside the island, falling.
-    w.players[1].pos = V3::new(Fx::from_int(19), Fx::from_int(38), Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(22), Fx::from_int(38), Fx::ZERO);
     let mut out = false;
     for _ in 0..600 {
         w.advance(idle::<2>());
@@ -462,6 +462,15 @@ fn walk(
                 break;
             }
             let above = d.y.raw() > Fx::ratio(15, 100).raw();
+            // A drop just ahead, toward the goal: jump it, as a player at
+            // the edge of a gap does, rather than walk off.
+            let ahead = {
+                let flat = V3::new(d.x, Fx::ZERO, d.z).normalized();
+                let at = p.pos.add(flat.scale(Fx::ratio(7, 10)));
+                w.terrain().ground_under(V3::new(at.x, p.pos.y, at.z))
+            };
+            let edge = ahead.raw() < p.pos.y.sub(Fx::ratio(3, 2)).raw()
+                && d.flat_len().raw() > Fx::from_int(2).raw();
             let over = d.flat_len().raw() < Fx::ratio(4, 10).raw();
             stuck = if p.grounded && p.vel.flat_len().raw() < Fx::ratio(1, 2).raw() {
                 stuck + 1
@@ -476,7 +485,7 @@ fn walk(
             let jump = if held > 0 && held < HOLD {
                 held += 1;
                 Input::SPACE
-            } else if held == 0 && p.grounded && (above || stuck > 20) {
+            } else if held == 0 && p.grounded && (above || stuck > 20 || edge) {
                 held = 1;
                 Input::SPACE
             } else {
@@ -651,7 +660,9 @@ fn every_way_on_a_hill_map_is_walked_by_the_shortest_jump() {
 #[test]
 fn every_height_on_a_floating_stage_is_reached() {
     let routes: &[Route] = &[
-        (ArenaId::ANVIL, (600, 4000, -500), &[(600, 4260, 0)]),
+        (ArenaId::ANVIL, (600, 4000, -500), &[(600, 4370, 0)]),
+        (ArenaId::ANVIL, (-500, 4000, 0), &[(-1650, 3900, 0)]),
+        (ArenaId::ZIGGURAT, (0, 4000, 600), &[(0, 3850, 1300)]),
         (ArenaId::ANVIL, (-500, 4000, 0), &[(0, 4045, 0)]),
         (
             ArenaId::ZIGGURAT,
@@ -659,16 +670,16 @@ fn every_height_on_a_floating_stage_is_reached() {
             &[(-450, 4100, 0), (0, 4200, 0)],
         ),
         (ArenaId::CALDERA, (-600, 4000, -600), &[(0, 4125, 0)]),
-        (ArenaId::TWIN_ISLES, (-600, 4000, 550), &[(0, 4270, 550)]),
+        (ArenaId::TWIN_ISLES, (-700, 4000, 550), &[(0, 4380, 550)]),
         (
             ArenaId::TWIN_ISLES,
-            (-900, 4000, 300),
-            &[(-900, 4100, -300)],
+            (-1000, 4000, 300),
+            &[(-1000, 4100, -300)],
         ),
         (
             ArenaId::TWIN_ISLES,
-            (-800, 4000, 0),
-            &[(0, 4000, 0), (800, 4000, 0)],
+            (-900, 4000, 0),
+            &[(0, 4000, 0), (900, 4000, 0)],
         ),
     ];
     let mut failed = Vec::new();
