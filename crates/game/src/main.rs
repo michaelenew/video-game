@@ -31,6 +31,7 @@ mod crosshair;
 mod debug;
 mod falls;
 mod forms;
+mod fx;
 mod glint;
 mod ground;
 mod grove;
@@ -235,6 +236,7 @@ fn main() {
         .init_resource::<Fades>()
         .init_resource::<ShadowFades>()
         .init_resource::<CopyLooks>()
+        .init_resource::<fx::Flowing>()
         .init_resource::<ShieldHands>()
         .init_resource::<Hands>()
         .init_resource::<Torsos>()
@@ -351,6 +353,7 @@ fn main() {
                     place_debris,
                     place_gusts,
                     place_discs,
+                    fx::flow,
                     place_wingspans,
                     place_marks,
                     place_scythes,
@@ -2281,12 +2284,44 @@ struct EffectLook {
     /// The Blood mage's scythe, as a weapon (`blades::haft`, `blades::scythe_blade`).
     haft: Handle<Mesh>,
     scythe_blade: Handle<Mesh>,
+    /// The elements as things (`fx`): what a column or a ball is drawn as
+    /// when it is fire, wind or earth (`EffectLook::dressed`).
+    flame: Handle<Mesh>,
+    fireball: Handle<Mesh>,
+    rubble: Handle<Mesh>,
+    whirl: Handle<Mesh>,
+    windball: Handle<Mesh>,
+    winddisc: Handle<Mesh>,
+    comet: Handle<Mesh>,
+    rock: Handle<Mesh>,
+    /// Moving air, streaked and see-through: the Elementalist's wind.
+    air: Handle<StandardMaterial>,
+    /// The Blood mage's things as things (`fx`): a ridged thorn, a braided
+    /// vine, a drop, a spill on the floor, a tongue of essence.
+    thorn: Handle<Mesh>,
+    vine: Handle<Mesh>,
+    droplet: Handle<Mesh>,
+    puddle: Handle<Mesh>,
+    tongue: Handle<Mesh>,
+    /// The Champion's: a crescent of light, and the gold it is made of.
+    crescent_wave: Handle<Mesh>,
+    gilt: Handle<StandardMaterial>,
+    /// The Dual mage's: a star of light, a cloud, a sunburst, a shard, and
+    /// a disc with a sigil on it in each force.
+    star: Handle<Mesh>,
+    cloud: Handle<Mesh>,
+    sunburst: Handle<Mesh>,
+    point: Handle<Mesh>,
+    disc: Handle<Mesh>,
+    sigil_light: Handle<StandardMaterial>,
+    sigil_dark: Handle<StandardMaterial>,
 }
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn setup(
     mut commands: Commands,
     settings: Res<settings::Settings>,
@@ -2294,6 +2329,8 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut skins: ResMut<Assets<still::SkinMaterial>>,
     mut copies: ResMut<CopyLooks>,
+    mut images: ResMut<Assets<Image>>,
+    mut flowing: ResMut<fx::Flowing>,
 ) {
     let eye = commands
         .spawn((
@@ -2517,34 +2554,56 @@ fn setup(
         height: 1.0,
     });
     let ball = meshes.add(Sphere::new(0.5));
+    let flame_tex = images.add(fx::flame_texture());
+    let wind_tex = images.add(fx::wind_texture());
+    let stone_tex = images.add(fx::stone_texture());
+    let blood_tex = images.add(fx::blood_texture());
+    let essence_tex = images.add(fx::essence_texture());
+    let light_tex = images.add(fx::light_texture());
+    let dark_tex = images.add(fx::dark_texture());
+    let smoke_tex = images.add(fx::smoke_texture());
+    let sigil_tex = images.add(fx::sigil_texture());
+    let feather_tex = images.add(fx::feather_texture());
     let look = EffectLook {
         // Translucent, not solid -- it is flame, and a wall of solid orange
         // plastic reads as a structure rather than a hazard you could
         // arguably see an opponent through.
+        //
+        // Tongues of it (`fx::flame_texture`), flowing up through a heat the
+        // mesh carries from a white root to red tips (`fx::heat`).
         fire: materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.45, 0.12, 0.55),
-            emissive: LinearRgba::rgb(2.4, 0.8, 0.15),
+            base_color: Color::srgba(1.0, 0.75, 0.45, 0.8),
+            base_color_texture: Some(flame_tex.clone()),
+            emissive: LinearRgba::rgb(2.0, 0.75, 0.15),
+            emissive_texture: Some(flame_tex.clone()),
             perceptual_roughness: 0.9,
             alpha_mode: AlphaMode::Blend,
+            double_sided: true,
+            cull_mode: None,
             ..default()
         }),
+        // Wet: clotted dark in patches (`fx::blood_texture`), and glossy.
         blood: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.35, 0.03, 0.09),
+            base_color: Color::srgb(0.55, 0.05, 0.12),
+            base_color_texture: Some(blood_tex.clone()),
             emissive: LinearRgba::rgb(0.5, 0.0, 0.12),
-            perceptual_roughness: 0.95,
+            perceptual_roughness: 0.35,
+            reflectance: 0.6,
             ..default()
         }),
         thrall: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.42, 0.0, 0.02, 0.78),
+            base_color: Color::srgba(0.62, 0.02, 0.05, 0.82),
+            base_color_texture: Some(blood_tex.clone()),
             emissive: LinearRgba::rgb(0.22, 0.0, 0.01),
-            perceptual_roughness: 0.8,
+            perceptual_roughness: 0.4,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         vines: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.03, 0.02, 0.03, 0.55),
+            base_color: Color::srgba(0.07, 0.05, 0.06, 0.8),
+            base_color_texture: Some(images.add(fx::vine_texture())),
             emissive: LinearRgba::rgb(0.06, 0.0, 0.02),
-            perceptual_roughness: 0.6,
+            perceptual_roughness: 0.7,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
@@ -2563,11 +2622,16 @@ fn setup(
             // violet, lit from inside, so it reads as something she draws
             // out of a body rather than what a wound leaves on the floor.
             let solid = 0.18 + 0.72 * step as f32 / (ESSENCE_STEPS - 1) as f32;
+            // Folded through itself (`fx::essence_texture`), and flowing.
             materials.add(StandardMaterial {
-                base_color: Color::srgba(0.26, 0.03, 0.20, solid),
+                base_color: Color::srgba(0.42, 0.05, 0.34, solid),
+                base_color_texture: Some(essence_tex.clone()),
                 emissive: LinearRgba::rgb(0.70 * solid, 0.04, 0.50 * solid),
-                perceptual_roughness: 0.9,
+                emissive_texture: Some(essence_tex.clone()),
+                perceptual_roughness: 0.5,
                 alpha_mode: AlphaMode::Blend,
+                double_sided: true,
+                cull_mode: None,
                 ..default()
             })
         }),
@@ -2576,8 +2640,10 @@ fn setup(
         // thing of hers that reads as an object rather than a stain.
         heart: materials.add(StandardMaterial {
             // Lit only a little from inside: brighter, the bloom washed it
-            // out to a pink that read as a sweet rather than a heart.
-            base_color: Color::srgba(0.55, 0.01, 0.06, 0.97),
+            // out to a pink that read as a sweet rather than a heart. Veined
+            // (`fx::heart_texture`), so it is flesh.
+            base_color: Color::srgba(0.75, 0.03, 0.09, 0.97),
+            base_color_texture: Some(images.add(fx::heart_texture())),
             emissive: LinearRgba::rgb(0.6, 0.0, 0.05),
             perceptual_roughness: 0.75,
             alpha_mode: AlphaMode::Blend,
@@ -2587,7 +2653,10 @@ fn setup(
         // Bright enough to read as *the* thing on screen, which is what a
         // finisher at full depth is supposed to be.
         light: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.98, 0.95, 1.0, 0.55),
+            base_color: Color::srgba(0.98, 0.95, 1.0, 0.7),
+            base_color_texture: Some(light_tex.clone()),
+            double_sided: true,
+            cull_mode: None,
             emissive: LinearRgba::rgb(5.0, 4.4, 6.4),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
@@ -2598,6 +2667,7 @@ fn setup(
         // and the one thing it must not do is wash out the body on the end of
         // it, which is what the player is actually looking at.
         wing_light: materials.add(StandardMaterial {
+            base_color_texture: Some(feather_tex.clone()),
             base_color: Color::srgba(1.0, 0.95, 0.78, 0.34),
             emissive: LinearRgba::rgb(1.8, 1.5, 0.9),
             alpha_mode: AlphaMode::Blend,
@@ -2607,6 +2677,7 @@ fn setup(
             ..default()
         }),
         wing_dark: materials.add(StandardMaterial {
+            base_color_texture: Some(feather_tex.clone()),
             base_color: Color::srgba(0.38, 0.14, 0.62, 0.34),
             emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
             alpha_mode: AlphaMode::Blend,
@@ -2616,30 +2687,101 @@ fn setup(
             ..default()
         }),
         dark: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.16, 0.06, 0.26, 0.88),
+            base_color: Color::srgba(0.16, 0.06, 0.26, 0.92),
+            base_color_texture: Some(dark_tex.clone()),
             emissive: LinearRgba::rgb(0.55, 0.12, 0.95),
+            emissive_texture: Some(dark_tex.clone()),
+            double_sided: true,
+            cull_mode: None,
             perceptual_roughness: 0.8,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         stone: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.52, 0.50, 0.47),
+            base_color: Color::srgb(0.62, 0.60, 0.56),
+            base_color_texture: Some(stone_tex.clone()),
             perceptual_roughness: 0.95,
             ..default()
         }),
         // A lit stone: the same rock, glowing at the seams. Bright enough to
         // read as a stove from across the arena, which is what it is.
+        //
+        // Burning in its cracks (`fx::ember_texture`), so it reads as rock
+        // with a fire inside rather than as a rock painted orange.
         stone_lit: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.62, 0.40, 0.28),
-            emissive: LinearRgba::rgb(2.6, 0.9, 0.2),
+            base_color: Color::srgb(0.78, 0.66, 0.58),
+            base_color_texture: Some(stone_tex.clone()),
+            emissive: LinearRgba::rgb(4.0, 4.0, 4.0),
+            emissive_texture: Some(images.add(fx::ember_texture())),
             perceptual_roughness: 0.9,
             ..default()
         }),
         beam: materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.86, 0.45, 0.75),
+            base_color: Color::srgba(1.0, 0.86, 0.45, 0.85),
+            base_color_texture: Some(wind_tex.clone()),
             emissive: LinearRgba::rgb(6.0, 3.4, 0.9),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
+            ..default()
+        }),
+        air: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.88, 0.94, 1.0, 0.6),
+            base_color_texture: Some(wind_tex.clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        flame: meshes.add(fx::flame()),
+        fireball: meshes.add(fx::fireball()),
+        rubble: meshes.add(fx::rubble()),
+        whirl: meshes.add(fx::whirl()),
+        windball: meshes.add(fx::windball()),
+        winddisc: meshes.add(fx::winddisc()),
+        comet: meshes.add(fx::comet()),
+        rock: meshes.add(fx::rock(7)),
+        thorn: meshes.add(fx::thorn()),
+        vine: meshes.add(fx::vine()),
+        droplet: meshes.add(fx::droplet()),
+        puddle: meshes.add(fx::puddle(3)),
+        tongue: meshes.add(fx::tongue()),
+        crescent_wave: meshes.add(fx::crescent()),
+        star: meshes.add(fx::star()),
+        cloud: meshes.add(fx::cloud()),
+        sunburst: meshes.add(fx::sunburst()),
+        point: meshes.add(fx::point()),
+        disc: meshes.add(fx::disc()),
+        sigil_light: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.95, 0.85, 0.8),
+            base_color_texture: Some(sigil_tex.clone()),
+            emissive: LinearRgba::rgb(4.0, 3.4, 2.4),
+            emissive_texture: Some(sigil_tex.clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        sigil_dark: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.45, 0.2, 0.75, 0.85),
+            base_color_texture: Some(sigil_tex.clone()),
+            emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
+            emissive_texture: Some(sigil_tex.clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        gilt: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.82, 0.4, 0.85),
+            base_color_texture: Some(wind_tex.clone()),
+            emissive: LinearRgba::rgb(4.0, 2.6, 0.8),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
             ..default()
         }),
         column: unit.clone(),
@@ -2654,7 +2796,8 @@ fn setup(
         haft: meshes.add(blades::haft()),
         scythe_blade: meshes.add(blades::scythe_blade()),
         sun: materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.9, 0.62, 0.62),
+            base_color: Color::srgba(1.0, 0.9, 0.62, 0.7),
+            base_color_texture: Some(light_tex.clone()),
             emissive: LinearRgba::rgb(4.2, 3.3, 1.6),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
@@ -2675,14 +2818,16 @@ fn setup(
             ..default()
         }),
         storm: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.07, 0.06, 0.09, 0.5),
+            base_color: Color::srgba(0.12, 0.11, 0.15, 0.6),
+            base_color_texture: Some(smoke_tex.clone()),
             emissive: LinearRgba::rgb(0.02, 0.015, 0.04),
             perceptual_roughness: 1.0,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         wisp: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.12, 0.11, 0.15, 0.22),
+            base_color: Color::srgba(0.16, 0.15, 0.2, 0.3),
+            base_color_texture: Some(smoke_tex.clone()),
             perceptual_roughness: 1.0,
             alpha_mode: AlphaMode::Blend,
             ..default()
@@ -2730,9 +2875,13 @@ fn setup(
     for owner in 0..MAX_PLAYERS {
         for index in 0..sim::class::MAX_STRUCTURES {
             commands.spawn((
-                Mesh3d(meshes.add(shapes::rock_column(
-                    (owner * sim::class::MAX_STRUCTURES + index) as u32 + 1,
-                ))),
+                Mesh3d(meshes.add({
+                    let mut stone = shapes::rock_column(
+                        (owner * sim::class::MAX_STRUCTURES + index) as u32 + 1,
+                    );
+                    fx::wrap_uv(&mut stone);
+                    stone
+                })),
                 MeshMaterial3d(look.stone.clone()),
                 Transform::default(),
                 Visibility::Hidden,
@@ -2757,8 +2906,8 @@ fn setup(
     let wing = meshes.add(wing_mesh());
     for slot in 0..sim::bolt::MAX_BOLTS {
         commands.spawn((
-            Mesh3d(pellet.clone()),
-            MeshMaterial3d(look.beam.clone()),
+            Mesh3d(look.comet.clone()),
+            MeshMaterial3d(look.fire.clone()),
             Transform::default(),
             Visibility::Hidden,
             BoltMesh(slot),
@@ -2769,7 +2918,7 @@ fn setup(
     // blast that broke it.
     for slot in 0..sim::debris::MAX_DEBRIS {
         commands.spawn((
-            Mesh3d(pellet.clone()),
+            Mesh3d(look.rock.clone()),
             MeshMaterial3d(look.stone.clone()),
             Transform::default(),
             Visibility::Hidden,
@@ -2782,15 +2931,15 @@ fn setup(
     // bolt is a stretched bead and a Gale is a disc with a rim.
     for slot in 0..sim::gust::MAX_GUSTS {
         commands.spawn((
-            Mesh3d(pellet.clone()),
-            MeshMaterial3d(look.beam.clone()),
+            Mesh3d(look.comet.clone()),
+            MeshMaterial3d(look.air.clone()),
             Transform::default(),
             Visibility::Hidden,
             GustMesh(slot),
         ));
         commands.spawn((
-            Mesh3d(unit.clone()),
-            MeshMaterial3d(look.beam.clone()),
+            Mesh3d(look.winddisc.clone()),
+            MeshMaterial3d(look.air.clone()),
             Transform::default(),
             Visibility::Hidden,
             DiscMesh(slot),
@@ -2952,16 +3101,32 @@ fn setup(
     };
     use view::arms::Stuff;
     let stuffs = [Stuff::Edge, Stuff::Gold, Stuff::Deep, Stuff::Liquid];
-    let stuff_handles: [Handle<StandardMaterial>; 4] =
-        std::array::from_fn(|i| materials.add(stuff(stuffs[i])));
+    // Chased, all of it (`fx::gilt_texture`): worked metal, not yellow.
+    let chased = images.add(fx::gilt_texture());
+    let stuff_handles: [Handle<StandardMaterial>; 4] = std::array::from_fn(|i| {
+        materials.add(StandardMaterial {
+            base_color_texture: Some(chased.clone()),
+            ..stuff(stuffs[i])
+        })
+    });
+    let forged_blade = meshes.add(fx::blade());
+    let forged_point = meshes.add(fx::point());
     for owner in 0..MAX_PLAYERS {
         for weapon in 0..view::arms::WEAPONS {
             for piece in 0..view::arms::PIECES {
                 let (shape, made_of) = view::arms::MAKE[weapon][piece];
+                // The sword's blade forged (`fx::blade`), every point ground
+                // to the blade's own section (`fx::point`).
                 let mesh = match shape {
+                    view::arms::Shape::Block
+                        if weapon == sim::moves::champion::SWORD as usize
+                            && made_of == view::arms::Stuff::Edge =>
+                    {
+                        forged_blade.clone()
+                    }
                     view::arms::Shape::Block => block.clone(),
                     view::arms::Shape::Rod => unit.clone(),
-                    view::arms::Shape::Point => look.spike.clone(),
+                    view::arms::Shape::Point => forged_point.clone(),
                     view::arms::Shape::Knob => look.ball.clone(),
                 };
                 let at = stuffs.iter().position(|s| *s == made_of).unwrap_or(0);
@@ -2980,7 +3145,7 @@ fn setup(
         }
         for bead in 0..view::arms::BEADS {
             commands.spawn((
-                Mesh3d(look.ball.clone()),
+                Mesh3d(look.droplet.clone()),
                 MeshMaterial3d(stuff_handles[3].clone()),
                 Transform::default(),
                 Visibility::Hidden,
@@ -3001,7 +3166,7 @@ fn setup(
             ));
         }
         commands.spawn((
-            Mesh3d(look.ball.clone()),
+            Mesh3d(look.fireball.clone()),
             MeshMaterial3d(look.beam.clone()),
             Transform::default(),
             Visibility::Hidden,
@@ -3039,6 +3204,23 @@ fn setup(
         })
     });
     commands.insert_resource(ArmsLook { trail, glow });
+    // Fire rises, wind streams, the beam pours out of her hand.
+    flowing.0.extend([
+        (look.fire.clone(), Vec2::new(0.05, 0.9)),
+        (look.air.clone(), Vec2::new(0.0, -1.4)),
+        (look.beam.clone(), Vec2::new(0.0, -4.0)),
+        (look.gilt.clone(), Vec2::new(0.0, -2.5)),
+        (look.light.clone(), Vec2::new(0.0, -0.8)),
+        (look.dark.clone(), Vec2::new(0.04, 0.12)),
+        (look.sun.clone(), Vec2::new(0.0, -0.5)),
+        (look.storm.clone(), Vec2::new(0.03, 0.02)),
+        (look.wisp.clone(), Vec2::new(0.05, 0.03)),
+        (look.thrall.clone(), Vec2::new(0.02, 0.15)),
+    ]);
+    // Essence turns slowly over on itself.
+    for step in &look.essence {
+        flowing.0.push((step.clone(), Vec2::new(0.03, 0.12)));
+    }
     commands.insert_resource(look);
 }
 
@@ -3408,10 +3590,11 @@ fn place_gusts(
         &GustMesh,
         &mut Transform,
         &mut Visibility,
+        &mut Mesh3d,
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
-    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
+    for (tag, mut tf, mut vis, mut mesh, mut skin) in meshes.iter_mut() {
         let Some(shot) = sim.cur.gusts[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
@@ -3428,10 +3611,18 @@ fn place_gusts(
         let want = if shot.lit || matches!(shot.gale, Gale::Ember) {
             &look.fire
         } else {
-            &look.beam
+            &look.air
         };
         if skin.0 != *want {
             skin.0 = want.clone();
+        }
+        // A bolt is a comet with its tail behind it; a coal is a ball of fire.
+        let form = match shot.gale {
+            Gale::Bolt => &look.comet,
+            _ => &look.fireball,
+        };
+        if mesh.0 != *form {
+            mesh.0 = form.clone();
         }
         let radius = shot.girth().to_f32_for_render();
         tf.translation = fx3(shot.pos);
@@ -3513,7 +3704,7 @@ fn place_discs(
         }
         *vis = Visibility::Inherited;
         // A Gale flown through fire is drawn as fire, as the bolts are.
-        let want = if shot.lit { &look.fire } else { &look.beam };
+        let want = if shot.lit { &look.fire } else { &look.air };
         if skin.0 != *want {
             skin.0 = want.clone();
         }
@@ -4037,7 +4228,7 @@ fn place_spells(
             *vis = Visibility::Hidden;
             continue;
         };
-        let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+        let (want_mesh, want_skin) = (look.dressed(&piece), look.dressed_material(&piece));
         *vis = Visibility::Inherited;
         if mesh.0 != want_mesh {
             mesh.0 = want_mesh;
@@ -4649,7 +4840,7 @@ fn place_effects(
             *vis = Visibility::Hidden;
             continue;
         };
-        let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+        let (want_mesh, want_skin) = (look.dressed(&piece), look.dressed_material(&piece));
         *vis = Visibility::Inherited;
         if mesh.0 != want_mesh {
             mesh.0 = want_mesh;
@@ -4698,7 +4889,7 @@ fn show_piece(
     mesh: &mut Mesh3d,
     mat: &mut MeshMaterial3d<StandardMaterial>,
 ) {
-    let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+    let (want_mesh, want_skin) = (look.dressed(&piece), look.dressed_material(&piece));
     *vis = Visibility::Inherited;
     if mesh.0 != want_mesh {
         mesh.0 = want_mesh;
@@ -4861,6 +5052,10 @@ enum Skin {
     /// Moving air: the beam's pale, barely-there material, so a draft or a
     /// ring of air is seen without hiding what is in it.
     Air,
+    /// The Champion's light: his gold, streaming -- the crescent he throws,
+    /// the javelin, the cuts. His own, not the Dual mage's white: two
+    /// classes' throws in one colour were one class's.
+    Gilt,
 }
 
 impl EffectLook {
@@ -4876,6 +5071,49 @@ impl EffectLook {
             Shape::Shuriken => self.shuriken.clone(),
             Shape::Shard => self.shard.clone(),
             Shape::Crescent => self.crescent.clone(),
+        }
+    }
+
+    /// The mesh a piece is drawn with: its shape, read with what it is made
+    /// of -- a column of fire is a flame, a flat column of air a disc of wind
+    /// (`fx`). Every one fills the room its shape does, so the hit test's
+    /// size is still the drawing's.
+    fn dressed(&self, piece: &Piece) -> Handle<Mesh> {
+        let flat = piece.scale.y < 0.3 * piece.scale.x;
+        match (piece.shape, piece.skin) {
+            (Shape::Column, Skin::Fire) => self.flame.clone(),
+            (Shape::Ball, Skin::Fire) => self.fireball.clone(),
+            (Shape::Column, Skin::Stone) => self.rubble.clone(),
+            (Shape::Column, Skin::Air) if flat => self.winddisc.clone(),
+            (Shape::Column, Skin::Air) => self.whirl.clone(),
+            (Shape::Ball, Skin::Air) => self.windball.clone(),
+            (Shape::Spike, Skin::Blood | Skin::Vines) => self.thorn.clone(),
+            (Shape::Spike, Skin::Essence(_)) => self.tongue.clone(),
+            (Shape::Limb, Skin::Vines | Skin::Essence(_)) => self.vine.clone(),
+            (Shape::Ball | Shape::Column, Skin::Essence(_) | Skin::Blood | Skin::Vines) if flat => {
+                self.puddle.clone()
+            }
+            (Shape::Ball, Skin::Essence(_) | Skin::Blood | Skin::Heart) => self.droplet.clone(),
+            (Shape::Column, Skin::Gilt) if flat => self.crescent_wave.clone(),
+            (Shape::Column, Skin::Gilt) => self.comet.clone(),
+            (Shape::Ball, Skin::Light) => self.star.clone(),
+            (Shape::Ball, Skin::Dark) => self.fireball.clone(),
+            (Shape::Ball, Skin::Storm | Skin::Wisp) => self.cloud.clone(),
+            (Shape::Column, Skin::Light | Skin::Dark) if flat => self.disc.clone(),
+            (Shape::Column, Skin::Sun) if flat => self.sunburst.clone(),
+            (Shape::Spike, Skin::Light | Skin::Dark) => self.point.clone(),
+            (shape, _) => self.mesh(shape),
+        }
+    }
+
+    /// The material a piece is drawn in: its skin's, except a mark on the
+    /// floor in either of the Dual mage's forces, which is a sigil.
+    fn dressed_material(&self, piece: &Piece) -> Handle<StandardMaterial> {
+        let flat = piece.scale.y < 0.3 * piece.scale.x;
+        match (piece.shape, piece.skin) {
+            (Shape::Column, Skin::Light) if flat => self.sigil_light.clone(),
+            (Shape::Column, Skin::Dark) if flat => self.sigil_dark.clone(),
+            _ => self.material(piece.skin),
         }
     }
 
@@ -4896,7 +5134,8 @@ impl EffectLook {
             Skin::Storm => self.storm.clone(),
             Skin::Wisp => self.wisp.clone(),
             Skin::Stone => self.stone.clone(),
-            Skin::Air => self.beam.clone(),
+            Skin::Air => self.air.clone(),
+            Skin::Gilt => self.gilt.clone(),
             Skin::Steel => self.steel.clone(),
             Skin::Forged => self.forged.clone(),
         }
@@ -5582,12 +5821,14 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let r = effect.field_radius().to_f32_for_render();
             let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
             let shrink = 1.0 - part as f32 * 0.3;
+            // A moon thrown back-first along its flight (`fx::crescent`).
+            let flat = Vec3::new(back.x, 0.0, back.z).normalize_or(Vec3::X);
             Some(Piece {
                 shape: Shape::Column,
-                skin: Skin::Light,
+                skin: Skin::Gilt,
                 at: fx3(effect.head()) - back,
                 scale: Vec3::new(r * 2.0 * shrink, 0.12, r * 2.0 * shrink),
-                turn: Quat::IDENTITY,
+                turn: Quat::from_rotation_arc(Vec3::X, flat),
             })
         }
         // The shockwave: broken ground on its live radius, standing where
@@ -5611,18 +5852,23 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let r = effect.field_radius().to_f32_for_render();
             let landing = effect.age >= sim::tuning::cuts_delay();
             let size = if landing { r * 0.8 } else { r * 0.2 };
+            // Each a slash across the line he ran.
+            let run = Vec3::new(end.x - at.x, 0.0, end.z - at.z).normalize_or(Vec3::X);
             Some(Piece {
                 shape: Shape::Column,
-                skin: Skin::Light,
+                skin: Skin::Gilt,
                 at: at.lerp(end, t),
                 scale: Vec3::new(size * 2.0, 0.08, size * 2.0),
-                turn: Quat::IDENTITY,
+                turn: Quat::from_rotation_arc(Vec3::X, run),
             })
         }
         // The javelin: a line of light behind its head, a spear's length.
-        EffectKind::Javelin if part < 4 => {
-            let back = fx3(effect.dir).normalize_or_zero() * (part as f32 * 0.7);
-            Some(floating_in(Skin::Light, fx3(effect.head()) - back, 0.12))
+        // One spear of light, its head at the javelin's and its tail
+        // streaming back the length the beads ran.
+        EffectKind::Javelin if part == 0 => {
+            let head = fx3(effect.head());
+            let back = fx3(effect.dir).normalize_or_zero() * (3.0 * 0.7);
+            Some(rod(Skin::Gilt, head - back, head, 0.12))
         }
         EffectKind::Reaping => reaping_cut(effect, part),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(shuriken(

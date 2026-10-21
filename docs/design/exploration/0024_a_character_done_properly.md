@@ -257,9 +257,8 @@ should stream). Each is 55-70 thousand triangles; one of each class a seat
 is made at startup and hidden unless used.
 
 **What is left**, in order: the Champion's gold (still beads and boxes),
-the Dual mage's wings and the Elementalist's stones are the game's
-primitives; the hair is a mass, good at the camera's distance and a cap
-close up; faces have painted brows and lips but no expression; the
+the Dual mage's wings and the Elementalist's stones were the game's
+primitives (§10 since); the hair was a mass (cards since, below); faces have painted brows and lips but no expression; the
 Bulwark is the mannequin.
 
 **Chests** (2026-10-21, the owner's word: "fix all of the women's chests ...
@@ -287,3 +286,53 @@ edges); and cards rooted evenly left the crown bare (now they are rooted
 high and fall over the rest), over a scalp painted the hair's colour in
 shadow so a gap reads as depth.
 
+
+## 10. Their effects (2026-10-21, the owner's word: "all elemental effects of the elementalist, all the blood mage things, etc")
+
+The four bodies were drawn properly and everything they threw was still a
+stock cylinder, ball or cone in a flat colour: a fire pillar an orange tin,
+a raised stone a grey drum, a thrall's blood a red plastic. `game::fx` is
+what they are drawn as now, and two rules from before still hold.
+
+**The drawing is the hit test's size.** Every mesh in `fx` is made inside
+the same unit room as the stock shape it stands in for -- a unit cylinder,
+ball or cone -- and pulled back into it if anything pokes out
+(`fit_column`, `fit_ball`). A piece is still placed and scaled by its
+volume exactly as before (`effect_piece`); only what is drawn inside that
+volume changed.
+
+**The look is chosen in one place.** `EffectLook::dressed` reads a piece's
+shape with its skin: a column of fire is a flame, a ball of air a ball of
+wind, a flat column of air a disc of wind, a flat column of either of the
+Dual mage's forces a sigil. So every effect in an element is drawn as that
+element, whichever class or move makes it, and a new effect drawn as a
+column of fire is a flame without anyone writing it.
+
+What each class got:
+
+- **Elementalist.** Fire: tongues of flame rising through a heat the mesh
+  carries (white root, red tips), the texture flowing upward -- pillar,
+  tornado, fountain, carpet, ring, embers, bolts as comets. Wind: twisting
+  ribbons of streaked air for drafts, rings of it for the Air ball, a
+  spiral disc for the Gale and the air ring. Earth: the stones' lathe
+  textured mottled and cracked, a lit stone burning in its cracks; broken
+  ground (Quake, Surge, the Fissure's crack, the Champion's shockwave) as
+  heaved slabs; debris as rocks.
+- **Blood mage.** Essence marbled crimson-to-violet and turning over on
+  itself; pools and stains as ragged spills; the standing essence as a
+  tongue; ridged thorns for spikes and barbs; braided vines with bark;
+  blood wet and clotted; the heart veined; bolts and motes as drops.
+- **Champion.** The liquid gold chased and hammered; the sword's blade
+  forged with ground bevels and every point ground to the blade's section;
+  the beads as drops; his throws in his own streaming gold -- the
+  crescent a moon thrown back-first, the javelin one spear of light, the
+  cuts slashes across the line he ran -- rather than the Dual mage's white.
+- **Dual mage.** Light as a star with rays, the dark as dark flame, marks
+  on the floor as sigils (rings, runes, spokes) in either force, the
+  sun-disk a sunburst, shards ground like blade points, the storm cloud
+  billows of smoke, the wings feathered.
+
+Textures are painted in code (value noise, layered and folded), tile, and
+the fire's, wind's, essence's, light's and smoke's scroll on the renderer's
+clock (`fx::flow`): a texture moving over a surface whose every place and
+size is the snapshot's, so a rollback cannot make it pop.
