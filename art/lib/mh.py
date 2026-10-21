@@ -222,3 +222,36 @@ def grip(base, rig, verts, curl=(62.0, 75.0, 45.0), thumb=(25.0, 30.0, 20.0), si
         m = total > 0
         v[m] = acc[m] + (1 - total[m])[:, None] * verts[m]
     return v
+
+
+def flatten_bust(base, rig, verts, flat, amount):
+    """The bust pressed toward a flat chest: each vertex the breasts' own
+    bones move is blended toward ``flat`` (the same body built male) by
+    ``amount`` times their weight -- a half for one compressed shape under a
+    fitted top, all of it for none. The bones' weights fade out over the
+    ribs, so the blend has no edge."""
+    mask = np.zeros(len(verts))
+    for bone in ("breast.L", "breast.R"):
+        idx, w = rig.weights[bone]
+        mask[idx] = np.maximum(mask[idx], w)
+    mask = np.clip(mask * 3.0, 0, 1) * amount
+    out = verts + mask[:, None] * (flat - verts)
+    # Then smoothed over the same region, a few rounds, so nothing the flat
+    # chest still carries -- a nipple, a pectoral's edge -- stands out of a
+    # fitted top.
+    edges = []
+    for f in base.faces:
+        for i in range(len(f)):
+            edges.append((f[i], f[(i + 1) % len(f)]))
+    e = np.array(edges)
+    n = len(verts)
+    deg = np.zeros(n)
+    np.add.at(deg, e[:, 0], 1)
+    np.add.at(deg, e[:, 1], 1)
+    for _ in range(6):
+        acc = np.zeros_like(out)
+        np.add.at(acc, e[:, 0], out[e[:, 1]])
+        np.add.at(acc, e[:, 1], out[e[:, 0]])
+        avg = acc / np.maximum(deg, 1)[:, None]
+        out = out + (mask * 0.6)[:, None] * (avg - out)
+    return out

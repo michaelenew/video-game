@@ -11,7 +11,7 @@ import mh
 
 BODY = mh.macro(gender="male", age="young", muscle=0.70, weight=0.40, proportions=1.0,
                 # South Asian.
-                races={"caucasian": 0.55, "african": 0.25, "asian": 0.20}) + [
+                races={"caucasian": 0.60, "african": 0.10, "asian": 0.30}) + [
     ("head/head-square.target", 0.35),
     ("chin/chin-bones-incr.target", 0.3),
 ]

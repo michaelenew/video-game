@@ -374,7 +374,7 @@ def trousers(body, r, material="trousers", hem=0.30, gap=0.009, close=0.025, nam
 
 
 def jerkin(body, r, material="leather", gap=0.012, low=0.12, collar=0.03, name="jerkin", faces=2000,
-           inset=0.03, close=0.04, trims=(), sleeved=False, smooth=8, trim=0.025):
+           inset=0.03, close=0.055, trims=(), sleeved=False, smooth=8, trim=0.025):
     """A fitted leather jerkin, collar to the top of the thigh: bridged
     over the bust and the small of the back as stiff leather is, its skirt
     falling past the belt, creased at the waist where it bends."""

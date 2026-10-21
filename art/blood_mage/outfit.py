@@ -20,7 +20,7 @@ from wardrobe import (belt, body_masks, boots, coat_tails, collar, covered, eyes
 
 def coat(body, r):
     return jerkin(body, r, material="coat", gap=0.012, low=0.05, collar=0.03, name="coat", faces=2400,
-                  close=0.04, sleeved=True, trim=0.02)
+                  close=0.065, sleeved=True, trim=0.02)
 
 
 def coat_sleeves(body, r):

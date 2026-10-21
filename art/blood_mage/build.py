@@ -13,7 +13,7 @@ sys.path[:0] = [os.path.join(HERE, "..", "lib"), HERE]
 
 import character  # noqa: E402
 import outfit  # noqa: E402,F401
-from recipe import BODY, GIRTH, HEAD_SCALE  # noqa: E402,F401
+from recipe import BODY, BUST, FLAT, GIRTH, HEAD_SCALE  # noqa: E402,F401
 
 NAME = "blood_mage"
 CLASS = "Blood mage"

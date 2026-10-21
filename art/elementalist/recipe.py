@@ -14,5 +14,10 @@ BODY = mh.macro(gender="female", age="young", muscle=0.55, weight=0.30, proporti
     ("head/head-oval.target", 0.3),
 ]
 
+# The chest, pressed: one shape under her tunic.
+BUST = 0.55
+FLAT = mh.macro(gender="male", age="young", muscle=0.55, weight=0.30, proportions=1.0,
+                races={"caucasian": 0.10, "african": 0.05, "asian": 0.85})
+
 GIRTH = {}
 HEAD_SCALE = 1.0

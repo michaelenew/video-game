@@ -21,7 +21,7 @@ from wardrobe import (body_masks, boots, coat_tails, covered, eyes, hair, jerkin
 
 def tunic(body, r):
     return jerkin(body, r, material="tunic", gap=0.011, low=0.10, collar=0.05, name="tunic", faces=2200,
-                  close=0.035, sleeved=True, trim=0.02)
+                  close=0.065, sleeved=True, trim=0.02)
 
 
 def arms(body, r):

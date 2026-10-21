@@ -50,6 +50,11 @@ def body(spec):
     base = mh.Base(os.path.join(ROOT, "target/art/mh"))
     rig = mh.Rig(os.path.join(ROOT, "target/art/mh"))
     v = mh.shaped(base, spec.BODY)
+    # A chest under a fitted top is one shape, not two (the owner,
+    # 2026-10-20 and 2026-10-21): ``BUST`` is how far the breasts are pressed
+    # toward ``FLAT``, the same body built male.
+    if getattr(spec, "BUST", 0.0):
+        v = mh.flatten_bust(base, rig, v, mh.shaped(base, spec.FLAT), spec.BUST)
     sk = fit.Skeleton(os.path.join(ROOT, "target/art/anim.json"), spec.CLASS)
     verts, faces, face_uvs, uvs, W, bo, br, marks = fit.fit(base, rig, v, sk, spec.GIRTH, spec.HEAD_SCALE,
                                                             carried=mh.grip(base, rig, v))

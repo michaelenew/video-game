@@ -25,7 +25,7 @@ def halves(pieces, r):
 
 def tunic(body, r):
     return halves(jerkin(body, r, material="vessel", gap=0.009, low=0.06, collar=0.02, name="tunic",
-                         faces=2200, close=0.035, sleeved=True, trim=0.02), r)
+                         faces=2200, close=0.065, sleeved=True, trim=0.02), r)
 
 
 def arms(body, r):

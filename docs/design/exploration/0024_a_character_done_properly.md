@@ -227,14 +227,15 @@ so each outfit is designed from those:
 | Champion | a duellist of the aristocrats' champions; South Asian, the reference middleweight | a high-collared doublet in deep blue, its skirt in four kicking panels; the right sleeve fitted to the wrist, because the gold coils up that arm and forms the weapon; a bracer on the left; a short cape over the left shoulder in the team's colour; pale breeches, tall riding boots, gloves | a dark square torso, colour on one shoulder, pale legs, the gold |
 | Elementalist | a terrain author who kneels and drives her hands into the floor; East Asian, tall and narrow | a slate tunic over a long split rust robe that spreads round her when she kneels; linen-bound forearms and bare hands -- they touch the earth; three river stones on her belt; a stole in the team's colour; hair in a knot | a tall figure in earth colours, a long robe, bare hands |
 | Blood mage | a reaper and a priestess of something nobody should worship; Black, heavier, not athletic | a long black coat to a high collar, its skirt to the ankle; an oxblood bodice laced over it; long gloves; tall boots; a sash in the team's colour; an ash-silver bob that falls to the jaw | a tall black shape, a red waist, a pale crown -- and the scythe |
-| Dual mage | a vessel for two forces, light in her right hand and dark in her left; North African, slight | everything split down the middle -- her right ivory and gold, her left obsidian and violet: a fitted high-necked tunic, flared sleeves, four long skirt panels, soft boots, a gold bracer on the right and black glass on the left; her hair to the jaw, white on the right and black on the left | one figure, two halves, and which hand is which |
+| Dual mage | a vessel for two forces, light in her right hand and dark in her left; white, slight | everything split down the middle -- her right ivory and gold, her left obsidian and violet: a fitted high-necked tunic, flared sleeves, four long skirt panels, soft boots, a gold bracer on the right and black glass on the left; her hair to the jaw, white on the right and black on the left | one figure, two halves, and which hand is which |
 
 **Who they are.** The first build gave every body MakeHuman's even mix of its
 three ancestry targets, so the women came out alike; the owner caught it
 ("you don't have to make every model a white woman or a black man"). Each now
 has their own heritage in both the face's shape and the painted skin, and
 their own hair: a South Asian Champion, an East Asian Elementalist, a Black
-Blood mage, a North African Dual mage, a Northern European Reaver.
+Blood mage, a white Dual mage, a Northern European Reaver -- two of the five
+white, the owner's call (2026-10-21).
 
 **Hair**, which the Reaver's hood and mask had let her do without, is a
 sculpted mass as a painted figure's is (`wardrobe.hair`): the head inflated a
@@ -260,3 +261,15 @@ the Dual mage's wings and the Elementalist's stones are the game's
 primitives; the hair is a mass, good at the camera's distance and a cap
 close up; faces have painted brows and lips but no expression; the
 Bulwark is the mannequin.
+
+**Chests** (2026-10-21, the owner's word: "fix all of the women's chests ...
+and remove the blood mage's breasts"). Fitted tops showed two separate
+shapes. The body now presses the bust toward the same body built male
+(`mh::flatten_bust`): MakeHuman's own breast bones' weights mark the
+region, the blend follows them, and a few rounds of smoothing over it take
+out what a flat chest still carries. Half way for the Reaver, the
+Elementalist and the Dual mage -- one compressed shape, as under a fitted
+top -- and all the way for the Blood mage, who has none. Every top bridges
+the chest wider as well (`close`), so the cloth spans it instead of
+following the skin.
+

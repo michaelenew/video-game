@@ -21,6 +21,11 @@ BODY = mh.macro(gender="female", age="young", muscle=0.72, weight=0.32, proporti
 ]
 
 # Thickness across each bone, against MakeHuman's: 1 keeps it.
+# The chest, pressed: one shape under her fitted top.
+BUST = 0.55
+FLAT = mh.macro(gender="male", age="young", muscle=0.72, weight=0.32, proportions=1.0,
+                races={"caucasian": 0.90, "african": 0.0, "asian": 0.10})
+
 GIRTH = {}
 
 # The head is carried whole and scaled, never stretched.
