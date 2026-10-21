@@ -60,6 +60,7 @@ mod slash;
 mod sound;
 mod species;
 mod splats;
+mod squeeze;
 mod still;
 mod stream;
 mod swing;
@@ -224,6 +225,13 @@ fn main() {
                 })
                 .set(bevy::render::RenderPlugin {
                     synchronous_pipeline_compilation: platform::flag("--sync-pipelines"),
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    file_path: platform::asset_root(),
+                    // No settings file beside a model: asked for, it is a
+                    // request a page's host answers with a 404.
+                    meta_check: bevy::asset::AssetMetaCheck::Never,
                     ..default()
                 }),
         )

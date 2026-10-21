@@ -11,9 +11,13 @@
 //! each joint of the model is put where the solve says, in character space,
 //! under the fighter's root. The inverse bind matrices in the file do the rest.
 //!
-//! **One of each class a seat**, made at startup and hidden unless that seat
-//! is playing that class, so changing class never loads anything -- and for
-//! the Reaver six more: her shadow and the five copies of the Reaping. Each
+//! **A class's model is loaded the first time a seat plays it** (2026-10-21,
+//! exploration 0024 sec. 11): a file from `assets/`, read when it is wanted
+//! rather than compiled into the program, made for that seat, and kept --
+//! hidden while the seat plays something else, so changing back loads
+//! nothing. Until it is there the seat is drawn as the mannequin, as it
+//! always was before a model was ready. For the Reaver six more: her shadow
+//! and the five copies of the Reaping, made with her. Each
 //! hangs under the root the mannequin it replaces already had (`Fighter`,
 //! `ShadowRoot`, `CopyRoot`), so it is placed, shown and hidden exactly as
 //! that was. They wear the fighters' skin (`still::SkinMaterial`), so the
@@ -21,9 +25,6 @@
 //! the exporter names `team` dyed the seat's colour; the shadow and the
 //! copies are in ink (`crate::ink`).
 
-use std::path::{Path, PathBuf};
-
-use bevy::asset::io::embedded::EmbeddedAssetRegistry;
 use bevy::gltf::GltfMaterialName;
 use bevy::pbr::NotShadowCaster;
 use bevy::prelude::*;
@@ -35,55 +36,36 @@ use crate::coat::{TAIL_JOINTS, TAIL_NAMES, TailJoint, Tails};
 use crate::ink::{self, Ink, InkMaterial};
 use crate::{REAP_COPIES, still};
 
-/// The classes drawn by a model, and the model's file: embedded in the
-/// binary, so the browser build carries them the same way the desktop does.
-pub const MODELS: [(sim::Class, &str, &[u8]); MODELLED] = [
-    (
-        sim::Class::ShadowReaver,
-        "reaver.glb",
-        include_bytes!("../assets/reaver.glb"),
-    ),
-    (
-        sim::Class::Champion,
-        "champion.glb",
-        include_bytes!("../assets/champion.glb"),
-    ),
-    (
-        sim::Class::Elementalist,
-        "elementalist.glb",
-        include_bytes!("../assets/elementalist.glb"),
-    ),
-    (
-        sim::Class::BloodMage,
-        "blood_mage.glb",
-        include_bytes!("../assets/blood_mage.glb"),
-    ),
-    (
-        sim::Class::DualMage,
-        "dual_mage.glb",
-        include_bytes!("../assets/dual_mage.glb"),
-    ),
+/// The classes drawn by a model, and the model's file in `assets/`
+/// (`platform::asset_root`): beside the program on a desktop, beside the
+/// page in a browser (`crates/web/build-game.sh` copies them), so neither
+/// carries a model nobody is playing.
+pub const MODELS: [(sim::Class, &str); MODELLED] = [
+    (sim::Class::ShadowReaver, "reaver.glb"),
+    (sim::Class::Champion, "champion.glb"),
+    (sim::Class::Elementalist, "elementalist.glb"),
+    (sim::Class::BloodMage, "blood_mage.glb"),
+    (sim::Class::DualMage, "dual_mage.glb"),
 ];
 /// How many classes have a model.
 pub const MODELLED: usize = 5;
 
 /// Which entry of [`MODELS`] a class is, if it has a model.
 pub fn model_of(class: sim::Class) -> Option<usize> {
-    MODELS.iter().position(|(c, _, _)| *c == class)
+    MODELS.iter().position(|(c, _)| *c == class)
 }
 
 pub struct ModelsPlugin;
 
 impl Plugin for ModelsPlugin {
     fn build(&self, app: &mut App) {
-        let registry = app.world_mut().resource_mut::<EmbeddedAssetRegistry>();
-        for (_, file, bytes) in MODELS {
-            registry.insert_asset(PathBuf::new(), Path::new(file), bytes);
-        }
         app.init_resource::<Rigs>()
+            .init_resource::<Loaded>()
+            .init_resource::<crate::squeeze::Squeeze>()
             .init_resource::<crate::coat::Coats>()
             .init_resource::<crate::slash::Traces>()
-            .add_systems(PostStartup, (spawn, crate::slash::spawn))
+            .add_systems(PostStartup, crate::slash::spawn)
+            .add_systems(Update, (spawn, crate::squeeze::squeeze))
             .add_systems(
                 PostUpdate,
                 crate::slash::draw.after(bevy::transform::TransformSystem::TransformPropagate),
@@ -162,25 +144,41 @@ impl Rigs {
     }
 }
 
+/// Which models have been asked for, and made for which seats.
+#[derive(Resource, Default)]
+pub struct Loaded {
+    scenes: [Option<Handle<Scene>>; MODELLED],
+    her: [[bool; MODELLED]; MAX_PLAYERS],
+    shadow: [bool; MAX_PLAYERS],
+}
+
+impl Loaded {
+    /// A model's scene, asked of the file the first time it is wanted. Its
+    /// textures stay readable until they are squeezed (`squeeze`), which
+    /// lets their copy in memory go. Its meshes keep theirs: `warm` reads a
+    /// mesh's layout to compile its pipelines before it is seen, and it is
+    /// a few megabytes a character, not the textures' hundreds.
+    fn scene(&mut self, m: usize, server: &AssetServer) -> Handle<Scene> {
+        self.scenes[m]
+            .get_or_insert_with(|| server.load(GltfAssetLabel::Scene(0).from_asset(MODELS[m].1)))
+            .clone()
+    }
+}
+
+/// Make the model of every class a present seat is playing, for that seat,
+/// the first time it plays it -- and with the Reaver's, her shadow and her
+/// copies.
 fn spawn(
     mut commands: Commands,
     server: Res<AssetServer>,
+    sim: Res<crate::Sim>,
+    mut loaded: ResMut<Loaded>,
     fighters: Query<(Entity, &crate::Fighter)>,
     shadows: Query<(Entity, &crate::ShadowRoot)>,
     copies: Query<(Entity, &crate::CopyRoot)>,
 ) {
-    let scenes: Vec<Handle<Scene>> = MODELS
-        .iter()
-        .map(|(_, file, _)| {
-            server.load(GltfAssetLabel::Scene(0).from_asset(format!("embedded://{file}")))
-        })
-        .collect();
     let reaver = model_of(sim::Class::ShadowReaver).expect("the Reaver has a model");
-    let mut add = |root: Entity, owner: usize, body: Body| {
-        let scene = match body {
-            Body::Her(m) => scenes[m].clone(),
-            Body::Shadow | Body::Copy(_) => scenes[reaver].clone(),
-        };
+    let add = |commands: &mut Commands, scene: Handle<Scene>, root: Entity, owner, body| {
         let model = commands
             .spawn((
                 Model { owner, body },
@@ -192,15 +190,34 @@ fn spawn(
         commands.entity(root).add_child(model);
     };
     for (root, fighter) in fighters.iter() {
-        for m in 0..MODELLED {
-            add(root, fighter.0, Body::Her(m));
+        let owner = fighter.0;
+        if !sim.cur.is_present(owner) {
+            continue;
         }
-    }
-    for (root, shadow) in shadows.iter() {
-        add(root, shadow.0, Body::Shadow);
-    }
-    for (root, copy) in copies.iter() {
-        add(root, copy.owner, Body::Copy(copy.copy));
+        let Some(m) = model_of(sim.cur.players[owner].class) else {
+            continue;
+        };
+        if !loaded.her[owner][m] {
+            loaded.her[owner][m] = true;
+            let scene = loaded.scene(m, &server);
+            add(&mut commands, scene, root, owner, Body::Her(m));
+        }
+        if m == reaver && !loaded.shadow[owner] {
+            loaded.shadow[owner] = true;
+            let scene = loaded.scene(reaver, &server);
+            for (root, shadow) in shadows.iter().filter(|(_, s)| s.0 == owner) {
+                add(&mut commands, scene.clone(), root, shadow.0, Body::Shadow);
+            }
+            for (root, copy) in copies.iter().filter(|(_, c)| c.owner == owner) {
+                add(
+                    &mut commands,
+                    scene.clone(),
+                    root,
+                    owner,
+                    Body::Copy(copy.copy),
+                );
+            }
+        }
     }
 }
 
@@ -218,6 +235,7 @@ fn ready(
     mut skins: ResMut<Assets<still::SkinMaterial>>,
     mut inks: ResMut<Assets<InkMaterial>>,
     mut rigs: ResMut<Rigs>,
+    mut squeeze: ResMut<crate::squeeze::Squeeze>,
     mut commands: Commands,
 ) {
     let root = trigger.target();
@@ -258,6 +276,7 @@ fn ready(
             continue;
         };
         let mut base = base.clone();
+        squeeze.take(&base);
         let mut swap = commands.entity(entity);
         swap.remove::<MeshMaterial3d<StandardMaterial>>();
         if let Body::Her(_) = body {

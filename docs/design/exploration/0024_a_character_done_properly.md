@@ -336,3 +336,52 @@ Textures are painted in code (value noise, layered and folded), tile, and
 the fire's, wind's, essence's, light's and smoke's scroll on the renderer's
 clock (`fx::flow`): a texture moving over a surface whose every place and
 size is the snapshot's, so a rollback cannot make it pop.
+
+## 11. What a character costs, and the squeeze (2026-10-21, the owner's question: "how much memory and storage this version of the characters needs")
+
+Measured, not guessed. A model file was 8 MB: 4.3 MB of pictures (3 MB of
+it one 2048-square normal map saved as PNG, which a lossless compressor
+cannot do much with) and 3.5 MB of geometry in full floats. All five were
+compiled into the program, so a page downloaded every one of them before it
+drew anything, and all five were loaded at startup. Loaded, a picture is raw
+pixels -- 17 MB for a 2048 square -- and Bevy kept a copy in memory beside the
+one on the GPU.
+
+What changed, none of it to the art:
+
+- **The file** (`art/lib/character.py`, `art/lib/glb.py`): the normal map a
+  JPEG; the glow and metal maps at half size, since they carry no fine
+  detail; weights a byte each, texture coordinates two bytes each, indices
+  two bytes where a piece has fewer than 65,536 corners.
+- **When it is read** (`game::models`): a class's model is a file in
+  `crates/game/assets`, read the first time a present seat plays the class,
+  and kept. The page fetches it from `assets/` beside itself
+  (`crates/web/build-game.sh` copies them; `platform::asset_root`).
+- **How it is held** (`game::squeeze`): every texture a model loads is put
+  into the GPU's own block format as it arrives -- BC1 for colour, BC3 with
+  alpha, BC5 for a normal map -- and its copy in memory let go. Where the GPU
+  has no block formats (a phone's browser) it keeps its pixels and only the
+  copy goes. Meshes keep theirs: `warm` reads a mesh's layout to compile its
+  pipelines before it is seen.
+
+| | Before | After |
+| --- | --- | --- |
+| The five model files | 40.6 MB | 21.4 MB |
+| A page's download before it draws (compressed in transit) | 49.7 MB | 18.8 MB, then ~3 MB a class as it first appears |
+| Textures of a two-class fight, in memory | 115 MB, twice (GPU and a copy) | 19 MB, on the GPU only |
+| The running game, a two-class fight (RSS under lavapipe, which keeps GPU memory in RAM) | 2,005 MB | 1,359 MB |
+
+The page's numbers: the module is 42.7 MB (18.8 MB gzipped) with no model in
+it; before, the same module carried the five files, 40.6 MB more (30.9 MB
+gzipped). The memory figures are the mean of two runs each, 75 s into the
+same fight.
+
+**What it means for the rest of the world in this style.** A character is
+the dearest kind of art there is: unique, skinned, seen close. After this,
+one costs about 4 MB on disk and about 10 MB of GPU memory. The world is not
+hundreds of characters -- it is a hundred or so *kinds* of thing (13 forms,
+11 materials, the town's buildings and props, 13 creatures), each drawn
+many times from one copy, and much of it made by code at startup. At this
+rate the whole valley in this style is a few hundred megabytes, not tens of
+gigabytes; the budget that binds first is the page's download, which is
+why models are files fetched when wanted rather than part of the module.

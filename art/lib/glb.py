@@ -151,10 +151,12 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
         views.append(v)
         return len(views) - 1
 
-    def acc(arr, ctype, kind, target=None, minmax=False):
+    def acc(arr, ctype, kind, target=None, minmax=False, normalized=False):
         a = np.ascontiguousarray(arr)
         view = add(a.tobytes(), target)
         e = {"bufferView": view, "componentType": ctype, "count": len(a), "type": kind}
+        if normalized:
+            e["normalized"] = True
         if minmax:
             e["min"] = a.min(axis=0).tolist()
             e["max"] = a.max(axis=0).tolist()
@@ -195,18 +197,32 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
         tw = tw / np.maximum(tw.sum(axis=1, keepdims=True), 1e-9)
         joints = top.astype(np.uint8)
         joints[tw == 0] = 0
+        # Weights in a byte each, summing to exactly 255 (the rounding's
+        # leftover put on the heaviest): four floats a vertex was a tenth
+        # of the file, for a precision nobody can see.
+        qw = np.round(tw * 255).astype(np.int32)
+        qw[:, 0] += 255 - qw.sum(axis=1)
+        uv = np.stack([d["uv"][:, 0], 1 - d["uv"][:, 1]], 1)
+        # Texture coordinates in two bytes each when they lie in the
+        # texture, as an atlas's do (a sixty-fifth of a texel at 2048).
+        if uv.min() >= 0.0 and uv.max() <= 1.0:
+            uv_acc = acc(np.round(uv * 65535).astype(np.uint16), U16, "VEC2", 34962, normalized=True)
+        else:
+            uv_acc = acc(uv.astype(np.float32), FLOAT, "VEC2", 34962)
+        idx = d["idx"]
+        small = idx.max() < 65536
         primitives.append({
             "attributes": {
                 "POSITION": acc(d["pos"].astype(np.float32), FLOAT, "VEC3", 34962, True),
                 "NORMAL": acc(d["nrm"].astype(np.float32) / np.maximum(
                     np.linalg.norm(d["nrm"], axis=1, keepdims=True), 1e-9).astype(np.float32),
                     FLOAT, "VEC3", 34962),
-                "TEXCOORD_0": acc(np.stack([d["uv"][:, 0], 1 - d["uv"][:, 1]], 1).astype(np.float32),
-                                  FLOAT, "VEC2", 34962),
+                "TEXCOORD_0": uv_acc,
                 "JOINTS_0": acc(joints, U8, "VEC4", 34962),
-                "WEIGHTS_0": acc(tw.astype(np.float32), FLOAT, "VEC4", 34962),
+                "WEIGHTS_0": acc(qw.astype(np.uint8), U8, "VEC4", 34962, normalized=True),
             },
-            "indices": acc(d["idx"].astype(np.uint32), U32, "SCALAR", 34963),
+            "indices": acc(idx.astype(np.uint16 if small else np.uint32), U16 if small else U32,
+                           "SCALAR", 34963),
             "material": mi,
         })
 

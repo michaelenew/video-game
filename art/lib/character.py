@@ -64,6 +64,14 @@ def body(spec):
     return ob, sk, bo, br, marks
 
 
+def _half(a):
+    """An image at half its size, each pixel the mean of the four under it:
+    for maps that carry no fine detail -- what glows, what is metal -- and
+    cost a full-size picture's memory for nothing (exploration 0024 sec. 11)."""
+    h, w = a.shape[:2]
+    return a[:h // 2 * 2, :w // 2 * 2].reshape(h // 2, 2, w // 2, 2, *a.shape[2:]).mean(axis=(1, 3))
+
+
 def finish(spec, bo, br, size):
     """Paint and export: the body on its own textures, the costume joined into
     one atlas, the team-coloured piece on a third so the game can dye it a
@@ -101,11 +109,16 @@ def finish(spec, bo, br, size):
         images.append(paint.to_png(col, os.path.join(tex, f"{name}.jpg"), quality=92))
         entry = {"color": len(images) - 1}
         if "normal" in p:
-            images.append(paint.to_png(p["normal"], os.path.join(tex, f"{name}_normal.png"), srgb=False))
+            # A JPEG, not a PNG: a normal map is noise to a lossless
+            # compressor (three megabytes of each file's eight), and the
+            # game compresses it lossily on the GPU anyway.
+            images.append(paint.to_png(p["normal"], os.path.join(tex, f"{name}_normal.jpg"), srgb=False,
+                                       quality=95))
             entry["normal"] = len(images) - 1
         shine = paint.glow(p, spec.GLOW)
         if shine is not None and shine.max() > 0:
-            images.append(paint.to_png(np.clip(shine, 0, 1), os.path.join(tex, f"{name}_glow.jpg"), quality=90))
+            images.append(paint.to_png(_half(np.clip(shine, 0, 1)), os.path.join(tex, f"{name}_glow.jpg"),
+                                       quality=90))
             entry["emissive"] = len(images) - 1
         if any(n in spec.METAL for n in slot_names):
             names = sorted(spec.COLOURS.keys())
@@ -118,7 +131,7 @@ def finish(spec, bo, br, size):
                 m = mid == names.index(n)
                 mr[m, 1] = rough
                 mr[m, 2] = metal
-            images.append(paint.to_png(mr, os.path.join(tex, f"{name}_mr.png"), srgb=False))
+            images.append(paint.to_png(_half(mr), os.path.join(tex, f"{name}_mr.png"), srgb=False))
             entry["mr"] = len(images) - 1
         if name == "team":
             entry["double"] = True

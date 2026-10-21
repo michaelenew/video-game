@@ -172,6 +172,13 @@ so it is worth having the real numbers rather than a feeling about them.
 
 Plus 108 KB of `wasm-bindgen` glue and a 26 KB page.
 
+**The characters are not in the module** (2026-10-21, exploration 0024
+sec. 11). They were compiled into it, 40.6 MB of models every visitor
+downloaded before the page drew; they are now files in `assets/` beside the
+page, each fetched the first time somebody plays its class -- about 3 MB
+over a gzipping connection. (The module itself has grown since the table
+above: 42.7 MB, 18.8 MB gzipped, as of the same date.)
+
 **`wasm-opt` is not in the build, and the middle row is why.** It shipped once
 and every visitor got `CompileError: WebAssembly.instantiate(): invalid value
 type 0x0 @+198` after downloading eighteen megabytes to find out.

@@ -661,6 +661,23 @@ pub fn bakes_shadows() -> bool {
     !cfg!(target_arch = "wasm32")
 }
 
+/// **Where the files the game reads as it goes are** (2026-10-21): the
+/// characters' models (`crate::models`), which were compiled into the
+/// program and are now read when a seat first plays the class.
+///
+/// A desktop build reads the checkout's `crates/game/assets`, by the path
+/// it was compiled from: the launchers build from a checkout and run there,
+/// and a run started from anywhere (`./target/debug/game`, a screenshot)
+/// still finds them. A page reads `assets/` beside itself, which
+/// `crates/web/build-game.sh` fills.
+pub fn asset_root() -> String {
+    if cfg!(target_arch = "wasm32") {
+        "assets".to_string()
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/assets").to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
