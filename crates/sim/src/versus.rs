@@ -45,34 +45,50 @@ pub const fn side(i: usize) -> u8 {
     (i % SIDES) as u8
 }
 
-/// **A capture point**: a disc on the floor of a stage, and the height a
-/// body's feet may be at to be standing on it.
+/// **A capture point**: a disc on the floor of a stage, and **the column of
+/// air over it** (2026-10-21, from play: "jump around on the point without
+/// losing capture, and hold it even in the air"). A body counts as on the
+/// point with its feet anywhere over the disc from a little under its
+/// surface up to `King of the hill, the point counts up to` over it -- so a
+/// hop, a launch or an aerial exchange on the point keeps capturing -- but
+/// never as high as `room`, the map's own headroom: somebody standing on a
+/// bridge over the point is not on it, however the knob is tuned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Hill {
     /// The middle of the disc, on the surface it lies on.
     pub at: V3,
     pub radius: Fx,
-    /// Feet between these heights count as on it.
-    pub lo: Fx,
-    pub hi: Fx,
+    /// Feet this far under the surface still count (a step down off it).
+    pub below: Fx,
+    /// The most air over the surface that may count: under whatever stands
+    /// over the point.
+    pub room: Fx,
 }
 
 impl Hill {
     /// From centimetres: a disc of `radius` round (x, z) on a surface at
-    /// height `y`, counting feet from `below` under it to `above` over it.
-    pub const fn cm(x: i32, y: i32, z: i32, radius: i32, below: i32, above: i32) -> Hill {
+    /// height `y`, counting feet from `below` under it to `room` over it at
+    /// the most.
+    pub const fn cm(x: i32, y: i32, z: i32, radius: i32, below: i32, room: i32) -> Hill {
         Hill {
             at: V3::new(cm(x), cm(y), cm(z)),
             radius: cm(radius),
-            lo: cm(y - below),
-            hi: cm(y + above),
+            below: cm(below),
+            room: cm(room),
         }
     }
 
-    /// Is a body with its feet here standing on the point?
+    /// The highest feet that count, over the surface.
+    pub fn reach(&self) -> Fx {
+        t::hill_column().min(self.room)
+    }
+
+    /// Is a body with its feet here on the point: over the disc, from a
+    /// little under its surface up through the column of air over it?
     pub fn holds(&self, feet: V3) -> bool {
-        feet.y.raw() >= self.lo.raw()
-            && feet.y.raw() <= self.hi.raw()
+        let up = feet.y.sub(self.at.y);
+        up.raw() >= self.below.neg().raw()
+            && up.raw() <= self.reach().raw()
             && feet.sub(self.at).flat_len().raw() <= self.radius.raw()
     }
 }
@@ -110,7 +126,7 @@ impl Stage {
 }
 
 /// Every stage, duels first, in the order the picker steps through them.
-pub static STAGES: [&Stage; 7] = [
+pub static STAGES: [&Stage; 9] = [
     &crate::arena::stages::ANVIL_STAGE,
     &crate::arena::stages::ZIGGURAT_STAGE,
     &crate::arena::stages::CALDERA_STAGE,
@@ -118,6 +134,8 @@ pub static STAGES: [&Stage; 7] = [
     &crate::arena::hills::QUARRY_STAGE,
     &crate::arena::hills::GLACIER_STAGE,
     &crate::arena::hills::DELTA_STAGE,
+    &crate::arena::hills::GORGE_STAGE,
+    &crate::arena::hills::HENGE_STAGE,
 ];
 
 /// The stage an arena is, if it is one.

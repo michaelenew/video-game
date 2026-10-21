@@ -197,6 +197,11 @@ impl ArenaId {
     pub const QUARRY: ArenaId = ArenaId(56);
     pub const GLACIER: ArenaId = ArenaId(57);
     pub const DELTA: ArenaId = ArenaId(58);
+    /// Two more King of the Hill maps, with a walkway high over the point.
+    /// Sixty is left unregistered: `tests/courses.rs` travels to it to see a
+    /// trip to nowhere refused.
+    pub const GORGE: ArenaId = ArenaId(59);
+    pub const HENGE: ArenaId = ArenaId(61);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -287,6 +292,8 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::QUARRY => Some(&hills::QUARRY),
         ArenaId::GLACIER => Some(&hills::GLACIER),
         ArenaId::DELTA => Some(&hills::DELTA),
+        ArenaId::GORGE => Some(&hills::GORGE),
+        ArenaId::HENGE => Some(&hills::HENGE),
         ArenaId(n)
             if n >= crate::valley::ranges::FIRST
                 && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>

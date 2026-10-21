@@ -19,6 +19,7 @@ const ICE_PEAK: [f32; 3] = [0.74, 0.80, 0.86];
 const REED: [f32; 3] = [0.56, 0.58, 0.30];
 const ICE: [f32; 3] = [0.78, 0.88, 0.94];
 const SPOIL: [f32; 3] = [0.62, 0.58, 0.52];
+const POST: [f32; 3] = [0.40, 0.30, 0.20];
 
 const fn prop(shape: Shape, at: [f32; 3], size: [f32; 3], yaw: f32, rgb: [f32; 3]) -> Prop {
     Prop {
@@ -191,4 +192,68 @@ const DELTA_PROPS: [Prop; 18] = {
 pub static DELTA: Dressing = Dressing {
     drop: false,
     props: &DELTA_PROPS,
+};
+
+const GORGE_PROPS: [Prop; 6] = [
+    // Ferns along the river, and rope posts at the bridge's ends.
+    prop(Shape::Sphere, [-14.0, 0.0, 3.5], [1.4, 0.6, 1.4], 0.0, REED),
+    prop(Shape::Sphere, [14.0, 0.0, -3.5], [1.4, 0.6, 1.4], 0.0, REED),
+    prop(
+        Shape::Cylinder,
+        [-2.2, 7.0, 10.4],
+        [0.2, 1.1, 0.2],
+        0.0,
+        POST,
+    ),
+    prop(
+        Shape::Cylinder,
+        [2.2, 7.0, 10.4],
+        [0.2, 1.1, 0.2],
+        0.0,
+        POST,
+    ),
+    prop(
+        Shape::Cylinder,
+        [-2.2, 7.0, -10.4],
+        [0.2, 1.1, 0.2],
+        0.0,
+        POST,
+    ),
+    prop(
+        Shape::Cylinder,
+        [2.2, 7.0, -10.4],
+        [0.2, 1.1, 0.2],
+        0.0,
+        POST,
+    ),
+];
+
+pub static GORGE: Dressing = Dressing {
+    drop: false,
+    props: &GORGE_PROPS,
+};
+
+const HENGE_PROPS: [Prop; 4] = [
+    // Tufts of long grass about the circle.
+    prop(
+        Shape::Sphere,
+        [-11.0, 0.0, 11.0],
+        [1.6, 0.5, 1.6],
+        0.0,
+        REED,
+    ),
+    prop(
+        Shape::Sphere,
+        [11.0, 0.0, -11.0],
+        [1.6, 0.5, 1.6],
+        0.0,
+        REED,
+    ),
+    prop(Shape::Sphere, [-21.0, 0.0, 6.0], [1.4, 0.4, 1.4], 0.0, REED),
+    prop(Shape::Sphere, [21.0, 0.0, -6.0], [1.4, 0.4, 1.4], 0.0, REED),
+];
+
+pub static HENGE: Dressing = Dressing {
+    drop: false,
+    props: &HENGE_PROPS,
 };

@@ -406,6 +406,12 @@ pub fn hill_respawn() -> u16 {
     oven::scalar(Scalar::HillRespawn).max(0) as u16
 }
 
+/// How high over the point's surface a body's feet still count as on it:
+/// the column of air a hop stays inside (`versus::Hill`).
+pub fn hill_column() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HillColumn)).max(Fx::ZERO)
+}
+
 /// Reaction time at 60 Hz, used by the feel tests to reason about what is and
 /// is not reactable. Roughly 250 ms, which is the usual figure for a simple
 /// visual reaction.

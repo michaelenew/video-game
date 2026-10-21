@@ -197,8 +197,8 @@ back to.
 - **The versus stages** (`arena/stages.rs`, `arena/hills.rs`, 2026-10-21):
   four floating duel stages -- **the Anvil**, **the Ziggurat**, **the
   Caldera**, **the Twin Isles** -- small islands hanging at forty metres over
-  a pit you are knocked out by falling past; and three King of the Hill maps
-  -- **the Quarry**, **the Glacier**, **the Delta** -- each turned half a turn
+  a pit you are knocked out by falling past; and five King of the Hill maps
+  -- **the Quarry**, **the Glacier**, **the Delta**, **the Gorge**, **the Henge** -- each turned half a turn
   about its middle so both sides have the same map. Their rules are
   `sim::versus`; see [versus.md](versus.md). The first marks to stand off the
   floor (`Mark::up_cm`): a mark on a floating island.

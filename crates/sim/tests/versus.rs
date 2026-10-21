@@ -35,11 +35,11 @@ fn hill_of(id: ArenaId) -> versus::Hill {
 
 #[test]
 fn every_stage_is_registered_and_named_for_what_it_is() {
-    assert_eq!(versus::STAGES.len(), 7);
+    assert_eq!(versus::STAGES.len(), 9);
     let duels = versus::STAGES.iter().filter(|s| s.kind == Kind::Duel);
     let hills = versus::STAGES.iter().filter(|s| s.kind == Kind::Hill);
     assert_eq!(duels.clone().count(), 4);
-    assert_eq!(hills.clone().count(), 3);
+    assert_eq!(hills.clone().count(), 5);
     for s in versus::STAGES {
         let a = arena::lookup(s.arena).expect("registered");
         assert!(a.creature.is_none(), "{}", a.name);
@@ -138,6 +138,63 @@ fn the_point_is_standable_at_its_middle() {
             let feet = V3::new(m.at.x, a.ground_under(m.at), m.at.z);
             assert!(!hill.holds(feet), "{}", a.name);
         }
+    }
+}
+
+#[test]
+fn the_point_is_a_column_of_air_capped_by_what_stands_over_it() {
+    for s in versus::STAGES.iter().filter(|s| s.kind == Kind::Hill) {
+        let a = s.arena.get();
+        let hill = s.hill.unwrap();
+        let up = |m: Fx| V3::new(hill.at.x, hill.at.y.add(m), hill.at.z);
+        // A hop's height over it is on it.
+        assert!(hill.holds(up(Fx::from_int(3))), "{}", a.name);
+        // Nothing hanging over the point can be stood on inside the
+        // column: standing on a bridge or a lintel is never standing on it.
+        let top = hill.at.y.add(hill.reach());
+        for solid in a.solids() {
+            let over = solid.over(hill.at.x, hill.at.z, hill.radius);
+            let hangs = solid.min.y.raw() > hill.at.y.raw();
+            assert!(
+                !over || !hangs || solid.max.y.raw() > top.raw(),
+                "{}: {solid:?} can be stood on inside the point's column",
+                a.name
+            );
+        }
+    }
+    // Where a walkway crosses over the point, standing on it is not on it.
+    for id in [ArenaId::GORGE, ArenaId::HENGE] {
+        let hill = hill_of(id);
+        let deck = id
+            .get()
+            .ground_under(V3::new(Fx::ZERO, Fx::from_int(9), Fx::ZERO));
+        assert_eq!(deck, Fx::from_int(7), "{}", id.get().name);
+        assert!(!hill.holds(V3::new(Fx::ZERO, deck, Fx::ZERO)));
+    }
+}
+
+#[test]
+fn hopping_on_the_point_keeps_capturing_it() {
+    for class in sim::class::ALL_CLASSES {
+        let id = ArenaId::QUARRY;
+        let hill = hill_of(id);
+        let mut w = World::versus_in([class, Class::Champion], id);
+        w.hill.locked = 0;
+        stand(&mut w, 0, hill.at);
+        home(&mut w, 1);
+        let mut aloft = false;
+        // Hopping the whole time: a capture's frames and a little.
+        for f in 0..t::hill_capture() as u32 + 60 {
+            let jump = if f % 50 < 30 { Input::SPACE } else { 0 };
+            w.advance([Input::aimed(jump, 0), Input::default()]);
+            aloft |= !w.players[0].grounded;
+            assert_eq!(
+                w.hill.standing[0], 1,
+                "{class:?} fell off the point on frame {f}"
+            );
+        }
+        assert!(aloft, "{class:?} never left the ground");
+        assert_eq!(w.hill.owner, 0, "{class:?}");
     }
 }
 
@@ -523,6 +580,62 @@ fn every_way_on_a_hill_map_is_walked_by_the_shortest_jump() {
             &[(-1600, 0, -500), (-1600, 0, 0), (0, 45, 0)],
         ),
         (ArenaId::DELTA, (-2800, 0, 0), &[(0, 45, 0)]),
+        // Gorge: the point along the river; the north cliff-top by its
+        // west ledges and by its east ones, then across the bridge over the
+        // point to the south cliff-top; the cave from the bay to its mouth
+        // by the point.
+        (ArenaId::GORGE, (-2800, 0, 0), &[(0, 45, 0)]),
+        (
+            ArenaId::GORGE,
+            (-2300, 0, 400),
+            &[(-2300, 230, 780), (-2300, 700, 1400)],
+        ),
+        (
+            ArenaId::GORGE,
+            (1500, 0, 400),
+            &[
+                (1500, 230, 780),
+                (1500, 700, 1400),
+                (0, 700, 1200),
+                (0, 700, 0),
+                (0, 700, -1300),
+            ],
+        ),
+        (
+            ArenaId::GORGE,
+            (-3400, 0, 700),
+            &[
+                (-3400, 0, 1450),
+                (-150, 0, 1450),
+                (-150, 0, 700),
+                (0, 45, 200),
+            ],
+        ),
+        // Henge: the west stone by its stair, along the lintel over the
+        // point and on to the north stone; the north stone from outside;
+        // the barrow end to end and on to the point.
+        (
+            ArenaId::HENGE,
+            (-2200, 0, 0),
+            &[
+                (-1600, 230, 0),
+                (-1400, 470, 0),
+                (-1100, 700, 0),
+                (-500, 700, 0),
+                (0, 700, 0),
+                (0, 700, 1100),
+            ],
+        ),
+        (
+            ArenaId::HENGE,
+            (0, 0, 2200),
+            &[(0, 230, 1600), (0, 470, 1400), (0, 700, 1100)],
+        ),
+        (
+            ArenaId::HENGE,
+            (-3300, 0, -1300),
+            &[(-1500, 0, -1300), (0, 45, 0)],
+        ),
     ];
     let mut failed = Vec::new();
     for (id, from, route) in routes {

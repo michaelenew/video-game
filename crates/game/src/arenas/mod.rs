@@ -123,6 +123,8 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::QUARRY => &stages::QUARRY,
         ArenaId::GLACIER => &stages::GLACIER,
         ArenaId::DELTA => &stages::DELTA,
+        ArenaId::GORGE => &stages::GORGE,
+        ArenaId::HENGE => &stages::HENGE,
         _ => &proving_ground::DRESSING,
     }
 }

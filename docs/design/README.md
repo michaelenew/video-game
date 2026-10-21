@@ -152,7 +152,7 @@ game, `T` tempers the one you are hunting, and the HUD's list shows your trophie
 
 **The game starts in the valley** ([valley.md](valley.md)): Hearth's square, with every creature a room off the climb, behind its tier's waystone -- one map you walk, since 2026-10-09 ([atlas.md](atlas.md)). `--versus` starts the proving ground instead, and `--open` lights every waystone.
 
-**Fighting each other has places of its own** ([versus.md](versus.md), 2026-10-21): four floating duel stages where knocking someone off the edge wins the round, and three King of the Hill maps -- a capture point held until the other side takes it, the side that holds it longest winning. `Shift+N` steps through them; `--arena anvil` (or `ziggurat`, `caldera`, `twin_isles`, `quarry`, `glacier`, `delta`) starts on one.
+**Fighting each other has places of its own** ([versus.md](versus.md), 2026-10-21): four floating duel stages where knocking someone off the edge wins the round, and five King of the Hill maps -- a capture point held until the other side takes it, the side that holds it longest winning. `Shift+N` and the Esc menu step through them; `--arena anvil` (or `ziggurat`, `caldera`, `twin_isles`, `quarry`, `glacier`, `delta`, `gorge`, `henge`) starts on one.
 
 Two dev species, the gnats (a pack with nothing of its own) and the sentinel (one of every
 hazard and sense), are reached by `--hunt gnats` / `--hunt sentinel` and kept out of the cycle

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 728] = [
+pub const SCALARS: [i32; 729] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -736,6 +736,7 @@ pub const SCALARS: [i32; 728] = [
               25, // match.king_of_the_hill,_an_empty_point_drains_(%) = 25
             7200, // match.king_of_the_hill,_each_side's_clock = 7200
              300, // match.king_of_the_hill,_the_dead_are_back_after = 300
+          458752, // match.king_of_the_hill,_the_point_counts_up_to_(m) = 7
 ];
 
 #[rustfmt::skip]

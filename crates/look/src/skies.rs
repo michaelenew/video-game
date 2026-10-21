@@ -209,6 +209,10 @@ pub fn of(id: ArenaId) -> Sky {
         // under a cold clear sky, a river mouth in humid green haze.
         ArenaId::QUARRY => Sky::over([0.83, 0.86, 0.90]),
         ArenaId::GLACIER => Sky::over([0.82, 0.90, 0.98]),
+        // The Gorge in the cool of the morning, and the Henge's down under
+        // a high summer sky.
+        ArenaId::GORGE => Sky::over([0.80, 0.88, 0.92]),
+        ArenaId::HENGE => Sky::over([0.84, 0.88, 0.97]),
         ArenaId::DELTA => Sky {
             reach: 700.0,
             ..Sky::over([0.82, 0.90, 0.84])

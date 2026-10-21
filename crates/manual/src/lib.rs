@@ -638,15 +638,15 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "Versus stages",
         in_browser: true,
-        blurb: "Places built for fighting each other: four small floating stages where knocking someone off the edge wins the round, and three King of the Hill maps. docs/design/versus.md has the maps and the rules.",
+        blurb: "Places built for fighting each other: four small floating stages where knocking someone off the edge wins the round, and five King of the Hill maps. docs/design/versus.md has the maps and the rules.",
         entries: &[
             e(
                 "Shift+N",
-                "The next versus stage: the Anvil, the Ziggurat, the Caldera and the Twin Isles (floating duel stages), then the Quarry, the Glacier and the Delta (King of the Hill). From anywhere else, the first. Online, both players go together.",
+                "The next versus stage: the Anvil, the Ziggurat, the Caldera and the Twin Isles (floating duel stages), then the Quarry, the Glacier, the Delta, the Gorge and the Henge (King of the Hill). The Esc menu lists them too. From anywhere else, the first. Online, both players go together.",
             ),
             e(
                 "--arena anvil, ?arena=anvil",
-                "Start on a stage by name: anvil, ziggurat, caldera, twin_isles, quarry, glacier or delta.",
+                "Start on a stage by name: anvil, ziggurat, caldera, twin_isles, quarry, glacier, delta, gorge or henge.",
             ),
             e(
                 "Off the edge",
@@ -654,7 +654,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "King of the Hill",
-                "The point in the middle opens after a few seconds. Stand on it alone to take it -- faster with a team-mate; both sides on it and nothing moves. While your side holds it your clock runs down, and when it runs out your side wins -- unless the other side is on the point or part way to taking it, which is overtime. The knocked out stand back up at their side's start after a few seconds. Seats one and three are blue, two and four orange, and a side cannot hurt its own. The line under the bars shows both clocks and the point.",
+                "The point in the middle opens after a few seconds. Stand on it alone to take it -- in the air over it counts, so you can jump and fight on it, but standing on a bridge over it does not -- faster with a team-mate; both sides on it and nothing moves. While your side holds it your clock runs down, and when it runs out your side wins -- unless the other side is on the point or part way to taking it, which is overtime. The knocked out stand back up at their side's start after a few seconds. Seats one and three are blue, two and four orange, and a side cannot hurt its own. The line under the bars shows both clocks and the point.",
             ),
         ],
     },

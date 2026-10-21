@@ -1242,6 +1242,11 @@ scalars! {
     HillDecay,            "Match",    "King of the hill, an empty point drains (%)",         Percent, 0, 100;
     HillClock,            "Match",    "King of the hill, each side's clock",                 Frames, 600, 36000;
     HillRespawn,          "Match",    "King of the hill, the dead are back after",           Frames, 0, 1200;
+    // **The point is a column** (2026-10-21, from play): feet anywhere over
+    // the disc up to this high count, so a jump on it is still on it --
+    // seven metres, over the Dual mage's six-metre hop. A map's own headroom
+    // caps it (`versus::Hill::room`).
+    HillColumn,           "Match",    "King of the hill, the point counts up to (m)",        Fixed, 0, fx(12,1);
 }
 
 // ---------------------------------------------------------------------------

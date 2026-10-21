@@ -5,22 +5,23 @@ status: built 2026-10-21, unplayed
 # Versus modes — floating stages and King of the Hill
 
 Versus was one rule in one place: last one standing, in the proving ground.
-This adds **two modes and seven places built for fighting each other**:
+This adds **two modes and nine places built for fighting each other**:
 
 - **Four floating duel stages**: small islands hanging over open air. Knock
   your opponent off the edge and you win the round, the way Smash's ring-out
   works.
-- **King of the Hill**, Team Fortress 2's way, on **three maps**: one
+- **King of the Hill**, Team Fortress 2's way, on **five maps**: one
   capture point in the middle; you hold it until the other side takes it
   back; the side that holds it long enough wins.
 
 All of it is `sim::versus` (the rules), `sim::arena::stages` and
 `sim::arena::hills` (the places), and is tested by `crates/sim/tests/versus.rs`.
 
-**How to get there:** `Shift+N` in game steps through the seven stages (`N`
-alone is still the jump courses), and `--arena <name>` / `?arena=<name>`
-starts on one: `anvil`, `ziggurat`, `caldera`, `twin_isles`, `quarry`,
-`glacier`, `delta`. The mode comes from the map, as it does in Team Fortress
+**How to get there:** the Esc menu's **Versus stages** section has a button
+for each; `Shift+N` in game steps through all nine (`N` alone is still the
+jump courses); and `--arena <name>` / `?arena=<name>` starts on one:
+`anvil`, `ziggurat`, `caldera`, `twin_isles`, `quarry`, `glacier`, `delta`,
+`gorge`, `henge`. The mode comes from the map, as it does in Team Fortress
 2: there is no separate mode switch.
 
 ## 1 · The rules
@@ -48,6 +49,7 @@ on a map with a hill, so every other fight hashes as it always did.
 | Rule | Built as | Knob ("Match" family) | First guess |
 | --- | --- | --- | --- |
 | The point is **locked** at the start of a round, so both sides can reach it | counts down from the round's start | King of the hill, point unlocks after | 10 s |
+| **On the point** is anywhere over its disc, **in the air too** -- a column, so hopping and fighting on it keeps capturing -- but never standing on a bridge over it (each map caps the column under its own walkway, `Hill::room`) | | King of the hill, the point counts up to (m) | 7 m, over the Dual mage's 6 m hop |
 | One side **alone** on the point **captures** it | progress climbs a frame at a time | King of the hill, a capture takes | 6 s |
 | A **second** fighter of that side speeds it up | each one after the first adds a share | King of the hill, a second capper adds (%) | 50 % |
 | **Both sides** on it: **contested**, nothing moves | | | |
@@ -117,7 +119,10 @@ nothing copied from any one of them:
   movement section (CLAUDE.md's Bulwark rule is about those), so the
   Bulwark walks every route in the test.
 
-Each is about 75 × 55 m, inside a rim.
+Each is about 75 × 55 m, inside a rim. Where high ground backs onto the
+rim (the Glacier's shelves, the Gorge's cliff-tops) the rim's bank starts at
+that height, so walking off the back of it is walking onto the bank and not
+into a crease below it.
 
 ### The Quarry (`quarry`)
 
@@ -156,15 +161,44 @@ Over the north lane runs a broken **aqueduct**, the side's high road, 5.7 m
 up from its start to a broken end over the point's north flank. Reeds, a
 hummock and a fallen arch are cover.
 
+### The Gorge (`gorge`)
+
+A river gorge twenty metres wide between cliffs seven metres high, the
+sides' starts at its two ends. The point is on a gravel bar in the river,
+and **a plank bridge** crosses the gorge straight over it, four body heights
+up (its planks 6.3–7 m over the bar), from one cliff-top to the other: a
+walkway to fight down onto the point from, and to be knocked off. Each
+cliff-top is a long terrace of open high ground, climbed out of the gorge by
+two ledges at each end. Inside the north cliff runs **the cave**, in from a
+bay by the west start and out of a mouth in the cliff beside the point --
+the hidden way; the south cliff's is the east side's. The gorge floor is
+open, with boulders.
+
+### The Henge (`henge`)
+
+A giant's stone circle on a grass down. Four standing stones seven metres
+tall stand nine metres from the point, north, south, east and west, and
+**two lintels** cross between them over it in a cross, four body heights
+up: a walkway over the point from every side. Each stone is climbed by a
+stair of three blocks on its outer face; the west stone is the west side's,
+the east the east side's, north and south nobody's. Out by each start a
+**long barrow** has a passage through it that comes out beside the south (or
+north) stone -- the hidden way. A ring of smaller stones stands about for
+cover.
+
 ## 4 · Checked by
 
 `crates/sim/tests/versus.rs`:
 
 - every stage is registered, named, and the right kind; `Shift+N`'s order
-  visits all seven;
+  visits all nine;
 - a floating stage hangs wholly above its pit and starts everybody on it; a
   fall off it ends the round; standing still on it does not;
 - the point is standable at its middle, and no start is on it;
+- the point is a column: a hop over it counts, and nothing hanging over
+  it can be stood on inside the column -- standing on the Gorge's bridge or
+  the Henge's lintels is not on the point; **every class hops on the point
+  for a whole capture without once leaving it**;
 - the hill's rules one at a time: locked at the start, captured, held, the
   clock run, the round won; contested; a capture taken back before the other
   side starts its own; overtime; a second capper faster; the knocked out
@@ -188,6 +222,11 @@ dressing in `game::arenas::stages`, and a sky each in `look::skies`.
   the two-player game is unchanged: seat one against seat two.
 - **A round of King of the Hill is one game**: winning it adds a round win to
   everybody on the side. Rounds are counted as versus counts them.
+- **The point is a column seven metres tall** (from play): the first cut
+  counted three metres over the surface, and a high jump left it.
+- **The Glacier's shelves backed onto a bank that started at the floor**,
+  so stepping off a shelf's back dropped you into a crease under a
+  five-metre wall; the bank starts at the shelves' height now.
 - **The point unlocks after ten seconds**, not thirty: the maps are small
   and the walk to the point is about ten seconds.
 - **The Caldera's plug was a cone 1.8 m high** and came down to a drum a
