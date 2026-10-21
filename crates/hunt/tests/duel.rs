@@ -400,3 +400,65 @@ fn the_elementalist_pushes_stones() {
         "{blind} pushes with nothing of hers near the line, {aimed} with something"
     );
 }
+
+/// **The Reave spends the tally on the sparring bot** (2026-10-21, from
+/// play: "the reaver's lclick doesn't seem to be consuming stacks against the
+/// sparring bot"). The bot fights close, and a Reave thrown from close in ran
+/// her on to it and cut past it: the first thing to land was the shadow's
+/// copy, which marks rather than spends. Now the first blow of every Reave
+/// that lands is her own blade, and it takes the marks.
+#[test]
+fn the_reave_spends_the_marks_on_the_bot() {
+    use sim::moves::reaver as r;
+    use sim::state::Action;
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Champion]);
+    let mut bot = Duelist::new(1, Level::Normal, 7);
+    let (mut cashed, mut copied) = (0, 0);
+    let mut watching = false;
+    for f in 0..3000u32 {
+        let it = w.players[1];
+        let press = f % 30 == 0 && matches!(w.players[0].action, Action::Free);
+        if press {
+            // Close in, on its own floor, facing it: where the bot fights.
+            w.players[0].pos = V3::new(it.pos.x.sub(sim::Fx::ratio(6, 5)), it.pos.y, it.pos.z);
+            w.players[1].marks = 3;
+            watching = true;
+        }
+        bot.watch(&w);
+        let two = bot.act(&w);
+        let before = w.players[1].health;
+        w.advance([
+            Input::aimed(if press { r::keys::FINISHER } else { 0 }, 0),
+            two,
+        ]);
+        let reaving = matches!(w.players[0].action.attack_kind(), Some(r::REAVE));
+        if watching && reaving && w.players[1].health < before {
+            watching = false;
+            // A bot that stepped aside and is behind her as she lands got
+            // out of the way: the copy, turned to it, may catch it then.
+            let ahead = w.players[1]
+                .pos
+                .sub(w.players[0].pos)
+                .dot(w.players[0].facing);
+            if w.players[1].marks == 0 {
+                cashed += 1;
+            } else if ahead.raw() >= 0 {
+                copied += 1;
+            }
+        }
+        if !reaving {
+            watching = false;
+        }
+        if w.players[0].health <= 0 || w.players[1].health <= 0 {
+            w = World::with_classes([Class::ShadowReaver, Class::Champion]);
+        }
+    }
+    assert_eq!(
+        copied, 0,
+        "{copied} Reaves landed only the shadow's copy on a bot in front of her ({cashed} cashed)"
+    );
+    assert!(
+        cashed >= 10,
+        "too few Reaves landed to say anything: {cashed}"
+    );
+}

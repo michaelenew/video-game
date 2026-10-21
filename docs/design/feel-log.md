@@ -9694,3 +9694,22 @@ rises straight to the same ceiling at death; the launch still starts at the tabl
 air follow-ups are tuned to its height. **Measured**: the hammer carries a fresh Champion 1.6 m
 (was 1.1), one at half 2.4 m (2.2), one at a fifth 2.9 m (2.8); a fresh Bulwark 1.1 m, a fresh
 Dual mage 2.0 m. **Verdict** open.
+
+
+### 2026-10-21 — the Reave's cut reaches back to her
+
+From play: "the reaver's lclick doesn't seem to be consuming stacks against the sparring bot".
+**Found** the Reave's dash is a fixed 2.5 m and its disc sits 1.6 m past where the dash ends,
+reaching 0.1 m in front of her. Against the bot, which fights close and walks in, a Reave from
+close in carried her on to it and the disc landed beyond. Her blade whiffed, the only hit was
+the shadow's copy of the swing (12 damage), and a copy marks rather than spends. Against a
+target standing still it landed, which is why nothing caught it.
+**Changed** the Reave's volume is a flat strip from her body to the disc; everything that tests
+a flat volume asks `Hitbox::flat_nearest` (one point for every other disc, so nothing else
+moves). The sweet spot is still only the disc's middle.
+**Measured** against the Normal bot, Reaves from 1.2 m: 6 cashed and 11 landed only the copy on
+a bot in front of her; now 18 cash and none do. Three more land only the copy on a bot that
+stepped aside behind her, which is the bot getting out of the way. Pinned by
+`crates/hunt/tests/duel.rs` (`the_reave_spends_the_marks_on_the_bot`).
+**Verdict** open -- unplayed.
+

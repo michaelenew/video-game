@@ -4379,6 +4379,14 @@ impl Hitbox {
             .add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))
     }
 
+    /// The point of a flat volume nearest `at` along the floor: its one
+    /// point for a disc, and the nearest point of the strip for one stretched
+    /// from her body (the Reave's, see [`hitbox`]). A flat volume is tested
+    /// by the floor distance from here; everything that tests one asks this.
+    pub fn flat_nearest(&self, at: V3) -> V3 {
+        crate::math::flat_segment_nearest(at, self.from, self.to)
+    }
+
     /// Is this volume a line rather than a bubble?
     pub fn is_a_beam(&self) -> bool {
         self.from != self.to
@@ -4511,6 +4519,21 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             moves::Shape::Cylinder if p.stoop.raw() < 0 => {
                 return Some(disc(p.pos.add(p.facing.scale(m.reach))));
             }
+            // **The Reave's cut reaches back to her** (2026-10-21, from
+            // play): its dash is a fixed 2.5 m, so thrown from on top of
+            // somebody it ran her onto them and the disc landed past them --
+            // a whiff, and only the shadow's copy connected, which marks
+            // rather than cashes. 0013 says the cut is plain from there, not
+            // gone: so the disc is stretched into a strip from her body,
+            // and only its far end is the sweet spot (`reave_sweet`).
+            moves::Shape::Cylinder
+                if p.class == Class::ShadowReaver && kind == moves::reaver::REAVE =>
+            {
+                return Some(Hitbox {
+                    from: p.pos,
+                    ..disc(p.pos.add(p.aim_dir().scale(m.reach)))
+                });
+            }
             moves::Shape::Cylinder => return Some(disc(p.pos.add(p.aim_dir().scale(m.reach)))),
             moves::Shape::Swing(plane) => {
                 // The hand stays near the body and the head of the weapon
@@ -4625,7 +4648,8 @@ fn reave_sweet(
     if attacker.class != Class::ShadowReaver || kind != moves::reaver::REAVE {
         return Fx::ONE;
     }
-    if inside(box_out.centre(), t::reave_sweet()) {
+    // The middle of the cut's disc, at the far end of its strip.
+    if inside(box_out.to, t::reave_sweet()) {
         t::reave_sweet_damage()
     } else {
         Fx::ONE
@@ -4854,7 +4878,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         // The original rule, kept for every move that has not been given a
         // shape: flat distance from the middle of the disc, with no top and no
         // bottom. You cannot duck under one of these or jump over it.
-        let delta = defender.pos.sub(box_out.centre());
+        let delta = defender.pos.sub(box_out.flat_nearest(defender.pos));
         delta.flat_len().raw() <= reach.raw()
     } else {
         // A capsule against a standing body. Height genuinely decides this
@@ -9326,7 +9350,15 @@ pub fn shield_hitbox(p: &Player) -> Option<Hitbox> {
 /// not of standing next to it and swinging.
 fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<usize> {
     if box_out.flat {
-        return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
+        // A disc is one point; a strip (the Reave's) is asked from its far
+        // end, the sweet spot, back toward her.
+        if box_out.from == box_out.to {
+            return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
+        }
+        return (0..=3).rev().find_map(|i| {
+            let at = crate::math::lerp3(box_out.from, box_out.to, Fx::ratio(i, 3));
+            beast.part_struck(at, box_out.radius, attacker.hurt_height())
+        });
     }
     const SAMPLES: i32 = 5;
     let thick = box_out.radius;
@@ -17391,7 +17423,7 @@ impl World {
             let reach = hb.radius.add(radius);
             let top = V3::new(th.pos.x, th.pos.y.add(height), th.pos.z);
             let touched = if hb.flat {
-                th.pos.sub(hb.centre()).flat_len().raw() <= reach.raw()
+                th.pos.sub(hb.flat_nearest(th.pos)).flat_len().raw() <= reach.raw()
             } else {
                 crate::math::segment_gap(hb.from, hb.to, th.pos, top).raw() <= reach.raw()
             };

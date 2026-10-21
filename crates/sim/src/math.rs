@@ -843,20 +843,27 @@ pub fn wide_normalized(v: V3) -> V3 {
 /// line on the floor -- a web strand -- is measured by.
 pub fn flat_segment_gap(p: V3, a: V3, b: V3) -> Fx {
     let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z);
-    let (p, a, b) = (flat(p), flat(a), flat(b));
-    let d = b.sub(a);
+    big_len(flat(p).sub(flat(flat_segment_nearest(p, a, b))))
+}
+
+/// The point on the segment from `a` to `b` nearest `p` in the floor plane:
+/// [`flat_segment_gap`]'s closest point, at its own height on the segment.
+/// Exactly `a` when the two ends are one point.
+pub fn flat_segment_nearest(p: V3, a: V3, b: V3) -> V3 {
+    let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z);
+    let (fp, fa, fb) = (flat(p), flat(a), flat(b));
+    let d = fb.sub(fa);
     // In `i64`, so a strand across a cave and a point at its far end square
     // without saturating.
     let dd = d.x.raw() as i64 * d.x.raw() as i64 + d.z.raw() as i64 * d.z.raw() as i64;
-    let r = p.sub(a);
+    let r = fp.sub(fa);
     let along = if dd == 0 {
         0
     } else {
         let dot = r.x.raw() as i64 * d.x.raw() as i64 + r.z.raw() as i64 * d.z.raw() as i64;
         ((dot << 16) / dd).clamp(0, 1 << 16)
     };
-    let at = a.add(d.scale(Fx::from_raw(along as i32)));
-    big_len(p.sub(at))
+    a.add(b.sub(a).scale(Fx::from_raw(along as i32)))
 }
 
 /// **How far a body `half_width` wide can travel along `dir` from `from`,
