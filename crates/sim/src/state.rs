@@ -5181,13 +5181,21 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         // what they weigh. One multiplier for the whole launch, sideways and
         // up alike, so a move keeps the angle it was authored with and only
         // the distance grows. A creature's blow does what its table says.
-        let carry = if duel {
-            knockback_swell(defender, hit.damage).div(t::weight_of(defender.class))
+        //
+        // The shove starts above the table at full health and climbs to the
+        // same ceiling (`tuning::swell_start`); the launch starts at the
+        // table, because the follow-ups into the air are tuned to its height.
+        let (carry, lift_carry) = if duel {
+            let weight = t::weight_of(defender.class);
+            (
+                knockback_swell(defender, hit.damage, t::swell_start()).div(weight),
+                knockback_swell(defender, hit.damage, Fx::ONE).div(weight),
+            )
         } else {
-            Fx::ONE
+            (Fx::ONE, Fx::ONE)
         };
         let shove = hit.knockback.mul(carry);
-        let lift = hit.launch.mul(carry);
+        let lift = hit.launch.mul(lift_carry);
         defender.vel.x = hit.dir.x.mul(shove);
         defender.vel.z = hit.dir.z.mul(shove);
         if hit.grabs > 0 {
@@ -5263,17 +5271,22 @@ fn hurt(p: &Player) -> Fx {
     Fx::ratio((full - p.health).clamp(0, full), full)
 }
 
-/// How much further a fighter's blow sends this victim than it would send an
-/// untouched one, before their weight.
+/// What a fighter's blow is multiplied by against this victim, before their
+/// weight: `start` at full health, rising in a straight line to the ceiling
+/// at death.
 ///
-/// Two terms, as Smash has: one grows with what the victim has lost, the
-/// other with the share of their bar this blow took, so a committed move
-/// scales harder against a hurt opponent than a poke does.
-fn knockback_swell(victim: &Player, damage: i32) -> Fx {
+/// The ceiling has two terms, as Smash has: one for dying at all, the other
+/// for the share of their bar this blow took, so a committed move scales
+/// harder against a hurt opponent than a poke does. A start above one is a
+/// slower climb to the same ceiling, never a higher one.
+fn knockback_swell(victim: &Player, damage: i32, start: Fx) -> Fx {
     let full = victim.full_health().max(1);
     let share = Fx::ratio(damage.clamp(0, full), full);
-    let growth = t::swell_knockback().add(t::swell_blow().mul(share));
-    Fx::ONE.add(hurt(victim).mul(growth))
+    let ceiling = Fx::ONE
+        .add(t::swell_knockback())
+        .add(t::swell_blow().mul(share));
+    let rise = ceiling.sub(start).max(Fx::ZERO);
+    start.add(hurt(victim).mul(rise))
 }
 
 /// How much further this fighter would be thrown than an untouched one: the
@@ -5281,8 +5294,10 @@ fn knockback_swell(victim: &Player, damage: i32) -> Fx {
 /// leaves out the blow's own term, which belongs to whichever move lands next,
 /// and folds in the class's weight.
 pub fn launch_scale(p: &Player) -> Fx {
-    Fx::ONE
-        .add(hurt(p).mul(t::swell_knockback()))
+    let ceiling = Fx::ONE.add(t::swell_knockback());
+    let start = t::swell_start();
+    start
+        .add(hurt(p).mul(ceiling.sub(start).max(Fx::ZERO)))
         .div(t::weight_of(p.class))
 }
 
@@ -20613,6 +20628,48 @@ mod knockback_tests {
             fresh.stun_total >= 20,
             "never less than the table's own stun"
         );
+    }
+
+    #[test]
+    fn the_shove_starts_above_the_table_and_ends_where_it_did() {
+        // A Champion weighs one, so what is measured is the swell alone.
+        let mut fresh = Player::new(Class::Champion);
+        let mut nothing = blow(1);
+        nothing.damage = 0;
+        apply_hit(&mut fresh, nothing);
+        assert_eq!(
+            fresh.vel.x,
+            Fx::from_int(4).mul(t::swell_start()),
+            "untouched, the shove is the start times the table"
+        );
+        assert!(
+            t::swell_start().raw() > Fx::ONE.raw(),
+            "and the start is above one"
+        );
+        // The killing blow: the ceiling, which the start does not move.
+        let mut last = Player::new(Class::Champion);
+        last.health = 50;
+        apply_hit(&mut last, blow(1));
+        let share = Fx::ratio(50, last.full_health());
+        let ceiling = Fx::ONE
+            .add(t::swell_knockback())
+            .add(t::swell_blow().mul(share));
+        assert!(
+            (last.vel.x.raw() - Fx::from_int(4).mul(ceiling).raw()).abs() < 64,
+            "at death the ceiling: {:?} against {:?}",
+            last.vel.x,
+            Fx::from_int(4).mul(ceiling)
+        );
+    }
+
+    #[test]
+    fn a_launch_starts_at_the_table() {
+        let mut p = Player::new(Class::Champion);
+        let mut up = blow(1);
+        up.damage = 0;
+        up.launch = Fx::from_int(6);
+        apply_hit(&mut p, up);
+        assert_eq!(p.vel.y, Fx::from_int(6), "the follow-ups are tuned to it");
     }
 
     #[test]

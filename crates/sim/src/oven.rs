@@ -1244,6 +1244,10 @@ scalars! {
     SwellBlow,            "Knockback", "Swell, added per share of the bar a blow takes (x)",  Fixed, 0, fx(20,1);
     SwellHitstun,         "Knockback", "Swell, hitstun added at death (x)",                   Fixed, 0, fx(3,1);
     ComboDecay,           "Knockback", "Swell kept per hit in a string",                      Fixed, 0, fx(1,1);
+    // **Knockback starts higher** (2026-10-21, from play): at full health a
+    // fighter's shove is this times the table, rising in a straight line to
+    // the same multiple at death it reached before. Sideways only.
+    SwellStart,           "Knockback", "Knockback at full health (x)",                        Fixed, fx(1,2), fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

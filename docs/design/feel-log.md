@@ -9686,3 +9686,11 @@ thrown by it steered somewhere else). Narrowed to launches from a fighter, like 
 far reads as the fight heating up or as the rules changing; whether the Champion's strings link
 at a quarter bar where they did not; whether the Bulwark's 1.35 makes him feel planted or
 merely sluggish to fight.
+
+**Later the same day, from play**: "0 damage knockback doesn't feel like you can use it at
+all" -- knockback should start greater (not much greater) and climb more slowly to where it
+caps out now. **Changed** the shove's line starts at `Knockback at full health (x)`, 1.5, and
+rises straight to the same ceiling at death; the launch still starts at the table, because the
+air follow-ups are tuned to its height. **Measured**: the hammer carries a fresh Champion 1.6 m
+(was 1.1), one at half 2.4 m (2.2), one at a fifth 2.9 m (2.8); a fresh Bulwark 1.1 m, a fresh
+Dual mage 2.0 m. **Verdict** open.

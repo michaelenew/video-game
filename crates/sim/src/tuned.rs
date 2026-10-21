@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 732] = [
+pub const SCALARS: [i32; 733] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -740,6 +740,7 @@ pub const SCALARS: [i32; 732] = [
           196608, // knockback.swell,_added_per_share_of_the_bar_a_blow_takes_(x) = 3
            65536, // knockback.swell,_hitstun_added_at_death_(x) = 1
            19661, // knockback.swell_kept_per_hit_in_a_string = 0.3
+           98304, // knockback.knockback_at_full_health_(x) = 1.5
 ];
 
 #[rustfmt::skip]

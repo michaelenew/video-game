@@ -49,15 +49,27 @@ Everything below changes the third, and how long the second lasts.
 
 Smash's percent, in a game whose bar counts down instead of up.
 
-A move's `knockback`, `launch` and `hitstun` in the move table are **what it
-does to someone untouched**. Between fighters, they grow with the share of
-their own bar the victim has already lost:
+A move's `launch` and `hitstun` in the move table are **what it does to
+someone untouched**. Its `knockback` starts a little above the table, at
+*Knockback at full health* (1.5). Between fighters, all three grow with the
+share of their own bar the victim has already lost:
 
 ```
 hurt      = 1 - health / full health          (0 untouched, 1 at death)
-knockback = table x (1 + hurt x (swell + blow x share of the bar this blow took)) / weight
+ceiling   = 1 + swell + blow x share of the bar this blow took
+knockback = table x (start + hurt x (ceiling - start)) / weight
+launch    = table x (1     + hurt x (ceiling - 1))     / weight
 hitstun   = table x (1 + hurt x stun swell x decay^hits in the string)
 ```
+
+**The shove starts higher and climbs more slowly** (2026-10-21, from play:
+"0 damage knockback doesn't feel like you can use it at all"). The start
+lifts the bottom of the line, and the ceiling at death is where it was, so a
+higher start is a gentler climb rather than a bigger finish. The launch keeps
+starting at the table, because the follow-ups into the air (the Champion's
+leap after an upcut) are tuned to its height. So early in a round a blow
+sends somebody a little flatter than its author wrote; by the end the two
+agree again.
 
 Two terms in the knockback, as Smash has: one grows with what the victim has
 lost, and one with the size of the blow, so a committed move scales harder
@@ -156,11 +168,14 @@ fields left out of the hash.
 
 | Victim | Carried |
 | --- | --- |
-| Champion, full health | 1.1 m |
-| Champion, half | 2.2 m |
-| Champion, a fifth | 2.8 m |
-| Bulwark, full | 0.8 m |
-| Dual mage, full | 1.4 m |
+| Champion, full health | 1.6 m |
+| Champion, half | 2.4 m |
+| Champion, a fifth | 2.9 m |
+| Bulwark, full | 1.1 m |
+| Dual mage, full | 2.0 m |
+
+With the shove starting at the table (the first build, the same day) these
+were 1.1, 2.2, 2.8, 0.8 and 1.4 m.
 
 ## Open numbers
 
@@ -169,8 +184,9 @@ All in the Oven under **Knockback**. None of them can be reasoned out.
 - **The swell.** The branch ran +4.5 at death and +5 per blow share, against a
   game whose knockback was half what it is now (the 2026-09-26 pass doubled
   the heavy hits). These start at +2 and +3, so the distances above are about
-  what the branch meant. Whether the middle of a round should throw people
-  twice as far is a question for somebody with a controller.
+  what the branch meant. The start, 1.5, came from the first play: at 1 a
+  fresh hit's shove was too small to use. Whether 1.5 is enough is the next
+  thing to play for.
 - **Stun swell +1 at death, decay 0.3.** As built on the branch. Whether a
   Champion string at a quarter bar now links where it did not is the first
   thing to play for.

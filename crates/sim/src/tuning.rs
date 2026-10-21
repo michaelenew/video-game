@@ -1527,6 +1527,14 @@ pub fn swell_knockback() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SwellKnockback))
 }
 
+/// What a fighter's shove is worth, against another fighter, at full
+/// health: the start of the swell's line. The line rises from here to the
+/// same multiple at death [`swell_knockback`] sets, so a higher start is a
+/// slower climb, not a higher ceiling. The shove only; a launch starts at one.
+pub fn swell_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellStart))
+}
+
 /// The second term of the knockback swell, per share of the victim's bar the
 /// blow itself took: a committed move grows harder against a hurt opponent
 /// than a poke does, so a jab never turns into a launcher just by being
