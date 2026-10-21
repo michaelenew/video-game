@@ -22,6 +22,7 @@
 
 use super::{After, Duelist, Gesture, Seen, Tool, back, by_the_wall, flat};
 use sim::class::{Force, Mechanic, Shield};
+use sim::effects::EffectKind;
 use sim::fixed::Fx;
 use sim::moves::{self, elementalist};
 use sim::state::{self, Action, Player, SLOT_MECHANIC, SLOT_SPECIAL};
@@ -46,6 +47,9 @@ pub(super) struct Cues {
     pub pool_by_them: bool,
     /// One of the Elementalist's standing stones is between her and them.
     pub stone_between: bool,
+    /// Her fire -- a pillar, a cloud of embers, a carpet -- is on the line
+    /// to them, or round them: a Bolt shot through it comes out a fire bolt.
+    pub fire_between: bool,
     /// They are guarding.
     pub guarding: bool,
     /// How full the Bulwark's shield is, in percent.
@@ -74,6 +78,10 @@ const STONE_RIDE: u16 = 30;
 /// wall, once the bot raised the stone with the right button (2026-10-20).
 const STONE_RIDE_CLEAR: Fx = Fx::from_int(8);
 
+/// How close to the line her fire has to be for a Bolt to pass through it:
+/// a pillar's girth and a little.
+const FIRE_NEAR: Fx = Fx::ratio(15, 10);
+
 /// Is this one of the Elementalist's two pushes?
 fn pushes(bits: u16) -> bool {
     bits == elementalist::keys::WEAK_PUSH || bits == elementalist::keys::STRONG_PUSH
@@ -98,11 +106,21 @@ impl Duelist {
             let line = flat(them.pos.sub(me.pos));
             let dist = line.flat_len();
             let dir = line.normalized();
-            cues.stone_between = stones.iter().flatten().any(|s| {
-                let rel = flat(s.at.sub(me.pos));
+            let on_the_line = |at: V3, within: Fx| {
+                let rel = flat(at.sub(me.pos));
                 let along = rel.dot(dir);
                 let off = rel.sub(dir.scale(along)).flat_len();
-                along.raw() > 0 && along.raw() < dist.raw() && off.raw() < Fx::ONE.raw()
+                along.raw() > 0 && along.raw() < dist.add(within).raw() && off.raw() < within.raw()
+            };
+            cues.stone_between = stones.iter().flatten().any(|s| on_the_line(s.at, Fx::ONE));
+            let who = self.who as u8;
+            cues.fire_between = w.effects.iter().flatten().any(|e| {
+                e.owner == who
+                    && matches!(
+                        e.kind,
+                        EffectKind::FirePillar | EffectKind::Embers | EffectKind::FireCarpet
+                    )
+                    && on_the_line(e.pos, FIRE_NEAR)
             });
         }
         self.cues = cues;
@@ -132,12 +150,18 @@ impl Duelist {
         }
     }
 
-    /// The Elementalist's two pushes go through a body and kick what she
+    /// The Elementalist's two pushes go through a body and act on what she
     /// built: worth throwing at somebody only with one of her stones between
     /// her and them, to kick into them (the Bolt) or break into debris on
-    /// them (Cataclysm).
+    /// them (Cataclysm) -- or, for the Bolt, her fire on the line, which it
+    /// comes out of as a fire bolt. That is what the creature hunter does
+    /// with it, a pillar under the work and the Bolt through it, and without
+    /// it her hunts do half the damage (2026-10-20).
     fn wants_harmless(&self, me: &Player, t: Tool) -> bool {
-        me.class == Class::Elementalist && pushes(t.bits) && self.cues.stone_between
+        me.class == Class::Elementalist
+            && pushes(t.bits)
+            && (self.cues.stone_between
+                || self.cues.fire_between && t.bits == elementalist::keys::WEAK_PUSH)
     }
 
     fn class_bias(&self, me: &Player, t: Tool) -> i32 {
@@ -174,6 +198,9 @@ impl Duelist {
                 if cues.stone_between && pushes(t.bits) {
                     // A push kicks a stone along the line it was shot on.
                     400
+                } else if cues.fire_between && t.bits == elementalist::keys::WEAK_PUSH {
+                    // The Bolt, through her fire: a fire bolt.
+                    300
                 } else if t.bits == elementalist::keys::FIRE {
                     // The pillar: her damage, and the field's fire.
                     150

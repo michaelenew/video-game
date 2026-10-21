@@ -327,10 +327,11 @@ fn it_knows_what_hurts() {
 }
 
 /// **It does not push at nobody.** The Elementalist's pushes go through a
-/// body, so she throws them to kick one of her stones into somebody: over
-/// three minutes against a Champion, nearly every push she throws has a stone
-/// of hers near the line between them. Until 2026-10-20 she threw them all
-/// fight with nothing to push, and did nothing with them.
+/// body, so she throws them to kick one of her stones into somebody, or the
+/// Bolt through her fire, which lights it: over three minutes against a
+/// Champion, nearly every push she throws has a stone or a fire of hers near
+/// the line between them. Until 2026-10-20 she threw them all fight with
+/// nothing to push, and did nothing with them.
 ///
 /// Near rather than on the line, by two metres: what she aims at is where she
 /// saw him a reaction ago, and he has moved since.
@@ -366,14 +367,21 @@ fn the_elementalist_pushes_stones() {
                 let Mechanic::Structures(stones) = me.mechanic else {
                     unreachable!()
                 };
-                let near = stones.iter().flatten().any(|s| {
-                    let rel = s.at.sub(me.pos);
+                let near_line = |at: V3| {
+                    let rel = at.sub(me.pos);
                     let along = rel.dot(dir);
                     let off = rel.sub(dir.scale(along)).flat_len();
                     along.raw() > 0
-                        && along.raw() < dist.raw()
+                        && along.raw() < dist.add(sim::Fx::from_int(2)).raw()
                         && off.raw() < sim::Fx::from_int(2).raw()
-                });
+                };
+                use sim::effects::EffectKind as K;
+                let near = stones.iter().flatten().any(|s| near_line(s.at))
+                    || w.effects.iter().flatten().any(|e| {
+                        e.owner == 0
+                            && matches!(e.kind, K::FirePillar | K::Embers | K::FireCarpet)
+                            && near_line(e.pos)
+                    });
                 if near {
                     aimed += 1;
                 } else {
@@ -383,9 +391,12 @@ fn the_elementalist_pushes_stones() {
             was = now;
         },
     );
-    assert!(aimed >= 10, "she pushed a stone at him only {aimed} times");
+    assert!(
+        aimed >= 10,
+        "she pushed a stone or fire at him only {aimed} times"
+    );
     assert!(
         blind * 3 < aimed,
-        "{blind} pushes with no stone near the line, {aimed} with one"
+        "{blind} pushes with nothing of hers near the line, {aimed} with something"
     );
 }
