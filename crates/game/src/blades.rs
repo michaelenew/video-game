@@ -224,3 +224,82 @@ pub fn steel() -> StandardMaterial {
         ..default()
     }
 }
+
+/// Dark wood, for a haft; iron, for the bands on it; and a scythe's edge,
+/// lit the colour of the blood it draws.
+const WOOD: [f32; 4] = [0.07, 0.035, 0.02, 1.0];
+const IRON: [f32; 4] = [0.06, 0.055, 0.065, 1.0];
+const BLOOD_EDGE: [f32; 4] = [0.55, 0.05, 0.08, 1.0];
+
+/// **The Blood mage's scythe's haft** (2026-10-21): a turned pole, unit
+/// long along `y` and centred, half a unit across, with iron bands at the
+/// butt, the grip and the neck and a leather wrap where the leading hand
+/// holds it -- drawn stretched from butt to neck, as the bar it replaces was.
+pub fn haft() -> Mesh {
+    let mut b = Builder::new();
+    let sides = 10;
+    // (height along the pole, radius as a share of the pole's, colour)
+    let rings: &[(f32, f32, [f32; 4])] = &[
+        (-0.5, 0.0, IRON),
+        (-0.5, 1.15, IRON),
+        (-0.46, 1.15, IRON),
+        (-0.45, 0.95, WOOD),
+        (0.05, 0.95, WOOD),
+        (0.06, 1.08, IRON),
+        (0.08, 1.08, IRON),
+        (0.09, 1.02, IRON),
+        (0.30, 1.02, IRON),
+        (0.31, 0.95, WOOD),
+        (0.44, 0.95, WOOD),
+        (0.45, 1.25, IRON),
+        (0.5, 1.25, IRON),
+        (0.5, 0.0, IRON),
+    ];
+    for w in rings.windows(2) {
+        let ((y0, r0, c0), (y1, r1, c1)) = (w[0], w[1]);
+        for i in 0..sides {
+            let a0 = i as f32 / sides as f32 * std::f32::consts::TAU;
+            let a1 = (i + 1) as f32 / sides as f32 * std::f32::consts::TAU;
+            let p = |y: f32, r: f32, a: f32| Vec3::new(a.cos() * r * 0.5, y, a.sin() * r * 0.5);
+            b.tri(p(y0, r0, a0), p(y1, r1, a1), p(y1, r1, a0), c0, c1, c1);
+            b.tri(p(y0, r0, a0), p(y0, r0, a1), p(y1, r1, a1), c0, c0, c1);
+        }
+    }
+    b.mesh()
+}
+
+/// **The Blood mage's scythe's blade**: from its socket at the origin to
+/// its point at `(0, 1, 0)`, bowed out toward `+z` (the scythe's `bow`) by a
+/// fifth of its length at the middle, broad at the heel and running to the
+/// point, its cutting edge on the inside of the curve lit crimson. Drawn at
+/// the length of the blade, so it bends with the hit test's reach.
+pub fn scythe_blade() -> Mesh {
+    let mut b = Builder::new();
+    let steps = 20;
+    let spine = |t: f32| Vec3::new(0.0, t, 0.2 * (std::f32::consts::PI * t).sin());
+    // Broadest at the heel, to nothing at the point.
+    let breadth = |t: f32| 0.105 * (1.0 - t).powf(0.7) + 0.004;
+    let thick = 0.018;
+    for i in 0..steps {
+        let (t0, t1) = (i as f32 / steps as f32, (i + 1) as f32 / steps as f32);
+        let (s0, s1) = (spine(t0), spine(t1));
+        // The blade's flat lies in the y-z plane; its edge is toward -z.
+        let (e0, e1) = (s0 - Vec3::Z * breadth(t0), s1 - Vec3::Z * breadth(t1));
+        for side in [1.0f32, -1.0] {
+            let (k0, k1) = (s0 + Vec3::X * thick * side, s1 + Vec3::X * thick * side);
+            if side > 0.0 {
+                b.tri(k0, e0, e1, IRON, BLOOD_EDGE, BLOOD_EDGE);
+                b.tri(k0, e1, k1, IRON, BLOOD_EDGE, IRON);
+            } else {
+                b.tri(k0, e1, e0, IRON, BLOOD_EDGE, BLOOD_EDGE);
+                b.tri(k0, k1, e1, IRON, IRON, BLOOD_EDGE);
+            }
+        }
+        // The spine's back, closed.
+        let (a0, a1) = (s0 + Vec3::X * thick, s1 + Vec3::X * thick);
+        let (c0, c1) = (s0 - Vec3::X * thick, s1 - Vec3::X * thick);
+        b.tri(a0, a1, c1, IRON, IRON, IRON);
+        b.tri(a0, c1, c0, IRON, IRON, IRON);
+    }
+    b.mesh()
+}

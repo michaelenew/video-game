@@ -42,6 +42,7 @@ mod ink;
 mod keep;
 mod land;
 mod menu;
+mod models;
 mod online;
 mod outline;
 mod paint;
@@ -49,7 +50,6 @@ mod palette;
 mod picker;
 mod platform;
 mod profile;
-mod reaver;
 mod settings;
 mod shapes;
 mod signs;
@@ -264,7 +264,7 @@ fn main() {
         .add_plugins(splats::SplatsPlugin)
         .add_plugins(warm::WarmPlugin)
         .add_plugins(ink::InkPlugin)
-        .add_plugins(reaver::ReaverPlugin)
+        .add_plugins(models::ModelsPlugin)
         .add_plugins(impact::ImpactPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
@@ -2278,6 +2278,9 @@ struct EffectLook {
     crescent: Handle<Mesh>,
     steel: Handle<StandardMaterial>,
     forged: Handle<StandardMaterial>,
+    /// The Blood mage's scythe, as a weapon (`blades::haft`, `blades::scythe_blade`).
+    haft: Handle<Mesh>,
+    scythe_blade: Handle<Mesh>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2648,6 +2651,8 @@ fn setup(
         crescent: meshes.add(blades::crescent()),
         steel: materials.add(blades::steel()),
         forged: materials.add(blades::forged()),
+        haft: meshes.add(blades::haft()),
+        scythe_blade: meshes.add(blades::scythe_blade()),
         sun: materials.add(StandardMaterial {
             base_color: Color::srgba(1.0, 0.9, 0.62, 0.62),
             emissive: LinearRgba::rgb(4.2, 3.3, 1.6),
@@ -2863,14 +2868,17 @@ fn setup(
             MarkMesh(owner),
         ));
     }
-    // The Blood mage's scythe: a bar from her grip to the head of the blade.
-    // Shade-skinned rather than blood: it is iron, and the blood is what it
-    // leaves on the floor.
+    // The Blood mage's scythe: a turned haft and a curved blade
+    // (`blades`), in forged iron: the blood is what it leaves on the floor.
     for owner in 0..MAX_PLAYERS {
         for piece in 0..SCYTHE_PIECES {
             commands.spawn((
-                Mesh3d(unit.clone()),
-                MeshMaterial3d(look.shade.clone()),
+                Mesh3d(if piece == 0 {
+                    look.haft.clone()
+                } else {
+                    look.scythe_blade.clone()
+                }),
+                MeshMaterial3d(look.forged.clone()),
                 Transform::default(),
                 Visibility::Hidden,
                 ScytheMesh { owner, piece },
@@ -3051,7 +3059,7 @@ fn fade_own_body(
     sim: Res<Sim>,
     inside: Res<InsideOwnHead>,
     parts: Query<(&BodyPart, &MeshMaterial3d<still::SkinMaterial>)>,
-    rigs: Res<reaver::Rigs>,
+    rigs: Res<models::Rigs>,
     mut materials: ResMut<Assets<still::SkinMaterial>>,
 ) {
     let me = sim.local_player();
@@ -3098,20 +3106,20 @@ fn fade_own_body(
 fn pose_models(
     sim: Res<Sim>,
     joints: Res<Joints>,
-    rigs: Res<reaver::Rigs>,
+    rigs: Res<models::Rigs>,
     mut inks: ResMut<Assets<ink::InkMaterial>>,
-    mut models: Query<(&reaver::Model, &mut Visibility)>,
+    mut models: Query<(&models::Model, &mut Visibility)>,
     mut bones: Query<&mut Transform, Without<Fighter>>,
-    mut parts: Query<(&BodyPart, &mut Visibility), Without<reaver::Model>>,
-    mut balls: Query<(&BodyBall, &mut Visibility), (Without<reaver::Model>, Without<BodyPart>)>,
+    mut parts: Query<(&BodyPart, &mut Visibility), Without<models::Model>>,
+    mut balls: Query<(&BodyBall, &mut Visibility), (Without<models::Model>, Without<BodyPart>)>,
     mut shadow_parts: Query<
         (&ShadowPart, &mut Visibility),
-        (Without<reaver::Model>, Without<BodyPart>, Without<BodyBall>),
+        (Without<models::Model>, Without<BodyPart>, Without<BodyBall>),
     >,
     mut shadow_balls: Query<
         (&ShadowBall, &mut Visibility),
         (
-            Without<reaver::Model>,
+            Without<models::Model>,
             Without<BodyPart>,
             Without<BodyBall>,
             Without<ShadowPart>,
@@ -3120,7 +3128,7 @@ fn pose_models(
     mut copy_parts: Query<
         (&CopyPart, &mut Visibility),
         (
-            Without<reaver::Model>,
+            Without<models::Model>,
             Without<BodyPart>,
             Without<BodyBall>,
             Without<ShadowPart>,
@@ -3128,9 +3136,10 @@ fn pose_models(
         ),
     >,
 ) {
-    let modelled = |owner: usize| reaver::drawn(sim.cur.players[owner].class) && rigs.ready(owner);
+    let class = |owner: usize| sim.cur.players[owner].class;
+    let modelled = |owner: usize| rigs.ready(owner, class(owner));
     for (model, mut seen) in models.iter_mut() {
-        let want = if modelled(model.owner) {
+        let want = if modelled(model.owner) && model.shown_as(class(model.owner)) {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -3140,20 +3149,27 @@ fn pose_models(
         }
     }
     for owner in (0..MAX_PLAYERS).filter(|&o| modelled(o)) {
-        reaver::pose(rigs.her[owner], joints.body[owner].as_ref(), &mut bones);
-        reaver::pose(
+        models::pose(
+            rigs.her(owner, class(owner)),
+            joints.body[owner].as_ref(),
+            &mut bones,
+        );
+        if class(owner) != sim::Class::ShadowReaver {
+            continue;
+        }
+        models::pose(
             rigs.shadow[owner],
             joints.shadow[owner].as_ref(),
             &mut bones,
         );
         for copy in 0..REAP_COPIES {
-            reaver::pose(
+            models::pose(
                 rigs.copies[owner][copy],
                 joints.copies[owner][copy].as_ref(),
                 &mut bones,
             );
             let solid = (joints.copy_solid[owner][copy] / COPY_SOLID).min(1.0);
-            reaver::fade_copy(&rigs, owner, copy, solid, &mut inks);
+            models::fade_copy(&rigs, owner, copy, solid, &mut inks);
         }
     }
     let mannequin = |owner: usize| {
@@ -3192,17 +3208,18 @@ fn swing_coats(
     sim: Res<Sim>,
     time: Res<Time>,
     joints: Res<Joints>,
-    rigs: Res<reaver::Rigs>,
+    rigs: Res<models::Rigs>,
     mut coats: ResMut<coat::Coats>,
     fighters: Query<(&Fighter, &Transform)>,
     mut bones: Query<&mut Transform, Without<Fighter>>,
 ) {
     for (fighter, body) in fighters.iter() {
         let owner = fighter.0;
-        if !reaver::drawn(sim.cur.players[owner].class) {
+        let class = sim.cur.players[owner].class;
+        if !models::drawn(class) {
             continue;
         }
-        let (Some(tails), Some(skin)) = (rigs.tails[owner].as_ref(), joints.body[owner].as_ref())
+        let (Some(tails), Some(skin)) = (rigs.tails(owner, class), joints.body[owner].as_ref())
         else {
             continue;
         };
@@ -3622,13 +3639,16 @@ fn place_scythes(
             *vis = Visibility::Hidden;
             continue;
         };
-        // Three pieces of one weapon: the haft from the butt to the neck, and
-        // the blade from the neck to the mid and the mid to the tip, so its
-        // curve is visible.
+        // Two pieces of one weapon: the haft from the butt to the neck, and
+        // the blade from the neck to the tip, bowed the way the hit test's
+        // blade is. A third is not drawn.
+        if tag.piece >= 2 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
         let (from, to) = match tag.piece {
             0 => (Vec3::from(scythe.butt), Vec3::from(scythe.neck)),
-            1 => (Vec3::from(scythe.neck), Vec3::from(scythe.mid)),
-            _ => (Vec3::from(scythe.mid), Vec3::from(scythe.tip)),
+            _ => (Vec3::from(scythe.neck), Vec3::from(scythe.tip)),
         };
         let along = to - from;
         let length = along.length();
@@ -3637,7 +3657,12 @@ fn place_scythes(
             continue;
         }
         *vis = Visibility::Inherited;
-        tf.translation = from + along * 0.5;
+        // The haft is centred on its span; the blade starts at its socket.
+        tf.translation = if tag.piece == 0 {
+            from + along * 0.5
+        } else {
+            from
+        };
         // A full basis rather than a single axis, so the blade's flat lies in
         // the plane of the haft and the bow -- the plane of the cut -- and
         // does not roll to a world direction of its own. Y runs along the
@@ -3648,13 +3673,13 @@ fn place_scythes(
         let x = y.cross(bow).try_normalize().unwrap_or(Vec3::X);
         let z = x.cross(y);
         tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
-        // The haft is a pole. The blade is a thin band: edge-on it is nearly
-        // nothing, across it is a hand's breadth, and its length is the
-        // reach's last third.
+        // The haft is a pole; the blade is drawn at its own length, its
+        // shape kept (`blades::scythe_blade` is a unit blade), so it bows
+        // out the way the volume does as her reach grows.
         tf.scale = if tag.piece == 0 {
-            Vec3::new(0.06, length, 0.06)
+            Vec3::new(0.065, length, 0.065)
         } else {
-            Vec3::new(0.025, length, scythe.breadth)
+            Vec3::splat(length)
         };
     }
 }

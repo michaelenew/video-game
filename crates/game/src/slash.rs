@@ -240,7 +240,7 @@ fn cutting(p: &sim::state::Player) -> bool {
 /// propagated, so the blades are where this frame drew them.
 pub fn draw(
     sim: Res<crate::Sim>,
-    rigs: Res<crate::reaver::Rigs>,
+    rigs: Res<crate::models::Rigs>,
     points: Query<&GlobalTransform>,
     mut traces: ResMut<Traces>,
     mut ribbons: Query<(&Ribbon, &Mesh3d, &mut Visibility)>,
@@ -251,7 +251,7 @@ pub fn draw(
     let now = frame as f32 + alpha;
     for owner in 0..MAX_PLAYERS {
         let p = &sim.cur.players[owner];
-        let blades = rigs.blades[owner].filter(|_| crate::reaver::drawn(p.class));
+        let blades = rigs.blades[owner].filter(|_| p.class == sim::Class::ShadowReaver);
         for hand in 0..2 {
             let trace = &mut traces.0[owner][hand];
             if let (Some(blades), true) = (blades, cutting(p)) {

@@ -196,7 +196,7 @@ fn hash(seed: u32, k: usize) -> f32 {
 #[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are what it reads
 fn draw(
     sim: Res<crate::Sim>,
-    rigs: Res<crate::reaver::Rigs>,
+    rigs: Res<crate::models::Rigs>,
     points: Query<&GlobalTransform>,
     fighters: Query<(&crate::Fighter, &GlobalTransform)>,
     looks: Res<Looks>,
@@ -220,7 +220,7 @@ fn draw(
         let owner = fighter.0;
         let p = &sim.cur.players[owner];
         let b = &mut bursts.all[owner];
-        if !crate::reaver::drawn(p.class) {
+        if p.class != sim::Class::ShadowReaver {
             continue;
         }
         let Some(blow) = landed(p, frame).filter(|_| p.frozen > 0 || hurt) else {
@@ -264,7 +264,7 @@ fn draw(
     for slot in 0..MAX_EFFECTS {
         let now = sim.cur.effects[slot];
         let before = std::mem::replace(&mut bursts.seen[slot], now);
-        let Some(e) = now.filter(|e| crate::reaver::drawn(e.class)) else {
+        let Some(e) = now.filter(|e| e.class == sim::Class::ShadowReaver) else {
             continue;
         };
         let before = before.filter(|b| b.kind == e.kind && b.owner == e.owner && b.age <= e.age);
