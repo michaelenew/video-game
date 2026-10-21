@@ -6391,6 +6391,7 @@ fn step_player(
         &out,
         [pressed_mechanic, pressed_f, pressed_r, pressed_side_b],
     );
+    cancel_into_a_push(p, input, &out, pressed_mechanic);
 
     queue_the_shadow(p, input);
     follow_the_shadow(p, input);
@@ -8783,6 +8784,55 @@ fn cancel_the_carpet(
     if asked.into_iter().flatten().any(|k| p.can_throw(k, out)) {
         // Free rather than straight into the move, as `chain_cancel` does:
         // the ordinary input path below already knows how to throw it.
+        p.action = Action::Free;
+    }
+}
+
+/// Cut the recovery of anything the **Elementalist** throws short into `Q` or
+/// `E`, the two pushes.
+///
+/// The clicks are what she makes and the keys are what she does to it, so
+/// nearly every push follows something she has just put down. Waiting out the
+/// whole recovery first made every push two moves of frames -- the stone's
+/// recovery and then the push's own wind-up -- and the second wind-up is the
+/// part the opponent was meant to read (2026-10-21, from play).
+///
+/// **From anything but a push**, from `tuning::push_cancel_from` frames into
+/// its recovery to the end of it. Recovery only, as the carpet's: the thing is
+/// already out. Not a push into a push: the Bolt then Cataclysm is two
+/// decisions about one stone, and paying for the first is the price of
+/// making it. Only into a push that would come out, so the cancel is never
+/// spent on nothing. What it cannot buy is safety: she is still in the
+/// push's own frames, which are about as long as any recovery they cut
+/// (`a_cancelled_recovery_is_still_punishable_on_block`).
+///
+/// `Q` is read held and `E` on its press (`pressed_e`), as the input below
+/// reads them.
+fn cancel_into_a_push(
+    p: &mut Player,
+    input: Input,
+    out: &[bool; moves::MAX_SLOTS],
+    pressed_e: bool,
+) {
+    if p.class != Class::Elementalist {
+        return;
+    }
+    let Action::Recovery { kind, left } = p.action else {
+        return;
+    };
+    if kind == SLOT_POKE || kind == SLOT_HEAVY {
+        return;
+    }
+    if moves::get(p.class, kind).recovery.saturating_sub(left) < t::push_cancel_from() {
+        return;
+    }
+    let asked = [
+        input.has(Input::SPECIAL).then(|| keyed_q(p)).flatten(),
+        pressed_e.then(|| keyed_move(p)).flatten(),
+    ];
+    if asked.into_iter().flatten().any(|k| p.can_throw(k, out)) {
+        // Free, as `cancel_the_carpet` does: the input below throws it, and
+        // reads `Q` and `E` before anything else.
         p.action = Action::Free;
     }
 }

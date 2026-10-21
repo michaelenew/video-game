@@ -9502,3 +9502,31 @@ off or sliding down the lab's ledges where the 3 m slab covered only part of the
 re-searched (`envelope search --class`) and replaced, every other line kept. The Elementalist's
 best onto the +8 m ledge fell from 33.4 m to 27.7 m (shared blocks 32.2 to 20.5); the Champion's
 two moved by under a metre. One Blood mage line lost 2 cm.
+
+
+### 2026-10-21 — the Elementalist's pushes cut her recovery
+
+From play: "I think the elementalist's q and e should animation cancel her other abilities, or
+at least somehow be able to be cast faster after they come out. It's hard to use q and e right
+now because they are effectively two moves of frame data and about 4x longer effective windup."
+**Changed**: `Q` (the Bolt) or `E` (Cataclysm) asked for in the recovery of any other move of
+hers ends that recovery and comes out at once (`state::cancel_into_a_push`, the carpet's cancel
+made general). New knob `Q and E, cut a recovery from` (0 frames into the recovery); the window
+runs to the end of the recovery. Not from a push into a push. A pillar into the Bolt now puts
+the line out 7 frames after the pillar's recovery starts instead of 31, into Cataclysm 24
+instead of 48.
+**Why** her pushes only act on what she made, so the push nearly always follows a making move,
+and the long wind-up the push has is the part meant to be read -- the recovery in front of it
+was just waiting.
+**Safety**: the cut never makes a blocked move safe. The Fire pillar (-12 on block) cut at
+frame 0 into the Bolt (22 frames start to finish, against the pillar's 24 of recovery) is -10;
+everything else is longer (`a_cancelled_recovery_is_still_punishable_on_block`).
+**Verdict** open -- unplayed. Watch whether a push straight out of a placement reads to the
+opponent at all, and whether the cut wants a few frames' delay (`cut a recovery from`) so the
+placing move is seen to finish.
+**Re-pinned** the Elementalist's Ridgeback hunt (`tests/ridgeback_pin.rs`): its random inputs
+press `Q` and `E` in her recoveries, which now cut them.
+**What it cost the search** (`tests/fixtures/envelope.txt`): two of her stored lines (lanes 2
+and 8, whole kit) pressed `Q` inside a recovery and timed a kick around the old wait; they
+were re-searched (`envelope search --class Elementalist`) and replaced, every other line
+kept. Both got longer: 45.6 m to 50.3 m, and 45.8 m to 49.8 m.

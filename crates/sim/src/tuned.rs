@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 718] = [
+pub const SCALARS: [i32; 719] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -726,6 +726,7 @@ pub const SCALARS: [i32; 718] = [
               10, // champion.chain,_a_press_waits_for_its_link = 10
               33, // champion.beat,_falls_at_(%_of_the_window) = 33
                6, // champion.beat,_lasts = 6
+               0, // elementalist.q_and_e,_cut_a_recovery_from = 0
 ];
 
 #[rustfmt::skip]

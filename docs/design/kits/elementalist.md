@@ -170,6 +170,20 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
   direction she holds pushes her that way (`Updraft, steered by her walk`, up
   to `Updraft, steered up to`).
 
+### `Q` and `E` cut a recovery — 2026-10-21
+
+From play: "It's hard to use q and e right now because they are effectively two moves of frame
+data" -- every push follows something she has just made, so she sat through that move's whole
+recovery and then the push's wind-up. **Now `Q` or `E` asked for in the recovery of anything
+else she throws comes out at once** (`state::cancel_into_a_push`), from `Q and E, cut a
+recovery from` (0) frames into it. A Fire pillar into the Bolt: the line is out 7 frames after
+the pillar's recovery begins, where it was 31; into Cataclysm, 24 where it was 48. Not a push
+into a push: Bolt then Cataclysm on one stone is two decisions, and the first is paid in full.
+Only into a push that would come out. It buys an earlier push, never safety: cut at the
+earliest frame into the quicker push, everything of hers that can be blocked is still minus
+(`a_cancelled_recovery_is_still_punishable_on_block`, `tests/elementalist_clicks.rs`). The
+Fire carpet keeps its own window, which cuts into any move.
+
 **Fire carpet** (`EffectKind::FireCarpet`). A strip of fire laid out from a little ahead of her
 along the line the crosshair solved (`aim::skillshot_path`), its length the move's reach and
 its half-width the move's radius. It hangs for `Fire carpet, hangs for` and burns whoever

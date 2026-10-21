@@ -564,6 +564,112 @@ fn the_carpets_window_is_not_spent_on_a_second_carpet() {
     assert!(matches!(w.players[0].action, Action::Recovery { .. }));
 }
 
+/// An Elementalist who has just planted a Fire pillar (the fire click,
+/// tapped), on the first frame of its recovery.
+fn pillar_planted() -> World {
+    let mut w = elementalist();
+    step(&mut w, keys::FIRE);
+    for _ in 0..40 {
+        if matches!(w.players[0].action, Action::Recovery { .. }) {
+            return w;
+        }
+        step(&mut w, 0);
+    }
+    panic!("the pillar never reached its recovery");
+}
+
+#[test]
+fn q_cuts_the_recovery_of_what_she_just_made() {
+    let mut w = pillar_planted();
+    run(&mut w, t::push_cancel_from() as u32, 0);
+    assert!(matches!(w.players[0].action, Action::Recovery { .. }));
+    step(&mut w, keys::WEAK_PUSH);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Startup {
+                kind: SLOT_POKE,
+                ..
+            }
+        ),
+        "the Bolt's wind-up began now, not after the pillar's recovery: {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn e_cuts_the_recovery_of_what_she_just_made() {
+    let mut w = pillar_planted();
+    run(&mut w, t::push_cancel_from() as u32, 0);
+    step(&mut w, keys::STRONG_PUSH);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Startup {
+                kind: SLOT_HEAVY,
+                ..
+            }
+        ),
+        "Cataclysm's wind-up began now: {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn a_push_does_not_cut_a_push() {
+    // The Bolt then Cataclysm on one stone is two decisions, and the first
+    // is paid for in full.
+    let mut w = elementalist();
+    step(&mut w, keys::WEAK_PUSH);
+    for _ in 0..40 {
+        if matches!(w.players[0].action, Action::Recovery { .. }) {
+            break;
+        }
+        step(&mut w, 0);
+    }
+    run(&mut w, t::push_cancel_from() as u32, 0);
+    step(&mut w, keys::STRONG_PUSH);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Recovery {
+                kind: SLOT_POKE,
+                ..
+            }
+        ),
+        "the Bolt's recovery stands: {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn a_cancelled_recovery_is_still_punishable_on_block() {
+    // The cut buys an earlier push, never safety: whatever she threw that
+    // can be blocked, cut at the earliest frame into the quicker push, still
+    // leaves her minus.
+    let push = |kind| {
+        let m = sim::moves::get(Class::Elementalist, kind);
+        (m.startup + m.active + m.recovery) as i32
+    };
+    let quickest = push(SLOT_POKE).min(push(SLOT_HEAVY));
+    let table = sim::moves::table(Class::Elementalist);
+    for (kind, m) in table.iter().enumerate() {
+        let kind = kind as u8;
+        if kind == SLOT_POKE || kind == SLOT_HEAVY || m.damage == 0 || m.blockstun == 0 {
+            continue;
+        }
+        let busy = m.busy_after_contact() - m.recovery as i32
+            + (t::push_cancel_from() as i32).min(m.recovery as i32)
+            + quickest;
+        let on_block = m.blockstun as i32 - busy;
+        assert!(
+            on_block < 0,
+            "{} cut into a push is {on_block:+} on block",
+            m.name
+        );
+    }
+}
+
 #[test]
 fn the_fountain_bursts_at_her_feet_and_leaves_a_wash_where_she_took_off() {
     let mut w = elementalist();
