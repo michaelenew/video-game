@@ -7,7 +7,9 @@
 //! Strictly one-directional: this reads two snapshots and produces something to
 //! draw. Nothing here is ever fed back into the simulation.
 
+use crate::dodge::Floor;
 use crate::fx;
+use crate::math::{Quat, V3};
 use sim::World;
 use sim::class::Ghost;
 use sim::state::{Action, MAX_PLAYERS};
@@ -110,13 +112,21 @@ pub struct PlayerView {
     /// snapshot, so a rollback redraws the same shake. Presentation only: it
     /// moves the drawn hips, never the body, the camera or the aim.
     pub shudder: f32,
-    /// The whole body turned over, in radians: `[0]` is a **forward flip**,
-    /// about the body's own side, and `[1]` a **spin** about the vertical, on
-    /// top of the facing. Zero for everybody but the Reaver (2026-10-10): her
-    /// dash jump's flip and the Tumble's. Off the
-    /// simulation's clocks -- see [`roll_of`] -- so a rollback redraws it.
-    /// Presentation only: the body, the camera and the aim never turn over.
-    pub roll: [f32; 2],
+    /// The whole body turned over, in character space on top of the facing:
+    /// the Reaver's dash jump flip and her Tumble (2026-10-10), and **every
+    /// class's grounded dodge**, a dive roll (2026-10-21, `crate::dodge`).
+    /// The identity for everything else. Off the simulation's clocks -- see
+    /// [`roll_of`] -- so a rollback redraws it. Presentation only: the body,
+    /// the camera and the aim never turn over.
+    pub roll: Quat,
+    /// The point the body is turned over about, in character space: the hips
+    /// for a flip in the air, the middle of the ball for a roll on the floor.
+    pub roll_about: V3,
+    /// How the turned body is held to the floor: on it through a roll, above
+    /// it through the Dual mage's aerial, free through a flip. The renderer
+    /// raises the drawn body by `dodge::lift` of it, measured off the pose it
+    /// is drawing.
+    pub roll_floor: crate::dodge::Floor,
     /// The ledge this fighter is holding, if any. See [`Hold`].
     pub ledge: Option<Hold>,
     /// On a wall slide, or just kicked off a wall, if either. See [`OnWall`].
@@ -170,23 +180,41 @@ pub struct Hold {
     pub along: f32,
 }
 
-/// How far the body is turned over this snapshot. See [`PlayerView::roll`].
+/// How far the body is turned over this snapshot, and about where. See
+/// [`PlayerView::roll`].
 ///
 /// Each is a whole number of turns over the stretch of frames it belongs to,
-/// eased in and out, so it starts and ends upright.
-pub fn roll_of(p: &sim::state::Player) -> [f32; 2] {
+/// eased in and out, so it starts and ends upright. `travel` is the body's own
+/// (`PlayerView::travel`), which is what picks a roll's direction -- the same
+/// reading that picks its clip (`dodge::way`).
+pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor) {
     use sim::moves::reaver as r;
     use std::f32::consts::TAU;
+    // About the hips: a flip in the air goes over rather than cartwheeling
+    // off its own toes.
+    const HIPS: V3 = [0.0, 0.95, 0.0];
+    let upright = (Quat::IDENTITY, HIPS, Floor::Free);
+    if let Action::Dodge { left } = p.action {
+        // On the floor, and travelling under its own legs: the Reaver's dash
+        // to her shadow is driven along its own line, up onto a dais if it
+        // must, and keeps its own drawing.
+        if !p.grounded || sim::shadow::dash_drive(p).is_some() {
+            return upright;
+        }
+        let frame = crate::dodge::length().saturating_sub(left) as f32;
+        let (turn, about) = crate::dodge::turned(p.class, crate::dodge::way(travel), frame);
+        return (turn, about, crate::dodge::floor(p.class, frame));
+    }
     if p.class != sim::Class::ShadowReaver {
-        return [0.0, 0.0];
+        return upright;
     }
     let ease = |t: f32| {
         let t = t.clamp(0.0, 1.0);
         t * t * (3.0 - 2.0 * t)
     };
-    let mut roll = [0.0, 0.0];
+    let mut flip = 0.0;
     if let Some(through) = sim::shadow::flip_through(p) {
-        roll[0] = ease(through.to_f32_for_render()) * TAU;
+        flip = ease(through.to_f32_for_render()) * TAU;
     }
     // How far through a move she is, over the frames given.
     let through = |kind: u8, over: &dyn Fn(&sim::moves::Move) -> u16| -> Option<f32> {
@@ -203,11 +231,20 @@ pub fn roll_of(p: &sim::state::Player) -> [f32; 2] {
     };
     // The Tumble turns her over once, through the throw and the rise.
     if p.action.attack_kind() == Some(r::TUMBLE) {
-        roll[0] =
-            ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
-                * TAU;
+        flip = ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
+            * TAU;
     }
-    roll
+    (Quat::from_x(flip), HIPS, Floor::Free)
+}
+
+/// The turn between two snapshots' turns, the short way round. Both are a
+/// few degrees apart at most -- the fastest roll is a turn in a dozen frames --
+/// so a normalised blend is as good as a slerp and cheaper.
+fn roll_between(from: Quat, to: Quat, a: f32) -> Quat {
+    let (f, t) = (from.0, to.0);
+    let dot = f[0] * t[0] + f[1] * t[1] + f[2] * t[2] + f[3] * t[3];
+    let s = if dot < 0.0 { -1.0 } else { 1.0 };
+    Quat(std::array::from_fn(|i| f[i] * s + (t[i] - f[i] * s) * a)).normalized()
 }
 
 /// How far a struck body is thrown off its mark at the start of the freeze.
@@ -346,6 +383,15 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         (was + (step - step.round()) * a) * std::f32::consts::TAU
     };
 
+    // The turn of a roll, blended like everything else continuous: a whole
+    // turn in a dozen frames is thirty degrees a tick, which steps visibly on
+    // any screen faster than the simulation. The pivot is the newer one's.
+    let (roll, roll_about, roll_floor) = {
+        let (was, _, _) = roll_of(p, travel);
+        let (now, about, floor) = roll_of(c, travel);
+        (roll_between(was, now, a), about, floor)
+    };
+
     PlayerView {
         pos,
         facing,
@@ -375,7 +421,9 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
             _ => None,
         },
         shudder: shudder_of(c),
-        roll: roll_of(c),
+        roll,
+        roll_about,
+        roll_floor,
         ledge: hold_of(p, c, facing),
         wall: wall_of(c, pos, facing),
     }

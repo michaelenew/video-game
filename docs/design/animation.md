@@ -547,6 +547,25 @@ Two diagnostics are worth knowing about when a clip is not behaving:
   thing a body does. Six or seven per cent means a grip or a foot target wants
   moving a few centimetres closer.
 
+## A body that turns over is turned outside the clip
+
+The root has fifty degrees of forward swing, which is a body that folds rather than one
+that inverts, so **no clip turns a body over**. What does is the whole-body turn the
+renderer puts on top of the pose (`view::PlayerView::roll`, about `roll_about`): the
+Reaver's flips since 2026-10-10, and since 2026-10-21 **every class's grounded dodge**,
+which is a dive roll (`view::dodge`, [defense.md](defense.md#dodge)). The clip is what a
+body does *inside* the turn -- dive, ball, open, catch -- and authoring the turn there as
+well would be two.
+
+A roll on the floor is also **held to it**: the renderer measures the lowest corner of the
+turned pose it is about to draw and raises or lowers the body so that corner is on the
+floor (`view::dodge::lift`), fully while the body is over and not at all at the two ends,
+where the feet are what is on the floor. So the point a roll turns about decides the arc
+and not whether the body is in the floor; it is set to the middle of the class's ball, and
+`cargo test -p view --test dodge report_ball_middles -- --ignored --nocapture` prints
+where that is after a clip is changed. The Dual mage's aerial is only kept out of the
+floor, never pulled down onto it.
+
 ## The creature has its own rig
 
 The Ridgeback goes through the same factory and almost none of the same code,

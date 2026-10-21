@@ -63,6 +63,26 @@ vertical takeoff and dodge moved onto shift alone. See
 Dodge is the universal answer to a read you made correctly. It is punished by attacks
 that cover space or arrive late.
 
+**On the ground it is drawn as a dive roll, and every class rolls its own** (2026-10-21).
+The body really goes over -- `view::dodge` turns the whole drawn body about the middle of
+the ball the clip curls into, and holds it on the floor as it goes -- and it is a drawing
+only: the frames, the invulnerable window, the speed and the hurt volume are exactly what
+they were. The turn is mostly done on the frame the cover runs out, so the silhouette still
+opens on that frame. Each class's version, in its own clips (`crates/anim/src/clips/dodge.rs`):
+
+| Class | The roll |
+| --- | --- |
+| Champion | The soldier's roll: a dive onto the hands, one tight turn, up in a low crouch with the weapon hand forward |
+| Bulwark | The shield roll: later, heavier and lower, tucked in behind the shield, up behind it |
+| Shadow Reaver | The twisting dive: long and flat with the blades swept back, a full twist through the turn with them held out, and the first up, light |
+| Elementalist | The earth roll: out of the turn sliding on one knee with a hand dragged along the floor |
+| Blood mage | The low tumble: the longest dive and the latest turn, sunk low, the scythe arm trailing out wide |
+| Dual mage | The aerial: no tuck -- laid out, arms spread, a layout or a cartwheel turned about her waist, in the air rather than on the floor |
+
+The class dodges that are not travel keep their own drawing underneath: the Dual mage's
+and the Blood mage's blinks arrive and then roll forward where they land, and the Reaver's
+dash to her shadow is not turned over at all. The airdodge is unchanged.
+
 The crouch-roll (`crouch → jump`) is **not built** and is not currently wanted: crouch is
 its own input and lowers your hurtbox, and a second, slower reposition has nothing to do
 that the dodge's own tail does not already do.
