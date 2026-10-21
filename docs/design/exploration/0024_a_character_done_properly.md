@@ -205,3 +205,58 @@ secondary layer and the Reave's shoulder; the rest of her clips still move
 them only by rule. A trail behind a thrown star, and the shadow's ink line,
 are the next two things the effects want.
 
+
+## 9. The other four (2026-10-21, the owner's word: "build the other 4 classes in the same triple A style, leaving aside bulwark")
+
+**One builder, five specs.** The Reaver's build was split into what every
+character shares and what is hers: `art/lib/character.py` (body, dress, paint,
+export, driven by a class's spec) and `art/lib/wardrobe.py` (the tailor: a
+garment cut from the inflated body, straps, bands, a cape, a collar, boots,
+sleeves, a jerkin, coat tails, hair, eyes, the skin and glove masks, the skin
+nothing sees). A class is three files under `art/<class>/`: `recipe.py`
+(the body), `outfit.py` (what it wears) and `build.py` (the palette). A fix
+to the builder or the wardrobe is a fix to every class -- the first was the
+boots, which had left the toes out since the toes became joints.
+
+No design document said what any of the four wears (the research found
+fantasy, build, effect colours and what each holds, and nothing on costume),
+so each outfit is designed from those:
+
+| Class | Who | Wears | Read at range |
+| --- | --- | --- | --- |
+| Champion | a duellist of the aristocrats' champions; South Asian, the reference middleweight | a high-collared doublet in deep blue, its skirt in four kicking panels; the right sleeve fitted to the wrist, because the gold coils up that arm and forms the weapon; a bracer on the left; a short cape over the left shoulder in the team's colour; pale breeches, tall riding boots, gloves | a dark square torso, colour on one shoulder, pale legs, the gold |
+| Elementalist | a terrain author who kneels and drives her hands into the floor; East Asian, tall and narrow | a slate tunic over a long split rust robe that spreads round her when she kneels; linen-bound forearms and bare hands -- they touch the earth; three river stones on her belt; a stole in the team's colour; hair in a knot | a tall figure in earth colours, a long robe, bare hands |
+| Blood mage | a reaper and a priestess of something nobody should worship; Black, heavier, not athletic | a long black coat to a high collar, its skirt to the ankle; an oxblood bodice laced over it; long gloves; tall boots; a sash in the team's colour; an ash-silver bob that falls to the jaw | a tall black shape, a red waist, a pale crown -- and the scythe |
+| Dual mage | a vessel for two forces, light in her right hand and dark in her left; North African, slight | everything split down the middle -- her right ivory and gold, her left obsidian and violet: a fitted high-necked tunic, flared sleeves, four long skirt panels, soft boots, a gold bracer on the right and black glass on the left; her hair to the jaw, white on the right and black on the left | one figure, two halves, and which hand is which |
+
+**Who they are.** The first build gave every body MakeHuman's even mix of its
+three ancestry targets, so the women came out alike; the owner caught it
+("you don't have to make every model a white woman or a black man"). Each now
+has their own heritage in both the face's shape and the painted skin, and
+their own hair: a South Asian Champion, an East Asian Elementalist, a Black
+Blood mage, a North African Dual mage, a Northern European Reaver.
+
+**Hair**, which the Reaver's hood and mask had let her do without, is a
+sculpted mass as a painted figure's is (`wardrobe.hair`): the head inflated a
+few millimetres, cut back along a hairline, lifted at the crown, falling out
+and down below the ears for a bob, and combed on the high piece with uneven
+locks that reach the game as the normal map. The first version read as a
+swimming cap; the second, with regular grooves, as cornrows.
+
+**In the game** (`game::models`, which `reaver.rs` became): one model of each
+class a seat, shown when the seat plays that class; the Reaver's shadow,
+copies, blade trail and hit flash stay hers. What each holds is still the
+game's own -- the Champion's gold, the Blood mage's scythe -- drawn on the
+skeleton's hands; the scythe is now a turned haft and a curved blade
+(`blades::haft`, `blades::scythe_blade`) in place of three boxes.
+
+**What it costs.** Five models of about 7 MB each, embedded: about 37 MB in
+the binary and in the browser build's download (ART-4 asks whether they
+should stream). Each is 55-70 thousand triangles; one of each class a seat
+is made at startup and hidden unless used.
+
+**What is left**, in order: the Champion's gold (still beads and boxes),
+the Dual mage's wings and the Elementalist's stones are the game's
+primitives; the hair is a mass, good at the camera's distance and a cap
+close up; faces have painted brows and lips but no expression; the
+Bulwark is the mannequin.
