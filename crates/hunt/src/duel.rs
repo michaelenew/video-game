@@ -56,7 +56,7 @@ use sim::{Class, Input, V3, World};
 
 /// How good its eyes and hands are.
 ///
-/// Three presets, and every field is public so a harness can make a fourth.
+/// Five presets ([`Level`]), and every field is public so a harness can make another.
 /// What the fields do **not** change is how it thinks: an easy bot and a hard
 /// one choose plans the same way, and differ in how well they see and carry
 /// them out. That is the difference between a beginner and an expert, too.
@@ -83,27 +83,65 @@ pub struct Skill {
     pub lead: u32,
 }
 
-/// The three presets, by name. See [`Skill`].
+/// The five presets, by name, easiest first. See [`Skill`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
+    Beginner,
     Easy,
     Normal,
     Hard,
+    Expert,
 }
 
 impl Level {
-    pub const ALL: [Level; 3] = [Level::Easy, Level::Normal, Level::Hard];
+    pub const ALL: [Level; 5] = [
+        Level::Beginner,
+        Level::Easy,
+        Level::Normal,
+        Level::Hard,
+        Level::Expert,
+    ];
 
     pub const fn name(self) -> &'static str {
         match self {
+            Level::Beginner => "beginner",
             Level::Easy => "easy",
             Level::Normal => "normal",
             Level::Hard => "hard",
+            Level::Expert => "expert",
+        }
+    }
+
+    /// What it is like to play, in a line: what the menu says under the
+    /// choice.
+    pub const fn blurb(self) -> &'static str {
+        match self {
+            Level::Beginner => "Slow to see anything, rarely dodges, swings at where you were.",
+            Level::Easy => "Sees things half a second late and misses a good share of them.",
+            Level::Normal => "A regular: reacts in about a third of a second, punishes some.",
+            Level::Hard => "A good player: quick, accurate, and punishes most mistakes.",
+            Level::Expert => {
+                "As quick as a person waiting for it, and it rarely misses an opening."
+            }
         }
     }
 
     pub fn skill(self) -> Skill {
         match self {
+            // Somebody picking the game up for the first time: most of a
+            // second behind, and it often does not see a move at all.
+            Level::Beginner => Skill {
+                react_min: 30,
+                react_max: 45,
+                notice: 30,
+                punish: 15,
+                aim_error: Fx::ratio(5, 100),
+                turn: Fx::ratio(15, 1000),
+                think_min: 16,
+                think_max: 30,
+                slop: 9,
+                lead: 0,
+            },
             // Someone who has not played a fighting game: sees things half a
             // second late, misses a good share of them, and swings at where
             // you were.
@@ -146,6 +184,22 @@ impl Level {
                 think_max: 8,
                 slop: 2,
                 lead: 85,
+            },
+            // The best a person plays: **still not below fifteen frames**, so
+            // what it has over Hard is how seldom it misses -- it notices
+            // nearly everything, takes nearly every opening, and its hands
+            // are steady.
+            Level::Expert => Skill {
+                react_min: 15,
+                react_max: 18,
+                notice: 95,
+                punish: 95,
+                aim_error: Fx::ratio(4, 1000),
+                turn: Fx::ratio(8, 100),
+                think_min: 2,
+                think_max: 5,
+                slop: 1,
+                lead: 95,
             },
         }
     }
@@ -218,6 +272,9 @@ const HOP_THE_WALL: Fx = Fx::ratio(25, 10);
 const STUCK: u16 = 12;
 /// Slower than this, walking, is not getting anywhere.
 const CRAWL: Fx = Fx::ratio(5, 10);
+/// The longest reach that is still close work, for pressing: past it a move
+/// is something thrown from range.
+const CLOSE: Fx = Fx::from_int(8);
 /// The number of plans it remembers, to avoid doing one of them again.
 const RECENT: usize = 4;
 
@@ -226,6 +283,16 @@ const RECENT: usize = 4;
 pub struct Tool {
     pub bits: u16,
     pub kind: u8,
+    /// What it did to somebody standing in front of it, at its best: health
+    /// taken, by whatever the move puts in the world -- its own swing, a shot
+    /// it throws, a stone it raises. Zero for a move that hurts nobody: the
+    /// Elementalist's two pushes go straight through bodies (2026-10-02), and
+    /// the move table's damage for them is what the *stone* does. Read off
+    /// the move table's number until [`Kit::measure`] has measured it.
+    pub hurt: i32,
+    /// The furthest of the measuring distances it hurt at. What a thrown
+    /// thing's reach really is, when the move's own length is the hand's.
+    pub far: Fx,
 }
 
 /// Every move a class throws from the floor, by the button that throws it.
@@ -233,6 +300,8 @@ pub struct Tool {
 pub struct Kit {
     pub class: Class,
     pub tools: [Option<Tool>; BUTTONS.len()],
+    /// Whether [`Kit::measure`] has been run, or the numbers are the table's.
+    pub measured: bool,
 }
 
 impl Kit {
@@ -251,9 +320,85 @@ impl Kit {
             if tools.iter().flatten().any(|t: &Tool| t.kind == kind) {
                 continue;
             }
-            tools[slot] = Some(Tool { bits, kind });
+            tools[slot] = Some(Tool {
+                bits,
+                kind,
+                hurt: moves::get(class, kind).damage,
+                far: Fx::ZERO,
+            });
         }
-        Kit { class, tools }
+        Kit {
+            class,
+            tools,
+            measured: false,
+        }
+    }
+
+    /// **Learned, and then tried on somebody.** [`Kit::learn`] says which
+    /// move a button starts; this says what it is *for*, the way a player
+    /// finds out on the training dummy: each button thrown, the way the bot
+    /// throws it, at a fighter standing at each of [`MEASURE_AT`], and the
+    /// health it took counted.
+    ///
+    /// It is what the bot weighs its moves by, rather than the move table's
+    /// damage, because the table's number is the swing's own and three kinds
+    /// of move hurt by something else. A thrown thing (the Shuriken, the Thorn
+    /// lash) has no damage of its own in the table and was never thrown; the
+    /// Elementalist's two pushes have the stone's damage in it and go straight
+    /// through bodies, and were thrown all fight at people they could not
+    /// touch (2026-10-20); and the Dual mage's clicks start as their long hold
+    /// and become the auto on the release, so the move a button *starts* is
+    /// not the one it throws. Here `kind` is the one it throws.
+    ///
+    /// Two hundred frames a distance, five distances, five buttons: a few
+    /// thousand frames, tens of milliseconds -- so once a class for the whole
+    /// program, kept, rather than once a bot. A sparring bot meeting a class
+    /// mid-fight, when its player switches, would otherwise hitch the game.
+    pub fn measure(class: Class) -> Kit {
+        static KITS: [std::sync::OnceLock<Kit>; sim::class::ALL_CLASSES.len()] =
+            [const { std::sync::OnceLock::new() }; sim::class::ALL_CLASSES.len()];
+        let Some(slot) = sim::class::ALL_CLASSES.iter().position(|c| *c == class) else {
+            return Kit::try_out(class);
+        };
+        *KITS[slot].get_or_init(|| Kit::try_out(class))
+    }
+
+    fn try_out(class: Class) -> Kit {
+        let mut tools = [None; BUTTONS.len()];
+        for (slot, &bits) in BUTTONS.iter().enumerate() {
+            let Some(starts) = probe(class, bits) else {
+                continue;
+            };
+            let aimed = moves::get(class, starts).aim();
+            let mut thrown = None;
+            let mut hurt = 0;
+            let mut far = Fx::ZERO;
+            for at in MEASURE_AT {
+                let (kind, took) = try_on(class, bits, aimed, at);
+                thrown = thrown.or(kind);
+                if took > 0 {
+                    hurt = hurt.max(took);
+                    far = at;
+                }
+            }
+            let Some(kind) = thrown else {
+                continue;
+            };
+            if tools.iter().flatten().any(|t: &Tool| t.kind == kind) {
+                continue;
+            }
+            tools[slot] = Some(Tool {
+                bits,
+                kind,
+                hurt,
+                far,
+            });
+        }
+        Kit {
+            class,
+            tools,
+            measured: true,
+        }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = Tool> + '_ {
@@ -271,16 +416,44 @@ impl Kit {
     /// What a player means by "their range": the distance to respect.
     fn threat(&self) -> Fx {
         self.iter()
-            .map(|t| reach(&moves::get(self.class, t.kind), None))
+            .filter(|t| t.hurt > 0)
+            .map(|t| self.reach_of(t, None))
             .filter(|r| r.raw() < Fx::from_int(9).raw())
             .max_by_key(|r| r.raw())
             .unwrap_or(Fx::from_int(3))
     }
 
+    /// Its longest aimed move that hurts somebody: what it zones with.
     fn ranged(&self) -> Option<Tool> {
         self.iter()
-            .filter(|t| moves::get(self.class, t.kind).aim().is_a_skillshot())
-            .max_by_key(|t| moves::get(self.class, t.kind).reach.raw())
+            .filter(|t| t.hurt > 0 && moves::get(self.class, t.kind).aim().is_a_skillshot())
+            .max_by_key(|t| self.reach_of(*t, None).raw())
+    }
+
+    /// How far its close work reaches: the longest move that hurts and
+    /// reaches no further than [`CLOSE`], less a little to land it. A thrown
+    /// thing that crosses the arena is zoning, not this.
+    fn close_reach(&self, who: &Player) -> Fx {
+        self.iter()
+            .filter(|t| t.hurt > 0)
+            .map(|t| self.reach_of(t, Some(who)))
+            .filter(|r| r.raw() <= CLOSE.raw())
+            .max_by_key(|r| r.raw())
+            .map_or(Fx::ZERO, |r| r.sub(Fx::ratio(5, 10)))
+    }
+
+    /// How far this move reaches: the move's own length, or as far as it
+    /// was seen to hurt somebody, whichever is further -- a thrown thing
+    /// goes past the hand that threw it.
+    pub(crate) fn reach_of(&self, t: Tool, who: Option<&Player>) -> Fx {
+        reach(&moves::get(self.class, t.kind), who).max(t.far)
+    }
+
+    /// Does the move this fighter started hurt anybody? The ones its kit
+    /// measured at nothing do not; a move off its buttons -- an aerial, a
+    /// held one -- is assumed to.
+    fn harmless(&self, kind: u8) -> bool {
+        self.iter().any(|t| t.kind == kind && t.hurt == 0)
     }
 }
 
@@ -298,6 +471,57 @@ fn probe(class: Class, bits: u16) -> Option<u8> {
         }
     }
     None
+}
+
+/// The distances [`Kit::measure`] tries each move at: from inside a swing to the far side of most thrown things.
+const MEASURE_AT: [Fx; 5] = [
+    Fx::ratio(15, 10),
+    Fx::from_int(3),
+    Fx::from_int(6),
+    Fx::from_int(10),
+    Fx::from_int(15),
+];
+/// Frames a measuring throw is watched for: long enough for a slow startup, a
+/// thrown thing's flight and a pillar's burn.
+const MEASURE_FOR: u32 = 200;
+
+/// Throw one button at a fighter standing `at` away, aimed the way the bot
+/// aims (`aim::look_onto`, the crosshair on them), and see which move it
+/// became and how much health it took. The move is the last one seen, since
+/// a hold can start as one move and be let go as another.
+fn try_on(class: Class, bits: u16, aimed: Kind, at: Fx) -> (Option<u8>, i32) {
+    let mut w = World::with_classes([class, Class::Champion]);
+    let line = flat(w.players[1].pos.sub(w.players[0].pos)).normalized();
+    w.players[1].pos = w.players[0].pos.add(line.scale(at));
+    let full = w.players[1].health;
+    // The Dual mage's clicks are taps: held, they are her long holds.
+    let press = if class == Class::DualMage {
+        1
+    } else {
+        PRESS as u32
+    };
+    let mut kind = None;
+    for frame in 0..MEASURE_FOR {
+        let me = w.players[0];
+        let to = flat(w.players[1].pos.sub(me.pos));
+        let wire = turns_to_aim(atan2_turns(to.z, to.x).sub(me.carry_yaw));
+        let pitch = match aimed {
+            Kind::Swing => 0,
+            _ => aim::look_onto(me.pos, wire, me.aloft, me.clear, w.players[1].pos),
+        };
+        let held = if (1..1 + press).contains(&frame) {
+            bits
+        } else {
+            0
+        };
+        let mut wire_in = [Input::default(); DUEL];
+        wire_in[0] = Input::looking_at(held, wire, pitch);
+        w.advance(wire_in);
+        if let Some(k) = w.players[0].action.attack_kind() {
+            kind = Some(k);
+        }
+    }
+    (kind, full - w.players[1].health)
 }
 
 /// How far a move reaches from the body throwing it, to the middle of a body
@@ -725,12 +949,12 @@ impl Duelist {
     pub fn act(&mut self, w: &World) -> Input {
         self.bounds = w.arena().bounds;
         let me = w.players[self.who];
-        if me.class != self.mine.class {
-            self.mine = Kit::learn(me.class);
+        if me.class != self.mine.class || !self.mine.measured {
+            self.mine = Kit::measure(me.class);
         }
         let them_class = w.players[1 - self.who].class;
-        if them_class != self.theirs.class {
-            self.theirs = Kit::learn(them_class);
+        if them_class != self.theirs.class || !self.theirs.measured {
+            self.theirs = Kit::measure(them_class);
         }
         if !matches!(w.phase, Phase::Fighting) || me.health <= 0 {
             self.stand_down();
@@ -882,6 +1106,12 @@ impl Duelist {
             return;
         }
         let kind = now.attack_kind().unwrap_or(0);
+        // Knowing the roster is knowing which moves are nothing to you: the
+        // Elementalist's pushes pass through a body, and a dodge spent on
+        // one is a dodge she baited for free.
+        if self.theirs.harmless(kind) {
+            return;
+        }
         let m = moves::get(seen.them.class, kind);
         let to_me = flat(me.pos.sub(seen.them.pos));
         let dist = to_me.flat_len();
@@ -1016,7 +1246,7 @@ impl Duelist {
             .filter(|t| self.usable(me, *t))
             .filter(|t| {
                 let m = moves::get(me.class, t.kind);
-                (m.startup as i32) <= within && reach(&m, Some(me)).raw() >= dist.raw()
+                (m.startup as i32) <= within && self.mine.reach_of(*t, Some(me)).raw() >= dist.raw()
             })
             .min_by_key(|t| moves::get(me.class, t.kind).startup)
     }
@@ -1038,7 +1268,7 @@ impl Duelist {
                 continue;
             }
             let m = moves::get(me.class, t.kind);
-            if reach(&m, Some(me)).raw() < dist.raw() {
+            if self.mine.reach_of(t, Some(me)).raw() < dist.raw() {
                 continue;
             }
             if window.is_some_and(|w| m.startup as i32 > w) {
@@ -1047,7 +1277,11 @@ impl Duelist {
             let cost = (m.startup + m.active + m.recovery).max(1) as i32;
             // Worth, and a floor under it so a slow move is still sometimes
             // the one it goes for.
-            let worth = (m.damage.max(1) * 100 / cost).clamp(5, 200) + 10;
+            // What it measured at, or -- for a move that hurt nobody on its
+            // own and is wanted anyway, a push with a stone in the line --
+            // the table's number, which is the stone's.
+            let damage = if t.hurt > 0 { t.hurt } else { m.damage };
+            let worth = (damage.max(1) * 100 / cost).clamp(5, 200) + 10;
             options[i] = (Some(t), worth * self.tool_bias(me, t) / 100);
         }
         let total: i32 = options.iter().map(|o| o.1).sum();
@@ -1143,7 +1377,7 @@ impl Duelist {
         }
         if self.plan == Plan::Zone
             && let Some(t) = self.mine.ranged().filter(|t| self.usable(me, *t))
-            && reach(&moves::get(me.class, t.kind), Some(me)).raw() >= dist.raw()
+            && self.mine.reach_of(t, Some(me)).raw() >= dist.raw()
         {
             self.attempt(t);
             return;
@@ -1160,7 +1394,8 @@ impl Duelist {
         let mine = self
             .mine
             .iter()
-            .map(|t| reach(&moves::get(me.class, t.kind), Some(me)))
+            .filter(|t| t.hurt > 0)
+            .map(|t| self.mine.reach_of(t, Some(me)))
             .max_by_key(|r| r.raw())
             .unwrap_or(Fx::from_int(3));
         let ranged = self.mine.ranged().is_some();
@@ -1252,7 +1487,23 @@ impl Duelist {
 
         // Where it wants to go, by plan.
         let mut want = match self.plan {
-            Plan::Press => toward,
+            // **Pressing is to your own reach, not theirs.** A fighter whose
+            // close work outreaches the other's -- the Dual mage's ball, sweet
+            // at its full six metres, against a sword -- stops at the end of
+            // it and works from there, rather than walking on into the reach
+            // it had over them.
+            Plan::Press => {
+                let keep = self.mine.close_reach(me);
+                if keep.raw() > theirs.add(Fx::ONE).raw() && dist.raw() < keep.raw() {
+                    if dist.raw() < keep.sub(Fx::ONE).raw() {
+                        back(toward).add(side).normalized()
+                    } else {
+                        side
+                    }
+                } else {
+                    toward
+                }
+            }
             Plan::Footsies => {
                 self.dance_left = self.dance_left.saturating_sub(1);
                 if self.dance_left == 0 {
@@ -1284,7 +1535,7 @@ impl Duelist {
                 let keep = self
                     .mine
                     .ranged()
-                    .map(|t| moves::get(me.class, t.kind).reach.mul(Fx::ratio(6, 10)))
+                    .map(|t| self.mine.reach_of(t, None).mul(Fx::ratio(6, 10)))
                     .unwrap_or(theirs.add(Fx::from_int(2)));
                 if dist.raw() < keep.sub(Fx::ONE).raw() {
                     back(toward).add(side.scale(Fx::ratio(1, 2))).normalized()
@@ -1546,8 +1797,11 @@ impl Duelist {
                     let string = 15 + self.style.aggression / 3;
                     if self.chance(string) {
                         let after = m.startup + m.active + self.between(0, 6) as u16;
+                        // From what it would throw anyway: a string into
+                        // a move that hurts nobody is a string into air.
                         let nth = self.roll(3) as usize;
-                        let next = self.mine.iter().nth(nth);
+                        let mine = self.mine;
+                        let next = mine.iter().filter(|t| self.usable(me, *t)).nth(nth);
                         self.string_in = next.map(|t| (after, t));
                     }
                 }
@@ -1683,6 +1937,8 @@ pub struct Bout {
     pub dodges: [u32; DUEL],
     /// Times each side used its class mechanic on purpose.
     pub mechanic: [u32; DUEL],
+    /// Health each side took off the other, whatever took it.
+    pub dealt: [i32; DUEL],
 }
 
 /// Play two bots against each other for `frames`, and count.
@@ -1710,6 +1966,7 @@ pub fn spar_traced(
         landed: [0; DUEL],
         dodges: [0; DUEL],
         mechanic: [0; DUEL],
+        dealt: [0; DUEL],
     };
     while w.frame < frames {
         for b in bots.iter_mut() {
@@ -1729,6 +1986,10 @@ pub fn spar_traced(
                 bout.dodges[i] += 1;
             }
             let other = 1 - i;
+            let lost = before.players[other].health - w.players[other].health;
+            if lost > 0 && before.players[other].health > 0 {
+                bout.dealt[i] += lost;
+            }
             let (was, now) = (before.players[other].action, w.players[other].action);
             let struck = |a: Action| {
                 matches!(

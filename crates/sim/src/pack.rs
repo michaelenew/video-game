@@ -890,7 +890,10 @@ pub fn frames_until_free(pack: &Pack, critters: &Critters, herd: &Herd) -> u16 {
             .map(|r| r as u32);
         held.chain(resting).min().unwrap_or(0)
     };
-    (before.max(back) + then).min(u16::MAX as u32) as u16
+    // Saturating: a token held by a body not yet in its recovery is `MAX`,
+    // "not soon", and added to plainly it overflowed -- a panic in a debug
+    // build and, wrapped, "in a few frames" in a release one (2026-10-20).
+    before.max(back).saturating_add(then).min(u16::MAX as u32) as u16
 }
 
 /// Is the pack beaten: nobody left in the fight?
