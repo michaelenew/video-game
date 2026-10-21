@@ -15,9 +15,10 @@
 //!   `cargo run -p hunt --bin replay` judges and `--replay` plays back. `Y`
 //!   does the same without the menu. See `docs/design/replays.md`.
 //! - **Training dummy**, alone: bring it into a hunt or the valley's
-//!   peaceful places, send it away again, choose what it does and its class
-//!   ([`dummy`]). A duel always has it. The number keys still pick what it
-//!   does; this is where somebody who was never told finds it.
+//!   peaceful places, send it away again, choose what it does, how hard the
+//!   sparring bot plays, and its class ([`dummy`]). A duel always has it. The
+//!   number keys still pick what it does; this is where somebody who was
+//!   never told finds it.
 //! - **Fast travel**, in the valley: to any cairn this player has touched
 //!   ([`crate::cairns`]) -- every one in dev mode -- out of a fight. A trip
 //!   on the wire, so the other player comes too.
@@ -220,18 +221,25 @@ pub fn draw(
 }
 
 /// What the dummy does, as the menu names it: the number keys' modes, less
-/// the second set of keys, which is nobody's (2026-10-20).
-const DUMMY_MODES: [(crate::Dummy, &str); 6] = [
+/// the second set of keys, which is nobody's (2026-10-20). The sparring bot is
+/// one entry; how good it is is the Difficulty row under it.
+const DUMMY_MODES: [(crate::Dummy, &str); 4] = [
     (crate::Dummy::Idle, "Stands still"),
     (crate::Dummy::Block, "Blocks"),
     (crate::Dummy::Attack, "Attacks now and then"),
-    (crate::Dummy::Bot(hunt::Level::Easy), "Sparring bot, easy"),
-    (
-        crate::Dummy::Bot(hunt::Level::Normal),
-        "Sparring bot, normal",
-    ),
-    (crate::Dummy::Bot(hunt::Level::Hard), "Sparring bot, hard"),
+    (crate::Dummy::Bot(hunt::Level::Normal), "Sparring bot"),
 ];
+
+/// The sparring bot's levels, as the Difficulty row names them.
+fn level_name(level: hunt::Level) -> &'static str {
+    match level {
+        hunt::Level::Beginner => "Beginner",
+        hunt::Level::Easy => "Easy",
+        hunt::Level::Normal => "Normal",
+        hunt::Level::Hard => "Hard",
+        hunt::Level::Expert => "Expert",
+    }
+}
 
 /// **The training dummy**: in or out, what it does, its class. Alone only --
 /// against a person the second seat is theirs. A duel always has it
@@ -262,9 +270,10 @@ fn dummy(ui: &mut egui::Ui, sim: &mut crate::Sim) {
             ui.label(egui::RichText::new("restarts this place").weak());
         });
     }
+    let bot = |m: crate::Dummy| matches!(m, crate::Dummy::Bot(_));
     let named = DUMMY_MODES
         .iter()
-        .find(|(m, _)| *m == mode)
+        .find(|(m, _)| *m == mode || bot(*m) && bot(mode))
         .map_or("Player two's keys", |(_, name)| name);
     ui.horizontal(|ui| {
         ui.label("Does");
@@ -272,10 +281,24 @@ fn dummy(ui: &mut egui::Ui, sim: &mut crate::Sim) {
             .selected_text(named)
             .show_ui(ui, |ui| {
                 for (m, name) in DUMMY_MODES {
-                    ui.selectable_value(&mut mode, m, name);
+                    // Picking the bot again keeps the level it is on.
+                    let already = bot(m) && bot(mode);
+                    if ui.selectable_label(m == mode || already, name).clicked() && !already {
+                        mode = m;
+                    }
                 }
             });
     });
+    if let crate::Dummy::Bot(mut level) = mode {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Difficulty");
+            for l in hunt::Level::ALL {
+                ui.selectable_value(&mut level, l, level_name(l));
+            }
+        });
+        ui.label(egui::RichText::new(level.blurb()).weak());
+        mode = crate::Dummy::Bot(level);
+    }
     ui.horizontal(|ui| {
         ui.label("Class");
         egui::ComboBox::from_id_salt("dummy class")

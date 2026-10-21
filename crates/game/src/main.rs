@@ -667,13 +667,14 @@ enum Dummy {
     Block,
     Attack,
     Human,
-    /// `hunt::Duelist`, at one of its three levels. Keys 5, 6 and 7, or
-    /// `--bot <level>` to start with one.
+    /// `hunt::Duelist`, at one of its five levels (`hunt::Level`). Keys 5, 6
+    /// and 7 are easy, normal and hard; the Esc menu has all five, and
+    /// `--bot <level>` starts with one.
     Bot(hunt::Level),
 }
 
-/// Which opponent a run starts with: `--bot easy|normal|hard` (`?bot=hard` in
-/// a browser), or the dummy standing still.
+/// Which opponent a run starts with: `--bot beginner|easy|normal|hard|expert`
+/// (`?bot=hard` in a browser), or the dummy standing still.
 fn starting_dummy() -> Dummy {
     let Some(name) = platform::value("--bot") else {
         return Dummy::Idle;

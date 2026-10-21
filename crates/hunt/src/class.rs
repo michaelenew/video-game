@@ -155,9 +155,8 @@ pub struct Uses {
     pub lotuses: u32,
     pub recalls: u32,
     pub cashed: u32,
-    /// The Elementalist: pillars lit, heavy and light shots from range.
+    /// The Elementalist: pillars lit, and Bolts thrown through them.
     pub pillars: u32,
-    pub cataclysms: u32,
     pub shots: u32,
     /// The Blood mage: spikes, spikes on a pool, Grasps, cuts, blinks.
     pub spikes: u32,
@@ -194,7 +193,6 @@ impl Uses {
         self.recalls += o.recalls;
         self.cashed += o.cashed;
         self.pillars += o.pillars;
-        self.cataclysms += o.cataclysms;
         self.shots += o.shots;
         self.spikes += o.spikes;
         self.erupted += o.erupted;
@@ -252,8 +250,11 @@ impl Uses {
             ],
             Class::Elementalist => vec![
                 ("pillars", self.pillars, "lit where it stands"),
-                ("cataclysms", self.cataclysms, "the heavy, in a long window"),
-                ("shots", self.shots, "bolts thrown from range"),
+                (
+                    "shots",
+                    self.shots,
+                    "Bolts thrown from range, through her fire",
+                ),
             ],
             Class::BloodMage => vec![
                 ("spikes", self.spikes, "Black spikes thrown"),
@@ -491,9 +492,17 @@ impl Hands {
     }
 
     /// The Elementalist: **the pillar where it stands** in a window long enough
-    /// to plant it, **Cataclysm** in one long enough for that, and otherwise
-    /// the bolt -- aimed, every one of them, through the crosshair onto the
-    /// point, not levelled at the horizon.
+    /// to plant it, and otherwise the Bolt -- aimed, both of them, through the
+    /// crosshair onto the point, not levelled at the horizon.
+    ///
+    /// **The Bolt passes through the creature** as it does through a fighter
+    /// (`sim::bolt::targets`), so what it is for here is her own fire: shot
+    /// through the pillar burning on the work it lights a fire bolt, which
+    /// does hurt. Measured 2026-10-20 over 24 hunts (three creatures, eight
+    /// seeds): without it she does half the damage. Cataclysm in its place
+    /// tears the pillar loose and does less. There was a "Cataclysm" branch
+    /// here pressing slot one, which since the clicks moved (2026-10-09) is
+    /// Fissure, and it never once fired; it is gone.
     fn cast(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
         let far = flat(at.sub(me.pos)).flat_len();
         if me.grounded {
@@ -505,15 +514,6 @@ impl Hands {
             {
                 self.uses.pillars += 1;
                 return self.look_keeping(me, plan, self.spot(w, me, floor_under(me, at), true), b);
-            }
-            let heavy = moves::get(me.class, SLOT_COMMITTED);
-            if window >= fits(&heavy, far)
-                && far.raw() < heavy.reach.sub(Fx::ONE).raw()
-                && self.ready(w, me, SLOT_COMMITTED)
-                && let Some(b) = self.button(me, SLOT_COMMITTED)
-            {
-                self.uses.cataclysms += 1;
-                return self.look_keeping(me, plan, self.spot(w, me, at, false), b);
             }
         }
         self.uses.shots += 1;
