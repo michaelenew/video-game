@@ -20616,12 +20616,22 @@ mod knockback_tests {
     //! `tests/knockback.rs`.
     use super::*;
 
+    /// A shove and a launch to measure by: real speeds from the Oven, so
+    /// nothing here is a number of its own.
+    fn shove() -> Fx {
+        t::move_speed()
+    }
+
+    fn lift() -> Fx {
+        t::move_speed()
+    }
+
     fn blow(by: u8) -> Hit {
         Hit {
             damage: 50,
             hitstun: 20,
             blockstun: 10,
-            knockback: Fx::from_int(4),
+            knockback: shove(),
             launch: Fx::ZERO,
             grabs: 0,
             by,
@@ -20671,7 +20681,7 @@ mod knockback_tests {
         apply_hit(&mut fresh, nothing);
         assert_eq!(
             fresh.vel.x,
-            Fx::from_int(4).mul(t::swell_start()),
+            shove().mul(t::swell_start()),
             "untouched, the shove is the start times the table"
         );
         assert!(
@@ -20680,17 +20690,18 @@ mod knockback_tests {
         );
         // The killing blow: the ceiling, which the start does not move.
         let mut last = Player::new(Class::Champion);
-        last.health = 50;
-        apply_hit(&mut last, blow(1));
-        let share = Fx::ratio(50, last.full_health());
+        let finishing = blow(1);
+        last.health = finishing.damage;
+        apply_hit(&mut last, finishing);
+        let share = Fx::ratio(finishing.damage, last.full_health());
         let ceiling = Fx::ONE
             .add(t::swell_knockback())
             .add(t::swell_blow().mul(share));
         assert!(
-            (last.vel.x.raw() - Fx::from_int(4).mul(ceiling).raw()).abs() < 64,
+            (last.vel.x.raw() - shove().mul(ceiling).raw()).abs() < 64,
             "at death the ceiling: {:?} against {:?}",
             last.vel.x,
-            Fx::from_int(4).mul(ceiling)
+            shove().mul(ceiling)
         );
     }
 
@@ -20699,9 +20710,9 @@ mod knockback_tests {
         let mut p = Player::new(Class::Champion);
         let mut up = blow(1);
         up.damage = 0;
-        up.launch = Fx::from_int(6);
+        up.launch = lift();
         apply_hit(&mut p, up);
-        assert_eq!(p.vel.y, Fx::from_int(6), "the follow-ups are tuned to it");
+        assert_eq!(p.vel.y, lift(), "the follow-ups are tuned to it");
     }
 
     #[test]
@@ -20709,7 +20720,7 @@ mod knockback_tests {
         for by in [QUARRY, NOBODY] {
             let mut p = hurt_to(Class::DualMage, (1, 4));
             apply_hit(&mut p, blow(by));
-            assert_eq!(p.vel.x, Fx::from_int(4), "no swell and no weight");
+            assert_eq!(p.vel.x, shove(), "no swell and no weight");
             assert_eq!(p.stun_total, 20, "and the stun as written");
             assert_eq!(p.taken, 0, "and it starts no string");
         }
@@ -20762,7 +20773,7 @@ mod knockback_tests {
         let mut p = Player::new(Class::Champion);
         let mut grab = blow(1);
         grab.grabs = 10;
-        grab.launch = Fx::from_int(6);
+        grab.launch = lift();
         apply_hit(&mut p, grab);
         assert!(matches!(p.action, Action::Held { .. }));
         assert!(p.thrown.raw() > 0, "the launch was dropped");
@@ -20777,7 +20788,7 @@ mod knockback_tests {
     #[test]
     fn steering_a_launch_turns_it_and_never_shortens_it() {
         let mut p = Player::new(Class::Champion);
-        p.vel = V3::new(Fx::from_int(12), Fx::ZERO, Fx::ZERO);
+        p.vel = V3::new(shove(), Fx::ZERO, Fx::ZERO);
         let before = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
         let air = p.class.mobility().air_speed;
         for _ in 0..10 {
@@ -20791,7 +20802,7 @@ mod knockback_tests {
         );
         // Holding back against it: it may turn, it may not brake.
         let mut q = Player::new(Class::Champion);
-        q.vel = V3::new(Fx::from_int(12), Fx::ZERO, Fx::ZERO);
+        q.vel = V3::new(shove(), Fx::ZERO, Fx::ZERO);
         steer_while_stunned(&mut q, V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO), air);
         assert!(V3::new(q.vel.x, Fx::ZERO, q.vel.z).flat_len().raw() >= before.raw() - 64);
     }
