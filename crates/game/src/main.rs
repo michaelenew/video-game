@@ -23,6 +23,7 @@ mod bag;
 mod bake;
 mod beast;
 mod blades;
+mod brushwork;
 mod cairns;
 mod claimed;
 mod coat;
@@ -280,6 +281,7 @@ fn main() {
         .add_plugins(swing::SwingPlugin)
         .add_plugins(warm::WarmPlugin)
         .add_plugins(ink::InkPlugin)
+        .add_plugins(brushwork::BrushworkPlugin)
         .add_plugins(models::ModelsPlugin)
         .add_plugins(impact::ImpactPlugin)
         // The line round every silhouette, as a pass over the finished picture.
@@ -8223,7 +8225,11 @@ fn drive_camera(
             // `angle` degrees from straight in front of them.
             let p = frame.players[(seat as usize).min(MAX_PLAYERS - 1)];
             let at = Vec3::new(p.pos[0], p.pos[1] + height, p.pos[2]);
-            let turn = body_turn(p.facing) * Quat::from_rotation_y(angle.to_radians());
+            // `SHOT_SPIN` degrees a second round them: a turntable, for
+            // judging a painted body in motion (exploration 0025).
+            let spin =
+                platform::env_parsed::<f32>("SHOT_SPIN").unwrap_or(0.0) * time.elapsed_secs();
+            let turn = body_turn(p.facing) * Quat::from_rotation_y((angle + spin).to_radians());
             tf.translation = at + turn * Vec3::new(0.0, 0.15, distance);
             tf.look_at(at, Vec3::Y);
             // Nobody's own body is faded for being near the fight's eye.
@@ -8237,6 +8243,7 @@ fn drive_camera(
     }
 }
 
+/// `SHOT_SPIN=<degrees a second>` turns that camera round them as the run goes.
 /// `SHOT_PORTRAIT=seat,angle,distance,height` takes the camera off the fight
 /// and puts it `distance` metres from a fighter, `angle` degrees round from
 /// in front of them, looking at `height` above their feet: how a character is

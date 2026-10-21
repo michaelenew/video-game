@@ -33,6 +33,7 @@ use bevy::render::mesh::skinning::SkinnedMesh;
 use bevy::render::view::NoFrustumCulling;
 
 use crate::beast::MarkMaterial;
+use crate::brushwork::Brushwork;
 use crate::ink::InkMaterial;
 use crate::paint::Paint;
 use crate::still::SkinMaterial;
@@ -58,6 +59,7 @@ impl Plugin for WarmPlugin {
                 prime::<SkinMaterial>,
                 prime::<InkMaterial>,
                 prime::<SwingMaterial>,
+                prime::<Brushwork>,
                 retire,
             )
                 .before(bevy::render::view::VisibilitySystems::CheckVisibility),
@@ -164,6 +166,11 @@ impl Warm for InkMaterial {
 
 /// One form: blended, both sides, nothing else to choose.
 impl Warm for SwingMaterial {
+    fn key(&self, _h: &mut DefaultHasher) {}
+}
+
+/// One form: cut out, both sides.
+impl Warm for Brushwork {
     fn key(&self, _h: &mut DefaultHasher) {}
 }
 
