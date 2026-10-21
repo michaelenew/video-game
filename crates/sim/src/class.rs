@@ -28,18 +28,24 @@ pub const ALL_CLASSES: [Class; 6] = [
     Class::DualMage,
 ];
 
-/// **The order a player steps through the classes** -- Tab, and the class
-/// button under the scoreboard -- and the class a seat is given when none is
-/// named (2026-10-20, the owner: "Champion should be first", the Bulwark
-/// last). Not [`ALL_CLASSES`]'s order, which is the enum's and is what the
-/// wire, the Oven's tables and the move table are indexed by.
-pub const ROTATION: [Class; 6] = [
+/// **The classes a player can choose, in the order they step through them**
+/// -- Tab, the class button under the scoreboard, the dummy's menu, `--p1` --
+/// and the class a seat is given when none is named (2026-10-20, the owner:
+/// "Champion should be first").
+///
+/// **The Bulwark is not on it** (2026-10-21, the owner): it is "so far behind
+/// the others and there isn't a clear way to make it fit", so it is out of
+/// the classes on offer for now. Its code stays -- the kit, the move table,
+/// the Oven's knobs, the bots and the tests that build it by name -- so
+/// putting it back is adding it here. Not [`ALL_CLASSES`]'s order, which is
+/// the enum's and is what the wire, the Oven's tables and the move table are
+/// indexed by.
+pub const ROTATION: [Class; 5] = [
     Class::Champion,
     Class::ShadowReaver,
     Class::Elementalist,
     Class::BloodMage,
     Class::DualMage,
-    Class::Bulwark,
 ];
 
 /// **The classes a movement section is built for: every class but the
@@ -57,10 +63,13 @@ pub const MOVERS: [Class; 5] = [
 ];
 
 impl Class {
-    /// The class after this one in [`ROTATION`], wrapping round.
+    /// The class after this one in [`ROTATION`], wrapping round. A class
+    /// that is not on offer (the Bulwark) steps to the first that is.
     pub fn next_in_rotation(self) -> Class {
-        let at = ROTATION.iter().position(|c| *c == self).unwrap_or(0);
-        ROTATION[(at + 1) % ROTATION.len()]
+        match ROTATION.iter().position(|c| *c == self) {
+            Some(at) => ROTATION[(at + 1) % ROTATION.len()],
+            None => ROTATION[0],
+        }
     }
 }
 

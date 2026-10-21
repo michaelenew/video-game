@@ -75,7 +75,8 @@ use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
 use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate, pitch_from_radians};
 
 /// Loose class-name matching, so `--p1 reaver` works without remembering the
-/// full name.
+/// full name. Only the classes on offer (`sim::class::ROTATION`): `--p1
+/// bulwark` names nobody, and the seat is the Champion.
 fn parse_class(name: &str) -> Option<sim::Class> {
     use sim::Class::*;
     let n = name.to_lowercase();
@@ -92,7 +93,7 @@ fn parse_class(name: &str) -> Option<sim::Class> {
         })
 }
 
-const ALL: [sim::Class; 6] = sim::class::ALL_CLASSES;
+const ALL: [sim::Class; 5] = sim::class::ROTATION;
 
 fn matches(n: &str, c: sim::Class) -> bool {
     c.name().to_lowercase().contains(n) && !n.is_empty()
