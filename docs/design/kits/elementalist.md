@@ -170,6 +170,20 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
   direction she holds pushes her that way (`Updraft, steered by her walk`, up
   to `Updraft, steered up to`).
 
+### `Q` and `E` cut a recovery — 2026-10-21
+
+From play: "It's hard to use q and e right now because they are effectively two moves of frame
+data" -- every push follows something she has just made, so she sat through that move's whole
+recovery and then the push's wind-up. **Now `Q` or `E` asked for in the recovery of anything
+else she throws comes out at once** (`state::cancel_into_a_push`), from `Q and E, cut a
+recovery from` (0) frames into it. A Fire pillar into the Bolt: the line is out 7 frames after
+the pillar's recovery begins, where it was 31; into Cataclysm, 24 where it was 48. Not a push
+into a push: Bolt then Cataclysm on one stone is two decisions, and the first is paid in full.
+Only into a push that would come out. It buys an earlier push, never safety: cut at the
+earliest frame into the quicker push, everything of hers that can be blocked is still minus
+(`a_cancelled_recovery_is_still_punishable_on_block`, `tests/elementalist_clicks.rs`). The
+Fire carpet keeps its own window, which cuts into any move.
+
 **Fire carpet** (`EffectKind::FireCarpet`). A strip of fire laid out from a little ahead of her
 along the line the crosshair solved (`aim::skillshot_path`), its length the move's reach and
 its half-width the move's radius. It hangs for `Fire carpet, hangs for` and burns whoever
@@ -180,7 +194,16 @@ the fire is seen being pushed outward. One at a time. **Its recovery cancels** (
 a move asked for from `Fire carpet, cancel opens into recovery` frames into it, for `Fire carpet,
 cancel open for` frames, comes out at once, so the Updraft into it is thrown while she is still
 up (`the_carpets_recovery_is_cut_short_by_a_move_asked_for_in_its_window`); later than that, the
-recovery is paid in full. *Known from the start to be awkward at
+recovery is paid in full. **It hangs her for 24 frames** (2026-10-21, from 8), and an
+Updraft thrown inside that hang does not cut it short, so carpet then Updraft through the
+cancel brings the column up round her where she laid the carpet, about a tenth of a metre
+lower, and the two are seen to meet; at 8 frames, with the Updraft cutting the hang, she had
+fallen about 2 m by the time the column rose
+(`a_carpet_into_the_updraft_meets_it_where_she_laid_it`). **Each carpet after the first in
+one jump hangs her `Fire carpet, each hang after` (0.3) of the one before** -- 24, 7, 2, then
+nothing -- counted over her carpets alone (`Player::carpets`), so a Gale first does not take
+the long hang off the carpet the Updraft is for (`each_carpet_in_one_jump_hangs_her_less`).
+*Known from the start to be awkward at
 speed — she can outrun a carpet she has just laid — and built anyway so it can be played and
 something better found.*
 

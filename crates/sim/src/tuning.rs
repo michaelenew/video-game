@@ -3453,6 +3453,18 @@ pub fn carpet_cancel_for() -> u16 {
     oven::scalar(Scalar::CarpetCancelFor).max(0) as u16
 }
 
+/// How many frames of the recovery of anything but a push she must wait out
+/// before `Q` or `E` may cut the rest short. See `state::cancel_into_a_push`.
+pub fn push_cancel_from() -> u16 {
+    oven::scalar(Scalar::PushCancelFrom).max(0) as u16
+}
+
+/// What each Fire carpet after the first in one airtime hangs her for, as a
+/// share of the one before. See `state::Player::carpets`.
+pub fn carpet_hang_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetHangFalloff))
+}
+
 /// How long the Fire fountain's wash burns where she took off.
 pub fn fountain_life() -> u16 {
     oven::scalar(Scalar::FountainLife).max(1) as u16
