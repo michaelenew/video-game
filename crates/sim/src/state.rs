@@ -1656,6 +1656,18 @@ pub struct World {
     /// changes -- a fighter's health -- is. Against a person both seats are
     /// played and it is two on both machines.
     pub seats: u8,
+    /// **The second seat is a training partner on this machine** -- the
+    /// dummy, the sparring bot, or a second pair of hands at one keyboard --
+    /// so the valley's peaceful places let it and you hurt each other
+    /// ([`World::pvp`]). Set by the game for local play only: online, the
+    /// second seat is a person walking the town with you, and nobody fights
+    /// there. Without it the dummy brought into the town from the Esc menu
+    /// swung at you all day for nothing, and nothing of yours reached it
+    /// (2026-10-21). A hunt is unchanged: hunters do not hurt each other.
+    ///
+    /// Carried into every fresh world built inside a tick, as the frame and
+    /// the pause are, and hashed only while set.
+    pub sparring: bool,
     /// **The valley's journey** (`crate::valley`): whether this world is the
     /// valley, which creatures have been beaten on the way, which seam you
     /// came in by, each fighter's last cairn. All zero, and not hashed,
@@ -1729,6 +1741,7 @@ impl World {
             lore: Lore::NONE,
             course: [crate::course::Run::default(); MAX_PLAYERS],
             paused: false,
+            sparring: false,
             seats: MAX_PLAYERS as u8,
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
@@ -2130,6 +2143,7 @@ impl World {
         Some(World {
             frame: self.frame,
             paused: self.paused,
+            sparring: self.sparring,
             ..world.seated(self.seats)
         })
     }
@@ -2241,6 +2255,7 @@ impl World {
         World {
             frame: self.frame,
             paused: self.paused,
+            sparring: self.sparring,
             ..World::arrive_all(classes, self.valley, seam.to, Some(seam.at), self.seats)
         }
     }
@@ -2371,11 +2386,12 @@ impl World {
             && crate::valley::place(self.arena).is_none_or(|p| p.peaceful())
     }
 
-    /// **May the fighters hurt each other?** In versus, yes; in a hunt and in
-    /// the valley's peaceful places, no. The one question every blow between
-    /// fighters asks.
+    /// **May the fighters hurt each other?** In versus, yes; in a hunt, no;
+    /// in the valley's peaceful places, only with a training partner
+    /// ([`World::sparring`]). The one question every blow between fighters
+    /// asks.
     pub fn pvp(&self) -> bool {
-        !self.hunting() && !self.peaceful()
+        !self.hunting() && (!self.peaceful() || self.sparring)
     }
 
     /// The first creature, for the code and tools that are about one: the
@@ -2656,6 +2672,7 @@ impl World {
                 recast.map(|classes| World {
                     frame: self.frame,
                     paused: self.paused,
+                    sparring: self.sparring,
                     ..self.restarted(classes).seated(self.seats)
                 })
             });
@@ -4072,6 +4089,10 @@ impl World {
         // has and every pinned checksum stays pinned.
         if self.paused {
             h.write_u32(0x7061_7573);
+        }
+        // The same, for a training partner in the valley.
+        if self.sparring {
+            h.write_u32(0x7370_6172);
         }
         for b in &self.bolts {
             match b {

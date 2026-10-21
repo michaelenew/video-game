@@ -1022,7 +1022,9 @@ nobody does. The other fighter (the dummy, the sparring bot, a person online) ha
 centred under the round counter the way a creature's is. Its class, what it does (the sparring
 bot's difficulty among it, five levels), and whether
 it is in a hunt or the valley's peaceful places at all are the Esc menu's *Training dummy*
-section (`menu::dummy`); a duel always has it. Online,
+section (`menu::dummy`); a duel always has it. Brought into a peaceful place, it is a
+training partner (`World::sparring`, set for local play only, 2026-10-21): the two of you
+can hurt each other there, where two people online cannot. Online,
 the top-left set is whichever seat is yours (`hud::seat`).
 
 They need a free cursor, which is what the Oven gives you — and they route through the same

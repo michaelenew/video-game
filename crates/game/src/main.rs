@@ -6769,6 +6769,16 @@ fn tick_sim(
                 ),
                 mode => dummy_input(mode, sim.cur.frame, held_two),
             };
+            // **Played on this machine, the second seat is a training
+            // partner** (`World::sparring`): the dummy, the bot or the second
+            // keys may fight you in the valley's peaceful places. Online is
+            // the other branch, and never sets it. Once, on the tape, as the
+            // seating is -- unless a tape is playing, whose own events rule.
+            if sim.playing.is_none() && !sim.cur.sparring {
+                let frame = sim.cur.frame;
+                sim.tape.note(frame, sim::replay::Event::Sparring(true));
+                sim.cur.sparring = true;
+            }
             // A trip rides on the first tick after it was asked for, and
             // only that one.
             let travel = std::mem::take(&mut sim.travel);
@@ -6788,10 +6798,13 @@ fn tick_sim(
                 // dummy keys' seating -- is applied as the tape says.
                 let at = playback.at as u32;
                 let mut seats = None;
+                let mut sparring = None;
                 for (frame, event) in &playback.tape.events {
                     if *frame == at {
-                        let sim::replay::Event::Seats(n) = event;
-                        seats = Some(*n);
+                        match event {
+                            sim::replay::Event::Seats(n) => seats = Some(*n),
+                            sim::replay::Event::Sparring(on) => sparring = Some(*on),
+                        }
                     }
                 }
                 match playback.tape.frames.get(playback.at) {
@@ -6807,6 +6820,9 @@ fn tick_sim(
                 }
                 if let Some(n) = seats {
                     sim.cur.seats = n;
+                }
+                if let Some(on) = sparring {
+                    sim.cur.sparring = on;
                 }
             }
             // Remembered before the tick, so one press of `[` lands on the

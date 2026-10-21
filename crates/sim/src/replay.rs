@@ -218,6 +218,9 @@ pub enum Event {
     /// The number of played seats changed (the game's dummy keys), which
     /// takes effect at the next fresh fight.
     Seats(u8),
+    /// The second seat became, or stopped being, a training partner
+    /// ([`World::sparring`]): at once.
+    Sparring(bool),
 }
 
 /// **One second of a match against a person, as this machine saw it.** The
@@ -453,6 +456,7 @@ impl Tape {
                 }
                 match event {
                     Event::Seats(n) => w.seats = *n,
+                    Event::Sparring(on) => w.sparring = *on,
                 }
                 events.next();
             }
@@ -500,6 +504,7 @@ impl Tape {
                 }
                 match event {
                     Event::Seats(n) => out.push_str(&format!("@{at} seats {n}\n")),
+                    Event::Sparring(on) => out.push_str(&format!("@{at} sparring {}\n", *on as u8)),
                 }
                 events.next();
             }
@@ -522,6 +527,7 @@ impl Tape {
         for (at, event) in events {
             match event {
                 Event::Seats(n) => out.push_str(&format!("@{at} seats {n}\n")),
+                Event::Sparring(on) => out.push_str(&format!("@{at} sparring {}\n", *on as u8)),
             }
         }
         if !self.link.is_empty() {
@@ -574,6 +580,9 @@ impl Tape {
                     words.next().and_then(|w| w.parse::<u8>().ok()),
                 ) {
                     (Some("seats"), Some(n)) => tape.events.push((frame, Event::Seats(n))),
+                    (Some("sparring"), Some(on)) => {
+                        tape.events.push((frame, Event::Sparring(on != 0)))
+                    }
                     _ => return Err(format!("{}: unknown event {rest:?}", at())),
                 }
                 continue;

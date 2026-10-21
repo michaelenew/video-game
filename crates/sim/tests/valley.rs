@@ -1109,3 +1109,37 @@ fn fast_travel_is_refused_in_a_fight() {
         "fast travelled out of a hunt"
     );
 }
+
+/// **A training partner may be fought in the town** (2026-10-21). Nobody
+/// fights in the valley's peaceful places -- but the dummy or the sparring
+/// bot brought in from the Esc menu swung at you for nothing there, and
+/// nothing of yours reached it. With `World::sparring` set, as the game sets
+/// it for local play, a sword in front of you lands; without it, as online,
+/// it does not. A hunt stays a hunt either way: hunters do not hurt each
+/// other.
+#[test]
+fn a_training_partner_can_be_fought_in_the_town() {
+    let swing = |sparring: bool| {
+        let mut w = World::versus_in([Class::Champion, Class::Champion], valley::START).seated(2);
+        w.sparring = sparring;
+        assert!(w.peaceful());
+        let (me, them) = (w.players[0], w.players[1]);
+        w.players[1].pos = me.pos.add(me.facing.scale(Fx::ratio(12, 10)));
+        let full = them.health;
+        for frame in 0..40 {
+            let mut wire = [Input::default(); 2];
+            if (1..4).contains(&frame) {
+                wire[0] = Input::new(Input::LEFT);
+            }
+            w.advance(wire);
+        }
+        (w.pvp(), full - w.players[1].health)
+    };
+    assert_eq!(swing(false), (false, 0), "a blow landed in peace");
+    let (pvp, took) = swing(true);
+    assert!(pvp && took > 0, "the training partner took {took}");
+
+    let mut hunt = World::hunt_of(CLASSES, SpeciesId::HORNBACK);
+    hunt.sparring = true;
+    assert!(!hunt.pvp(), "hunters hurt each other");
+}

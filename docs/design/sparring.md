@@ -208,6 +208,17 @@ now keeps its jumps four metres inside the walls, and hops back over if it is
 ever on the wrong side — but whether the arena should let anyone out is an open
 question for [README.md](README.md) §4, not something a bot should decide.
 
+## Where it fights
+
+In a duel, and since 2026-10-21 anywhere in the valley's peaceful places you bring it
+from the Esc menu: the town, a reach, a room whose creature is beaten. Those places let
+nobody hurt anybody (`World::pvp`), which is right for two people walking the town
+online and was wrong for the dummy: it swung at you all day for nothing, and nothing of
+yours reached it. Played on one machine the second seat is a training partner
+(`World::sparring`), and there the two of you fight -- no rounds, and whoever is knocked
+down stands again at the place's cairn. In a hunt it still stands: hunters do not hurt
+each other.
+
 ## Not built
 
 - **The creature.** In a hunt, player two sits out as the dummy always has; the
