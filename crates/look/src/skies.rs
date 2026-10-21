@@ -204,10 +204,10 @@ pub fn of(id: ArenaId) -> Sky {
             ..aloft(-0.10)
         },
         ArenaId::TWIN_ISLES => aloft(0.40),
-        // The three King of the Hill maps stand on the ground: a quarry in
-        // dusty afternoon light, a glacier under a cold clear sky, a river
-        // mouth in humid green haze.
-        ArenaId::QUARRY => Sky::over([0.84, 0.86, 0.88]),
+        // The three King of the Hill maps stand on the ground: a quarry under
+        // a high pale haze (a warmer one turned its floor orange), a glacier
+        // under a cold clear sky, a river mouth in humid green haze.
+        ArenaId::QUARRY => Sky::over([0.83, 0.86, 0.90]),
         ArenaId::GLACIER => Sky::over([0.82, 0.90, 0.98]),
         ArenaId::DELTA => Sky {
             reach: 700.0,
