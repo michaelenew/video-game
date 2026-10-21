@@ -1213,6 +1213,15 @@ scalars! {
     // same place for every weapon, never as soon as possible.
     BeatAt,               "Champion", "Beat, falls at (% of the window)",                     Percent, 0, 100;
     BeatLasts,            "Champion", "Beat, lasts",                                          Frames, 1, 30;
+    // **The Elementalist's pushes cut her recovery** (2026-10-21, from play):
+    // `Q` or `E` asked for this far into the recovery of anything else she
+    // throws comes out at once, so the push onto what she just made is not
+    // two moves of waiting. See `state::cancel_into_a_push`.
+    PushCancelFrom,       "Elementalist", "Q and E, cut a recovery from",                     Frames, 0, 30;
+    // **Each carpet in a jump hangs her less** (2026-10-21, from play): the
+    // carpet's long hang is for the Updraft into it, not for a string of
+    // carpets that never comes down. See `state::Player::carpets`.
+    CarpetHangFalloff,    "Elementalist", "Fire carpet, each hang after",                      Fixed, 0, fx(1,1);
     // **The Fire carpet sinks** (2026-10-21, from play): it comes down at
     // this speed for as long as it hangs, and an end that meets the floor
     // rests on it -- so one laid low enough ends up lying on the ground.

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 720] = [
+pub const SCALARS: [i32; 722] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -726,6 +726,8 @@ pub const SCALARS: [i32; 720] = [
               10, // champion.chain,_a_press_waits_for_its_link = 10
               33, // champion.beat,_falls_at_(%_of_the_window) = 33
                6, // champion.beat,_lasts = 6
+               0, // elementalist.q_and_e,_cut_a_recovery_from = 0
+           19661, // elementalist.fire_carpet,_each_hang_after = 0.3
            52429, // elementalist.fire_carpet,_sinks_at_(m/s) = 0.8
               14, // elementalist.strike,_a_full_one_flashes_for = 14
 ];
@@ -2450,7 +2452,7 @@ pub const MOVES: [i32; 2730] = [
                0, // move.elementalist.fire_carpet.blockstun = 0
                0, // move.elementalist.fire_carpet.knockback = 0
               20, // move.elementalist.fire_carpet.mobility_(%) = 20
-               8, // move.elementalist.fire_carpet.aerial_hang = 8
+              24, // move.elementalist.fire_carpet.aerial_hang = 24
                0, // move.elementalist.fire_carpet.unblockable = off
                1, // move.elementalist.fire_carpet.hits_crouching = on
                0, // move.elementalist.fire_carpet.needs_mechanic = off
