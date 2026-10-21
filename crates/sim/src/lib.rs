@@ -55,6 +55,7 @@ pub mod temper;
 pub mod tuned;
 pub mod tuning;
 pub mod valley;
+pub mod versus;
 
 pub use class::{Class, Mechanic};
 pub use fixed::Fx;

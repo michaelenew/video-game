@@ -48,6 +48,8 @@ pub mod siegeshell;
 
 pub mod climb;
 
+pub mod stages;
+
 /// One thing to look at that nothing collides with.
 #[derive(Clone, Copy, Debug)]
 pub struct Prop {
@@ -113,6 +115,16 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::CLIMB_GULF => &climb::GULF,
         ArenaId::CLIMB_WATERFALL => &climb::WATERFALL,
         ArenaId::CLIMB_REACH => &climb::REACH,
+
+        ArenaId::ANVIL => &stages::ANVIL,
+        ArenaId::ZIGGURAT => &stages::ZIGGURAT,
+        ArenaId::CALDERA => &stages::CALDERA,
+        ArenaId::TWIN_ISLES => &stages::TWIN_ISLES,
+        ArenaId::QUARRY => &stages::QUARRY,
+        ArenaId::GLACIER => &stages::GLACIER,
+        ArenaId::DELTA => &stages::DELTA,
+        ArenaId::GORGE => &stages::GORGE,
+        ArenaId::HENGE => &stages::HENGE,
         _ => &proving_ground::DRESSING,
     }
 }

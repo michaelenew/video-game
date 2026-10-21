@@ -382,6 +382,45 @@ pub fn round_over_frames() -> u16 {
     oven::scalar(Scalar::RoundOverFrames) as u16
 }
 
+/// **King of the Hill** (`crate::versus`): how long the point is locked at
+/// a round's start.
+pub fn hill_unlock() -> u16 {
+    oven::scalar(Scalar::HillUnlock).max(0) as u16
+}
+
+/// How long one fighter standing alone on the point takes to capture it.
+pub fn hill_capture() -> u16 {
+    oven::scalar(Scalar::HillCapture).max(1) as u16
+}
+
+/// How much faster a second fighter of the same side makes a capture, in
+/// hundredths of one fighter's rate.
+pub fn hill_second() -> u16 {
+    oven::scalar(Scalar::HillSecond).max(0) as u16
+}
+
+/// How fast a capture drains while nobody stands on the point, in
+/// hundredths of one fighter's rate.
+pub fn hill_decay() -> u16 {
+    oven::scalar(Scalar::HillDecay).max(0) as u16
+}
+
+/// How long each side must hold the point to win.
+pub fn hill_clock() -> u16 {
+    oven::scalar(Scalar::HillClock).clamp(1, u16::MAX as i32) as u16
+}
+
+/// How long a fighter knocked out on the hill waits to stand back up.
+pub fn hill_respawn() -> u16 {
+    oven::scalar(Scalar::HillRespawn).max(0) as u16
+}
+
+/// How high over the point's surface a body's feet still count as on it:
+/// the column of air a hop stays inside (`versus::Hill`).
+pub fn hill_column() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HillColumn)).max(Fx::ZERO)
+}
+
 /// Reaction time at 60 Hz, used by the feel tests to reason about what is and
 /// is not reactable. Roughly 250 ms, which is the usual figure for a simple
 /// visual reaction.

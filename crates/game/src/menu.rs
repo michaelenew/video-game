@@ -19,6 +19,10 @@
 //!   sparring bot plays, and its class ([`dummy`]). A duel always has it. The
 //!   number keys still pick what it does; this is where somebody who was
 //!   never told finds it.
+//! - **Versus stages**: a button for every floating duel stage and every
+//!   King of the Hill map (`sim::versus`), the one you are on lit. A trip
+//!   on the wire, as `Shift+N` is, so the other player comes too
+//!   ([`stages`]).
 //! - **Fast travel**, in the valley: to any cairn this player has touched
 //!   ([`crate::cairns`]) -- every one in dev mode -- out of a fight. A trip
 //!   on the wire, so the other player comes too.
@@ -188,6 +192,7 @@ pub fn draw(
                 }
             }
             details(ui, &mut menu, &sim, now);
+            stages(ui, &mut sim);
             dummy(ui, &mut sim);
             fast_travel(ui, &mut sim, &cairns);
             ui.separator();
@@ -218,6 +223,45 @@ pub fn draw(
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
         });
+}
+
+/// **Versus stages**: a row of buttons for the floating duel stages and one
+/// for the King of the Hill maps, each with its theme on hover, the one you
+/// are on lit. A trip on the wire (`Travel::arena`), exactly what `Shift+N`
+/// asks for, so a peer goes too and both build the fight on the same frame.
+fn stages(ui: &mut egui::Ui, sim: &mut crate::Sim) {
+    use sim::versus::{Kind, STAGES};
+    ui.separator();
+    ui.heading("Versus stages");
+    ui.add_space(4.0);
+    let mut go = None;
+    for (kind, title) in [
+        (Kind::Duel, "Floating duel"),
+        (Kind::Hill, "King of the Hill"),
+    ] {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new(title).strong());
+            for s in STAGES.iter().filter(|s| s.kind == kind) {
+                let here = sim.cur.arena == s.arena;
+                if ui
+                    .selectable_label(here, s.arena.get().name)
+                    .on_hover_text(s.theme)
+                    .clicked()
+                    && !here
+                {
+                    go = Some(s.arena);
+                }
+            }
+        });
+    }
+    let line = match sim::versus::of(sim.cur.arena) {
+        Some(s) => s.theme,
+        None => "Knock them off the edge, or hold the point. Shift+N steps through them too.",
+    };
+    ui.label(egui::RichText::new(line).weak());
+    if let Some(arena) = go {
+        sim.travel = sim::input::Travel::arena(arena);
+    }
 }
 
 /// What the dummy does, as the menu names it: the number keys' modes, less

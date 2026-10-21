@@ -33,6 +33,7 @@ mod glint;
 mod ground;
 mod grove;
 mod heel;
+mod hill;
 mod hub;
 mod hud;
 mod keep;
@@ -286,6 +287,7 @@ fn main() {
                 beast::setup_signs,
                 critters::setup,
                 signs::setup,
+                hill::setup,
                 ground::setup,
                 claimed::setup,
                 hud::setup,
@@ -365,7 +367,7 @@ fn main() {
                 ),
                 beast::place,
                 drive_camera,
-                fade_own_body,
+                (colour_by_side, fade_own_body).chain(),
                 hud::toggle_class_buttons,
                 hud::class_buttons,
                 (hud::update, hud::update_heart),
@@ -389,7 +391,7 @@ fn main() {
             (
                 critters::place,
                 critters::overlay,
-                signs::place,
+                (signs::place, hill::place),
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
@@ -399,7 +401,7 @@ fn main() {
                 glint::update,
                 veil::place,
                 online::announce,
-                hud::update_online,
+                (hud::update_online, hud::update_hill),
                 hud::update_seats,
                 hud::update_rival,
                 hud::update_regions,
@@ -3138,6 +3140,32 @@ fn fade_own_body(
         } else {
             AlphaMode::Blend
         };
+    }
+}
+
+/// **Each fighter in its seat's colour, or its side's on a hill**
+/// (`hud::seat_colour`): the skin's hue follows the fight it is in, and its
+/// alpha is left to [`fade_own_body`]. Looked at before it is taken mutably,
+/// for the reason that system gives, so a skin is rebuilt only on the frame
+/// its colour changes -- a trip onto or off a hill map.
+fn colour_by_side(
+    sim: Res<Sim>,
+    parts: Query<(&BodyPart, &MeshMaterial3d<still::SkinMaterial>)>,
+    mut materials: ResMut<Assets<still::SkinMaterial>>,
+) {
+    for (part, material) in parts.iter() {
+        let want = hud::seat_colour(&sim.cur, part.owner).to_srgba();
+        let Some(skin) = materials.get(&material.0) else {
+            continue;
+        };
+        let have = skin.base.base_color.to_srgba();
+        if (have.red, have.green, have.blue) == (want.red, want.green, want.blue) {
+            continue;
+        }
+        let Some(skin) = materials.get_mut(&material.0) else {
+            continue;
+        };
+        skin.base.base_color = Color::Srgba(want.with_alpha(have.alpha));
     }
 }
 
@@ -6693,8 +6721,16 @@ fn tick_sim(
     }
     // `N`: the next jump course, in order of difficulty. The same trip on the
     // wire as `H`, with the arena in the byte. See `picker::next_course`.
+    // `Shift+N`: the next versus stage instead -- the floating duel stages,
+    // then the King of the Hill maps (`sim::versus`). See
+    // `picker::next_stage`.
     if keys.just_pressed(KeyCode::KeyN) {
-        sim.travel = picker::next_course(&sim.cur);
+        let shifted = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        sim.travel = if shifted {
+            picker::next_stage(&sim.cur)
+        } else {
+            picker::next_course(&sim.cur)
+        };
     }
     // `T`: the same creature at the next temper on offer -- earned by beating
     // the one below it, or any of them with `--temper`. The same trip on the

@@ -29,9 +29,13 @@
 //! two halves (`hi`, `lo`), because the camera's picture is half-floats and
 //! one half-float holds a depth to a few centimetres at best.
 //!
-//! Outside the valley -- an arena fought on alone, a hunt -- nothing changes:
-//! the maps are not drawn, the paint is told there are none, and Bevy's
-//! cascades hold everything as they always have. In a browser likewise
+//! **An arena fought on alone does the same** (2026-10-21): its still world
+//! is everything drawn as its scenery ([`crate::arenas::Scenery`], and what
+//! hangs under it), in the world's own coordinates. It used to keep every
+//! still thing in Bevy's cascades, and on a King of the Hill map the trees
+//! and boulders on the hills behind the rim were seventy milliseconds of a
+//! software-rendered frame in the two far cascades alone. In a browser
+//! nothing is baked and Bevy's cascades hold everything as they always have
 //! ([`crate::platform::bakes_shadows`]).
 
 use bevy::asset::weak_handle;
@@ -302,14 +306,29 @@ fn spawn_camera(mut commands: Commands) {
     ));
 }
 
+/// **Where the still world is drawn from**: in the valley, the stream's map
+/// origin; in an arena fought on alone, the world's own origin -- its
+/// scenery is drawn where it is. `None` in the valley before the stream has
+/// put anything down.
+fn origin_of(sim: &crate::Sim, stream: &crate::stream::Stream) -> Option<Vec3> {
+    if sim.cur.valley.on {
+        stream.origin()
+    } else {
+        Some(Vec3::ZERO)
+    }
+}
+
 /// **Take the still world out of Bevy's shadow maps**: every piece of paint
-/// under the map's root that casts, as it is made. One that arrives inside
-/// the map, or one already in it that is shown or hidden (a door), wants the
-/// map drawn again.
-#[allow(clippy::type_complexity)] // A Bevy query: one filter per thing it watches.
+/// that casts, as it is made -- under the map's root in the valley, or part
+/// of an arena's scenery anywhere else. One that arrives inside the map, or
+/// one already in it that is shown or hidden (a door), wants the map drawn
+/// again.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)] // A Bevy query: one filter per thing it watches.
 fn gather(
     mut commands: Commands,
+    sim: Res<crate::Sim>,
     stream: Res<crate::stream::Stream>,
+    scenery: Query<(), With<crate::arenas::Scenery>>,
     mut maps: ResMut<Maps>,
     new: Query<
         (Entity, &GlobalTransform),
@@ -323,9 +342,21 @@ fn gather(
     shown: Query<&GlobalTransform, (With<Still>, Changed<Visibility>)>,
     parents: Query<&ChildOf>,
 ) {
-    let (Some(root), Some(origin)) = (stream.root(), stream.origin()) else {
+    let Some(origin) = origin_of(&sim, &stream) else {
         return;
     };
+    let valley = sim.cur.valley.on;
+    let root = stream.root();
+    let still = |e: Entity| {
+        if valley {
+            root.is_some_and(|r| parents.iter_ancestors(e).any(|a| a == r))
+        } else {
+            scenery.contains(e) || parents.iter_ancestors(e).any(|a| scenery.contains(a))
+        }
+    };
+    if valley && root.is_none() {
+        return;
+    }
     let near = |at: Vec3, maps: &Maps| {
         let middles = maps.read.iter().chain(maps.drawing.iter().map(|d| &d.0));
         let mut any = false;
@@ -337,7 +368,7 @@ fn gather(
         any || maps.read.is_none()
     };
     for (e, at) in &new {
-        if !parents.iter_ancestors(e).any(|a| a == root) {
+        if !still(e) {
             continue;
         }
         commands.entity(e).insert((
@@ -385,9 +416,9 @@ fn draw(
     let Ok((mut cam, mut place)) = camera.single_mut() else {
         return;
     };
-    let origin = stream.origin().filter(|_| sim.cur.valley.on);
+    let origin = origin_of(&sim, &stream);
     let (Some(origin), Ok(sun), Ok(eye)) = (origin, suns.single(), eyes.single()) else {
-        // Out of the valley: nothing to draw, and nothing to read.
+        // Nothing put down yet: nothing to draw, and nothing to read.
         *maps = Maps {
             told: maps.told,
             stamp: maps.stamp,
@@ -465,12 +496,13 @@ fn draw(
 /// a new map, or the world's frame moving under it -- and catch up any made
 /// since.
 fn tell(
+    sim: Res<crate::Sim>,
     stream: Res<crate::stream::Stream>,
     mut maps: ResMut<Maps>,
     mut paints: ResMut<Assets<Paint>>,
     mut skins: ResMut<Assets<SkinMaterial>>,
 ) {
-    let shade = match (maps.read, stream.origin()) {
+    let shade = match (maps.read, origin_of(&sim, &stream)) {
         (Some(r), Some(origin)) => {
             let (_, right, up) = axes(r.sun);
             let at = r.middle - origin - r.sun * BACK;
