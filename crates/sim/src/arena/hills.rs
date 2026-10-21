@@ -530,7 +530,9 @@ const GORGE_SOLIDS: [Solid; 30] = whole(
 // The Henge
 // ---------------------------------------------------------------------------
 
-/// **The Henge**: a giant's stone circle on a grass down. Four standing
+/// **The Henge**: a giant's stone circle on a grass down. Its great stones
+/// and lintels are rough rock, not dressed masonry: drawn as masonry, block by
+/// block, seven-metre stones were most of the map's cost to draw. Four standing
 /// stones seven metres tall stand nine metres out from the point, north,
 /// south, east and west, and **two lintels** cross between them over it in
 /// a cross, four body heights up: a walkway over the point from every side,
@@ -589,20 +591,20 @@ const HENGE_SOLIDS: [Solid; 32] = whole(
         round(0, 0, (0, 45), (500, 450), Stone),
         // The north-south lintel, over the point: its underside 6.3 m up,
         // flush with the north and south stones' tops.
-        Solid::cm([-200, 630, -900], [200, 700, 900], Stone),
+        Solid::cm([-200, 630, -900], [200, 700, 900], Rock),
     ],
     [
         // The west stone, seven metres, and its stair.
-        Solid::cm([-1300, 0, -200], [-900, 700, 200], Stone),
-        Solid::cm([-1700, 0, -200], [-1300, 230, 200], Stone),
-        Solid::cm([-1500, 0, -200], [-1300, 470, 200], Stone),
+        Solid::cm([-1300, 0, -200], [-900, 700, 200], Rock),
+        Solid::cm([-1700, 0, -200], [-1300, 230, 200], Rock),
+        Solid::cm([-1500, 0, -200], [-1300, 470, 200], Rock),
         // The west half of the east-west lintel, from the west stone to the
         // north-south one.
-        Solid::cm([-900, 630, -200], [-200, 700, 200], Stone),
+        Solid::cm([-900, 630, -200], [-200, 700, 200], Rock),
         // The north stone and its stair.
-        Solid::cm([-200, 0, 900], [200, 700, 1300], Stone),
-        Solid::cm([-200, 0, 1300], [200, 230, 1700], Stone),
-        Solid::cm([-200, 0, 1300], [200, 470, 1500], Stone),
+        Solid::cm([-200, 0, 900], [200, 700, 1300], Rock),
+        Solid::cm([-200, 0, 1300], [200, 230, 1700], Rock),
+        Solid::cm([-200, 0, 1300], [200, 470, 1500], Rock),
         // The west side's long barrow: two banks and the roof of the
         // passage between them, three metres wide, twelve long.
         Solid::cm([-3000, 0, -1600], [-1800, 300, -1450], Ground),
