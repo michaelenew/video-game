@@ -494,9 +494,10 @@ impl Solid {
 
     /// The middle of its box in the floor plane.
     pub fn middle(&self) -> (Fx, Fx) {
+        // Never half of each corner: see `math::midpoint`.
         (
-            Fx::from_raw(self.min.x.raw() / 2 + self.max.x.raw() / 2),
-            Fx::from_raw(self.min.z.raw() / 2 + self.max.z.raw() / 2),
+            crate::math::midpoint(self.min.x, self.max.x),
+            crate::math::midpoint(self.min.z, self.max.z),
         )
     }
 
@@ -971,9 +972,9 @@ impl Bounds {
     /// Its middle, on the floor plane.
     pub fn middle(&self) -> V3 {
         V3::new(
-            Fx::from_raw(self.lo_x.raw() / 2 + self.hi_x.raw() / 2),
+            crate::math::midpoint(self.lo_x, self.hi_x),
             Fx::ZERO,
-            Fx::from_raw(self.lo_z.raw() / 2 + self.hi_z.raw() / 2),
+            crate::math::midpoint(self.lo_z, self.hi_z),
         )
     }
 }
@@ -1920,8 +1921,8 @@ impl Terrain {
         match self.atlas {
             None => s.hangs(),
             Some(_) => {
-                let x = Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2);
-                let z = Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2);
+                let x = crate::math::midpoint(s.min.x, s.max.x);
+                let z = crate::math::midpoint(s.min.z, s.max.z);
                 s.min.y.raw() > self.relief_at(x, z).raw()
             }
         }

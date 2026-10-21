@@ -9653,6 +9653,79 @@ frames it is fire like any pillar -- it lights a stone, lights a shot through it
 could cut it loose -- to feel for.
 **Verdict** open -- unplayed.
 
+### 2026-10-21 — the Ridgeback meets the ground: it collides, and it gets up
+
+From play: "In the high plane the two ridgeback fight is really crazy. The ridgebacks clip
+into and out of the box they start next to just by walking, their spikes and charge are
+super inconsistent with how they interact with it. The collision and AI need to be fixed."
+And: "every monster needs a 'get up' and 'get down' animation and move ... the ridgebacks can
+get up things lower than their shoulders ... the ridgeback cannot go through other moves while
+getting up, so they get a window of opportunity."
+
+**Changed**
+- The Ridgeback collides (`FightDecl::collides`, with a senses row for its body radius 1.5 m
+  and step 1 m). It is fenced by discs along its length over each one's underside, stands on
+  what it steps onto, and walks round a rock between it and a fighter on the floor.
+- **Getting up and down** (`sim::climb`, `Doing::Climb`): a ledge over its step and under
+  `Gets up onto (x shoulder)` = 1 (4.5 m) is got up in `24 + 12 a metre` frames -- 72 up the
+  Sky Meadow's 4 m rock, 42 up the proving ground's 1.5 m platform -- and a drop under
+  1.25 shoulders got down in 0.7 of that. Not free, open, nothing out: the window.
+- A charge into a solid ends there and plays its recovery. The spray stops at the first
+  solid in its lane, and is smothered thrown from against one. A move that cannot reach a
+  fighter up a ledge, or whose lane is blocked, is not chosen; a fighter up a ledge is walked
+  right up to.
+- Placed at the start of a hunt, it stands on the highest top under its legs it could have
+  got up: the proving ground's spawn is astride the east platform, and it starts on it.
+- The same motion for a morph (`breed::climb`, the Oven's "Morph · Gets up onto" row), drawn
+  by the game as it follows you up a step bigger than a quarter of its shoulder.
+- `Solid::middle` takes a corner and half the size rather than half of each corner: a round
+  solid's middle was a sixty-thousandth off after a change of frame, which the Caverns'
+  Ridgebacks, now against its columns, found (`tests/valley.rs`).
+
+**Why** The fight on the plane was a body walking through the scenery it was placed beside.
+The climb is the owner's: pursuit up a box, paid for with a window.
+
+**Pins** `tests/ridgeback_pin.rs`, every class: the proving ground's Ridgeback starts on a
+platform and gets down, climbs the platforms after the hunters and walks round them. The
+proving ground's tests that measured pursuit and dodging through its middle (`hunted.rs`) run
+along a lane clear of the platforms now; two that stood it in the middle (`monster.rs`'s bite,
+`dual_spells.rs`'s curse) stand it on open floor.
+
+**Verdict** open -- unplayed. To feel for: whether 72 frames up a 4 m rock is a window worth
+having and not a tedium; whether 42 up the proving ground's platform makes the platforms a
+place to fight from; whether the walk-round reads as an animal or a robot; whether getting down
+after a fighter who jumped off is quick enough to be a threat.
+
+### 2026-10-21 — the Mireback, the Broodmother and the Siegeshell meet the ground too
+
+From the owner, after the Ridgeback: "Turn it on for the Mireback, Broodmother and Siegeshell
+too. Fix the bug you found. Small creatures I'm much less bothered about, it's fine if they have
+easy safe spots for now."
+
+**Changed**
+- All three collide and keep their own footing (a senses row each, for a body radius and a
+  step: Mireback 2.5 m and 0.5 m, Broodmother 2 m and 1 m, Siegeshell 6 m and 4.5 m), and get
+  up what is under their reach: 1.2 m, 3.6 m and 6.5 m (their climb rows, as baked before).
+- **A top is footing only where it is broad enough for the body** -- half its radius all round
+  the leg. Without it the Siegeshell rode up onto every boulder it stepped over. The Hollows'
+  stones are too narrow for the Broodmother to stand on: walls to her, not ledges.
+- Where to look for a ledge starts from the furthest-forward part of the body low enough to
+  meet one it could get up: the Broodmother's head meets a ledge before her forelegs do.
+- The Siegeshell's march and the Broodmother's pull along her line are handed back to the
+  ground (`Monster::keep_to_the_ground`); the march gets up what is across it. The Mireback's
+  flop arcs from the floor it left to the floor it lands on, not the arena's base height.
+- **The rounding bug, everywhere**: every middle of two places is `math::midpoint`, a corner
+  and half the span, never half of each end -- thirteen of them, the hanging test, a den's
+  middle and the Galewing's, Sandmaw's, Veilstalker's and the roaming doorways' among them.
+  `tests/midpoints.rs` checks it moves exactly with a shift and fails on the old spelling.
+
+**Pins** The Ridgeback hunts of the Elementalist and the Reaver moved for the breadth rule; no
+other pin moved, and every Mireback, Broodmother and Siegeshell test held.
+
+**Verdict** open -- unplayed. To feel for: whether the Mireback is fenced out of anything it used
+to reach; whether the Broodmother finds her way round the Hollows' stones or looks stuck behind
+them; whether the Siegeshell's march still reaches its siege line.
+
 
 ### 2026-10-21 — knockback between fighters grows through a round
 

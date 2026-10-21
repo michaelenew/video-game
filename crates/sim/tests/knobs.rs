@@ -99,6 +99,25 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "const MOST_FOLD: Fx = Fx::ratio(1, 4)",
+        "Geometry, not a feel number: the furthest `sim::climb::plant` turns a leg to \
+         put its foot where the climb's motion says -- a quarter turn, past which a \
+         joint is folded back on itself. Where the foot goes is the climb row's.",
+    ),
+    (
+        "let step = Fx::ratio(1, 64)",
+        "Arithmetic, not a magnitude: the nudge `sim::climb::plant` turns a leg by to \
+         measure how its foot answers (a numerical derivative), small enough to be \
+         the slope and large enough that 16.16 sees the foot move.",
+    ),
+    (
+        "pub const STEEPEST: Fx = Fx::ratio(1, 6)",
+        "Geometry, not a feel number: the steepest a body is pitched getting up a \
+         ledge (`sim::climb::pitch_of`), past which its forelegs reach for the top \
+         rather than its spine standing on end. How high it gets up and how long it \
+         takes are the climb row's knobs.",
+    ),
+    (
         "const WIND_LIT: i32 = 1 << 30",
         "A bit position, not a magnitude: which bit of `Effect::banked` says the \
          Elementalist's wind has caught fire, set well above the Downdraft's one bit \

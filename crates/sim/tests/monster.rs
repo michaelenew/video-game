@@ -827,6 +827,11 @@ fn it_can_still_reach_somebody_standing_where_it_is_looking() {
     // The companion, so the rule above reads as a fact about height rather than
     // as riders being quietly immune to something.
     let mut w = hunt();
+    // On the open floor: the proving ground's Ridgeback starts on the
+    // platform its spawn is astride (2026-10-21, `sim::climb`), and a bite
+    // from up there goes over the head of somebody on the floor.
+    w.monster_mut().expect("a hunt has a creature").pos =
+        V3::new(Fx::from_int(2), Fx::ZERO, Fx::from_int(8));
     // **At the bite's own ideal range**, in front of it -- the distance the
     // control algorithm throws it at. This fixture used to stand the fighter
     // at the volume's anchor instead, with a note explaining why the anchor

@@ -75,7 +75,8 @@ use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
 use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate, pitch_from_radians};
 
 /// Loose class-name matching, so `--p1 reaver` works without remembering the
-/// full name.
+/// full name. Only the classes on offer (`sim::class::ROTATION`): `--p1
+/// bulwark` names nobody, and the seat is the Champion.
 fn parse_class(name: &str) -> Option<sim::Class> {
     use sim::Class::*;
     let n = name.to_lowercase();
@@ -92,7 +93,7 @@ fn parse_class(name: &str) -> Option<sim::Class> {
         })
 }
 
-const ALL: [sim::Class; 6] = sim::class::ALL_CLASSES;
+const ALL: [sim::Class; 5] = sim::class::ROTATION;
 
 fn matches(n: &str, c: sim::Class) -> bool {
     c.name().to_lowercase().contains(n) && !n.is_empty()
@@ -713,6 +714,7 @@ impl Default for Sim {
         shot_form(&mut w);
         shot_at(&mut w);
         shot_move(&mut w);
+        shot_climb(&mut w);
         shot_blood(&mut w);
         shot_reap(&mut w);
         shot_chase(&mut w);
@@ -1195,6 +1197,53 @@ fn shot_move(w: &mut World) {
     if species == sim::species::SpeciesId::SIEGESHELL {
         shot_siege_move(w, kind as u8);
     }
+}
+
+/// `SHOT_CLIMB=up` starts a hunt with the creature at the proving ground's
+/// west platform, side on to the camera, already getting up it
+/// (`sim::climb`); `SHOT_CLIMB=down` on it, getting down. Pair it with
+/// `SHOT_FRAME` to land partway through, and `DEMO=0` so nobody moves.
+fn shot_climb(w: &mut World) {
+    let Some(how) = platform::env("SHOT_CLIMB") else {
+        return;
+    };
+    let down = how.trim() == "down";
+    let ground = w.terrain();
+    let Some(beast) = w.monster_mut() else {
+        return;
+    };
+    let sp = beast.sp();
+    // Facing -z, its lip at the platform's north face (z = 4 m); getting
+    // down, standing on it with its lip at the south face (z = -4 m).
+    let lip = sim::climb::probe(sp);
+    let (z, y) = if down {
+        (sim::Fx::from_int(-4).add(lip), sim::Fx::ratio(3, 2))
+    } else {
+        (sim::Fx::from_int(4).add(lip), sim::Fx::ZERO)
+    };
+    beast.pos = sim::V3::new(sim::Fx::from_int(-7), y, z);
+    beast.yaw = sim::Fx::ratio(3, 4);
+    beast.brain.grace = u16::MAX;
+    let top = ground.ground_under(sim::V3::new(
+        beast.pos.x,
+        sim::Fx::from_int(10),
+        sim::Fx::ZERO,
+    ));
+    let rise = if down { sim::Fx::ZERO.sub(top) } else { top };
+    let total = sim::climb::frames(sp, rise);
+    beast.doing = sim::monster::Doing::Climb {
+        left: total,
+        total,
+        rise: sim::lore::to_cm(rise),
+    };
+    // Player one off to the side, looking along +x at its flank.
+    let at = beast.pos;
+    w.players[0].pos = sim::V3::new(
+        sim::Fx::from_int(-13),
+        sim::Fx::ZERO,
+        at.z.sub(sim::Fx::from_int(2)),
+    );
+    w.players[0].facing = sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO);
 }
 
 /// [`shot_move`] for the Siegeshell, which is forty metres long and throws

@@ -551,7 +551,18 @@ pub fn place_morphs(
                 }
             };
             let pose = |g: &sim::breed::Genome, q: &posture::Posture| {
-                let d = if heel.going {
+                let d = if let Some(c) = heel.climb {
+                    // Getting up or down: the creatures' one motion, as its
+                    // drive (`sim::breed::climb`).
+                    sim::breed::climb::drive(
+                        g,
+                        q,
+                        locomotion::rest(g),
+                        c.progress(),
+                        crate::heel::fx(c.rise),
+                        &sim::breed::climb::Rates::tuned(),
+                    )
+                } else if heel.going {
                     let gait = locomotion::at(g, q, sim::Fx::ratio(1, 2));
                     locomotion::drive(g, q, &gait, crate::heel::phase(&heel), sim::Fx::ZERO)
                 } else {

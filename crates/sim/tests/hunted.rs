@@ -16,6 +16,15 @@ use sim::{Class, Input, V3, World};
 const PLUS_X: u16 = 0;
 const PLUS_Z: u16 = 1 << 14;
 
+/// **The lane these are measured along**: eight and a half metres off the proving
+/// ground's middle, clear of its two platforms. Since 2026-10-21 the
+/// Ridgeback walks into solids and gets up onto them (`sim::climb`), and a
+/// line through the middle runs through both platforms -- which is a fight
+/// about a ledge, not about pursuit on the open floor.
+fn lane() -> Fx {
+    Fx::ratio(-17, 2)
+}
+
 fn quarry(pos: V3, vel: V3) -> Quarry {
     Quarry {
         pos,
@@ -92,7 +101,7 @@ fn a_fighter_backing_away_is_run_down() {
     // stroll at seven metres and a walk at eight, so a backpedalling fighter
     // stayed just out of reach for as long as they liked -- and the gap grew.
     let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
-    beast.pos = V3::new(Fx::from_int(-9), Fx::ZERO, Fx::ZERO);
+    beast.pos = V3::new(Fx::from_int(-9), Fx::ZERO, lane());
     beast.brain.cooldown = [u16::MAX; sim::species::MAX_MOVES];
     let walk = sim::tuning::move_speed();
     let start = ridgeback::SPECIES.prowl_range().add(Fx::ONE);
@@ -161,7 +170,7 @@ fn dodge_at(at: u32) -> impl Fn(u32) -> Input {
 }
 
 fn walk_does_not_dodge_does(kind: u8, range: Fx) {
-    let at = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::ZERO);
+    let at = V3::new(Fx::from_int(-6), Fx::ZERO, lane());
     let me = at.add(V3::new(range, Fx::ZERO, Fx::ZERO));
     let name = ridgeback::MOVES[kind as usize].name;
     assert!(
@@ -207,8 +216,8 @@ fn the_spray_reaches_a_fighter_at_range_and_pins_them() {
     // **This is how it takes out somebody playing at range.** Fourteen metres
     // is past everything else it has but the charge, and the spray has to
     // arrive there and hold them where they are.
-    let at = V3::new(Fx::from_int(-7), Fx::ZERO, Fx::ZERO);
-    let me = V3::new(Fx::from_int(7), Fx::ZERO, Fx::ZERO);
+    let at = V3::new(Fx::from_int(-7), Fx::ZERO, lane());
+    let me = V3::new(Fx::from_int(7), Fx::ZERO, lane());
     let mut w = standoff(at, me);
     let spray = ridgeback::SPECIES.attack(ridgeback::SPRAY);
     w.monster_mut().unwrap().doing = Doing::Startup {

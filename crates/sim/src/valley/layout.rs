@@ -872,7 +872,7 @@ pub fn approach(r: &Room) -> Vec<(Fx, Fx)> {
         ArenaId::MANTIS => out.extend(saddle::SHRINE_WAY.iter().map(|q| p(q.x, q.z))),
         ArenaId::GALEWING => {
             let b = CLIFFS_BRIDGE;
-            let x = Fx::from_raw(b.min.x.raw() / 2 + b.max.x.raw() / 2);
+            let x = crate::math::midpoint(b.min.x, b.max.x);
             out.push((x, b.min.z.add(Fx::ONE)));
             out.push((x, b.max.z.add(Fx::from_int(3))));
             return out;

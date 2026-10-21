@@ -6,6 +6,11 @@ depends: ../bulwark.md, ../defense.md
 
 # Bulwark — kit
 
+> **Set aside, 2026-10-21 (the owner).** The Bulwark is off the classes a player can choose
+> (`sim::class::ROTATION`): it is so far behind the other five that there is no clear way to
+> make it fit yet. Everything below is still built and still tested; putting it back is adding
+> it to `ROTATION`.
+
 > **On three clicks, 2026-10-10, built and unplayed** — see
 > [../exploration/0012_bulwark_on_three_clicks.md](../exploration/0012_bulwark_on_three_clicks.md),
 > which supersedes the bindings below where they differ. Left is the strike (Bash, **Rebound**,
