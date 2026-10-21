@@ -401,3 +401,49 @@ fn landing_forgets_the_wall() {
     assert_eq!(w.players[0].wall_jumps, 0);
     assert!(!w.players[0].wall_jumped.is_some());
 }
+
+/// A Champion in the air at `pos`, drifting at `vel` (flat), the other
+/// fighter out of the way.
+fn in_the_air_at(pos: V3, vel: V3) -> World {
+    let mut w = World::versus_in([Class::Champion; 2], ArenaId::RANGE);
+    let p = &mut w.players[0];
+    p.pos = pos;
+    p.vel = vel;
+    p.grounded = false;
+    w.players[1].pos = V3::new(Fx::from_int(-100), Fx::ZERO, Fx::ZERO);
+    w
+}
+
+/// **Only a wall is a wall** (2026-10-20, from play: the slide was drawn
+/// "on very thin platforms where I wouldn't be able to slide at all"). A
+/// face is slid on and jumped off only where it covers most of the body's
+/// height (`wall_face_high`) and is wide enough across it
+/// (`wall_face_wide`): the range's wooden posts are eight-tenths of a metre
+/// across, and its low wall along the south edge (x 5 to 35, z 21 to 22)
+/// is a metre and a half tall -- each stops the body, and neither is a slide.
+#[test]
+fn a_post_or_a_short_face_is_not_slid_on_or_jumped_off() {
+    // North of the post at x -36, z -8.4 to -7.6, falling beside it.
+    let post = in_the_air_at(
+        V3::new(Fx::from_int(-36), Fx::from_int(3), Fx::ratio(-700, 100)),
+        V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(-3)),
+    );
+    // North of the low wall, its top level with the body's chest.
+    let low = in_the_air_at(
+        V3::new(Fx::from_int(20), Fx::ratio(9, 10), Fx::ratio(2040, 100)),
+        V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(3)),
+    );
+    for (what, mut w, aim) in [("the post", post, SOUTH), ("the low wall", low, NORTH)] {
+        let mut stopped = false;
+        for _ in 0..8 {
+            w.advance([Input::aimed(Input::W, aim), Input::default()]);
+            assert!(!w.players[0].grounded, "{what}: landed");
+            stopped |= w.players[0].vel.z == Fx::ZERO;
+            assert!(!w.players[0].sliding, "{what}: slid");
+            assert!(!on_the_wall(&w), "{what}: counted as a wall");
+        }
+        assert!(stopped, "{what}: never met it");
+        w.advance([Input::aimed(Input::W | Input::SPACE, aim), Input::default()]);
+        assert_eq!(w.players[0].wall_jumps, 0, "{what}: jumped off it");
+    }
+}
