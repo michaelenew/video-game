@@ -3404,6 +3404,13 @@ pub fn carpet_life() -> u16 {
     oven::scalar(Scalar::CarpetLife).max(1) as u16
 }
 
+/// How long the pillar a full Strike spent is still seen, shooting up and
+/// gone: always less than a burn tick, so it never burns. See `World::advance`
+/// where the Strike spends the pillar.
+pub fn strike_flash() -> u16 {
+    oven::scalar(Scalar::StrikeFlash).max(1) as u16
+}
+
 /// How fast a Fire carpet comes down while it hangs, in metres a second.
 /// Each end stops on the floor under it. See `state::World::sink_the_carpet`.
 pub fn carpet_sink() -> Fx {

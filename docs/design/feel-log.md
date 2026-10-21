@@ -9564,8 +9564,13 @@ charge the cap released is now spent until it comes up (`Player::spent_clicks`),
 click of hers. Pinned by `tests/elementalist_qol.rs`
 (`a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump`) and
 `tests/elementalist_clicks.rs` (`a_strike_held_past_its_charge_is_one_strike_not_two`).
-**Not found** the report that a held pillar cast from a box "doesn't come out at all": in the
-simulation it winds up, holds, strikes and leaves its pillar from the proving ground's dais,
-from a stone of hers, and from the range's 3 m box and 12 m tower, at a tap and at a hold.
-Waiting on a replay of it.
+**Found later the same day** (the person's own reading): the held pillar that "doesn't come out
+at all" was a *full* Strike, which spends the whole pillar and so drew nothing -- and the
+button still held then threw a tapped pillar, the double wind-up above. Not the box: the
+simulation struck from every box tried. **Changed**: a Strike leaving less than a burn tick
+leaves its pillar for `Strike, a full one flashes for` (14 frames), never long enough to burn
+(`a_full_strike_flashes_its_pillar_and_burns_nothing_more`; `elementalist_v2.rs`'s
+`the_strike_is_worth_exactly_the_burn_it_takes_off_the_pillar` now allows the flash). For those
+frames it is fire like any pillar -- it lights a stone, lights a shot through it, and Cataclysm
+could cut it loose -- to feel for.
 **Verdict** open -- unplayed.

@@ -135,6 +135,18 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
   (`Player::spent_clicks`). It used to throw a second pillar's whole wind-up the
   moment the first one's recovery ended -- the "double wind-up". Every click of
   hers whose hold ends at its cap does the same.
+- **A full Strike flashes** (2026-10-21): spending the whole pillar, it left
+  nothing standing and so nothing to see, which read as a cast that never came
+  out. A Strike that leaves less than one burn tick now leaves its pillar for
+  `Strike, a full one flashes for` (14 frames): it shoots up to its full size and
+  is gone, short of a tick, so it never burns
+  (`a_full_strike_flashes_its_pillar_and_burns_nothing_more`).
+- **A full Strike flashes** (2026-10-21): spending the whole pillar, it left
+  nothing standing and so nothing to see, which read as a cast that never came
+  out. A Strike that leaves less than one burn tick now leaves its pillar for
+  `Strike, a full one flashes for` (14 frames): it shoots up to its full size and
+  is gone, short of a tick, so it never burns
+  (`a_full_strike_flashes_its_pillar_and_burns_nothing_more`).
 - **The pillar is half again as big and stands twice as long.** The Strike's
   worth was halved with it, so a full Strike is the hit it was.
 - **`Q` and `E` act on everything on their line at once.** The Bolt and

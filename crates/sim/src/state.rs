@@ -3329,8 +3329,16 @@ impl World {
                         .mul(Fx::ONE.sub(p.channelled))
                         .to_int()
                         .max(0) as u16;
-                    if born.life < t::effect_tick_frames() {
-                        continue;
+                    // **Less than a tick left is a flash** (2026-10-21, from
+                    // play): it used to leave nothing at all, so a full Strike
+                    // had no picture and read as a cast that never came out.
+                    // The pillar shoots up to its full size over these few
+                    // frames (`Effect::progress` is its age over its life) and
+                    // is gone, shorter than a tick so it never burns: the
+                    // Strike's hit was the whole burn already.
+                    let tick = t::effect_tick_frames().max(1);
+                    if born.life < tick {
+                        born.life = born.life.max(t::strike_flash()).min(tick - 1);
                     }
                 }
                 // **How long a thing she leaves behind lasts is where she was

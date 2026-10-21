@@ -376,6 +376,31 @@ fn a_strike_held_past_its_charge_is_one_strike_not_two() {
     assert_eq!(doing(&w), Some(SLOT_SPECIAL), "a fresh press throws again");
 }
 
+#[test]
+fn a_full_strike_flashes_its_pillar_and_burns_nothing_more() {
+    // From play, 2026-10-21: a full Strike spends the whole pillar, and it
+    // left nothing to see -- it read as a cast that never came out.
+    let mut w = elementalist();
+    let m = sim::moves::get(Class::Elementalist, SLOT_SPECIAL);
+    run(&mut w, (m.startup + m.channel) as u32 + 4, keys::FIRE);
+    let mut seen = None;
+    for _ in 0..40 {
+        step(&mut w, 0);
+        if let Some(p) = of_kind(&w, EffectKind::FirePillar).first() {
+            seen = Some(*p);
+            break;
+        }
+    }
+    let pillar = seen.expect("a full Strike is seen: its pillar flashes up");
+    assert!(
+        pillar.life < t::effect_tick_frames(),
+        "and is gone before a tick, so it never burns: {} frames",
+        pillar.life
+    );
+    run(&mut w, pillar.life as u32 + 1, 0);
+    assert!(of_kind(&w, EffectKind::FirePillar).is_empty(), "then gone");
+}
+
 // ---------------------------------------------------------------------------
 // The Fire carpet and the Thermal
 // ---------------------------------------------------------------------------

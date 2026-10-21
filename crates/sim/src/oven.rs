@@ -1217,6 +1217,9 @@ scalars! {
     // this speed for as long as it hangs, and an end that meets the floor
     // rests on it -- so one laid low enough ends up lying on the ground.
     CarpetSink,           "Elementalist", "Fire carpet, sinks at (m/s)",                      Fixed, 0, fx(5,1);
+    // **A full Strike flashes** (2026-10-21, from play): the pillar it spent
+    // shoots up and is gone over this many frames, never long enough to burn.
+    StrikeFlash,          "Elementalist", "Strike, a full one flashes for",                   Frames, 1, 25;
 }
 
 // ---------------------------------------------------------------------------
