@@ -241,17 +241,20 @@ pub fn frames_at(rise: Fx, frames: i32, per_metre: i32, down: Fx) -> u16 {
 }
 
 /// **Where it looks for a ledge or an edge**, along its facing: just past
-/// the front of its legs -- the furthest disc it is fenced by at its feet
-/// ([`discs`]), its radius, and a hand more. The lip of what it gets up or
-/// down is about here.
+/// the front of what of it a ledge it could get up would meet -- the
+/// furthest disc ([`discs`]) whose underside is under its reach, its
+/// radius, and a hand more. The lip of what it gets up or down is about
+/// here. A Ridgeback's head is carried over anything it gets up, so its
+/// forelegs meet the ledge; a Broodmother's head is low, and meets it first.
 pub fn probe(sp: &Species) -> Fx {
     let b = build(sp);
     let step = sp.fight_fx(crate::species::FightField::StepOver);
+    let low_enough = reach(sp).max(step);
     let (discs, n) = discs(sp);
     let front = discs
         .iter()
         .take(n)
-        .filter(|(_, low)| low.raw() <= step.raw())
+        .filter(|(_, low)| low.raw() <= low_enough.raw())
         .map(|(x, _)| *x)
         .fold(b.front, Fx::max);
     front.add(footprint(sp)).add(Fx::ratio(1, 4))

@@ -72,6 +72,9 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // (`sim::climb`). It collides with the proving ground's walls and platforms,
 // starts on the platform its spawn is astride, gets up them after the hunters
 // and walks round them, and its charge and spray stop at what they run into.
+// And again the same day: a top is footing only where it is broad enough for
+// the body, so it stands differently where a top is narrow -- the
+// platforms' edges, the Elementalist's stones. Only hers and the Reaver's moved.
 const PINNED: [(Class, u32, u64); 7] = [
     (Class::Champion, 0x2545_F491, 0xee8fcc68d04666dd),
     (Class::Champion, 7, 0x5e9c828be57991c1),
@@ -108,7 +111,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-12 with no change to her fight: an effect is hashed by
     // its kind's number, and the Dual mage's retired Shade bolt sat before
     // her shadow's blades in the list (0015).
-    (Class::ShadowReaver, 31, 0xd432c3dd7019659c),
+    (Class::ShadowReaver, 31, 0xe995266258a0c817),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.
@@ -119,7 +122,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-18, deliberately: her QoL pass (a bigger, longer
     // pillar, pushes that act on the whole line, a sliding Fissure, burning
     // wind, a higher Updraft). Nobody else's moved.
-    (Class::Elementalist, 59, 0x337c247c275a3b06),
+    (Class::Elementalist, 59, 0xed0da5451bd7a943),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day

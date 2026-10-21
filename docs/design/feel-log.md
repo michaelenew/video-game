@@ -9545,3 +9545,33 @@ along a lane clear of the platforms now; two that stood it in the middle (`monst
 having and not a tedium; whether 42 up the proving ground's platform makes the platforms a
 place to fight from; whether the walk-round reads as an animal or a robot; whether getting down
 after a fighter who jumped off is quick enough to be a threat.
+
+### 2026-10-21 — the Mireback, the Broodmother and the Siegeshell meet the ground too
+
+From the owner, after the Ridgeback: "Turn it on for the Mireback, Broodmother and Siegeshell
+too. Fix the bug you found. Small creatures I'm much less bothered about, it's fine if they have
+easy safe spots for now."
+
+**Changed**
+- All three collide and keep their own footing (a senses row each, for a body radius and a
+  step: Mireback 2.5 m and 0.5 m, Broodmother 2 m and 1 m, Siegeshell 6 m and 4.5 m), and get
+  up what is under their reach: 1.2 m, 3.6 m and 6.5 m (their climb rows, as baked before).
+- **A top is footing only where it is broad enough for the body** -- half its radius all round
+  the leg. Without it the Siegeshell rode up onto every boulder it stepped over. The Hollows'
+  stones are too narrow for the Broodmother to stand on: walls to her, not ledges.
+- Where to look for a ledge starts from the furthest-forward part of the body low enough to
+  meet one it could get up: the Broodmother's head meets a ledge before her forelegs do.
+- The Siegeshell's march and the Broodmother's pull along her line are handed back to the
+  ground (`Monster::keep_to_the_ground`); the march gets up what is across it. The Mireback's
+  flop arcs from the floor it left to the floor it lands on, not the arena's base height.
+- **The rounding bug, everywhere**: every middle of two places is `math::midpoint`, a corner
+  and half the span, never half of each end -- thirteen of them, the hanging test, a den's
+  middle and the Galewing's, Sandmaw's, Veilstalker's and the roaming doorways' among them.
+  `tests/midpoints.rs` checks it moves exactly with a shift and fails on the old spelling.
+
+**Pins** The Ridgeback hunts of the Elementalist and the Reaver moved for the breadth rule; no
+other pin moved, and every Mireback, Broodmother and Siegeshell test held.
+
+**Verdict** open -- unplayed. To feel for: whether the Mireback is fenced out of anything it used
+to reach; whether the Broodmother finds her way round the Hollows' stones or looks stuck behind
+them; whether the Siegeshell's march still reaches its siege line.

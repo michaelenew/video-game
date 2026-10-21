@@ -184,13 +184,16 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// starts on the platform its spawn is astride and gets down, gets up the
 /// platforms after the hunters and walks round them, and its charge and
 /// spray stop at what they run into (`sim::climb`, `docs/design/feel-log.md`).
+/// **And again the same day**: a top is footing only where it is broad enough
+/// for the body, so it stands differently where a top is narrow -- the
+/// platforms' edges, the Elementalist's stones.
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xc55f215e15d0932d),
     (Class::Bulwark, 0xa6d54ebe7376b3b3),
     (Class::ShadowReaver, 0x98cc84bf577888df),
     (Class::BloodMage, 0x15eb57123846b741),
     (Class::DualMage, 0x410fda2490b3d761),
-    (Class::Elementalist, 0x2bb8e48f8004041b),
+    (Class::Elementalist, 0xeb9f3108530d79f4),
 ];
 
 #[test]

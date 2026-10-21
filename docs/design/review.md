@@ -632,9 +632,12 @@ cast")
   its recovery, a spray stops at the first solid in its lane, and a move whose
   volume cannot reach a fighter up a ledge -- or whose lane a solid blocks -- is
   not chosen. A ledge under its shoulders is got up as a move (`Doing::Climb`,
-  `sim::climb`), in which it throws nothing: the window. The Mireback, the
-  Broodmother and the Siegeshell still do not collide; each has a climb row
-  baked and is one flag from it, and each is a new fight to play first.
+  `sim::climb`), in which it throws nothing: the window. **The Mireback, the
+  Broodmother and the Siegeshell the same day**, from the owner: each collides
+  and keeps its own footing, and gets up what is under its reach (1.2 m, 3.6 m,
+  6.5 m). A top is footing only where it is broad enough for the body, so the
+  Siegeshell steps over the valley's boulders and the Broodmother walks round
+  the Hollows' narrow stones rather than perching on them. Unplayed.
   [monsters.md](monsters.md) §1b, `tests/ledges.rs`.
 - `MACH-4` Hazards reach a creature by its centre (the Mireback opts into its
   footprint): keep the shared rule?

@@ -494,13 +494,11 @@ impl Solid {
 
     /// The middle of its box in the floor plane.
     pub fn middle(&self) -> (Fx, Fx) {
-        // A corner and half the size, not half of each corner: that rounds
-        // the odd bit of where the world's frame is, so a round solid's middle
-        // moved by a frame's shift was a sixty-thousandth off where the shift
-        // put it -- and a body against it in one frame was pushed differently
-        // in the next (`tests/valley.rs`, a change of frame, 2026-10-21).
-        let half = |lo: Fx, hi: Fx| lo.add(Fx::from_raw(hi.sub(lo).raw() / 2));
-        (half(self.min.x, self.max.x), half(self.min.z, self.max.z))
+        // Never half of each corner: see `math::midpoint`.
+        (
+            crate::math::midpoint(self.min.x, self.max.x),
+            crate::math::midpoint(self.min.z, self.max.z),
+        )
     }
 
     /// A round solid's radius at height `y` (clamped to its span).
@@ -974,9 +972,9 @@ impl Bounds {
     /// Its middle, on the floor plane.
     pub fn middle(&self) -> V3 {
         V3::new(
-            Fx::from_raw(self.lo_x.raw() / 2 + self.hi_x.raw() / 2),
+            crate::math::midpoint(self.lo_x, self.hi_x),
             Fx::ZERO,
-            Fx::from_raw(self.lo_z.raw() / 2 + self.hi_z.raw() / 2),
+            crate::math::midpoint(self.lo_z, self.hi_z),
         )
     }
 }
@@ -1923,8 +1921,8 @@ impl Terrain {
         match self.atlas {
             None => s.hangs(),
             Some(_) => {
-                let x = Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2);
-                let z = Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2);
+                let x = crate::math::midpoint(s.min.x, s.max.x);
+                let z = crate::math::midpoint(s.min.z, s.max.z);
                 s.min.y.raw() > self.relief_at(x, z).raw()
             }
         }

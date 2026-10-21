@@ -2002,9 +2002,9 @@ impl World {
         let den = self.den();
         let b = den.home;
         let under = V3::new(
-            Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
+            crate::math::midpoint(b.lo_x, b.hi_x),
             den.off.y.add(Fx::from_int(-1000)),
-            Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
+            crate::math::midpoint(b.lo_z, b.hi_z),
         );
         let away = self.away;
         for (i, p) in self.players.iter_mut().enumerate() {
@@ -2332,9 +2332,9 @@ impl World {
         let (pos, facing) = match cairn {
             Some(top) => (
                 V3::new(
-                    Fx::from_raw(top.min.x.raw() / 2 + top.max.x.raw() / 2),
+                    crate::math::midpoint(top.min.x, top.max.x),
                     top.max.y,
-                    Fx::from_raw(top.min.z.raw() / 2 + top.max.z.raw() / 2),
+                    crate::math::midpoint(top.min.z, top.max.z),
                 ),
                 p.facing,
             ),

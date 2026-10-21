@@ -488,3 +488,162 @@ fn a_bred_body_gets_up_the_same_way() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Run a hunt of `species` with fighter one standing on the top of the
+/// nearest solid it could be got up after (or on the floor where there is
+/// none), and report the most any creature's middle was inside a solid it was
+/// not standing on or getting up, and whether one got up.
+fn walk_its_own_arena(species: sim::species::SpeciesId, frames: u32) -> (Fx, bool) {
+    let mut w = World::hunt_of([Class::Champion; 2], species);
+    w.players[1].health = 0;
+    for m in w.monsters.iter_mut().flatten() {
+        m.brain.grace = 0;
+    }
+    let ground = w.terrain();
+    let first = w.monsters.iter().flatten().next().copied().unwrap();
+    let step = first.sp().fight_fx(sim::species::FightField::StepOver);
+    let reach = sim::climb::reach(first.sp());
+    // A top it can get up, standing on the floor, broad enough to be
+    // footing: where fighter one waits.
+    let wide = sim::climb::footprint(first.sp()).add(sim::climb::footprint(first.sp()));
+    let ledge = ground
+        .solids()
+        .filter(|s| !ground.hangs(s) && s.min.y.raw() <= Fx::ratio(1, 10).raw())
+        .filter(|s| s.max.y.raw() > step.raw() && s.max.y.raw() <= reach.raw())
+        .filter(|s| {
+            s.max.x.sub(s.min.x).raw() >= wide.raw() && s.max.z.sub(s.min.z).raw() >= wide.raw()
+        })
+        .min_by_key(|s| sim::math::wide_flat_dist(top_of(s), first.pos).raw());
+    if let Some(l) = ledge {
+        w.players[0].pos = top_of(&l);
+    }
+    let mut worst = Fx::ZERO;
+    let mut climbed = false;
+    for _ in 0..frames {
+        let input = look(&w, 0, w.monsters.iter().flatten().next().unwrap().pos);
+        w.advance([input, Input::new(0)]);
+        w.players[0].health = sim::tuning::health_of(Class::Champion);
+        let ground = w.terrain();
+        for m in w.monsters.iter().flatten() {
+            if m.doing.climbing() {
+                climbed = true;
+                continue;
+            }
+            for s in ground.around(m.pos, Fx::from_int(4)) {
+                if s.max.y.sub(m.pos.y).raw() <= step.raw() {
+                    continue;
+                }
+                if let Some(d) = inside_by(m, &s, &ground) {
+                    worst = worst.max(d);
+                }
+            }
+        }
+    }
+    (worst, climbed)
+}
+
+#[test]
+fn the_mireback_broodmother_and_siegeshell_keep_out_of_their_arenas_solids() {
+    use sim::species::SpeciesId;
+    let mut wrong = Vec::new();
+    for id in [
+        SpeciesId::MIREBACK,
+        SpeciesId::BROODMOTHER,
+        SpeciesId::SIEGESHELL,
+    ] {
+        let (worst, _) = walk_its_own_arena(id, 1800);
+        if worst.raw() > Fx::ratio(1, 2).raw() {
+            wrong.push(format!(
+                "{}: its middle {} m inside a solid",
+                id.get().name,
+                worst.to_f32_for_render()
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// An open floor a hundred metres across with one block on it, eighteen
+/// metres square and `$cm` tall: a ledge for a body of any size.
+macro_rules! block {
+    ($name:ident, $cm:expr) => {
+        static $name: sim::arena::Arena = sim::arena::Arena {
+            id: sim::arena::ArenaId::PROVING_GROUND,
+            name: "a block",
+            creature: None,
+            bounds: sim::arena::Bounds::cm((-5000, 5000), (-5000, 5000)),
+            floor: sim::arena::Material::Ground,
+            regions: &[],
+            solids: &[sim::arena::Solid::cm(
+                [-900, 0, -900],
+                [900, $cm, 900],
+                sim::arena::Material::Stone,
+            )],
+            spawns: sim::arena::Spawns {
+                versus: [
+                    sim::arena::Mark::cm(-400, 0, (400, 0)),
+                    sim::arena::Mark::cm(400, 0, (-400, 0)),
+                ],
+                hunt: None,
+            },
+            sites: &[],
+            rim: None,
+        };
+    };
+}
+
+// Three quarters of each one's reach (`climb::reach`): the Ridgeback's 4.5 m,
+// the Mireback's 1.2, the Broodmother's 3.6, the Siegeshell's 6.5.
+block!(RIDGEBACK_BLOCK, 340);
+block!(MIREBACK_BLOCK, 90);
+block!(BROODMOTHER_BLOCK, 270);
+block!(SIEGESHELL_BLOCK, 490);
+
+#[test]
+fn every_body_that_collides_gets_up_after_somebody_on_a_block() {
+    use sim::species::SpeciesId;
+    let mut wrong = Vec::new();
+    for (id, arena) in [
+        (SpeciesId::RIDGEBACK, &RIDGEBACK_BLOCK),
+        (SpeciesId::MIREBACK, &MIREBACK_BLOCK),
+        (SpeciesId::BROODMOTHER, &BROODMOTHER_BLOCK),
+        (SpeciesId::SIEGESHELL, &SIEGESHELL_BLOCK),
+    ] {
+        let ground = Terrain::bare(arena);
+        let block = arena.solids[0];
+        let mut m = Monster::new(id);
+        assert!(m.climber(), "{} keeps its own footing", m.sp().name);
+        m.pos = V3::new(Fx::from_int(-35), Fx::ZERO, Fx::ZERO);
+        m.brain.cooldown = [u16::MAX; sim::species::MAX_MOVES];
+        let on_top = sim::monster::Quarry {
+            pos: V3::new(Fx::ZERO, block.max.y, Fx::ZERO),
+            vel: V3::ZERO,
+            alive: true,
+            aboard: false,
+            stunned: false,
+        };
+        let mut climbed = false;
+        for _ in 0..2400 {
+            m.step_in(&[on_top], &sim::monster::Senses::ALL, &ground);
+            // The Siegeshell's shared walk is held: its march is its own
+            // frame hook, which walks it and hands it back to the ground
+            // (`Monster::keep_to_the_ground`). Marched straight at the block.
+            if id == SpeciesId::SIEGESHELL && !m.doing.climbing() {
+                let was = m.pos;
+                let forward = V3::from_turns(m.yaw);
+                m.pos = m.pos.add(forward.scale(m.sp().walk().mul(sim::DT)));
+                m.keep_to_the_ground(&ground, was, Some(on_top.pos));
+            }
+            climbed |= m.doing.climbing();
+        }
+        if !climbed || m.pos.y != block.max.y {
+            wrong.push(format!(
+                "{}: got up {climbed}, standing at {} m on a {} m block",
+                m.sp().name,
+                m.pos.y.to_f32_for_render(),
+                block.max.y.to_f32_for_render()
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

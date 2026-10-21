@@ -256,8 +256,19 @@ stood in the middle of it, rearing at the fighter on top.
   reach a fighter up a ledge, or whose lane a solid blocks, is not chosen.
 
 The motion is not the Ridgeback's: it is every body's, read off its skeleton
-(`sim::climb`, below), and a bred body's (`sim::breed::climb`). Only the
-Ridgeback has it on yet; see review.md `MACH-3` for the rest.
+(`sim::climb`, below), and a bred body's (`sim::breed::climb`). It is on for
+every creature that walks the shared walk: the Ridgeback, the Mireback (gets
+up 1.2 m), the Broodmother (3.6 m) and the Siegeshell (6.5 m). The Pair and
+the Veilstalker keep their own leaps up, the Galewing flies, the Sandmaw
+burrows, and the critters (gnawers, the Hornback herd) are not bodies of
+bones at all and have no get-up yet. A creature whose own hook moves it --
+the Siegeshell's march, the Broodmother's pull along her line -- hands it back
+to the ground through `Monster::keep_to_the_ground`, and the Mireback's flop
+arcs from the floor it left to the floor it lands on.
+
+**A top is footing only where it is broad enough**: half the body's radius
+all round the leg. So the Siegeshell steps over a boulder rather than riding
+up onto it, and a stone too narrow to stand on is a wall, not a ledge.
 
 ### Getting up is one motion, read off the skeleton
 

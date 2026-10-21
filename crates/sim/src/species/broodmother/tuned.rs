@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 552] = [
+pub const KNOBS: [i32; 569] = [
            65536, // broodmother.size_(x) = 1
             6000, // broodmother.health = 6000
              500, // broodmother.breakable_part_health = 500
@@ -485,6 +485,23 @@ pub const KNOBS: [i32; 552] = [
               20, // broodmother.gnawer.flinch_length = 20
            65536, // broodmother.gnawer.knockback_taken_(x) = 1
              180, // broodmother.gnawer.body_lies_for = 180
+          131072, // broodmother_·_senses.body_radius,_against_solids = 2
+           65536, // broodmother_·_senses.steps_over_solids_under = 1
+               0, // broodmother_·_senses.sight,_half-angle_(turns) = 0
+               0, // broodmother_·_senses.blind_arc,_half-width_(turns) = 0
+               0, // broodmother_·_senses.feels_a_body_within = 0
+               0, // broodmother_·_senses.feels_a_body_no_higher_than = 0
+               0, // broodmother_·_senses.hears_a_footfall_at = 0
+               0, // broodmother_·_senses.hears_a_footfall_on_rock_at = 0
+               0, // broodmother_·_senses.hears_a_landing_at = 0
+               0, // broodmother_·_senses.landing,_more_per_metre_fallen = 0
+               0, // broodmother_·_senses.landing,_at_most = 0
+               0, // broodmother_·_senses.hears_a_dodge_at = 0
+               0, // broodmother_·_senses.hears_a_hit_at = 0
+               0, // broodmother_·_senses.hears_a_rush_at = 0
+               0, // broodmother_·_senses.hears_a_stone_at = 0
+               0, // broodmother_·_senses.hears_a_shield_planted_at = 0
+               0, // broodmother_·_senses.hears_a_quake_at = 0
              480, // broodmother.web_patch.lasts = 480
            19661, // broodmother.web_patch.reaches_above_the_floor = 0.3
            28180, // broodmother.web_patch.walk_speed_in_it_(x) = 0.43

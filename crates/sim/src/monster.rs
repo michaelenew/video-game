@@ -3150,19 +3150,49 @@ impl Monster {
     /// hind legs, its middle or its forelegs -- and whether it is a top. The
     /// land itself is read at its middle only, as it always was: a hillside
     /// is not a ledge, and the ground under its fore and hind feet on one is
-    /// a metre apart.
+    /// a metre apart. **A top is footing only where it is broad enough for
+    /// the body**, half its radius all round the leg: the Siegeshell steps
+    /// over a boulder rather than riding up onto it.
     fn floor_under(&self, arena: &Terrain) -> (Fx, bool) {
+        let step = self.sp().fight_fx(crate::species::FightField::StepOver);
+        self.footing(arena, self.pos.y.add(step))
+    }
+
+    /// **The footing at one point** no higher than `ceiling`: the land, or a
+    /// top broad enough to stand on there ([`Monster::floor_under`]'s rule).
+    /// Where it would come to stand at the end of getting up.
+    fn broad_top(&self, arena: &Terrain, at: V3, ceiling: Fx) -> Fx {
+        let inset = crate::math::half(crate::climb::footprint(self.sp())).neg();
+        let land = arena.relief_at(at.x, at.z);
+        arena
+            .around(at, Fx::ZERO)
+            .filter(|s| s.max.y.raw() <= ceiling.raw() && s.max.y.raw() > land.raw())
+            .filter(|s| s.over(at.x, at.z, inset) && !arena.hangs(s))
+            .map(|s| s.max.y)
+            .fold(land, Fx::max)
+    }
+
+    /// [`Monster::floor_under`], with the highest a top may be given.
+    fn footing(&self, arena: &Terrain, ceiling: Fx) -> (Fx, bool) {
         let sp = self.sp();
         let b = crate::climb::build(sp);
-        let step = sp.fight_fx(crate::species::FightField::StepOver);
+        let inset = crate::math::half(crate::climb::footprint(sp)).neg();
         let forward = V3::from_turns(self.yaw);
-        let ceiling = self.pos.y.add(step);
         let mut floor = arena.relief_at(self.pos.x, self.pos.z);
         let mut on_top = false;
         for x in [b.rear, Fx::ZERO, b.front] {
             let at = self.pos.add(forward.scale(x));
-            let top = arena.floor_below(V3::new(at.x, ceiling, at.z));
-            if top.raw() > arena.relief_at(at.x, at.z).raw() && top.raw() > floor.raw() {
+            let land = arena.relief_at(at.x, at.z);
+            for s in arena.around(at, Fx::ZERO) {
+                let top = s.max.y;
+                if top.raw() > ceiling.raw()
+                    || top.raw() <= land.raw()
+                    || top.raw() <= floor.raw()
+                    || !s.over(at.x, at.z, inset)
+                    || arena.hangs(&s)
+                {
+                    continue;
+                }
                 floor = top;
                 on_top = true;
             }
@@ -3219,7 +3249,12 @@ impl Monster {
         if free
             && rise.raw() > step.raw()
             && rise.raw() <= crate::climb::reach(sp).raw()
-            && arena.ground_under(land).sub(top).abs().raw() <= step.raw()
+            && self
+                .broad_top(arena, land, top.add(step))
+                .sub(top)
+                .abs()
+                .raw()
+                <= step.raw()
         {
             self.begin_climb(rise);
             return;
@@ -3256,6 +3291,34 @@ impl Monster {
         };
     }
 
+    /// **Back to the ground after a species' own hook moved it** -- the
+    /// Siegeshell's march, the Broodmother's pull along her line: the shared
+    /// fence and footing a walk gets in `step_with`, from where it was. Given
+    /// where it is `heading`, a ledge or a drop across its way is got up or
+    /// down as a walk's would be; without, it starts nothing -- no getting up
+    /// mid-pull -- and stops at an edge it would go over. Nothing, for a
+    /// creature that does not keep its own footing.
+    pub fn keep_to_the_ground(&mut self, arena: &Terrain, was: V3, heading: Option<V3>) {
+        if !self.climber() || self.doing.climbing() {
+            return;
+        }
+        let going = heading.is_some() && self.pos != was;
+        self.fence(arena);
+        self.keep_footing(arena, was, heading, going);
+    }
+
+    /// **The floor it could stand on at `at`**: the land there, or the top of
+    /// a solid there no higher over the land than it gets up. Where a lobbed
+    /// body leaves from and comes down on -- the Mireback's flop.
+    pub fn floor_at(&self, arena: &Terrain, at: V3) -> Fx {
+        let land = arena.relief_at(at.x, at.z);
+        if !self.climber() {
+            return land;
+        }
+        let reach = crate::climb::reach(self.sp());
+        arena.floor_below(V3::new(at.x, land.add(reach), at.z))
+    }
+
     /// **Put down where it is placed**, for a creature that keeps its own
     /// footing: on the highest top under its legs it could have got up, or
     /// the floor. What a spawn does, so a Ridgeback placed astride the
@@ -3265,22 +3328,9 @@ impl Monster {
         if !self.climber() {
             return;
         }
-        let sp = self.sp();
-        let reach = crate::climb::reach(sp);
-        let (discs, n) = crate::climb::discs(sp);
-        let step = sp.fight_fx(crate::species::FightField::StepOver);
-        let forward = V3::from_turns(self.yaw);
+        let reach = crate::climb::reach(self.sp());
         let floor = arena.relief_at(self.pos.x, self.pos.z);
-        let ceiling = floor.add(reach);
-        let mut y = floor;
-        for (x, low) in discs.iter().take(n) {
-            if low.raw() > step.raw() {
-                continue;
-            }
-            let at = self.pos.add(forward.scale(*x));
-            y = y.max(arena.floor_below(V3::new(at.x, ceiling, at.z)));
-        }
-        self.pos.y = y;
+        self.pos.y = self.footing(arena, floor.add(reach)).0;
     }
 
     /// Start getting up `rise` (down, below nothing).
