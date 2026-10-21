@@ -194,6 +194,15 @@ back to.
   not a box. A valley place also carries a `valley::Place` -- its seams
   and updrafts -- beside its `Arena`.
 
+- **The versus stages** (`arena/stages.rs`, `arena/hills.rs`, 2026-10-21):
+  four floating duel stages -- **the Anvil**, **the Ziggurat**, **the
+  Caldera**, **the Twin Isles** -- small islands hanging at forty metres over
+  a pit you are knocked out by falling past; and three King of the Hill maps
+  -- **the Quarry**, **the Glacier**, **the Delta** -- each turned half a turn
+  about its middle so both sides have the same map. Their rules are
+  `sim::versus`; see [versus.md](versus.md). The first marks to stand off the
+  floor (`Mark::up_cm`): a mark on a floating island.
+
 Every one of them, with its creature in it, is in the
 [gallery](gallery/README.md). Terrain-sized boxes (more than six metres
 across or tall) in a soft material or rock are drawn as **cliffs**: faces

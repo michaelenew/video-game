@@ -2152,11 +2152,16 @@ pub struct Targets {
     /// is already inside that wall grown by a beam's thickness: measured that
     /// way, a beam aimed away from the wall would stop where it started.
     pub walls: bool,
+    /// **Fighters passed through**, one bit a seat: a caster's own side on a
+    /// King of the Hill map (`World::allies`), whose shots go through
+    /// each other as their blows do.
+    pub spared: u8,
 }
 
 impl Targets {
     pub const fn none() -> Targets {
         Targets {
+            spared: 0,
             fighters: false,
             stones: false,
             fire: false,
@@ -2178,6 +2183,12 @@ impl Targets {
 
     pub const fn fighters(mut self, yes: bool) -> Targets {
         self.fighters = yes;
+        self
+    }
+
+    /// Pass through these seats ([`Targets::spared`]).
+    pub const fn spare(mut self, seats: u8) -> Targets {
+        self.spared = seats;
         self
     }
 
@@ -2400,7 +2411,11 @@ fn each_along(
 
     if targets.fighters {
         for (index, p) in scene.players.iter().enumerate() {
-            if index as u8 == owner || p.health <= 0 || p.untouchable() {
+            if index as u8 == owner
+                || targets.spared & (1 << index) != 0
+                || p.health <= 0
+                || p.untouchable()
+            {
                 continue;
             }
             if let Some(dist) = body_hit(from, dir, p, girth) {

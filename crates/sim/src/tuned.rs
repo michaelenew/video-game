@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 722] = [
+pub const SCALARS: [i32; 728] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -730,6 +730,12 @@ pub const SCALARS: [i32; 722] = [
            19661, // elementalist.fire_carpet,_each_hang_after = 0.3
            52429, // elementalist.fire_carpet,_sinks_at_(m/s) = 0.8
               14, // elementalist.strike,_a_full_one_flashes_for = 14
+             600, // match.king_of_the_hill,_point_unlocks_after = 600
+             360, // match.king_of_the_hill,_a_capture_takes = 360
+              50, // match.king_of_the_hill,_a_second_capper_adds_(%) = 50
+              25, // match.king_of_the_hill,_an_empty_point_drains_(%) = 25
+            7200, // match.king_of_the_hill,_each_side's_clock = 7200
+             300, // match.king_of_the_hill,_the_dead_are_back_after = 300
 ];
 
 #[rustfmt::skip]

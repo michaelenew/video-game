@@ -1704,6 +1704,10 @@ pub struct World {
     /// What each seat picked up this frame, or was given (`crate::keep`):
     /// how a game hears of a trophy for its bag. Emptied every frame.
     pub picked: [Option<crate::keep::Item>; MAX_PLAYERS],
+    /// **King of the Hill** (`crate::versus`): the capture point, both
+    /// sides' clocks, and who is waiting to stand back up. Off, and not
+    /// hashed, on every arena that has no hill.
+    pub hill: crate::versus::Koth,
 }
 
 impl World {
@@ -1754,6 +1758,7 @@ impl World {
             crowd: crate::crowd::Field::NONE,
             loose: [None; crate::keep::LOOSE],
             picked: [None; MAX_PLAYERS],
+            hill: crate::versus::Koth::NONE,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -2397,6 +2402,26 @@ impl World {
         !self.hunting() && !self.peaceful()
     }
 
+    /// **Fighter `i`'s own side**, as seat bits, leaving `i` out: who their
+    /// shots pass through ([`aim::Targets::spare`]). Nobody but on a hill.
+    pub fn allies(&self, i: usize) -> u8 {
+        let mut bits = 0;
+        for j in 0..MAX_PLAYERS {
+            if j != i && self.hill.on && crate::versus::side(i) == crate::versus::side(j) {
+                bits |= 1 << j;
+            }
+        }
+        bits
+    }
+
+    /// **May fighter `a` hurt fighter `b`?** [`World::pvp`], never
+    /// themselves, and on a King of the Hill map never somebody on their
+    /// own side (`crate::versus::side`). A duel stage is everybody against
+    /// everybody, as versus always was.
+    pub fn foes(&self, a: usize, b: usize) -> bool {
+        a != b && self.pvp() && !(self.hill.on && crate::versus::side(a) == crate::versus::side(b))
+    }
+
     /// The first creature, for the code and tools that are about one: the
     /// harness, the HUD, most tests.
     pub fn monster(&self) -> Option<&Monster> {
@@ -2406,6 +2431,63 @@ impl World {
     /// The first creature, to change it.
     pub fn monster_mut(&mut self) -> Option<&mut Monster> {
         self.monsters.iter_mut().flatten().next()
+    }
+
+    /// **One frame of King of the Hill** (`crate::versus`): the dead wait
+    /// and stand back up at their side's start, the point counts who is on
+    /// it, and a side whose clock has run out unchallenged wins the round.
+    fn step_the_hill(&mut self) {
+        let Some(hill) = crate::versus::of(self.arena).and_then(|s| s.hill) else {
+            return;
+        };
+        for i in 0..MAX_PLAYERS {
+            if !self.is_present(i) || self.players[i].health > 0 {
+                self.hill.respawn[i] = 0;
+                continue;
+            }
+            if self.hill.respawn[i] == 0 {
+                self.hill.respawn[i] = t::hill_respawn().max(1);
+                continue;
+            }
+            self.hill.respawn[i] -= 1;
+            if self.hill.respawn[i] == 0 {
+                self.stand_on_mark(i);
+            }
+        }
+        let on: [bool; MAX_PLAYERS] = std::array::from_fn(|i| {
+            let p = &self.players[i];
+            self.is_present(i) && p.health > 0 && hill.holds(p.pos)
+        });
+        if let Some(side) = self.hill.step(on) {
+            let present = self.present();
+            for (i, p) in self.players.iter_mut().enumerate().take(present) {
+                if crate::versus::side(i) == side {
+                    p.rounds_won += 1;
+                }
+            }
+            self.phase = Phase::RoundOver {
+                winner: side,
+                left: t::round_over_frames(),
+            };
+        }
+    }
+
+    /// Stand fighter `i` up fresh on their start mark, as a round does:
+    /// what a respawn on the hill is.
+    fn stand_on_mark(&mut self, i: usize) {
+        let here = self.terrain();
+        let mark = Mark::seat(&here.spawns.versus, i);
+        let p = &mut self.players[i];
+        let (wins, class) = (p.rounds_won, p.class);
+        *p = Player {
+            pos: V3::new(mark.at.x, here.ground_under(mark.at), mark.at.z),
+            facing: mark.facing,
+            rounds_won: wins,
+            ..Player::new(class)
+        };
+        if let Mechanic::Shadow(_) = p.mechanic {
+            p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+        }
     }
 
     /// Put both fighters back on their marks. Keeps round wins and classes.
@@ -2420,6 +2502,8 @@ impl World {
         self.gusts = [None; MAX_GUSTS];
         // A course's runs start again with the round, clock and all.
         self.course = [crate::course::Run::default(); MAX_PLAYERS];
+        // So does a game on the hill: locked, nobody's, both clocks full.
+        self.hill = crate::versus::Koth::start(self.arena);
         let here = self.arena();
         // The hunt's lore starts again with the round: nothing on the floor,
         // nothing heard, every defended thing whole and back at its start.
@@ -3489,7 +3573,7 @@ impl World {
                 continue;
             }
             for defender in 0..present {
-                if defender == attacker || snapshot[defender].health <= 0 {
+                if !self.foes(attacker, defender) || snapshot[defender].health <= 0 {
                     continue;
                 }
                 if let Some(mut hit) =
@@ -3776,11 +3860,13 @@ impl World {
         self.fire_lights_the_stones();
         let standing = self.effects;
         let versus = self.pvp();
+        let allies: [u8; MAX_PLAYERS] = std::array::from_fn(|i| self.allies(i));
         bolt::step(
             &mut self.bolts,
             &mut self.players,
             &standing,
             versus,
+            allies,
             pack::Prey {
                 herd: &mut self.monsters,
                 critters: &mut self.critters,
@@ -3793,6 +3879,7 @@ impl World {
             &mut self.players,
             &standing,
             versus,
+            allies,
             pack::Prey {
                 herd: &mut self.monsters,
                 critters: &mut self.critters,
@@ -3806,6 +3893,7 @@ impl World {
             &mut self.players,
             &standing,
             versus,
+            allies,
             pack::Prey {
                 herd: &mut self.monsters,
                 critters: &mut self.critters,
@@ -3885,6 +3973,23 @@ impl World {
         if let Some(next) = self.step_valley() {
             *self = next;
             return;
+        }
+
+        // **Versus stages** (`crate::versus`): off a floating stage's edge is
+        // out, and a hill's point, clocks and respawns decide the round
+        // rather than the last one standing.
+        if matches!(self.phase, Phase::Fighting) && self.pvp() && !self.valley.on {
+            if let Some(pit) = crate::versus::of(self.arena).and_then(|s| s.pit()) {
+                for p in self.players.iter_mut() {
+                    if p.health > 0 && p.pos.y.raw() < pit.raw() {
+                        p.health = 0;
+                    }
+                }
+            }
+            if self.hill.on {
+                self.step_the_hill();
+                return;
+            }
         }
 
         // Knockout check last, so the killing blow is fully applied first.
@@ -4156,6 +4261,18 @@ impl World {
             hash_monster(&mut h, slot, m);
         }
         hash_phase(&mut h, self.phase);
+        // The hill, only where there is one: every other fight hashes as it
+        // did before there were hills.
+        if self.hill.on {
+            let k = &self.hill;
+            h.write_u32(0x4111);
+            h.write_u32(k.locked as u32 | (k.owner as u32) << 16 | (k.capper as u32) << 24);
+            h.write_u32(k.progress);
+            h.write_u32(k.clock[0] as u32 | (k.clock[1] as u32) << 16);
+            for w in k.respawn {
+                h.write_u32(w as u32);
+            }
+        }
         // The arena, after everything else and only when it is not the
         // proving ground: so a fight there hashes exactly as it did before
         // arenas were data, and the pinned hunts still mean what they say.
@@ -5498,7 +5615,7 @@ impl World {
                 && ahead.dot(V3::new(d.x, Fx::ZERO, d.z)).raw() > 0
                 && !q.action.invulnerable()
         });
-        if let Some(other) = met.filter(|_| self.pvp()) {
+        if let Some(other) = met.filter(|&other| self.foes(i, other)) {
             let q = self.players[other];
             {
                 let (guarding, parried) = guard_against(&q, p.pos, false);
@@ -11930,7 +12047,10 @@ impl World {
                         from: p.aim_path.from,
                         to: p.aim_at(),
                     };
-                    let targets = aim::Targets::none().fighters(self.pvp()).quarry(true);
+                    let targets = aim::Targets::none()
+                        .fighters(self.pvp())
+                        .spare(self.allies(who))
+                        .quarry(true);
                     match aim::first_along(path, Fx::ZERO, who as u8, &scene, targets) {
                         Some(met) => path.from.add(path.dir().scale(met.dist())),
                         None => path.to,
@@ -12162,7 +12282,7 @@ impl World {
         let mut landed = false;
         for target in 0..self.present() {
             let defender = self.players[target];
-            if target == owner || defender.health <= 0 {
+            if !self.foes(owner, target) || defender.health <= 0 {
                 continue;
             }
             let Some(mut hit) = resolve_hit(ghost, &defender, owner as u8) else {
@@ -14306,7 +14426,10 @@ impl World {
     /// `advance`. Without this, a Blood mage's field was the one thing in the
     /// game that could kill a team-mate.
     fn effects_reach(&self, victim: usize, owner: u8) -> bool {
-        victim as u8 != owner && self.players[victim].health > 0 && self.pvp()
+        victim as u8 != owner
+            && self.players[victim].health > 0
+            && self.pvp()
+            && (owner as usize >= MAX_PLAYERS || self.foes(owner as usize, victim))
     }
 
     /// Did a blade sweeping from `was` to `at` slice this fighter?
@@ -17219,7 +17342,11 @@ impl World {
         let mut most = 0;
         for j in 0..MAX_PLAYERS {
             let q = &self.players[j];
-            if j as u8 == th.owner || q.health <= 0 || !self.pvp() {
+            if j as u8 == th.owner
+                || q.health <= 0
+                || !self.pvp()
+                || (th.owner as usize) < MAX_PLAYERS && !self.foes(j, th.owner as usize)
+            {
                 continue;
             }
             let Some(hb) = hitbox(q) else { continue };
@@ -18369,7 +18496,10 @@ impl World {
             critters: &self.critters,
             arena: &self.terrain(),
         };
-        let mut targets = aim::Targets::none().fighters(self.pvp()).quarry(true);
+        let mut targets = aim::Targets::none()
+            .fighters(self.pvp())
+            .spare(self.allies(i))
+            .quarry(true);
         if terrain {
             targets = targets.terrain().stones();
         }

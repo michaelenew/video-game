@@ -1229,6 +1229,19 @@ scalars! {
     // **A full Strike flashes** (2026-10-21, from play): the pillar it spent
     // shoots up and is gone over this many frames, never long enough to burn.
     StrikeFlash,          "Elementalist", "Strike, a full one flashes for",                   Frames, 1, 25;
+    // **King of the Hill** (2026-10-21, `crate::versus`): the point is
+    // locked for a while at the start, a capture takes this long for one
+    // fighter (a second adds this share again), a point nobody stands on
+    // drains a capture at this share of one capper, each side's clock runs
+    // this long while it holds the point, and the dead stand back up after
+    // this wait. Appended: `tuned::SCALARS` is read by this enum's own
+    // discriminant.
+    HillUnlock,           "Match",    "King of the hill, point unlocks after",               Frames, 0, 3600;
+    HillCapture,          "Match",    "King of the hill, a capture takes",                   Frames, 30, 1800;
+    HillSecond,           "Match",    "King of the hill, a second capper adds (%)",          Percent, 0, 100;
+    HillDecay,            "Match",    "King of the hill, an empty point drains (%)",         Percent, 0, 100;
+    HillClock,            "Match",    "King of the hill, each side's clock",                 Frames, 600, 36000;
+    HillRespawn,          "Match",    "King of the hill, the dead are back after",           Frames, 0, 1200;
 }
 
 // ---------------------------------------------------------------------------

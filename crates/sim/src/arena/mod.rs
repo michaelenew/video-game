@@ -111,6 +111,10 @@ pub mod heights;
 
 pub mod gully;
 
+pub mod stages;
+
+pub mod hills;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -183,6 +187,16 @@ impl ArenaId {
     /// and the stretch of the Sky Road over the mountains to it.
     pub const HIGH_PLANE: ArenaId = ArenaId(36);
     pub const SKY_ROAD: ArenaId = ArenaId(37);
+    /// **Versus stages** (2026-10-21, `crate::versus`): four floating duel
+    /// stages, in the two ids before the valley's ranges and the ones after
+    /// them, and three King of the Hill maps.
+    pub const ANVIL: ArenaId = ArenaId(38);
+    pub const ZIGGURAT: ArenaId = ArenaId(39);
+    pub const CALDERA: ArenaId = ArenaId(54);
+    pub const TWIN_ISLES: ArenaId = ArenaId(55);
+    pub const QUARRY: ArenaId = ArenaId(56);
+    pub const GLACIER: ArenaId = ArenaId(57);
+    pub const DELTA: ArenaId = ArenaId(58);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -264,6 +278,15 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::DEEP => Some(&deep::ARENA),
         ArenaId::HIGH_PLANE => Some(&heights::PLANE),
         ArenaId::SKY_ROAD => Some(&heights::SKY_ROAD),
+
+        ArenaId::ANVIL => Some(&stages::ANVIL),
+        ArenaId::ZIGGURAT => Some(&stages::ZIGGURAT),
+        ArenaId::CALDERA => Some(&stages::CALDERA),
+        ArenaId::TWIN_ISLES => Some(&stages::TWIN_ISLES),
+
+        ArenaId::QUARRY => Some(&hills::QUARRY),
+        ArenaId::GLACIER => Some(&hills::GLACIER),
+        ArenaId::DELTA => Some(&hills::DELTA),
         ArenaId(n)
             if n >= crate::valley::ranges::FIRST
                 && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
@@ -859,6 +882,17 @@ impl Mark {
         Mark {
             at,
             facing: to.sub(at).normalized(),
+        }
+    }
+
+    /// **A mark up off the floor**: standing on whatever top is at `y`
+    /// centimetres at (x, z) -- a floating stage's island, which a mark on
+    /// the floor would be under (`crate::versus`).
+    pub const fn up_cm(x: i32, y: i32, z: i32, toward: (i32, i32)) -> Mark {
+        let flat = Mark::cm(x, z, toward);
+        Mark {
+            at: V3::new(cm(x), cm(y), cm(z)),
+            facing: flat.facing,
         }
     }
 

@@ -187,6 +187,33 @@ pub fn of(id: ArenaId) -> Sky {
         ArenaId::CLIMB_REACH => aloft(0.12),
         ArenaId::CLIMB_WATERFALL => aloft(0.15),
 
+        // --- the versus stages --------------------------------------------
+        //
+        // The four floating duel stages are aloft as the courses are -- a
+        // bright deck under the drop is what says how far down it is -- each
+        // turned to its own hour: the Anvil at a dusk the colour of its
+        // embers, the Ziggurat at a hot desert noon, the Caldera thick with
+        // smoke and close, the Twin Isles at a cold dawn.
+        ArenaId::ANVIL => Sky {
+            glow: Some([0.96, 0.36, 0.12]),
+            ..aloft(-0.02)
+        },
+        ArenaId::ZIGGURAT => aloft(0.05),
+        ArenaId::CALDERA => Sky {
+            reach: 380.0,
+            ..aloft(-0.10)
+        },
+        ArenaId::TWIN_ISLES => aloft(0.40),
+        // The three King of the Hill maps stand on the ground: a quarry in
+        // dusty afternoon light, a glacier under a cold clear sky, a river
+        // mouth in humid green haze.
+        ArenaId::QUARRY => Sky::over([0.84, 0.86, 0.88]),
+        ArenaId::GLACIER => Sky::over([0.82, 0.90, 0.98]),
+        ArenaId::DELTA => Sky {
+            reach: 700.0,
+            ..Sky::over([0.82, 0.90, 0.84])
+        },
+
         _ => Sky::over([0.78, 0.87, 0.95]),
     }
 }

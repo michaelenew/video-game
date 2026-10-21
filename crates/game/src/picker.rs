@@ -198,6 +198,13 @@ pub fn next_course(w: &World) -> Travel {
     Travel::arena(sim::course::after(w.arena).arena)
 }
 
+/// `Shift+N`: the next versus stage -- the four floating duel stages, then
+/// the three King of the Hill maps -- wrapping, and the first from anywhere
+/// that is not a stage. The same trip as `N`. See `docs/design/versus.md`.
+pub fn next_stage(w: &World) -> Travel {
+    Travel::arena(sim::versus::after(w.arena).arena)
+}
+
 /// The course panel, in a course: every course, which one this is, and how
 /// the run is going -- the furthest checkpoint, the clock, the falls.
 pub fn course_panel(w: &World) -> Option<String> {
@@ -530,6 +537,28 @@ mod tests {
                 w.checksum(),
                 "{fight:?} described as {said:?}"
             );
+        }
+    }
+
+    #[test]
+    fn shift_n_steps_through_every_versus_stage() {
+        let mut w = World::with_classes([Class::Champion; 2]);
+        let mut seen = Vec::new();
+        for _ in 0..sim::versus::STAGES.len() {
+            let Some(sim::input::Destination::Arena(a)) = next_stage(&w).destination() else {
+                panic!("Shift+N went nowhere");
+            };
+            assert!(sim::versus::of(a).is_some());
+            seen.push(a);
+            w = World::versus_in([Class::Champion; 2], a);
+            assert_eq!(w.arena, a);
+            // A hill map starts a game on its hill; a duel stage has none.
+            let hill = sim::versus::of(a).unwrap().hill.is_some();
+            assert_eq!(w.hill.on, hill);
+            assert_eq!(crate::hud::hill_line(&w.hill).is_empty(), !hill);
+        }
+        for s in sim::versus::STAGES {
+            assert!(seen.contains(&s.arena));
         }
     }
 
