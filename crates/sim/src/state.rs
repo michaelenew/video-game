@@ -5120,6 +5120,22 @@ fn impact_freeze(hitstop: u16, blocked: bool) -> u16 {
     }
 }
 
+/// **A heavy blow on a creature holds both bodies** (2026-10-21, from play:
+/// strong hits on a creature did not land like strong hits). A fighter's
+/// blow from a move whose impact freeze is at least
+/// `tuning::creature_heavy_from` freezes the fighter and the creature for
+/// that length -- the same length, so neither gains a frame -- exactly as a
+/// blow between two fighters does. Lighter blows freeze nothing, so a string
+/// of quick cuts keeps its pace against something this size.
+fn freeze_on_the_creature(p: &mut Player, beast: &mut Monster, attacker: &Player, m: &moves::Move) {
+    if m.hitstop < t::creature_heavy_from() {
+        return;
+    }
+    let hold = m.hitstop + true_link_freeze(attacker);
+    freeze(p, hold);
+    beast.frozen = beast.frozen.max(hold.min(u8::MAX as u16) as u8);
+}
+
 /// Hold a body still for `frames`, or for whatever freeze it is already in if
 /// that is longer. Two blows landing on one frame are one impact, not two in
 /// a row.
@@ -11691,6 +11707,7 @@ fn hash_monster(h: &mut Fnv, slot: usize, m: &crate::monster::Monster) {
     h.write_u32(m.doing.frames_left() as u32);
     h.write_u32(m.doing.attacking().unwrap_or(0) as u32);
     h.write_u32(m.hit_used as u32);
+    h.write_u32(m.frozen as u32);
     hash_v3(h, &m.brain.seen);
     hash_v3(h, &m.brain.seen_vel);
     h.write_u32(m.brain.target as u32);
@@ -20033,6 +20050,9 @@ impl World {
             let dealt = dealt
                 + beast.take_extra(Fx::from_int(dealt).mul(carried_share(&attacker)).to_int());
             confirm_chain(&mut self.players[i], guarded.turned() || dealt <= 0);
+            if dealt > 0 && !guarded.turned() {
+                freeze_on_the_creature(&mut self.players[i], &mut beast, &attacker, &m);
+            }
             if dealt > 0 {
                 feed_the_momentum(&mut self.players[i], Some(kind));
                 impact(&mut beast, &attacker, kind, dealt);

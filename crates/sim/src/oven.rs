@@ -1260,6 +1260,11 @@ scalars! {
     // fighter's shove is this times the table, rising in a straight line to
     // the same multiple at death it reached before. Sideways only.
     SwellStart,           "Knockback", "Knockback at full health (x)",                        Fixed, fx(1,2), fx(4,1);
+    // **A heavy blow holds a creature too** (2026-10-21, from play): a
+    // fighter's blow on a creature from a move whose impact freeze is at
+    // least this freezes both of them for it, as between two fighters.
+    // Lighter blows freeze nothing, as before.
+    FreezeHeavyOnCreature, "Offence", "Impact freeze on a creature, a move's at least",     Frames, 0, 30;
 }
 
 // ---------------------------------------------------------------------------

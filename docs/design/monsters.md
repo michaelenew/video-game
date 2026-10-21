@@ -567,6 +567,19 @@ An ordinary flinch may not: a creature whose hit can be cancelled by being hit
 is a creature you never have to trade with, and trading is most of the ground
 game.
 
+**A heavy blow holds both bodies** (2026-10-21, from play: strong hits on a
+creature did not land like strong hits). A fighter's blow from a move whose
+impact freeze is at least `Offence → Impact freeze on a creature, a move's at
+least` (8 frames) freezes the fighter and the creature together for that
+move's freeze: the hammer, the finishers, the heavy cuts. Nothing about the
+creature advances while it lasts, its move included, but nothing is cancelled
+either: a swing it had out resumes where it stopped, so this is a pause rather
+than an interrupt. Both hold for the same frames, so it costs neither side
+tempo. Lighter blows freeze nothing, so a string of quick cuts keeps its pace.
+Only a fighter's own body blows; a shot or a field lands with no caster there
+to hold. The creature's own blows still freeze only their victim
+(`Impact freeze, the creature's blows`).
+
 ## 5 · The ladder of ways to be in trouble
 
 | State | Cause | Length | What it gives |

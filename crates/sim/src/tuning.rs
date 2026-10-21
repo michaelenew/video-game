@@ -188,6 +188,15 @@ pub fn creature_freeze() -> u16 {
     oven::scalar(Scalar::FreezeCreature) as u16
 }
 
+/// The other direction: a fighter's blow on a creature freezes both of them
+/// when its move's own impact freeze is at least this many frames -- the
+/// hammer, the finishers, the heavy cuts -- for that move's length. Lighter
+/// blows freeze nothing, so a string of quick cuts keeps its pace. From play:
+/// strong hits on a creature did not land like strong hits.
+pub fn creature_heavy_from() -> u16 {
+    oven::scalar(Scalar::FreezeHeavyOnCreature) as u16
+}
+
 /// What a successful parry costs the attacker. Must be long enough that the
 /// punish is worth the risk of trying to parry at all.
 pub fn parry_stagger() -> u16 {

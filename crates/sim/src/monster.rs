@@ -715,6 +715,12 @@ pub struct Monster {
     pub brain: Brain,
     /// The current active window has already connected.
     pub hit_used: bool,
+    /// **Frames of impact freeze left** (2026-10-21, from play): a heavy blow
+    /// from a fighter holds the creature still with the fighter who landed
+    /// it, the way a blow between two fighters holds both. Nothing about it
+    /// advances while it runs -- not its move, not its mind, not its turn.
+    /// See `state::freeze_on_the_creature`.
+    pub frozen: u8,
     /// Where it is in its stride, as a fraction of one cycle in 16.16's
     /// fractional bits -- the same accumulator the fighters carry, for the same
     /// reason: a gait on a fixed cadence skates the moment the body moves at
@@ -776,6 +782,7 @@ impl Monster {
             doing: Doing::Prowl,
             brain: Brain::default(),
             hit_used: false,
+            frozen: 0,
             stride: 0,
             beat: 0,
             slowed: 0,
@@ -2962,6 +2969,14 @@ impl Monster {
     ) {
         if self.health <= 0 {
             self.doing = Doing::Dead;
+            self.speed = Fx::ZERO;
+            self.yaw_rate = Fx::ZERO;
+            return;
+        }
+        // Held by a heavy blow. Both bodies stop together, so neither gains
+        // a frame by it; the blow reads as a collision. See `frozen`.
+        if self.frozen > 0 {
+            self.frozen -= 1;
             self.speed = Fx::ZERO;
             self.yaw_rate = Fx::ZERO;
             return;
