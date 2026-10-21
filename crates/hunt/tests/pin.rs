@@ -87,9 +87,12 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // lines out six reproduced their pins exactly -- and the Reave's cut reaches
 // back to her (`state::hitbox`), so it lands on the parts of the creature
 // she has run in on, which moved hers deliberately.
+// And every hunt again the same day, deliberately: a heavy blow holds the
+// creature too (`state::freeze_on_the_creature`) -- a fighter's blow from a
+// move with an impact freeze of at least 8 frames freezes both bodies.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0x12af2e13e177817d),
-    (Class::Champion, 7, 0xed2724f48fbbe131),
+    (Class::Champion, 0x2545_F491, 0x706f22ca9dffc86f),
+    (Class::Champion, 7, 0x03ee318684982bb9),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
@@ -100,7 +103,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-13, deliberately, with the Elementalist's: slopes, steps
     // and lips -- the steep-ground wall is the footing, and the arena's rim
     // is land, which the scripted hunt walks into. See feel-log.md.
-    (Class::Bulwark, 101, 0xa2b8b5d37db08083),
+    (Class::Bulwark, 101, 0x13f07f88788d7d7e),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between
@@ -115,7 +118,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // autos again, each hopping her the way she holds (0016); and again for
     // the second round -- forward wings, long holds, spending majors -- and
     // the third: the autos a ball, every click a tap or a hold (2026-10-13).
-    (Class::DualMage, 2_222, 0x3ab751b2d20f2caf),
+    (Class::DualMage, 2_222, 0x8c150fd313917c48),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
@@ -123,7 +126,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-12 with no change to her fight: an effect is hashed by
     // its kind's number, and the Dual mage's retired Shade bolt sat before
     // her shadow's blades in the list (0015).
-    (Class::ShadowReaver, 31, 0xa1e5ffad7fa9c778),
+    (Class::ShadowReaver, 31, 0xb2285c0bdf4fa068),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.
@@ -134,7 +137,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-18, deliberately: her QoL pass (a bigger, longer
     // pillar, pushes that act on the whole line, a sliding Fissure, burning
     // wind, a higher Updraft). Nobody else's moved.
-    (Class::Elementalist, 59, 0x68395c58580a0cd3),
+    (Class::Elementalist, 59, 0x111514c2de87b153),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day
@@ -155,7 +158,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // the same day: which patches a heart holds is kept in the snapshot.
     // And again: her oldest stain makes way past a cap of 32, and her ground
     // holds 128 patches, merging what is laid over it.
-    (Class::BloodMage, 83, 0xcbe5b5ceec93f22e),
+    (Class::BloodMage, 83, 0x59406e42f6d42b9e),
 ];
 
 #[test]
