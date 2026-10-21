@@ -41,8 +41,10 @@ line rules out.
 **Movement sections are for five classes** (2026-10-20). The Bulwark is not
 considered for any jump, climb, gully or course: none is sized to it and no test asks it
 to finish one (`sim::class::MOVERS`; [courses.md](courses.md) §0). **Tab steps through the
-classes Champion first and Bulwark last** (`sim::class::ROTATION`), and the Champion is who
-you are when no class is named.
+classes Champion first** (`sim::class::ROTATION`), and the Champion is who you are when no
+class is named. **The Bulwark is not on offer** (2026-10-21): it is too far behind the other
+five, with no clear way yet to make it fit, so no picker, menu or `--p1` reaches it. Its code
+stays in the game, and putting it back is adding it to `ROTATION`.
 
 **Time to kill.** ~60 seconds versus. 1–20 minutes coop, by fight difficulty.
 
@@ -108,7 +110,7 @@ waiting, and never free.** Accepted 2026-10-03 from the jump courses
 ([courses.md](courses.md) §0): a tool that reaches far with no timing, or reaches far after
 standing still long enough, is the thing to fix.
 
-**Roster.** Six classes. The Gatekeeper is retired and not backfilled — a missing long-range
+**Roster.** Six classes, five on offer (the Bulwark is set aside, above). The Gatekeeper is retired and not backfilled — a missing long-range
 poke is a design choice in a closed arena, not a gap.
 
 ## 2 · The roster
