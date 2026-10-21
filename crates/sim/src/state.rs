@@ -470,6 +470,16 @@ pub struct Player {
     /// purpose, so the falloff is what keeps the floatiest poke in the game
     /// from being a hover. See `tuning::air_stall_falloff`.
     pub air_stalls: u8,
+    /// How many Fire carpets have hung the Elementalist this airtime. Reset
+    /// with `air_stalls`.
+    ///
+    /// **Her carpet hangs her long**, so the Updraft into it comes up through
+    /// it, and the shared falloff alone let a jump of carpets float her most
+    /// of a second. Each carpet after the first is worth
+    /// `tuning::carpet_hang_falloff` of the one before, counted on its own,
+    /// so another aerial first does not take the long hang off the first
+    /// carpet (2026-10-21, from play).
+    pub carpets: u8,
     /// An airdodge has been spent this airtime. Reset on landing.
     ///
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
@@ -681,6 +691,13 @@ pub struct Player {
     /// Frames left of the parry flourish. A parry costs the defender nothing
     /// and is easy to miss; this is what lets them see that they got it.
     pub parried: u16,
+    /// Clicks that must come up before they count again: one whose charge
+    /// released itself at its cap with the button still down (2026-10-21,
+    /// from play). Without it, holding a full Strike threw it, and then threw
+    /// a second pillar's whole wind-up the moment the first one's recovery
+    /// ended. Input bits; cleared as each button comes up. The
+    /// Elementalist's only, so far: see `step_channel`.
+    pub spent_clicks: u16,
     /// Frames spent crouching, saturating. Zero while standing.
     ///
     /// `crouching` is a bool, and a bool cannot say how long it has been true --
@@ -1493,6 +1510,7 @@ impl Default for Player {
             haul_to: V3::ZERO,
             haul_speed: Fx::ZERO,
             air_stalls: 0,
+            carpets: 0,
             air_dodged: false,
             wall: Wall::NONE,
             wall_since: u8::MAX,
@@ -1533,6 +1551,7 @@ impl Default for Player {
             air_frames: 0,
             since_landed: 0,
             parried: 0,
+            spent_clicks: 0,
             crouched_for: 0,
             stun_total: 0,
             frozen: 0,
@@ -3323,8 +3342,16 @@ impl World {
                         .mul(Fx::ONE.sub(p.channelled))
                         .to_int()
                         .max(0) as u16;
-                    if born.life < t::effect_tick_frames() {
-                        continue;
+                    // **Less than a tick left is a flash** (2026-10-21, from
+                    // play): it used to leave nothing at all, so a full Strike
+                    // had no picture and read as a cast that never came out.
+                    // The pillar shoots up to its full size over these few
+                    // frames (`Effect::progress` is its age over its life) and
+                    // is gone, shorter than a tick so it never burns: the
+                    // Strike's hit was the whole burn already.
+                    let tick = t::effect_tick_frames().max(1);
+                    if born.life < tick {
+                        born.life = born.life.max(t::strike_flash()).min(tick - 1);
                     }
                 }
                 // **How long a thing she leaves behind lasts is where she was
@@ -6188,6 +6215,8 @@ fn step_player(
     // frame it was meant to come back.
     let out = p.abilities_out(who, scene);
     p.tick_repeat_locks(&out);
+    // A spent click counts again once it has come up (`Player::spent_clicks`).
+    p.spent_clicks &= input.bits;
     // **What the floor does to the feet** (bestiary P4): a dodge from inside
     // tar carries half as far, a jump from inside web hardly leaves it. The
     // walk is slowed through the ordinary slow (`World::feel_the_floor`);
@@ -6393,6 +6422,8 @@ fn step_player(
         &out,
         [pressed_mechanic, pressed_f, pressed_r, pressed_side_b],
     );
+    cancel_into_a_push(p, input, &out, pressed_mechanic);
+    jump_off_the_crack(p, input, scene);
 
     queue_the_shadow(p, input);
     follow_the_shadow(p, input);
@@ -7196,6 +7227,7 @@ fn step_player(
         p.jump_hold = 0;
         p.air_stall = 0;
         p.air_stalls = 0;
+        p.carpets = 0;
         p.leap_used = false;
         dual::feet_down(p);
     }
@@ -7672,7 +7704,13 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // along the crosshair like the auto. And both clicks mean something
         // different once her feet leave the floor, which is the *row* rather
         // than a fifth exception: see `elementalist_move`.
-        Class::Elementalist => elementalist_move(p, input),
+        Class::Elementalist => elementalist_move(
+            p,
+            Input {
+                bits: input.bits & !p.spent_clicks,
+                ..input
+            },
+        ),
         // **Shift is only ever a dodge now**, so on the five classes that kept
         // the shared grammar a click is a poke and nothing modifies it. That
         // strands `SLOT_COMMITTED` on the three that have one and nowhere else
@@ -8789,6 +8827,80 @@ fn cancel_the_carpet(
     }
 }
 
+/// **A jump cuts Fissure short while she stands on a stone** (2026-10-21,
+/// from play). Held at her own feet, the stone erupts under her on the move's
+/// first active frame and climbs, carrying her -- and the move's last active
+/// frames and its recovery kept the jump locked until the climb was long
+/// over, so the structure jump the surge was meant to be never came out.
+/// From the frame after the surge is sent (`hit_used`, which
+/// `World::race_the_crack` sets), space with her feet on a stone ends the
+/// move, and the ordinary jump below takes off from the stone with its climb.
+/// The surge is already out, so nothing it does is given up.
+fn jump_off_the_crack(p: &mut Player, input: Input, scene: &Scene) {
+    if p.class != Class::Elementalist || !input.has(Input::SPACE) || !p.grounded {
+        return;
+    }
+    let kind = match p.action {
+        Action::Active { kind, .. } | Action::Recovery { kind, .. } => kind,
+        _ => return,
+    };
+    if kind != SLOT_COMMITTED || !p.hit_used {
+        return;
+    }
+    if stones::under_in(scene.stones, p.pos).is_some() {
+        p.action = Action::Free;
+    }
+}
+
+/// Cut the recovery of anything the **Elementalist** throws short into `Q` or
+/// `E`, the two pushes.
+///
+/// The clicks are what she makes and the keys are what she does to it, so
+/// nearly every push follows something she has just put down. Waiting out the
+/// whole recovery first made every push two moves of frames -- the stone's
+/// recovery and then the push's own wind-up -- and the second wind-up is the
+/// part the opponent was meant to read (2026-10-21, from play).
+///
+/// **From anything but a push**, from `tuning::push_cancel_from` frames into
+/// its recovery to the end of it. Recovery only, as the carpet's: the thing is
+/// already out. Not a push into a push: the Bolt then Cataclysm is two
+/// decisions about one stone, and paying for the first is the price of
+/// making it. Only into a push that would come out, so the cancel is never
+/// spent on nothing. What it cannot buy is safety: she is still in the
+/// push's own frames, which are about as long as any recovery they cut
+/// (`a_cancelled_recovery_is_still_punishable_on_block`).
+///
+/// `Q` is read held and `E` on its press (`pressed_e`), as the input below
+/// reads them.
+fn cancel_into_a_push(
+    p: &mut Player,
+    input: Input,
+    out: &[bool; moves::MAX_SLOTS],
+    pressed_e: bool,
+) {
+    if p.class != Class::Elementalist {
+        return;
+    }
+    let Action::Recovery { kind, left } = p.action else {
+        return;
+    };
+    if kind == SLOT_POKE || kind == SLOT_HEAVY {
+        return;
+    }
+    if moves::get(p.class, kind).recovery.saturating_sub(left) < t::push_cancel_from() {
+        return;
+    }
+    let asked = [
+        input.has(Input::SPECIAL).then(|| keyed_q(p)).flatten(),
+        pressed_e.then(|| keyed_move(p)).flatten(),
+    ];
+    if asked.into_iter().flatten().any(|k| p.can_throw(k, out)) {
+        // Free, as `cancel_the_carpet` does: the input below throws it, and
+        // reads `Q` and `E` before anything else.
+        p.action = Action::Free;
+    }
+}
+
 /// Record that a chain link landed, so its recovery may be cut short.
 ///
 /// Called from the one place a hit is resolved, and a no-op for everything that
@@ -9853,6 +9965,11 @@ fn step_channel(
     // Released. The aim locks now, on the frame the wind-up becomes a move,
     // which is where every other move locks it too.
     aim_channel(p, who, kind, held, input, scene);
+    // Released by the cap with the button still down: that press is spent,
+    // and the button has to come up before it throws anything else.
+    if p.class == Class::Elementalist && input.has(channel_button(p.class, kind)) {
+        p.spent_clicks |= channel_button(p.class, kind);
+    }
     match charge {
         // **The Dual mage's long holds** (2026-10-12): held to the end, the
         // spell comes out on its own; let go sooner and the click was a tap,
@@ -10143,9 +10260,11 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
     let m = moves::get(p.class, kind);
     p.stoop = Fx::ZERO;
     p.aim_path = match m.aim() {
-        // Hers stay at her level when she did not point down
-        // (`aim::grounded_kept`); everybody else's are the plain rule.
-        aim::Kind::Grounded if p.class == Class::Elementalist => {
+        // Her stones stay at her level when she did not point down
+        // (`aim::grounded_kept`); everybody else's are the plain rule, and so
+        // is her Fire pillar (2026-10-21, from play): fire is not footing, and
+        // from a ledge she means the floor below it.
+        aim::Kind::Grounded if p.class == Class::Elementalist && kind != SLOT_SPECIAL => {
             aim::grounded_kept(who, input, reach, scene)
         }
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
@@ -10297,8 +10416,19 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     let full = moves::get(p.class, kind).air_stall;
     if full > 0 {
         let mut worth = Fx::from_int(full as i32);
-        for _ in 0..p.air_stalls {
-            worth = worth.mul(t::air_stall_falloff());
+        // The Fire carpet's falls off by the carpets before it alone, and
+        // steeply: see `Player::carpets`.
+        let carpet = p.class == Class::Elementalist && kind == moves::elementalist::FIRE_CARPET;
+        let (before, falloff) = if carpet {
+            (p.carpets, t::carpet_hang_falloff())
+        } else {
+            (p.air_stalls, t::air_stall_falloff())
+        };
+        for _ in 0..before {
+            worth = worth.mul(falloff);
+        }
+        if carpet {
+            p.carpets = p.carpets.saturating_add(1);
         }
         // And the Reaver's Fan wears down on its own as she keeps throwing it,
         // landing or not. See `shadow::fan_hang`.
@@ -10307,7 +10437,11 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
         }
         p.air_stall = worth.to_int().max(0) as u16;
         p.air_stalls = p.air_stalls.saturating_add(1);
-    } else {
+    } else if !(p.class == Class::Elementalist && kind == moves::elementalist::UPDRAFT) {
+        // A move with no hang of its own ends one still running -- except the
+        // Updraft, which only ever pushes up: the Fire carpet's hang carries
+        // her through its wind-up, so the column comes up through the carpet
+        // rather than a fall's height below it (2026-10-21, from play).
         p.air_stall = 0;
     }
 
@@ -11226,7 +11360,9 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.haul as u32);
     hash_v3(h, &p.haul_to);
     h.write_i32(p.haul_speed.raw());
-    h.write_u32(p.air_stalls as u32);
+    // The carpets in the byte above, so a fighter who never lays one hashes
+    // as before.
+    h.write_u32(p.air_stalls as u32 | (p.carpets as u32) << 8);
     // Only once a wall has been touched: a fight that never meets one
     // hashes as it did before there were wall jumps.
     if p.wall_press != 0 {
@@ -11263,6 +11399,7 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.air_frames as u32);
     h.write_u32(p.since_landed as u32);
     h.write_u32(p.parried as u32);
+    h.write_u32(p.spent_clicks as u32);
     h.write_u32(p.crouched_for as u32);
     h.write_u32(p.stun_total as u32);
     h.write_u32(p.frozen as u32);
@@ -13728,6 +13865,7 @@ impl World {
             // What it is *for* is the shot flown down it and the Thermal
             // thrown along it; the burn is what makes it a thing in the way.
             EffectKind::FireCarpet => {
+                self.sink_the_carpet(effect);
                 if effect.ticks_now() {
                     let (a, b) = effect.carpet_line();
                     let radius = effect.field_radius();
@@ -15597,6 +15735,7 @@ fn mount_on(p: &mut Player, slot: usize, beast: &Monster, part: usize, top: Fx) 
     p.jump_hold = 0;
     p.air_stall = 0;
     p.air_stalls = 0;
+    p.carpets = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }
@@ -15645,6 +15784,7 @@ fn meet_the_critters(p: &mut Player, crowd: &Critters) {
         p.jump_hold = 0;
         p.air_stall = 0;
         p.air_stalls = 0;
+        p.carpets = 0;
         p.grip_vel = V3::ZERO;
         p.grip_settle = t::mount_settle() as u8;
         return;
@@ -15780,6 +15920,7 @@ pub fn put_inside(p: &mut Player, slot: usize, beast: &Monster, part: usize) {
     p.jump_hold = 0;
     p.air_stall = 0;
     p.air_stalls = 0;
+    p.carpets = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }
@@ -16146,7 +16287,17 @@ impl World {
         // Along the floor it was raised on: stopped at an edge rather than
         // run off it into the floor below (`aim::kept_along`), and at a wall.
         let path = aim::kept_along(p.aim_path, &scene);
-        let length = aim::first_along(path, Fx::ZERO, i as u8, &scene, Targets::none().walls())
+        // Walls asked a step up off the floor it runs on (2026-10-21): along
+        // the floor itself the line grazes the top of the box it was raised
+        // on, which read as a wall at no distance, and a crack held on any
+        // raised floor never went anywhere. A step she would walk up is not a
+        // wall to it either.
+        let lift = V3::new(Fx::ZERO, t::step_up(), Fx::ZERO);
+        let probe = aim::Path {
+            from: path.from.add(lift),
+            to: path.to.add(lift),
+        };
+        let length = aim::first_along(probe, Fx::ZERO, i as u8, &scene, Targets::none().walls())
             .map_or(path.length(), |c| c.dist());
         let dir = path.dir();
         let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
@@ -16234,6 +16385,22 @@ impl World {
         if let Some(index) = (effect.banked as usize).checked_sub(1) {
             if running {
                 stones::slide_to(&mut self.players, index, front, &ground);
+            }
+            // **Off the end of her level, over the edge** (2026-10-21, from
+            // play): the run stops at a lip (`aim::kept_along`), and a stone
+            // that got there is let go at the surge's speed rather than left
+            // standing on it, so it goes on over and falls to the floor below.
+            // A run that ended at a wall, or on more floor, keeps its stone.
+            let end = effect.pos.add(effect.dir.scale(effect.reach));
+            // Its last frame, too: its life is the run rounded to frames, and
+            // can end a hair short of the end.
+            if front == end || effect.age.saturating_add(1) >= effect.life {
+                let past = front.add(flat.scale(t::body_radius()));
+                let below = ground.floor_below(V3::new(past.x, front.y.add(arena::SKIN), past.z));
+                if below.raw() < front.y.sub(t::placement_drop()).raw() {
+                    stones::shove(&mut self.players, index, flat, speed);
+                    effect.banked = 0;
+                }
             }
         }
         let m = effect.source();
@@ -18626,6 +18793,45 @@ impl World {
     /// it is given its speed, so it leaves with it. A ball smaller than
     /// `tuning::air_ball_holds` holds nobody, so the rider is put down a
     /// moment before the ball vanishes rather than dropped when it does.
+    /// The Fire carpet comes down while it hangs (2026-10-21, from play), at
+    /// `tuning::carpet_sink`, each end on its own: an end that reaches the
+    /// floor under it rests there, its capsule's radius up, and the other
+    /// keeps coming until it does too. So a carpet laid low enough ends up
+    /// lying on the ground, along the slope it landed on, and one laid high
+    /// is still in the air when it burns out. The floor is
+    /// `Terrain::floor_below`, so a stone or a ledge under an end catches it.
+    fn sink_the_carpet(&self, effect: &mut Effect) {
+        let drop = t::carpet_sink().mul(DT);
+        if drop == Fx::ZERO {
+            return;
+        }
+        let terrain = self.terrain();
+        let rest = effect.field_radius();
+        let lower = |end: V3| {
+            let floor = terrain.floor_below(end).add(rest);
+            let y = end.y.sub(drop).max(floor).min(end.y);
+            V3::new(end.x, y, end.z)
+        };
+        let (a, b) = effect.carpet_line();
+        let (near, far) = (lower(a), lower(b));
+        if near.y == a.y.sub(drop) && far.y == b.y.sub(drop) {
+            // Both ends still falling: the strip comes down whole, its line
+            // as it was laid.
+            effect.pos = near;
+            return;
+        }
+        if near == a && far == b {
+            return;
+        }
+        // An end has landed: the strip lies between where its ends are now.
+        let run = far.sub(near);
+        effect.pos = near;
+        effect.reach = run.len();
+        if effect.reach.raw() > 0 {
+            effect.dir = run.normalized();
+        }
+    }
+
     fn roll_the_ball(&mut self, effect: &mut Effect) {
         use moves::elementalist::AIR_BALL;
         let owner = effect.owner as usize;

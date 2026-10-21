@@ -710,9 +710,11 @@ fn the_strike_is_worth_exactly_the_burn_it_takes_off_the_pillar() {
         );
         last_life = life;
         if hold == cap {
+            // Nothing that burns: only the flash of it (2026-10-21), gone
+            // before its first tick.
             assert!(
-                pillars(&w).is_empty(),
-                "a full hold leaves nothing standing"
+                pillars(&w).iter().all(|p| p.life < t::effect_tick_frames()),
+                "a full hold leaves nothing standing but its flash"
             );
         }
         if hold == 0 {

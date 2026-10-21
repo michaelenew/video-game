@@ -3404,6 +3404,19 @@ pub fn carpet_life() -> u16 {
     oven::scalar(Scalar::CarpetLife).max(1) as u16
 }
 
+/// How long the pillar a full Strike spent is still seen, shooting up and
+/// gone: always less than a burn tick, so it never burns. See `World::advance`
+/// where the Strike spends the pillar.
+pub fn strike_flash() -> u16 {
+    oven::scalar(Scalar::StrikeFlash).max(1) as u16
+}
+
+/// How fast a Fire carpet comes down while it hangs, in metres a second.
+/// Each end stops on the floor under it. See `state::World::sink_the_carpet`.
+pub fn carpet_sink() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetSink)).max(Fx::ZERO)
+}
+
 /// How far in front of her the carpet starts, along her look.
 pub fn carpet_ahead() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CarpetAhead)).max(Fx::ZERO)
@@ -3451,6 +3464,18 @@ pub fn carpet_cancel_from() -> u16 {
 /// recovery is paid in full. Zero turns the cancel off.
 pub fn carpet_cancel_for() -> u16 {
     oven::scalar(Scalar::CarpetCancelFor).max(0) as u16
+}
+
+/// How many frames of the recovery of anything but a push she must wait out
+/// before `Q` or `E` may cut the rest short. See `state::cancel_into_a_push`.
+pub fn push_cancel_from() -> u16 {
+    oven::scalar(Scalar::PushCancelFrom).max(0) as u16
+}
+
+/// What each Fire carpet after the first in one airtime hangs her for, as a
+/// share of the one before. See `state::Player::carpets`.
+pub fn carpet_hang_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CarpetHangFalloff))
 }
 
 /// How long the Fire fountain's wash burns where she took off.

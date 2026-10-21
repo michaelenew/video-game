@@ -9503,6 +9503,156 @@ re-searched (`envelope search --class`) and replaced, every other line kept. The
 best onto the +8 m ledge fell from 33.4 m to 27.7 m (shared blocks 32.2 to 20.5); the Champion's
 two moved by under a metre. One Blood mage line lost 2 cm.
 
+
+### 2026-10-21 — the Elementalist's pushes cut her recovery
+
+From play: "I think the elementalist's q and e should animation cancel her other abilities, or
+at least somehow be able to be cast faster after they come out. It's hard to use q and e right
+now because they are effectively two moves of frame data and about 4x longer effective windup."
+**Changed**: `Q` (the Bolt) or `E` (Cataclysm) asked for in the recovery of any other move of
+hers ends that recovery and comes out at once (`state::cancel_into_a_push`, the carpet's cancel
+made general). New knob `Q and E, cut a recovery from` (0 frames into the recovery); the window
+runs to the end of the recovery. Not from a push into a push. A pillar into the Bolt now puts
+the line out 7 frames after the pillar's recovery starts instead of 31, into Cataclysm 24
+instead of 48.
+**Why** her pushes only act on what she made, so the push nearly always follows a making move,
+and the long wind-up the push has is the part meant to be read -- the recovery in front of it
+was just waiting.
+**Safety**: the cut never makes a blocked move safe. The Fire pillar (-12 on block) cut at
+frame 0 into the Bolt (22 frames start to finish, against the pillar's 24 of recovery) is -10;
+everything else is longer (`a_cancelled_recovery_is_still_punishable_on_block`).
+**Verdict** open -- unplayed. Watch whether a push straight out of a placement reads to the
+opponent at all, and whether the cut wants a few frames' delay (`cut a recovery from`) so the
+placing move is seen to finish.
+**Re-pinned** the Elementalist's Ridgeback hunt (`tests/ridgeback_pin.rs`): its random inputs
+press `Q` and `E` in her recoveries, which now cut them.
+**What it cost the search** (`tests/fixtures/envelope.txt`): two of her stored lines (lanes 2
+and 8, whole kit) pressed `Q` inside a recovery and timed a kick around the old wait; they
+were re-searched (`envelope search --class Elementalist`) and replaced, every other line
+kept. Both got longer: 45.6 m to 50.3 m, and 45.8 m to 49.8 m.
+
+
+### 2026-10-21 — the Fire carpet hangs her into the Updraft
+
+From play: "Right now it's still not possible or at least very difficult to get a fire carpet
+into updraft where the two visually connect." Measured: off a held jump, carpet then Updraft
+in the carpet's cancel window, the column came up 2 m below where she laid the carpet. Two
+causes: the carpet's hang (8 frames) was over before the cancel, and the Updraft, which has no
+hang of its own, cut whatever hang was left, so she fell through its 14-frame wind-up.
+**Changed**: the carpet's `Aerial hang` 8 to 24 frames; an Updraft thrown inside a hang leaves
+it running (`state::arm_aerial`; every other move with no hang still cuts it). Now she has
+fallen about 0.1 m when the column rises, and the column runs through the carpet.
+Tried: 16, 20, 28. At 16 she still fell about 0.9 m; 28 bought only about a tenth of a metre more than
+24.
+**Still true**: an Updraft asked for after the cancel window (6 frames) waits out the
+carpet's 16-frame recovery, and she has fallen 3.5 m or more by then, about the column's
+height. If the cancel window is what is hard to hit, `Fire carpet, cancel open for` is the
+knob.
+**Verdict** open -- unplayed.
+**What it cost the search, and what it bought** (`tests/fixtures/envelope.txt`): nine of her
+stored lines were timed round the old 8-frame hang and stopped landing or fell short. They were
+re-searched (`envelope search --class Elementalist --budget 4000 --restarts 6`) and replaced,
+every other line kept. The new lines lay the carpet three to five times in one jump: with
+each hang worth 0.55 of the last, the most the carpet can hang her in one airtime went from
+about 18 frames to about 53, and her reach went with it -- lane 1, shared blocks, 43.6 m to
+63.2 m; lane 4, whole kit, 45.4 to 69.0; lane 7, 47.6 to 68.0; lane 9, 55.8 to 66.3. Lane 3,
+whole kit, came out at 60.9 m against 62.3 stored, within what one search finds and the next
+does not. **If that much float is too much for the courses**, the hang could be the carpet's
+first in an airtime only, or `Aerial hang, each one after` could be steeper for it.
+
+
+### 2026-10-21 — each carpet in a jump hangs her less
+
+From play, on the entry above: "subsequent carpets in the same jump need to give diminishing
+returns on the hang time so she can't stall forever."
+**Changed**: the carpet's hang now falls off by the carpets before it in the same airtime alone
+(`Player::carpets`, reset with `air_stalls`), at a new knob `Fire carpet, each hang after`
+(0.3): 24, 7, 2, then nothing -- 33 frames in a whole jump of carpets, against about 53 under
+the shared falloff (0.55). Counted on its own so that a Gale or a Cinder spray first does not
+take the long hang off the carpet the Updraft is for. Every other aerial keeps the shared
+falloff, and carpets still count towards it.
+**The search** (`tests/fixtures/envelope.txt`): nine of her lines laid three to five carpets a
+jump and fell short. Re-searched at `--budget 4000 --restarts 6`; each lane took the better of
+the new line and the old one re-claimed at what it now crosses, and lane 3's whole kit takes
+its shared line, as the tool does. Against this morning, before the carpet's hang was raised
+at all: lane 1 shared 43.6 to 65.8 m, lane 4 whole kit 45.4 to 68.3, lane 7 47.6 to 64.9,
+lane 8 45.8 to 60.3, lane 9 55.8 to 61.9; lane 3 whole kit 62.3 to 56.6, lane 9 shared 49.1
+to 48.5. She still reaches further than she did: the first carpet's 24 frames are most of
+it. If the courses want less, the first hang itself is the knob, at the cost of the Updraft
+meeting it.
+
+
+### 2026-10-21 — the Fire carpet lasts, and sinks
+
+From play: the carpet should "last a lot longer (2-3x) and drift downward over time, eventually
+settling on the ground if it started low enough."
+**Changed** `Fire carpet, hangs for` 90 → 225 frames (2.5x; the slider's top 240 → 600), and a
+new knob, `Fire carpet, sinks at` (0.8 m/s): every frame it hangs, each end comes down by that
+much until it is the capsule's radius over the floor under it (`Terrain::floor_below`, so a
+stone or a ledge catches an end), and the strip lies between its ends wherever they are
+(`World::sink_the_carpet`). Over its life it comes down 3 m, so one laid from a short hop
+ends up lying on the ground along the slope it met; one laid from high up is still in the air
+when it burns out. Pinned by `tests/elementalist_clicks.rs`
+(`the_carpet_lasts_and_sinks_and_one_laid_low_settles_on_the_floor`).
+**Consequences** to feel for: an Updraft or a shot aimed at a carpet laid a second ago meets it
+up to a metre lower than it was laid; a carpet on the floor is a burning strip to walk round, and
+a Thermal off it throws her along the slope it lies on (flat, on a flat floor).
+**Verdict** open -- unplayed.
+
+
+### 2026-10-21 — the Fire pillar off a ledge, and Fissure on a raised floor
+
+From play: "the fire pillar off of an edge has really weird aiming now. I can't seem to aim it
+down to the ground below when I'm standing on a raised area", suspected to be the Reaver's
+shadow edge rule bleeding into other moves; and "a charged lclick that would end up off of the
+current plane doesn't get kicked at all. The stone needs to proceed as far as it can, then fall
+off the edge."
+**Found** the shadow's rule (`aim::walk_toward`) is the send's alone and nothing else calls it;
+`aim.rs` had not changed since 2026-10-19. The pillar was under the Elementalist's own
+2026-10-09 rule (`aim::grounded_kept`), which brings a placement aimed past an edge -- out of
+range, or at the cliff's face -- back up to her level. Fissure had a separate bug: the run's
+wall check went along the floor at exactly the height of the box she stood on, grazed its top,
+and read as a wall at no distance, so a crack held on any raised floor never moved.
+**Changed** the Fire pillar (tap and Strike) takes the plain `aim::grounded_path`; her stones
+keep the rule. Fissure's wall check is asked `Step up` above the floor it runs on. A surge
+whose run ends at a lip lets its stone go at `Fissure surge, speed` (a kick, so it hits who it
+lands among), and it goes over and falls. Pinned by `tests/elementalist_playtest.rs`
+(`a_fire_pillar_aimed_off_the_dais_goes_to_the_floor_below`,
+`a_crack_held_toward_an_edge_runs_to_it_and_its_stone_goes_over`, which replaces
+`a_crack_held_toward_an_edge_stops_at_it`).
+**Consequences** to feel for: the stone let go at the lip travels on as a kicked stone does
+(the Bolt's kick range), which on the proving ground's dais lands it about 9 m past the edge --
+further than the hold bought; off a course's island it goes into the pit.
+**Verdict** open -- unplayed.
+
+
+### 2026-10-21 — a jump off Fissure's stone; one Strike per press
+
+From play: "let a jump cancel Fissure's recovery on the stone", and the held Fire pillar "has a
+really weird double-windup looking animation".
+**Changed** (1) Space with her feet on a stone ends Fissure from the frame after the surge is
+sent, and the ordinary jump takes off from the stone (`state::jump_off_the_crack`). Finding the
+stone under her needed `stones::under_in`'s skin widened by an erupting stone's climb, as it
+already was by a moving one's fall: her feet are a frame behind a top that rises 0.1--0.4 m a
+frame. Measured: a jump held through leaves at 6.7 m (a jump is 5.0) and is carried ~19 m along
+the surge; timed to the climb's last frame, 25.9 m, the structure jump's number.
+(2) The double wind-up was the Strike held past its 60-frame charge: the cap throws it, and
+with the button still down a fresh pillar began the frame her recovery ended. A click whose
+charge the cap released is now spent until it comes up (`Player::spent_clicks`), for every
+click of hers. Pinned by `tests/elementalist_qol.rs`
+(`a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump`) and
+`tests/elementalist_clicks.rs` (`a_strike_held_past_its_charge_is_one_strike_not_two`).
+**Found later the same day** (the person's own reading): the held pillar that "doesn't come out
+at all" was a *full* Strike, which spends the whole pillar and so drew nothing -- and the
+button still held then threw a tapped pillar, the double wind-up above. Not the box: the
+simulation struck from every box tried. **Changed**: a Strike leaving less than a burn tick
+leaves its pillar for `Strike, a full one flashes for` (14 frames), never long enough to burn
+(`a_full_strike_flashes_its_pillar_and_burns_nothing_more`; `elementalist_v2.rs`'s
+`the_strike_is_worth_exactly_the_burn_it_takes_off_the_pillar` now allows the flash). For those
+frames it is fire like any pillar -- it lights a stone, lights a shot through it, and Cataclysm
+could cut it loose -- to feel for.
+**Verdict** open -- unplayed.
+
 ### 2026-10-21 — the Ridgeback meets the ground: it collides, and it gets up
 
 From play: "In the high plane the two ridgeback fight is really crazy. The ridgebacks clip

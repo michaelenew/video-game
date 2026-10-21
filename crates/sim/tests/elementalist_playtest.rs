@@ -367,6 +367,37 @@ fn a_raise_clicked_out_past_the_dais_stays_on_it() {
 }
 
 #[test]
+fn a_fire_pillar_aimed_off_the_dais_goes_to_the_floor_below() {
+    // Her stones stay on her level; her fire does not (2026-10-21, from
+    // play): out past the edge, at the range or at the floor, the pillar
+    // stands on the floor down there.
+    let _store = Store::with_drop(metres(0.5));
+    let d = dais();
+    let z = d.min.z.add(d.max.z).div(Fx::from_int(2));
+    for pitch in [degrees(0), degrees(-35)] {
+        let mut w = elementalist();
+        w.players[0].pos = V3::new(d.min.x.add(metres(0.6)), d.max.y, z);
+        run(&mut w, 2, 0);
+        step_aimed(&mut w, keys::FIRE, LOOK_LEFT, pitch);
+        run(&mut w, 30, 0);
+        let pillars: Vec<Effect> = w
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.kind == EffectKind::FirePillar)
+            .copied()
+            .collect();
+        assert_eq!(pillars.len(), 1, "a pillar");
+        assert!(
+            pillars[0].pos.y.raw() < metres(0.1).raw() && pillars[0].pos.x.raw() < d.min.x.raw(),
+            "it stood at {}, {}: on the dais, not the floor below",
+            as_f(pillars[0].pos.x),
+            as_f(pillars[0].pos.y)
+        );
+    }
+}
+
+#[test]
 fn a_landfall_near_an_edge_never_puts_its_slab_in_the_pit() {
     // Asked of where the slab goes (`aim::planted_ahead`) rather than played:
     // a slab put in a course's pit is gone before a test could see it there.
@@ -392,31 +423,41 @@ fn a_landfall_near_an_edge_never_puts_its_slab_in_the_pit() {
 }
 
 #[test]
-fn a_crack_held_toward_an_edge_stops_at_it() {
-    let _store = Store::new();
-    let (mut w, yaw) = on_an_island();
-    let stand = w.players[0].pos;
-    // Held the whole charge, level, toward the pit: Fissure from a stone at
-    // her feet, the crosshair out over the drop.
-    let down = degrees(-80);
-    step_aimed(&mut w, keys::EARTH, yaw, down);
-    for _ in 0..90 {
-        step_aimed(&mut w, keys::EARTH, yaw, 0);
+fn a_crack_held_toward_an_edge_runs_to_it_and_its_stone_goes_over() {
+    // From play, 2026-10-21: held on a raised floor toward its edge, the
+    // stone did not move at all -- the run's wall check grazed the top it
+    // was raised on -- and at an edge it stopped on the lip. Now it slides
+    // along her level as far as that goes, then over, and falls to the floor
+    // below. The dais with the drop turned down below its height, as above.
+    let _store = Store::with_drop(metres(0.5));
+    let d = dais();
+    let z = d.min.z.add(d.max.z).div(Fx::from_int(2));
+    let mut w = elementalist();
+    w.players[0].pos = V3::new(d.min.x.add(metres(3.0)), d.max.y, z);
+    run(&mut w, 2, 0);
+    // The stone at her feet, the hold aimed level off the edge (-X).
+    step_aimed(&mut w, keys::EARTH, LOOK_LEFT, degrees(-80));
+    for _ in 0..40 {
+        step_aimed(&mut w, keys::EARTH, LOOK_LEFT, 0);
     }
-    for _ in 0..60 {
-        step_aimed(&mut w, 0, yaw, 0);
+    let mut reached_the_lip = false;
+    for _ in 0..120 {
+        step_aimed(&mut w, 0, LOOK_LEFT, 0);
+        if let Some(s) = stones_of(&w).first() {
+            if s.at.y == d.max.y && s.at.x.raw() < d.min.x.add(metres(0.5)).raw() {
+                reached_the_lip = true;
+            }
+        }
     }
+    assert!(reached_the_lip, "it slid along the dais to its edge");
+    let stones = stones_of(&w);
+    assert_eq!(stones.len(), 1, "fixture: the crack's stone erupted");
     assert!(
-        !stones_of(&w).is_empty(),
-        "fixture: the crack's stone erupted"
+        stones[0].at.y.raw() < metres(0.1).raw() && stones[0].at.x.raw() < d.min.x.raw(),
+        "and went over, to the floor below: at {}, {}",
+        as_f(stones[0].at.x),
+        as_f(stones[0].at.y)
     );
-    for stone in stones_of(&w) {
-        assert!(
-            stone.at.y.raw() >= stand.y.sub(t::placement_drop()).raw(),
-            "the crack's stone erupted {} m below her",
-            as_f(stand.y.sub(stone.at.y))
-        );
-    }
 }
 
 // ---------------------------------------------------------------------------

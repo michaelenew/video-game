@@ -380,6 +380,48 @@ fn cast_at_her_own_feet_the_surge_carries_her() {
     );
 }
 
+/// Fissure raised at her own feet and held, then space held from `jump_at`
+/// frames after the release: the highest her feet got.
+fn jump_off_the_surge(jump_at: u32) -> Fx {
+    let mut w = elementalist();
+    let down = -(65536 / 5) as i16;
+    let ahead = -(65536 / 24) as i16;
+    fissure_from(&mut w, down, ahead, 40);
+    let mut peak = Fx::ZERO;
+    for k in 0..150 {
+        let bits = if k >= jump_at { Input::SPACE } else { 0 };
+        step_looking(&mut w, bits, ahead);
+        peak = peak.max(w.players[0].pos.y);
+    }
+    peak
+}
+
+#[test]
+fn a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump() {
+    // From play, 2026-10-21: the move's tail kept the jump locked until the
+    // eruption under her was long over. Now space on the stone ends it.
+    let mut w = elementalist();
+    let mut plain = Fx::ZERO;
+    for _ in 0..120 {
+        step_looking(&mut w, Input::SPACE, 0);
+        plain = plain.max(w.players[0].pos.y);
+    }
+    let held = jump_off_the_surge(0);
+    assert!(
+        held.raw() > plain.add(metres(1.0)).raw(),
+        "held through, she jumps off the stone with its climb: {} m against {}",
+        held.to_int(),
+        plain.to_int()
+    );
+    let best = (0..24).map(jump_off_the_surge).max().unwrap();
+    assert!(
+        best.raw() > plain.mul(Fx::from_int(3)).raw(),
+        "timed, the eruption catches her again: {} m against {}",
+        best.to_int(),
+        plain.to_int()
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Wind on fire burns
 // ---------------------------------------------------------------------------

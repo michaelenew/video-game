@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 726] = [
+pub const SCALARS: [i32; 730] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -353,7 +353,7 @@ pub const SCALARS: [i32; 726] = [
            18350, // elementalist.air_ball,_shrinks_by_(m/s) = 0.28
            32768, // elementalist.air_ball,_holds_a_body_down_to_(m) = 0.5
            98304, // elementalist.air_ball,_shrinks_faster_carrying_(x) = 1.5
-              90, // elementalist.fire_carpet,_hangs_for = 90
+             225, // elementalist.fire_carpet,_hangs_for = 225
            98304, // elementalist.fire_carpet,_starts_ahead_of_her_(m) = 1.5
                8, // elementalist.fire_carpet,_burn_per_tick = 8
          1441792, // elementalist.thermal,_lift_(m/s) = 22
@@ -726,6 +726,10 @@ pub const SCALARS: [i32; 726] = [
               10, // champion.chain,_a_press_waits_for_its_link = 10
               33, // champion.beat,_falls_at_(%_of_the_window) = 33
                6, // champion.beat,_lasts = 6
+               0, // elementalist.q_and_e,_cut_a_recovery_from = 0
+           19661, // elementalist.fire_carpet,_each_hang_after = 0.3
+           52429, // elementalist.fire_carpet,_sinks_at_(m/s) = 0.8
+              14, // elementalist.strike,_a_full_one_flashes_for = 14
            65536, // morph.gets_up_onto_(x_shoulder) = 1
            81920, // morph.gets_down_off_(x_shoulder) = 1.25
            16384, // morph.walks_up_a_step_under_(x_shoulder) = 0.25
@@ -2456,7 +2460,7 @@ pub const MOVES: [i32; 2730] = [
                0, // move.elementalist.fire_carpet.blockstun = 0
                0, // move.elementalist.fire_carpet.knockback = 0
               20, // move.elementalist.fire_carpet.mobility_(%) = 20
-               8, // move.elementalist.fire_carpet.aerial_hang = 8
+              24, // move.elementalist.fire_carpet.aerial_hang = 24
                0, // move.elementalist.fire_carpet.unblockable = off
                1, // move.elementalist.fire_carpet.hits_crouching = on
                0, // move.elementalist.fire_carpet.needs_mechanic = off
