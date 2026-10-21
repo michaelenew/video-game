@@ -1218,6 +1218,10 @@ scalars! {
     // throws comes out at once, so the push onto what she just made is not
     // two moves of waiting. See `state::cancel_into_a_push`.
     PushCancelFrom,       "Elementalist", "Q and E, cut a recovery from",                     Frames, 0, 30;
+    // **Each carpet in a jump hangs her less** (2026-10-21, from play): the
+    // carpet's long hang is for the Updraft into it, not for a string of
+    // carpets that never comes down. See `state::Player::carpets`.
+    CarpetHangFalloff,    "Elementalist", "Fire carpet, each hang after",                      Fixed, 0, fx(1,1);
 }
 
 // ---------------------------------------------------------------------------

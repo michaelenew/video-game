@@ -470,6 +470,16 @@ pub struct Player {
     /// purpose, so the falloff is what keeps the floatiest poke in the game
     /// from being a hover. See `tuning::air_stall_falloff`.
     pub air_stalls: u8,
+    /// How many Fire carpets have hung the Elementalist this airtime. Reset
+    /// with `air_stalls`.
+    ///
+    /// **Her carpet hangs her long**, so the Updraft into it comes up through
+    /// it, and the shared falloff alone let a jump of carpets float her most
+    /// of a second. Each carpet after the first is worth
+    /// `tuning::carpet_hang_falloff` of the one before, counted on its own,
+    /// so another aerial first does not take the long hang off the first
+    /// carpet (2026-10-21, from play).
+    pub carpets: u8,
     /// An airdodge has been spent this airtime. Reset on landing.
     ///
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
@@ -1493,6 +1503,7 @@ impl Default for Player {
             haul_to: V3::ZERO,
             haul_speed: Fx::ZERO,
             air_stalls: 0,
+            carpets: 0,
             air_dodged: false,
             wall: Wall::NONE,
             wall_since: u8::MAX,
@@ -7195,6 +7206,7 @@ fn step_player(
         p.jump_hold = 0;
         p.air_stall = 0;
         p.air_stalls = 0;
+        p.carpets = 0;
         p.leap_used = false;
         dual::feet_down(p);
     }
@@ -10345,8 +10357,19 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     let full = moves::get(p.class, kind).air_stall;
     if full > 0 {
         let mut worth = Fx::from_int(full as i32);
-        for _ in 0..p.air_stalls {
-            worth = worth.mul(t::air_stall_falloff());
+        // The Fire carpet's falls off by the carpets before it alone, and
+        // steeply: see `Player::carpets`.
+        let carpet = p.class == Class::Elementalist && kind == moves::elementalist::FIRE_CARPET;
+        let (before, falloff) = if carpet {
+            (p.carpets, t::carpet_hang_falloff())
+        } else {
+            (p.air_stalls, t::air_stall_falloff())
+        };
+        for _ in 0..before {
+            worth = worth.mul(falloff);
+        }
+        if carpet {
+            p.carpets = p.carpets.saturating_add(1);
         }
         // And the Reaver's Fan wears down on its own as she keeps throwing it,
         // landing or not. See `shadow::fan_hang`.
@@ -11278,7 +11301,9 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.haul as u32);
     hash_v3(h, &p.haul_to);
     h.write_i32(p.haul_speed.raw());
-    h.write_u32(p.air_stalls as u32);
+    // The carpets in the byte above, so a fighter who never lays one hashes
+    // as before.
+    h.write_u32(p.air_stalls as u32 | (p.carpets as u32) << 8);
     // Only once a wall has been touched: a fight that never meets one
     // hashes as it did before there were wall jumps.
     if p.wall_press != 0 {
@@ -15639,6 +15664,7 @@ fn mount_on(p: &mut Player, slot: usize, beast: &Monster, part: usize, top: Fx) 
     p.jump_hold = 0;
     p.air_stall = 0;
     p.air_stalls = 0;
+    p.carpets = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }
@@ -15687,6 +15713,7 @@ fn meet_the_critters(p: &mut Player, crowd: &Critters) {
         p.jump_hold = 0;
         p.air_stall = 0;
         p.air_stalls = 0;
+        p.carpets = 0;
         p.grip_vel = V3::ZERO;
         p.grip_settle = t::mount_settle() as u8;
         return;
@@ -15822,6 +15849,7 @@ pub fn put_inside(p: &mut Player, slot: usize, beast: &Monster, part: usize) {
     p.jump_hold = 0;
     p.air_stall = 0;
     p.air_stalls = 0;
+    p.carpets = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }

@@ -567,6 +567,39 @@ fn a_carpet_into_the_updraft_meets_it_where_she_laid_it() {
 }
 
 #[test]
+fn each_carpet_in_one_jump_hangs_her_less() {
+    // The first carpet's long hang is for the Updraft into it; a string of
+    // carpets is not a way to stay up (2026-10-21, from play).
+    let mut w = elementalist();
+    run(&mut w, 12, SPACE);
+    let mut hangs = Vec::new();
+    for _ in 0..200 {
+        if w.players[0].grounded {
+            break;
+        }
+        let was = doing(&w);
+        step(&mut w, SPACE | keys::FIRE);
+        if doing(&w) == Some(e::FIRE_CARPET) && was != Some(e::FIRE_CARPET) {
+            hangs.push(w.players[0].air_stall);
+        }
+        step(&mut w, SPACE);
+    }
+    assert!(hangs.len() >= 3, "she laid several: {hangs:?}");
+    assert!(hangs[0] >= 20, "the first hangs her long: {hangs:?}");
+    for pair in hangs.windows(2) {
+        assert!(
+            pair[1] * 2 < pair[0].max(1),
+            "each after it a good deal less: {hangs:?}"
+        );
+    }
+    let total: u16 = hangs.iter().sum();
+    assert!(
+        total < hangs[0] * 3 / 2,
+        "and all of them together not much more than the first: {hangs:?}"
+    );
+}
+
+#[test]
 fn a_move_asked_for_after_the_carpets_window_waits_for_the_recovery() {
     let mut w = carpet_laid();
     run(

@@ -199,7 +199,11 @@ Updraft thrown inside that hang does not cut it short, so carpet then Updraft th
 cancel brings the column up round her where she laid the carpet, about a tenth of a metre
 lower, and the two are seen to meet; at 8 frames, with the Updraft cutting the hang, she had
 fallen about 2 m by the time the column rose
-(`a_carpet_into_the_updraft_meets_it_where_she_laid_it`). *Known from the start to be awkward at
+(`a_carpet_into_the_updraft_meets_it_where_she_laid_it`). **Each carpet after the first in
+one jump hangs her `Fire carpet, each hang after` (0.3) of the one before** -- 24, 7, 2, then
+nothing -- counted over her carpets alone (`Player::carpets`), so a Gale first does not take
+the long hang off the carpet the Updraft is for (`each_carpet_in_one_jump_hangs_her_less`).
+*Known from the start to be awkward at
 speed — she can outrun a carpet she has just laid — and built anyway so it can be played and
 something better found.*
 

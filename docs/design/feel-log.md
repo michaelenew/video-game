@@ -9559,3 +9559,25 @@ about 18 frames to about 53, and her reach went with it -- lane 1, shared blocks
 whole kit, came out at 60.9 m against 62.3 stored, within what one search finds and the next
 does not. **If that much float is too much for the courses**, the hang could be the carpet's
 first in an airtime only, or `Aerial hang, each one after` could be steeper for it.
+
+
+### 2026-10-21 — each carpet in a jump hangs her less
+
+From play, on the entry above: "subsequent carpets in the same jump need to give diminishing
+returns on the hang time so she can't stall forever."
+**Changed**: the carpet's hang now falls off by the carpets before it in the same airtime alone
+(`Player::carpets`, reset with `air_stalls`), at a new knob `Fire carpet, each hang after`
+(0.3): 24, 7, 2, then nothing -- 33 frames in a whole jump of carpets, against about 53 under
+the shared falloff (0.55). Counted on its own so that a Gale or a Cinder spray first does not
+take the long hang off the carpet the Updraft is for. Every other aerial keeps the shared
+falloff, and carpets still count towards it.
+**The search** (`tests/fixtures/envelope.txt`): nine of her lines laid three to five carpets a
+jump and fell short. Re-searched at `--budget 4000 --restarts 6`; each lane took the better of
+the new line and the old one re-claimed at what it now crosses, and lane 3's whole kit takes
+its shared line, as the tool does. Against this morning, before the carpet's hang was raised
+at all: lane 1 shared 43.6 to 65.8 m, lane 4 whole kit 45.4 to 68.3, lane 7 47.6 to 64.9,
+lane 8 45.8 to 60.3, lane 9 55.8 to 61.9; lane 3 whole kit 62.3 to 56.6, lane 9 shared 49.1
+to 48.5. She still reaches further than she did: the first carpet's 24 frames are most of
+it. If the courses want less, the first hang itself is the knob, at the cost of the Updraft
+meeting it.
+**Verdict** open -- unplayed.
