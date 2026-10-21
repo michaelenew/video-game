@@ -179,13 +179,19 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **Every class again the same day: only enough wall is a wall**
 /// (`Terrain::wall_face`). The proving ground's low walls and edges the
 /// random presses brush are no longer slid on or jumped off.
+/// **Every class again 2026-10-21, for the hash**: `state_checksum` holds
+/// `Player::spent_clicks`. With that line out, every hunt but the
+/// Elementalist's reproduced its old pin exactly. **Hers moved
+/// deliberately**: space with her feet on a stone ends Fissure, and a click
+/// her charge's cap released stays spent until it comes up -- her random
+/// presses do both.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x488936a9eef126bf),
-    (Class::Bulwark, 0xf68445ba591dfe6f),
-    (Class::ShadowReaver, 0xb70c8375aac8cb9c),
-    (Class::BloodMage, 0x520976d3f6cad020),
-    (Class::DualMage, 0x22b31e2bdcd3bb9b),
-    (Class::Elementalist, 0x5997d13e09ad2200),
+    (Class::Champion, 0x1a29978b38aa1cef),
+    (Class::Bulwark, 0xc9d4ba59f9ccdb9f),
+    (Class::ShadowReaver, 0xec71a0c72f3a2fec),
+    (Class::BloodMage, 0x3ef117c8d25b96c0),
+    (Class::DualMage, 0xeeb08b7ad232dceb),
+    (Class::Elementalist, 0x497cb2d67b89c08e),
 ];
 
 #[test]

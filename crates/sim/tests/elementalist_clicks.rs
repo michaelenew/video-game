@@ -347,6 +347,35 @@ fn jumping_out_of_a_rolling_ball_keeps_its_speed() {
     );
 }
 
+#[test]
+fn a_strike_held_past_its_charge_is_one_strike_not_two() {
+    // From play, 2026-10-21: held past the hold's end, the Strike threw
+    // itself, and with the button still down a second pillar wound up the
+    // moment its recovery ended. The click has to come up first now.
+    let mut w = elementalist();
+    let m = sim::moves::get(Class::Elementalist, SLOT_SPECIAL);
+    let long = (m.startup + m.channel + m.active + m.recovery) as u32 * 2;
+    let mut starts = 0;
+    let mut was_winding = false;
+    for _ in 0..long {
+        step(&mut w, keys::FIRE);
+        let winding =
+            matches!(w.players[0].action, Action::Startup { kind, .. } if kind == SLOT_SPECIAL);
+        if winding && !was_winding {
+            starts += 1;
+        }
+        was_winding = winding;
+    }
+    assert_eq!(
+        starts, 1,
+        "one wind-up for one press, however long it is held"
+    );
+    // Let go, and the next press is a pillar again.
+    run(&mut w, 2, 0);
+    step(&mut w, keys::FIRE);
+    assert_eq!(doing(&w), Some(SLOT_SPECIAL), "a fresh press throws again");
+}
+
 // ---------------------------------------------------------------------------
 // The Fire carpet and the Thermal
 // ---------------------------------------------------------------------------

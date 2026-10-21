@@ -9546,3 +9546,26 @@ lands among), and it goes over and falls. Pinned by `tests/elementalist_playtest
 (the Bolt's kick range), which on the proving ground's dais lands it about 9 m past the edge --
 further than the hold bought; off a course's island it goes into the pit.
 **Verdict** open -- unplayed.
+
+
+### 2026-10-21 — a jump off Fissure's stone; one Strike per press
+
+From play: "let a jump cancel Fissure's recovery on the stone", and the held Fire pillar "has a
+really weird double-windup looking animation".
+**Changed** (1) Space with her feet on a stone ends Fissure from the frame after the surge is
+sent, and the ordinary jump takes off from the stone (`state::jump_off_the_crack`). Finding the
+stone under her needed `stones::under_in`'s skin widened by an erupting stone's climb, as it
+already was by a moving one's fall: her feet are a frame behind a top that rises 0.1--0.4 m a
+frame. Measured: a jump held through leaves at 6.7 m (a jump is 5.0) and is carried ~19 m along
+the surge; timed to the climb's last frame, 25.9 m, the structure jump's number.
+(2) The double wind-up was the Strike held past its 60-frame charge: the cap throws it, and
+with the button still down a fresh pillar began the frame her recovery ended. A click whose
+charge the cap released is now spent until it comes up (`Player::spent_clicks`), for every
+click of hers. Pinned by `tests/elementalist_qol.rs`
+(`a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump`) and
+`tests/elementalist_clicks.rs` (`a_strike_held_past_its_charge_is_one_strike_not_two`).
+**Not found** the report that a held pillar cast from a box "doesn't come out at all": in the
+simulation it winds up, holds, strikes and leaves its pillar from the proving ground's dais,
+from a stone of hers, and from the range's 3 m box and 12 m tower, at a tap and at a hold.
+Waiting on a replay of it.
+**Verdict** open -- unplayed.

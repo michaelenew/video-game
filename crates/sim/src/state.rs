@@ -681,6 +681,13 @@ pub struct Player {
     /// Frames left of the parry flourish. A parry costs the defender nothing
     /// and is easy to miss; this is what lets them see that they got it.
     pub parried: u16,
+    /// Clicks that must come up before they count again: one whose charge
+    /// released itself at its cap with the button still down (2026-10-21,
+    /// from play). Without it, holding a full Strike threw it, and then threw
+    /// a second pillar's whole wind-up the moment the first one's recovery
+    /// ended. Input bits; cleared as each button comes up. The
+    /// Elementalist's only, so far: see `step_channel`.
+    pub spent_clicks: u16,
     /// Frames spent crouching, saturating. Zero while standing.
     ///
     /// `crouching` is a bool, and a bool cannot say how long it has been true --
@@ -1533,6 +1540,7 @@ impl Default for Player {
             air_frames: 0,
             since_landed: 0,
             parried: 0,
+            spent_clicks: 0,
             crouched_for: 0,
             stun_total: 0,
             frozen: 0,
@@ -6186,6 +6194,8 @@ fn step_player(
     // frame it was meant to come back.
     let out = p.abilities_out(who, scene);
     p.tick_repeat_locks(&out);
+    // A spent click counts again once it has come up (`Player::spent_clicks`).
+    p.spent_clicks &= input.bits;
     // **What the floor does to the feet** (bestiary P4): a dodge from inside
     // tar carries half as far, a jump from inside web hardly leaves it. The
     // walk is slowed through the ordinary slow (`World::feel_the_floor`);
@@ -6391,6 +6401,7 @@ fn step_player(
         &out,
         [pressed_mechanic, pressed_f, pressed_r, pressed_side_b],
     );
+    jump_off_the_crack(p, input, scene);
 
     queue_the_shadow(p, input);
     follow_the_shadow(p, input);
@@ -7670,7 +7681,13 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // along the crosshair like the auto. And both clicks mean something
         // different once her feet leave the floor, which is the *row* rather
         // than a fifth exception: see `elementalist_move`.
-        Class::Elementalist => elementalist_move(p, input),
+        Class::Elementalist => elementalist_move(
+            p,
+            Input {
+                bits: input.bits & !p.spent_clicks,
+                ..input
+            },
+        ),
         // **Shift is only ever a dodge now**, so on the five classes that kept
         // the shared grammar a click is a poke and nothing modifies it. That
         // strands `SLOT_COMMITTED` on the three that have one and nowhere else
@@ -8787,6 +8804,31 @@ fn cancel_the_carpet(
     }
 }
 
+/// **A jump cuts Fissure short while she stands on a stone** (2026-10-21,
+/// from play). Held at her own feet, the stone erupts under her on the move's
+/// first active frame and climbs, carrying her -- and the move's last active
+/// frames and its recovery kept the jump locked until the climb was long
+/// over, so the structure jump the surge was meant to be never came out.
+/// From the frame after the surge is sent (`hit_used`, which
+/// `World::race_the_crack` sets), space with her feet on a stone ends the
+/// move, and the ordinary jump below takes off from the stone with its climb.
+/// The surge is already out, so nothing it does is given up.
+fn jump_off_the_crack(p: &mut Player, input: Input, scene: &Scene) {
+    if p.class != Class::Elementalist || !input.has(Input::SPACE) || !p.grounded {
+        return;
+    }
+    let kind = match p.action {
+        Action::Active { kind, .. } | Action::Recovery { kind, .. } => kind,
+        _ => return,
+    };
+    if kind != SLOT_COMMITTED || !p.hit_used {
+        return;
+    }
+    if stones::under_in(scene.stones, p.pos).is_some() {
+        p.action = Action::Free;
+    }
+}
+
 /// Record that a chain link landed, so its recovery may be cut short.
 ///
 /// Called from the one place a hit is resolved, and a no-op for everything that
@@ -9851,6 +9893,11 @@ fn step_channel(
     // Released. The aim locks now, on the frame the wind-up becomes a move,
     // which is where every other move locks it too.
     aim_channel(p, who, kind, held, input, scene);
+    // Released by the cap with the button still down: that press is spent,
+    // and the button has to come up before it throws anything else.
+    if p.class == Class::Elementalist && input.has(channel_button(p.class, kind)) {
+        p.spent_clicks |= channel_button(p.class, kind);
+    }
     match charge {
         // **The Dual mage's long holds** (2026-10-12): held to the end, the
         // spell comes out on its own; let go sooner and the click was a tap,
@@ -11263,6 +11310,7 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.air_frames as u32);
     h.write_u32(p.since_landed as u32);
     h.write_u32(p.parried as u32);
+    h.write_u32(p.spent_clicks as u32);
     h.write_u32(p.crouched_for as u32);
     h.write_u32(p.stun_total as u32);
     h.write_u32(p.frozen as u32);

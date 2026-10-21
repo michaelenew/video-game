@@ -130,6 +130,11 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
   fire bolt lights the stone that stops it, a lit shot the stones it passes, and
   burning wind (below) what it touches. It was only the pillar's footprint, on
   the frame it was cast.
+- **A Strike held past its charge is one Strike** (2026-10-21): released by
+  the cap with the button still down, the click is spent until it comes up
+  (`Player::spent_clicks`). It used to throw a second pillar's whole wind-up the
+  moment the first one's recovery ended -- the "double wind-up". Every click of
+  hers whose hold ends at its cap does the same.
 - **The pillar is half again as big and stands twice as long.** The Strike's
   worth was halved with it, so a full Strike is the hit it was.
 - **`Q` and `E` act on everything on their line at once.** The Bolt and
@@ -146,7 +151,14 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
   stands at its front is carried -- on their feet moved with it, off them given
   its speed along the line -- and that includes her: held at her own feet, the
   stone erupts under her and runs, and a jump timed out of the eruption leaves
-  with the stone's climb *and* the surge's run. Anybody else it reaches is
+  with the stone's climb *and* the surge's run. *Since 2026-10-21 that jump can
+  actually be thrown*: it had been locked until the move's recovery was over, by
+  which time the climb was long done. Space with her feet on a stone ends
+  Fissure from the frame after the surge is sent (`state::jump_off_the_crack`):
+  held through, she leaves at 6.7 m against a jump's 5.0 and is thrown ~19 m
+  along the line; timed to the climb's last frame, the eruption catches her
+  again for the structure jump's 25.9 m
+  (`a_jump_cuts_fissure_short_on_its_stone_and_is_a_structure_jump`). Anybody else it reaches is
   struck once and carried on: the row's damage at a tap, `1 +` `damage at a
   full hold` times it at a full one, and the same for knockback and the throw
   up. It no longer stops at the first body. The line is still rough terrain.
