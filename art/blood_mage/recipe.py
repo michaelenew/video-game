@@ -9,7 +9,7 @@ fighter -- which is the point of her.
 import mh
 
 BODY = mh.macro(gender="female", age="young", muscle=0.45, weight=0.66, proportions=0.6) + [
-    ("breast/female-young-averagemuscle-maxweight-averagecup-averagefirmness.target", 0.35),
+    ("breast/female-young-averagemuscle-maxweight-averagecup-maxfirmness.target", 0.35),
     ("head/head-round.target", 0.25),
 ]
 
