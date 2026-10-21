@@ -9713,3 +9713,12 @@ stepped aside behind her, which is the bot getting out of the way. Pinned by
 `crates/hunt/tests/duel.rs` (`the_reave_spends_the_marks_on_the_bot`).
 **Verdict** open -- unplayed.
 
+**And the tests it moved** (the owner's calls, the same day). A Judgement from an empty bar
+takes 76 of 1000 rather than 80: its strike shoves the victim out of its own field two ticks
+sooner. Accepted as the cost of the bigger shove; `b3`'s floor is 7% rather than 8%.
+`hunt/tests/duel.rs`'s `every_class_fights` no longer asks the bots to stay inside the proving
+ground's walls: they go over them by their own jumps and rushes on main as well (across eight
+seeds the Champion mirror spent 13,172 fighter-frames outside on main, 16,435 here; the
+Elementalist's 178 and 1,587), and the test's own seed had been a quiet one. "The arena is
+quite small, it makes sense they'd end up outside of it."
+

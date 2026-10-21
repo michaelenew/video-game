@@ -961,9 +961,12 @@ fn b9_the_majors_in_turn_with_nothing_built_are_spent_bars_not_a_rotation() {
 #[test]
 fn b3_a_judgement_from_a_full_bar_is_at_most_a_quarter_of_a_health_bar() {
     // The biggest single strike in the kit, and the one that was too big. A
-    // quarter from a full bar; still a real hit -- not under eight per cent --
+    // quarter from a full bar; still a real hit -- not under seven per cent --
     // from an empty one. Measured over the strike and its field on somebody
-    // standing where it lands.
+    // standing where it lands. Seven since 2026-10-21: knockback between
+    // fighters starts at one and a half times the table (`stun.md`), so the
+    // strike shoves them out of its own field two ticks sooner -- 76 where
+    // it was 80, and the floor was eight.
     let bar = sim::state::max_health();
     let full = dealt_from(E, high());
     let empty = dealt_from(E, 0);
@@ -972,8 +975,8 @@ fn b3_a_judgement_from_a_full_bar_is_at_most_a_quarter_of_a_health_bar() {
         "a Judgement from a full bar took {full} of {bar}, more than a quarter"
     );
     assert!(
-        empty * 100 >= bar * 8,
-        "a Judgement from an empty bar took {empty} of {bar}, under eight per cent"
+        empty * 100 >= bar * 7,
+        "a Judgement from an empty bar took {empty} of {bar}, under seven per cent"
     );
 }
 

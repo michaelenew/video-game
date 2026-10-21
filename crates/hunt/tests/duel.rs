@@ -110,25 +110,23 @@ fn plan_index(p: Plan) -> usize {
 }
 
 /// **It fights.** Every class, against its own mirror, throws, lands and
-/// finishes a round inside three minutes -- and stays inside the walls, which
-/// are lower than a jump.
+/// finishes a round inside three minutes.
+///
+/// It used to stay inside the walls too, and does not any more (2026-10-21):
+/// the proving ground is small and its walls are lower than a jump, so a bout
+/// that jumps, rushes and is thrown about ends up outside them, on main as
+/// well -- across eight seeds the Champion mirror spent thirteen thousand
+/// fighter-frames out there, and this test's seed was a quiet one. The owner:
+/// "the arena is quite small, it makes sense they'd end up outside of it".
 #[test]
 fn every_class_fights() {
     for class in ALL_CLASSES {
-        let mut outside = 0u32;
         let bout = spar_traced(
             [class, class],
             [Level::Normal; 2],
             3 * MINUTE,
             11,
-            |w, _| {
-                if matches!(w.phase, Phase::Fighting) {
-                    outside += w.players[..w.present()]
-                        .iter()
-                        .filter(|p| !inside(p))
-                        .count() as u32;
-                }
-            },
+            |_, _| {},
         );
         for i in 0..hunt::duel::DUEL {
             assert!(bout.thrown[i] >= 40, "{}: {bout:?}", class.name());
@@ -139,17 +137,7 @@ fn every_class_fights() {
             "{}: nobody won a round in three minutes: {bout:?}",
             class.name()
         );
-        assert!(
-            outside < 10 * 60,
-            "{}: {outside} fighter-frames outside the walls",
-            class.name()
-        );
     }
-}
-
-fn inside(p: &sim::state::Player) -> bool {
-    let half = sim::arena::proving_ground::half();
-    p.pos.x.abs().raw() <= half.raw() && p.pos.z.abs().raw() <= half.raw()
 }
 
 /// **The levels mean something.** Across every pairing, a hard bot takes a
