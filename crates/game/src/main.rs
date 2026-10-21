@@ -3090,11 +3090,15 @@ fn fade_own_body(
         // Blending only while it is actually translucent. An always-blended
         // fighter sorts against the other one and against the arena for no
         // reason the rest of the time.
-        skin.base.alpha_mode = if alpha >= 1.0 {
-            AlphaMode::Opaque
-        } else {
-            AlphaMode::Blend
-        };
+        // A cut-out stays one (hair cards): turned opaque it is the cards'
+        // rectangles, turned blended it shows its own layers through.
+        if !matches!(skin.base.alpha_mode, AlphaMode::Mask(_)) {
+            skin.base.alpha_mode = if alpha >= 1.0 {
+                AlphaMode::Opaque
+            } else {
+                AlphaMode::Blend
+            };
+        }
     }
 }
 

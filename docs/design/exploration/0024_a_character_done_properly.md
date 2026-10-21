@@ -273,3 +273,17 @@ top -- and all the way for the Blood mage, who has none. Every top bridges
 the chest wider as well (`close`), so the cloth spans it instead of
 following the skin.
 
+**Hair, properly** (2026-10-21, the owner's word: "fix the hair so it
+looks like real hair"). Every sculpted version -- a mass, combed, lifted,
+falling -- read as a cap close up, because a closed surface has no edges
+for light to pass. What every game with real-time hair does instead is
+**cards**: strips of painted strands, cut out between them, layered and
+combed (`art/README.md`, "Hair"). About two hundred and fifty to three
+hundred a head, six to eight thousand triangles, one masked double-sided
+material with its own 1024 texture. Three corrections got it from wisps to
+hair: the ends fanned while they followed the scalp past its edge (now
+they fall); each card's straight sides showed (now the lock thins to its
+edges); and cards rooted evenly left the crown bare (now they are rooted
+high and fall over the rest), over a scalp painted the hair's colour in
+shadow so a gap reads as depth.
+

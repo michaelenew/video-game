@@ -69,10 +69,21 @@ read.
 
 ## Hair
 
-Painted figures have hair as a *mass*, not strands, and so do these:
-`wardrobe.hair` is the head inflated a few millimetres, cut back from the
-face along a hairline and down to a nape, lifted at the crown, and combed --
-on the high piece only -- with grooves of uneven width running back from a
-parting. The grooves reach the game as the normal map and the painter's
-curvature, so the locks catch the light without costing a triangle. A bun or
-a knot is `wardrobe.stone` in the hair's material, hung on the head.
+Hair is **cards**, as it is in every game that has real-time hair: a few
+hundred strips of painted strands, layered over a scalp and laid along the
+way the hair is combed (`wardrobe.hair_cards`). Each card's texture
+(`wardrobe.strand_texture`) is a lock -- thin strands, thickest in the
+middle and thinning to its edges so neighbouring cards blend, darker at the
+root, a band of sheen a third of the way down, tapering to uneven tips --
+cut out between the strands, so the edges and the layers read as hair. They
+are the model's fourth material, `hair_cards`, masked and double-sided; the
+game keeps it a cut-out through the camera's fade. The scalp under them
+(`wardrobe.hair`, in the hair's own colour in shadow) is so nothing bald
+shows between cards. A style is a combing: `back` (swept back off the
+face), `bob` (from a parting, falling to the jaw, with a fringe if asked),
+`knot` (drawn back to a bun, which is `wardrobe.stone` in the hair's
+material). Cards are rooted high, as hair grows from the crown and falls
+over the rest, and off the scalp's edge they fall rather than following it.
+
+The first three tries were a sculpted mass -- combed, lifted, falling --
+and every one read as a helmet or a cap close up. Cards are what fixed it.
