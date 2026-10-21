@@ -208,7 +208,7 @@ const CALDERA_SOLIDS: [Solid; 10] = whole(
 /// a way across that is not the bridge.
 pub static TWIN_ISLES: Arena = Arena {
     id: ArenaId::TWIN_ISLES,
-    name: "Twin isles",
+    name: "Twin Isles",
     creature: None,
     bounds: Bounds::cm((-2400, 2400), (-1900, 1900)),
     floor: Snow,
