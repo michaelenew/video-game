@@ -32,6 +32,7 @@ COLOURS = {
     "leather": (0.09, 0.05, 0.025),
     "stone": (0.18, 0.17, 0.155),
     "hair": (0.018, 0.014, 0.013),
+    "scalp": (0.0081, 0.0063, 0.0059),   # under the cards: the hair's own colour in shadow
     "team": (0.80, 0.80, 0.80),
     "eye": (0.70, 0.68, 0.66),
     "eye/2": (0.20, 0.16, 0.06),

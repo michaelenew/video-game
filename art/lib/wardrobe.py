@@ -660,7 +660,11 @@ def hair_cards(scalp, r, style="back", length=0.07, layers=(0.004, 0.009, 0.014)
     tris = np.array(tris)
     a, b, cc = pts[tris[:, 0]], pts[tris[:, 1]], pts[tris[:, 2]]
     area = 0.5 * np.linalg.norm(np.cross(b - a, cc - a), axis=1)
-    prob = area / area.sum()
+    # Rooted high, as hair grows from the crown and the parting and falls
+    # over the rest: cards rooted evenly left the top of the head bare.
+    high = (a[:, 1] + b[:, 1] + cc[:, 1]) / 3 - e[1]
+    prob = area * (0.25 + np.clip((high + 0.01) / 0.09, 0, 1) ** 1.5)
+    prob = prob / prob.sum()
     tree = BVHTree.FromPolygons([Vector(p) for p in pts], tris.tolist())
     right = np.sign(r.o[f"arm.{RIGHT}"][0])
 
@@ -676,8 +680,12 @@ def hair_cards(scalp, r, style="back", length=0.07, layers=(0.004, 0.009, 0.014)
             if fringe and rel[2] > 0.035 and p[1] > e[1] + 0.01:
                 d = np.array([0.0, -0.6, 1.0])
             else:
+                # Away from the parting over the crown, then down; at the
+                # front, back from the face rather than out over the temple.
                 away = np.array([p[0] - part, 0.0, 0.0])
-                d = away / max(np.linalg.norm(away), 0.02) * 0.6 + np.array([0.0, -1.0, -0.15])
+                front = np.clip(rel[2] / 0.06, 0, 1)
+                d = (away / max(np.linalg.norm(away), 0.02) * 0.6 * (1 - 0.6 * front)
+                     + np.array([0.0, -1.0, -0.15 - 0.6 * front]))
         else:
             d = np.array([0.0, -0.25, -1.0]) if p[1] > e[1] else np.array([0.0, -1.0, -0.3])
         return d / np.linalg.norm(d)
@@ -692,7 +700,7 @@ def hair_cards(scalp, r, style="back", length=0.07, layers=(0.004, 0.009, 0.014)
             p = a[t] + (b[t] - a[t]) * w1 + (cc[t] - a[t]) * w2
             loc, n = surface(p)
             p = loc + n * lift
-            reach = length * (0.75 + 0.5 * rnd.random()) * (1.0 - 0.15 * li)
+            reach = length * (0.6 + 0.7 * rnd.random()) * (1.0 - 0.12 * li)
             if style == "knot" and knot is not None:
                 reach = min(reach, np.linalg.norm(np.asarray(knot) - p) + 0.01)
             step = 0.008
@@ -700,11 +708,20 @@ def hair_cards(scalp, r, style="back", length=0.07, layers=(0.004, 0.009, 0.014)
             travelled = 0.0
             while travelled < reach:
                 d = flow(line[-1])
+                below = line[-1][1] < e[1] - 0.025
+                if below:
+                    # Off the scalp's edge the hair simply falls, a little
+                    # in toward the neck, rather than being pushed out from a
+                    # surface it has left -- which fanned the ends.
+                    flat = (line[-1] - c) * np.array([1.0, 0.0, 1.0])
+                    d = np.array([0.0, -1.0, 0.0]) - flat * 1.5 + d * 0.25
+                    d /= np.linalg.norm(d)
                 q = line[-1] + d * step
-                loc, n2 = surface(q)
-                off = (q - loc) @ n2
-                if off < lift:
-                    q = q + n2 * (lift - off)
+                if not below:
+                    loc, n2 = surface(q)
+                    off = (q - loc) @ n2
+                    if off < lift:
+                        q = q + n2 * (lift - off)
                 if style == "bob" and q[1] < e[1] + jaw:
                     break
                 line.append(q)
@@ -718,7 +735,7 @@ def hair_cards(scalp, r, style="back", length=0.07, layers=(0.004, 0.009, 0.014)
             if not split:
                 variant = int(rnd.integers(0, CARD_VARIANTS))
             u0 = variant / CARD_VARIANTS
-            twist = rnd.normal() * 0.25
+            twist = rnd.normal() * 0.10
             base = len(verts)
             m = len(line)
             for i, q in enumerate(line):
@@ -764,21 +781,26 @@ def strand_texture(colour, second=None, size=1024, seed=5):
         x0 = v * col_w
         base = np.asarray(second if (second is not None and v >= CARD_VARIANTS // 2) else colour, float)
         rgb[:, x0:x0 + col_w] = base
-        for _ in range(110):
-            cx = x0 + col_w * (0.06 + 0.88 * rnd.random())
-            sway = rnd.normal() * 3.0
+        for _ in range(190):
+            # Thicker in the lock's middle, thinning to its edges, so cards
+            # side by side blend into one fall of hair instead of showing
+            # each strip's straight sides.
+            cx = x0 + col_w * np.clip(0.5 + rnd.normal() * 0.2, 0.03, 0.97)
+            sway = rnd.normal() * 2.0
             phase = rnd.random() * 6.28
-            thick = 0.6 + 1.6 * rnd.random()
-            end = 0.55 + 0.45 * rnd.random()
+            thick = 1.0 + 1.8 * rnd.random()
+            end = 0.72 + 0.28 * rnd.random()
             tone = 0.7 + 0.6 * rnd.random()
             xs = cx + sway * np.sin(yy[:, 0] * 5.0 + phase) + (yy[:, 0] ** 2) * rnd.normal() * 6.0
             xi = np.arange(x0, x0 + col_w)[None, :]
             d = np.abs(xi - xs[:, None])
             strand = np.clip(1.0 - (d - thick * (1 - 0.6 * yy)) / 1.0, 0, 1)
-            strand *= (yy < end) * np.clip((end - yy) / 0.12, 0, 1) ** 0.6
+            strand *= (yy < end) * np.clip((end - yy) / 0.22, 0, 1) ** 0.5
             region = alpha[:, x0:x0 + col_w]
             alpha[:, x0:x0 + col_w] = np.maximum(region, strand)
             shade[:, x0:x0 + col_w] = np.where(strand > 0.3, tone, shade[:, x0:x0 + col_w])
+    u = (np.arange(w) % col_w) / col_w
+    alpha *= np.clip(1.0 - np.abs(2 * u - 1) ** 2.5, 0, 1)[None, :] ** 0.7
     root = 0.55 + 0.45 * np.clip(yy / 0.25, 0, 1)
     sheen = 1.0 + 0.9 * np.exp(-((yy - 0.32) / 0.06) ** 2)
     out = np.concatenate([rgb * (shade * root * sheen)[..., None], alpha[..., None]], 2)

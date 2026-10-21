@@ -72,9 +72,9 @@ def neck(body, r):
 def head_hair(body, r):
     # A heavy bob to the jaw, parted to one side.
     scalp = hair(body, r, gap=0.004, front=0.04, nape=-0.12, side=0.01, part=0.03, grooves=10,
-                 depth=0.003, faces=2800, close=0.025, lift=0.004)
-    return [scalp, hair_cards(scalp, r, style="bob", part=0.03, jaw=-0.095, length=0.20, width=0.028,
-                              layers=(0.004, 0.009, 0.014), counts=(45, 60, 75), seed=13)]
+                 depth=0.003, faces=2800, close=0.025, lift=0.004, material="scalp")
+    return [scalp, hair_cards(scalp, r, style="bob", part=0.03, jaw=-0.095, length=0.20, width=0.034,
+                              layers=(0.004, 0.009, 0.014), counts=(60, 80, 95), seed=13)]
 
 
 GARMENTS = {

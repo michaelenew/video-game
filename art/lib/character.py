@@ -84,14 +84,17 @@ def finish(spec, bo, br, size):
     for o in highs:
         o.hide_render = False
     high = g.join(highs, "costume~hi") if highs else None
-    team = g.join(team, "team")
+    # A partial build (``--only``) may have no team piece.
+    team = g.join(team, "team") if team else None
     paint.uv_unwrap(costume)
-    paint.uv_unwrap(team)
+    if team:
+        paint.uv_unwrap(team)
     paint.ensure_dir(os.path.join(tex, "x"))
     art = dict(paint.ART, **getattr(spec, "ART", {}))
     images = []
     materials = {}
-    for ob, name, res in ((body, "body", size), (costume, "costume", size), (team, "team", size // 4)):
+    pieces = [(body, "body", size), (costume, "costume", size)] + ([(team, "team", size // 4)] if team else [])
+    for ob, name, res in pieces:
         slot_names = [s.material.name for s in ob.material_slots]
         p = paint.passes(ob, res, spec.COLOURS, high=high if ob is costume else None)
         col = paint.compose(p, art)
@@ -131,7 +134,7 @@ def finish(spec, bo, br, size):
             poly.material_index = 0
     if high:
         bpy.data.objects.remove(high)
-    parts = [body, costume, team]
+    parts = [body, costume] + ([team] if team else [])
     if cards:
         cards = g.join(cards, "cards")
         strands = wardrobe.strand_texture(spec.COLOURS["hair"], spec.COLOURS.get("hair/2"))

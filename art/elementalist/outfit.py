@@ -82,7 +82,7 @@ def team_stole(body, r):
 def head_hair(body, r):
     e = r.eye
     scalp = hair(body, r, gap=0.004, front=0.045, nape=-0.09, side=-0.045, grooves=11, depth=0.003,
-                 faces=2400, lift=0.003)
+                 faces=2400, lift=0.003, material="scalp")
     knot = e + np.array([0.0, 0.02, -0.15])
     # Drawn back from the face into a knot at the back of the head.
     return [scalp,

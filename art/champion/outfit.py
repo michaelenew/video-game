@@ -67,7 +67,7 @@ def neck(body, r):
 def head_hair(body, r):
     # Short, swept back from a high forehead, close at the sides.
     scalp = hair(body, r, gap=0.004, front=0.05, nape=-0.07, side=-0.075, grooves=10, depth=0.003,
-                 faces=2200, lift=0.004)
+                 faces=2200, lift=0.004, material="scalp")
     return [scalp, hair_cards(scalp, r, style="back", length=0.055, width=0.022,
                               layers=(0.003, 0.007, 0.011), counts=(45, 60, 70), seed=11)]
 

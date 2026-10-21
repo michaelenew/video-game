@@ -32,6 +32,7 @@ COLOURS = {
     "trousers": (0.025, 0.015, 0.018),
     "boot": (0.025, 0.015, 0.015),
     "hair": (0.36, 0.34, 0.36),
+    "scalp": (0.162, 0.153, 0.162),   # under the cards: the hair's own colour in shadow
     "team": (0.80, 0.80, 0.80),
     "eye": (0.70, 0.68, 0.66),
     "eye/2": (0.30, 0.03, 0.05),
