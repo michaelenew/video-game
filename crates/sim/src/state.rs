@@ -10355,7 +10355,11 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
         }
         p.air_stall = worth.to_int().max(0) as u16;
         p.air_stalls = p.air_stalls.saturating_add(1);
-    } else {
+    } else if !(p.class == Class::Elementalist && kind == moves::elementalist::UPDRAFT) {
+        // A move with no hang of its own ends one still running -- except the
+        // Updraft, which only ever pushes up: the Fire carpet's hang carries
+        // her through its wind-up, so the column comes up through the carpet
+        // rather than a fall's height below it (2026-10-21, from play).
         p.air_stall = 0;
     }
 

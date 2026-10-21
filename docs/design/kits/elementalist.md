@@ -194,7 +194,12 @@ the fire is seen being pushed outward. One at a time. **Its recovery cancels** (
 a move asked for from `Fire carpet, cancel opens into recovery` frames into it, for `Fire carpet,
 cancel open for` frames, comes out at once, so the Updraft into it is thrown while she is still
 up (`the_carpets_recovery_is_cut_short_by_a_move_asked_for_in_its_window`); later than that, the
-recovery is paid in full. *Known from the start to be awkward at
+recovery is paid in full. **It hangs her for 24 frames** (2026-10-21, from 8), and an
+Updraft thrown inside that hang does not cut it short, so carpet then Updraft through the
+cancel brings the column up round her where she laid the carpet, about a tenth of a metre
+lower, and the two are seen to meet; at 8 frames, with the Updraft cutting the hang, she had
+fallen about 2 m by the time the column rose
+(`a_carpet_into_the_updraft_meets_it_where_she_laid_it`). *Known from the start to be awkward at
 speed — she can outrun a carpet she has just laid — and built anyway so it can be played and
 something better found.*
 

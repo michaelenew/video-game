@@ -9530,3 +9530,32 @@ press `Q` and `E` in her recoveries, which now cut them.
 and 8, whole kit) pressed `Q` inside a recovery and timed a kick around the old wait; they
 were re-searched (`envelope search --class Elementalist`) and replaced, every other line
 kept. Both got longer: 45.6 m to 50.3 m, and 45.8 m to 49.8 m.
+
+
+### 2026-10-21 — the Fire carpet hangs her into the Updraft
+
+From play: "Right now it's still not possible or at least very difficult to get a fire carpet
+into updraft where the two visually connect." Measured: off a held jump, carpet then Updraft
+in the carpet's cancel window, the column came up 2 m below where she laid the carpet. Two
+causes: the carpet's hang (8 frames) was over before the cancel, and the Updraft, which has no
+hang of its own, cut whatever hang was left, so she fell through its 14-frame wind-up.
+**Changed**: the carpet's `Aerial hang` 8 to 24 frames; an Updraft thrown inside a hang leaves
+it running (`state::arm_aerial`; every other move with no hang still cuts it). Now she has
+fallen about 0.1 m when the column rises, and the column runs through the carpet.
+Tried: 16, 20, 28. At 16 she still fell about 0.9 m; 28 bought only about a tenth of a metre more than
+24.
+**Still true**: an Updraft asked for after the cancel window (6 frames) waits out the
+carpet's 16-frame recovery, and she has fallen 3.5 m or more by then, about the column's
+height. If the cancel window is what is hard to hit, `Fire carpet, cancel open for` is the
+knob.
+**Verdict** open -- unplayed.
+**What it cost the search, and what it bought** (`tests/fixtures/envelope.txt`): nine of her
+stored lines were timed round the old 8-frame hang and stopped landing or fell short. They were
+re-searched (`envelope search --class Elementalist --budget 4000 --restarts 6`) and replaced,
+every other line kept. The new lines lay the carpet three to five times in one jump: with
+each hang worth 0.55 of the last, the most the carpet can hang her in one airtime went from
+about 18 frames to about 53, and her reach went with it -- lane 1, shared blocks, 43.6 m to
+63.2 m; lane 4, whole kit, 45.4 to 69.0; lane 7, 47.6 to 68.0; lane 9, 55.8 to 66.3. Lane 3,
+whole kit, came out at 60.9 m against 62.3 stored, within what one search finds and the next
+does not. **If that much float is too much for the courses**, the hang could be the carpet's
+first in an airtime only, or `Aerial hang, each one after` could be steeper for it.

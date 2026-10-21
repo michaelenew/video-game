@@ -539,6 +539,34 @@ fn the_carpets_recovery_is_cut_short_by_a_move_asked_for_in_its_window() {
 }
 
 #[test]
+fn a_carpet_into_the_updraft_meets_it_where_she_laid_it() {
+    // The carpet hangs her long enough for the Updraft's wind-up, and the
+    // Updraft does not cut the hang short, so the column comes up round her
+    // where she laid the carpet -- through it, not a fall's height below it
+    // (2026-10-21, from play).
+    let mut w = carpet_laid();
+    let laid = w.players[0].pos.y;
+    step(&mut w, SPACE | keys::WIND);
+    assert_eq!(doing(&w), Some(e::UPDRAFT));
+    let mut column = None;
+    let mut thermal = false;
+    for _ in 0..40 {
+        step(&mut w, SPACE);
+        if column.is_none() && !of_kind(&w, EffectKind::Updraft).is_empty() {
+            column = Some(w.players[0].pos.y);
+        }
+        thermal |= w.players[0].vel.y.raw() > t::updraft_lift().raw();
+    }
+    let column = column.expect("the column came up");
+    assert!(
+        laid.sub(column).raw() < metres(0.5).raw(),
+        "she fell {} m between the carpet and the column",
+        as_f(laid.sub(column))
+    );
+    assert!(thermal, "and the column met the carpet: a Thermal");
+}
+
+#[test]
 fn a_move_asked_for_after_the_carpets_window_waits_for_the_recovery() {
     let mut w = carpet_laid();
     run(
