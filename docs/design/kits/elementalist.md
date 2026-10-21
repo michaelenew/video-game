@@ -101,9 +101,12 @@ What the person reported from three replays, what the replays showed, and what c
   floor far below — often a course's void. Now the edge of the range, and the floor under a wall
   she pointed at, come back toward her to the last footing no more than
   `Placed, at most below her` (2 m) under her own (`aim::kept_up`). A crosshair *on* the floor
-  below still puts it there. A Fissure held from a stone up top runs along that ground and stops
-  at the edge (`aim::kept_along`), so its stone erupts at the lip, not in the pit; one started
-  down there runs down there. Landfall's slab never comes up off a ledge (`aim::planted_ahead`):
+  below still puts it there. A Fissure held from a stone up top runs along that ground to the
+  edge (`aim::kept_along`); *since 2026-10-21* its stone is then let go at the surge's speed and
+  goes over and falls to the floor below, rather than stopping on the lip; one started down
+  there runs down there. The same day: a Fissure held on any raised floor ran nowhere at all
+  (its wall check grazed the floor's own top), and the Fire pillar left this rule -- aimed off a
+  ledge, it goes to the floor below. Landfall's slab never comes up off a ledge (`aim::planted_ahead`):
   past one it comes back to her level, and with no footing between there is no slab. The Reaver's
   send, the Black spike and Judgement keep the plain rule — the send's refusal past an edge was
   decided from play on 2026-10-04.

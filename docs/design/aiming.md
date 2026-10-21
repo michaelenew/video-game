@@ -172,14 +172,16 @@ them: a structure, a fire pillar.
   a place the floor does not know about, so nothing settles it.
 - **Hit anything else** — a wall — it drops to whatever is underneath,
   because the thing being placed can only exist on the floor.
-- **The Elementalist's placements stay at her level** (`aim::grounded_kept`,
-  2026-10-09, from play): in the two cases she did not point down — the edge of
+- **The Elementalist's stones stay at her level** (`aim::grounded_kept`,
+  2026-10-09, from play; her Fire pillar left the rule on 2026-10-21 and takes
+  the plain one -- a pillar is not footing, and aimed off a ledge she means the
+  floor below): in the two cases she did not point down — the edge of
   the range, and a wall — a floor more than `tuning::placement_drop` below her
   own is not where the stone goes; it comes back toward her to the last footing
   that is (`aim::kept_up`). Her stones kept appearing far below her, in a
   course's void, where she had not put them. A crosshair on that floor still
-  goes there. A Fissure from a stone up top stops at the edge
-  (`aim::kept_along`), and Landfall's slab is never put off a ledge
+  goes there. A Fissure from a stone up top runs to the edge
+  (`aim::kept_along`) and its stone goes on over it and falls (2026-10-21), and Landfall's slab is never put off a ledge
   (`aim::planted_ahead`). The other grounded casts keep the plain rule: the
   Reaver's send has its own answer, **only as far as she could walk**
   (`aim::walk_toward`, 2026-10-10).

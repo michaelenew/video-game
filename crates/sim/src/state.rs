@@ -10141,9 +10141,11 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
     let m = moves::get(p.class, kind);
     p.stoop = Fx::ZERO;
     p.aim_path = match m.aim() {
-        // Hers stay at her level when she did not point down
-        // (`aim::grounded_kept`); everybody else's are the plain rule.
-        aim::Kind::Grounded if p.class == Class::Elementalist => {
+        // Her stones stay at her level when she did not point down
+        // (`aim::grounded_kept`); everybody else's are the plain rule, and so
+        // is her Fire pillar (2026-10-21, from play): fire is not footing, and
+        // from a ledge she means the floor below it.
+        aim::Kind::Grounded if p.class == Class::Elementalist && kind != SLOT_SPECIAL => {
             aim::grounded_kept(who, input, reach, scene)
         }
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
@@ -16135,7 +16137,17 @@ impl World {
         // Along the floor it was raised on: stopped at an edge rather than
         // run off it into the floor below (`aim::kept_along`), and at a wall.
         let path = aim::kept_along(p.aim_path, &scene);
-        let length = aim::first_along(path, Fx::ZERO, i as u8, &scene, Targets::none().walls())
+        // Walls asked a step up off the floor it runs on (2026-10-21): along
+        // the floor itself the line grazes the top of the box it was raised
+        // on, which read as a wall at no distance, and a crack held on any
+        // raised floor never went anywhere. A step she would walk up is not a
+        // wall to it either.
+        let lift = V3::new(Fx::ZERO, t::step_up(), Fx::ZERO);
+        let probe = aim::Path {
+            from: path.from.add(lift),
+            to: path.to.add(lift),
+        };
+        let length = aim::first_along(probe, Fx::ZERO, i as u8, &scene, Targets::none().walls())
             .map_or(path.length(), |c| c.dist());
         let dir = path.dir();
         let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
@@ -16223,6 +16235,22 @@ impl World {
         if let Some(index) = (effect.banked as usize).checked_sub(1) {
             if running {
                 stones::slide_to(&mut self.players, index, front, &ground);
+            }
+            // **Off the end of her level, over the edge** (2026-10-21, from
+            // play): the run stops at a lip (`aim::kept_along`), and a stone
+            // that got there is let go at the surge's speed rather than left
+            // standing on it, so it goes on over and falls to the floor below.
+            // A run that ended at a wall, or on more floor, keeps its stone.
+            let end = effect.pos.add(effect.dir.scale(effect.reach));
+            // Its last frame, too: its life is the run rounded to frames, and
+            // can end a hair short of the end.
+            if front == end || effect.age.saturating_add(1) >= effect.life {
+                let past = front.add(flat.scale(t::body_radius()));
+                let below = ground.floor_below(V3::new(past.x, front.y.add(arena::SKIN), past.z));
+                if below.raw() < front.y.sub(t::placement_drop()).raw() {
+                    stones::shove(&mut self.players, index, flat, speed);
+                    effect.banked = 0;
+                }
             }
         }
         let m = effect.source();

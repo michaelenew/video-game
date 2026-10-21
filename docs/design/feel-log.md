@@ -9520,3 +9520,29 @@ when it burns out. Pinned by `tests/elementalist_clicks.rs`
 up to a metre lower than it was laid; a carpet on the floor is a burning strip to walk round, and
 a Thermal off it throws her along the slope it lies on (flat, on a flat floor).
 **Verdict** open -- unplayed.
+
+
+### 2026-10-21 — the Fire pillar off a ledge, and Fissure on a raised floor
+
+From play: "the fire pillar off of an edge has really weird aiming now. I can't seem to aim it
+down to the ground below when I'm standing on a raised area", suspected to be the Reaver's
+shadow edge rule bleeding into other moves; and "a charged lclick that would end up off of the
+current plane doesn't get kicked at all. The stone needs to proceed as far as it can, then fall
+off the edge."
+**Found** the shadow's rule (`aim::walk_toward`) is the send's alone and nothing else calls it;
+`aim.rs` had not changed since 2026-10-19. The pillar was under the Elementalist's own
+2026-10-09 rule (`aim::grounded_kept`), which brings a placement aimed past an edge -- out of
+range, or at the cliff's face -- back up to her level. Fissure had a separate bug: the run's
+wall check went along the floor at exactly the height of the box she stood on, grazed its top,
+and read as a wall at no distance, so a crack held on any raised floor never moved.
+**Changed** the Fire pillar (tap and Strike) takes the plain `aim::grounded_path`; her stones
+keep the rule. Fissure's wall check is asked `Step up` above the floor it runs on. A surge
+whose run ends at a lip lets its stone go at `Fissure surge, speed` (a kick, so it hits who it
+lands among), and it goes over and falls. Pinned by `tests/elementalist_playtest.rs`
+(`a_fire_pillar_aimed_off_the_dais_goes_to_the_floor_below`,
+`a_crack_held_toward_an_edge_runs_to_it_and_its_stone_goes_over`, which replaces
+`a_crack_held_toward_an_edge_stops_at_it`).
+**Consequences** to feel for: the stone let go at the lip travels on as a kicked stone does
+(the Bolt's kick range), which on the proving ground's dais lands it about 9 m past the edge --
+further than the hold bought; off a course's island it goes into the pit.
+**Verdict** open -- unplayed.
