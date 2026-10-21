@@ -382,6 +382,13 @@ pub fn form_of(arena: ArenaId, s: &Solid, hangs: bool) -> Form {
     if sim::arena::waterfall::part_of(s) {
         return Form::Basalt;
     }
+    // A floating duel stage's islands (`sim::versus`): a lump of rock under
+    // whatever its top is, as a course's are. Its hovering slabs are
+    // masonry, as anywhere.
+    let floats = sim::versus::of(arena).is_some_and(|st| st.pit.is_some());
+    if floats && hangs && s.material != Material::Stone && size.y >= 2.0 {
+        return Form::Island;
+    }
     if course(arena) {
         return match s.material {
             Material::Grass | Material::Snow | Material::Wood if hangs => Form::Island,

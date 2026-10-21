@@ -1260,6 +1260,24 @@ scalars! {
     // fighter's shove is this times the table, rising in a straight line to
     // the same multiple at death it reached before. Sideways only.
     SwellStart,           "Knockback", "Knockback at full health (x)",                        Fixed, fx(1,2), fx(4,1);
+    // **King of the Hill** (2026-10-21, `crate::versus`): the point is
+    // locked for a while at the start, a capture takes this long for one
+    // fighter (a second adds this share again), a point nobody stands on
+    // drains a capture at this share of one capper, each side's clock runs
+    // this long while it holds the point, and the dead stand back up after
+    // this wait. Appended: `tuned::SCALARS` is read by this enum's own
+    // discriminant.
+    HillUnlock,           "Match",    "King of the hill, point unlocks after",               Frames, 0, 3600;
+    HillCapture,          "Match",    "King of the hill, a capture takes",                   Frames, 30, 1800;
+    HillSecond,           "Match",    "King of the hill, a second capper adds (%)",          Percent, 0, 100;
+    HillDecay,            "Match",    "King of the hill, an empty point drains (%)",         Percent, 0, 100;
+    HillClock,            "Match",    "King of the hill, each side's clock",                 Frames, 600, 36000;
+    HillRespawn,          "Match",    "King of the hill, the dead are back after",           Frames, 0, 1200;
+    // **The point is a column** (2026-10-21, from play): feet anywhere over
+    // the disc up to this high count, so a jump on it is still on it --
+    // seven metres, over the Dual mage's six-metre hop. A map's own headroom
+    // caps it (`versus::Hill::room`).
+    HillColumn,           "Match",    "King of the hill, the point counts up to (m)",        Fixed, 0, fx(12,1);
 }
 
 // ---------------------------------------------------------------------------
