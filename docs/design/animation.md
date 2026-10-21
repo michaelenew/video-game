@@ -557,15 +557,17 @@ which is a roll (`view::dodge`, [defense.md](defense.md#dodge)). The clip is wha
 body does *inside* the turn -- dive, ball, open, catch -- and authoring the turn there as
 well would be two.
 
-A roll on the floor is also **held to it**: the renderer measures the lowest corner of the
-turned pose it is about to draw and raises or lowers the body so that corner is on the
-floor (`view::dodge::lift`), fully while the body is over and not at all at the two ends,
-where the feet are what is on the floor. So the point a roll turns about decides the arc
-and not whether the body is in the floor; it is set to the middle of the class's ball, and
+A roll's **height is set, not left to the pivot**: `dodge::Turn::height` is where the
+lowest point of the body should be -- up on the arc of the dive, on the floor from the
+moment the shoulder meets it -- and the renderer measures the lowest corner of the turned
+pose it is about to draw and moves the body so that corner is there (`view::dodge::lift`).
+So the point a roll turns about decides the arc and not whether the body is in the floor;
+it is set to the middle of the class's ball, and
 `cargo test -p view --test dodge report_ball_middles -- --ignored --nocapture` prints
-where that is after a clip is changed. A roll to the side is also turned, about the
-vertical through the feet, to face its travel (`PlayerView::roll_yaw`): it is the forward
-roll, and turns back to the front as it rises.
+where that is after a clip is changed. The roll goes over the lead shoulder by turning
+about an axis tipped off the body's side, and a roll to the side is first turned, about
+the vertical through the feet, to face its travel (`PlayerView::roll_yaw`): it is the
+forward roll, and turns back to the front as it rises.
 
 ## The creature has its own rig
 

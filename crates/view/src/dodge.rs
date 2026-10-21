@@ -1,40 +1,53 @@
 //! The grounded dodge as each class rolls it.
 //!
 //! **A dive roll, turned over for real.** The rig cannot roll over on its own
-//! -- the root has fifty degrees of forward swing -- so for years the dodge sold
-//! a roll by curling up and leaning. Now the clip is only what a body does
-//! *inside* a roll (a dive, a tuck, legs reaching for the floor) and the whole
-//! body is turned over on top of it, about the middle of the ball, the way the
-//! Reaver's Tumble already was. The turn is a pure function of the dodge's
-//! countdown, so a rollback redraws it exactly, and it is **presentation
-//! only**: the hurt volume, the camera and the aim never turn over, and nothing
-//! here touches a frame of the dodge's data.
+//! -- the root has fifty degrees of forward swing -- so the clip is only what a
+//! body does *inside* the roll, and the whole body is turned over on top of
+//! it, the way the Reaver's Tumble already was. The turn is a pure function of
+//! the dodge's countdown, so a rollback redraws it exactly, and it is
+//! **presentation only**: the hurt volume, the camera and the aim never turn
+//! over, and nothing here touches a frame of the dodge's data.
 //!
-//! **One roll, the kind a third-person action game has** (2026-10-21, from
-//! play: the first version, with a twist, a cartwheel and a laid-out aerial,
-//! "looked insane"): a hop off both feet, chin and knees to the chest, one
-//! turn along the floor in a round ball, and up onto the feet. Back, it is a
-//! backward roll. **To the side the body turns to face the travel, rolls
-//! forward over the lead shoulder, and turns back as it rises** -- nobody
-//! goes over their own shoulder line and comes up on their feet.
+//! ## The roll, after the souls games' (2026-10-21)
 //!
-//! Each class rolls it its own way, in timing, weight and what the arms carry:
+//! Twice wrong first, from play: a twist and a cartwheel ("insane"), then a
+//! body that dropped straight to the floor and somersaulted ("not close").
+//! What it is instead is a **dive roll**, in three parts:
+//!
+//! 1. **The dive.** Off both feet and *into the air*: the body long, the hands
+//!    out ahead, the legs trailing, pitching forward as it flies on a low arc.
+//!    The torso stays up -- its height comes down over the flight, not on the
+//!    first frame.
+//! 2. **The shoulder.** As the hands reach the floor the head tucks and the
+//!    lead shoulder drops, and the roll goes over *diagonally*, from that
+//!    shoulder across the back to the other hip, about a tilted axis.
+//! 3. **The roll and the rise.** The rest of the turn is fast, on the floor,
+//!    and comes up onto the feet.
+//!
+//! Back, it is the same thing backward: a hop back, sat down onto the back,
+//! over the shoulder. **To the side the body turns to face the travel, dives
+//! forward, and turns back as it rises.**
+//!
+//! The height is not left to the pivot: [`Turn::height`] is where the lowest
+//! point of the body is meant to be -- off the floor on the arc of the dive,
+//! on it through the roll -- and the renderer puts it there (`lift`).
+//!
+//! Each class rolls it its own way, in timing, the height of the dive, weight
+//! and what the arms carry:
 //!
 //! | Class | Its roll |
 //! | --- | --- |
 //! | Champion | The roll as it is; up with the weapon hand forward |
-//! | Bulwark | A frame later over and up, heavier, the shield arm across the ball, up behind the shield |
-//! | Shadow Reaver | Quickest over and up, blades swept back off the hop, up light and less deep |
+//! | Bulwark | Lower and later to the floor, heavier, the shield arm across him, up behind the shield |
+//! | Shadow Reaver | The highest, quickest dive, blades swept back off the push, up light |
 //! | Elementalist | Slides on out of it, low, a hand dragged along the floor |
-//! | Blood mage | Last over, unfurls low with the scythe arm thrown out wide |
-//! | Dual mage | Slowest and lightest, up with her arms opening wide |
+//! | Blood mage | The longest, flattest dive, unfurls low with the scythe arm thrown out wide |
+//! | Dual mage | A high, floating dive, slowest up, arms opening wide |
 //!
-//! Two things are the same for everyone, because they are the dodge's rather
-//! than the class's. The turn is mostly done by the frame the invulnerability
-//! ends, so the silhouette still changes on that frame -- tucked while the
-//! frames are free, opening as they stop being -- and it is done by frames,
-//! not seconds, out of `tuning::dodge_frames` and `dodge_iframes`, so
-//! retuning the window in the Oven moves the whole roll with it.
+//! The timing is by frames, not seconds, out of `tuning::dodge_frames` and
+//! `dodge_iframes`, so retuning the window in the Oven moves the whole roll
+//! with it; and the turn is most of the way round by the frame the
+//! invulnerability ends, so the silhouette opens on that frame.
 
 use crate::clips::Clip;
 use crate::math::{self, Quat, V3};
@@ -73,19 +86,24 @@ pub fn way(travel: [f32; 2]) -> Way {
     }
 }
 
-/// How one class turns over.
+/// How one class dives and rolls.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Roll {
-    /// The frame of the dodge the body starts going over on.
-    pub from: u16,
+    /// The frame the hands and shoulder reach the floor: the end of the dive
+    /// and the start of the roll.
+    pub contact: u16,
     /// How many frames after the cover runs out it is upright again (negative:
-    /// before). The turn is eased in and out between the two.
+    /// before).
     pub past_cover: i16,
+    /// How high the dive carries the lowest point of the body at the top of its
+    /// arc, in metres.
+    pub hop: f32,
+    /// How far over the body has pitched, in turns, by the time it reaches the
+    /// floor: the angle of the dive.
+    pub dive: f32,
     /// Where the body turns about, in character space (`+Y` up, `+Z` ahead):
-    /// about the middle of the ball the clip curls into. It decides the arc;
-    /// the height is then put right by [`lift`], which keeps whatever is
-    /// lowest on the floor -- so a pivot a few centimetres out is a slightly
-    /// different arc rather than a body in the floor.
+    /// about the middle of the ball it curls into. It decides the arc; the
+    /// height is [`Turn::height`]'s.
     pub about: V3,
 }
 
@@ -93,34 +111,46 @@ pub struct Roll {
 pub const fn roll(class: Class) -> Roll {
     match class {
         Class::Champion => Roll {
-            from: 2,
+            contact: 7,
             past_cover: 3,
-            about: [0.0, 0.47, 0.30],
+            hop: 0.24,
+            dive: 0.2,
+            about: [0.0, 0.50, 0.30],
         },
         Class::Bulwark => Roll {
-            from: 3,
+            contact: 8,
             past_cover: 4,
-            about: [0.0, 0.42, 0.28],
+            hop: 0.14,
+            dive: 0.17,
+            about: [0.0, 0.46, 0.28],
         },
         Class::ShadowReaver => Roll {
-            from: 2,
-            past_cover: 1,
-            about: [0.0, 0.52, 0.31],
+            contact: 7,
+            past_cover: 2,
+            hop: 0.32,
+            dive: 0.22,
+            about: [0.0, 0.54, 0.31],
         },
         Class::Elementalist => Roll {
-            from: 2,
-            past_cover: 2,
-            about: [0.0, 0.50, 0.32],
+            contact: 7,
+            past_cover: 3,
+            hop: 0.24,
+            dive: 0.2,
+            about: [0.0, 0.52, 0.32],
         },
         Class::BloodMage => Roll {
-            from: 4,
+            contact: 8,
             past_cover: 3,
-            about: [0.0, 0.44, 0.31],
+            hop: 0.2,
+            dive: 0.23,
+            about: [0.0, 0.48, 0.31],
         },
         Class::DualMage => Roll {
-            from: 2,
-            past_cover: 5,
-            about: [0.0, 0.50, 0.33],
+            contact: 7,
+            past_cover: 4,
+            hop: 0.34,
+            dive: 0.2,
+            about: [0.0, 0.52, 0.33],
         },
     }
 }
@@ -136,22 +166,77 @@ pub fn first_vulnerable() -> u16 {
     length().saturating_sub(spent)
 }
 
+fn smooth(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 impl Roll {
+    /// The frame the shoulder meets the floor, inside the clip and before the
+    /// cover runs out.
+    pub fn contact(&self) -> u16 {
+        self.contact
+            .clamp(2, first_vulnerable().saturating_sub(1).max(2))
+    }
+
     /// The frame the body is upright again, inside the clip.
     pub fn upright(&self) -> u16 {
         let last = length().saturating_sub(1);
         let at = first_vulnerable() as i32 + self.past_cover as i32;
-        (at.max(self.from as i32 + 2) as u16).min(last)
+        (at.max(self.contact() as i32 + 3) as u16).min(last)
     }
 
-    /// How far over the body is at a frame of the clip, nought to one, eased in
-    /// and out so it starts and ends upright and still.
+    /// How far over the body is at a frame of the clip, nought to one turn.
+    ///
+    /// Through the dive it pitches forward faster and faster, to `dive` at the
+    /// contact -- a body leaving the floor leaning, and falling further over
+    /// as it flies. Then it rolls, fast at once and slowing as it comes up:
+    /// hitting the floor is what turns it over.
     pub fn through(&self, frame: f32) -> f32 {
-        let (a, b) = (self.from as f32, self.upright() as f32);
-        let t = ((frame - a) / (b - a).max(1.0)).clamp(0.0, 1.0);
-        t * t * (3.0 - 2.0 * t)
+        let (c, u) = (self.contact() as f32, self.upright() as f32);
+        if frame <= 0.0 {
+            0.0
+        } else if frame <= c {
+            self.dive * (frame / c).powi(2)
+        } else if frame < u {
+            let t = (frame - c) / (u - c);
+            self.dive + (1.0 - self.dive) * (1.0 - (1.0 - t).powi(2))
+        } else {
+            1.0
+        }
+    }
+
+    /// How far the roll's axis has tipped onto the lead shoulder, nought to
+    /// one: none through the dive, all of it from just after the contact.
+    pub fn shoulder(&self, frame: f32) -> f32 {
+        let c = self.contact() as f32;
+        smooth((frame - (c - 2.0)) / 3.0)
+    }
+
+    /// Where the lowest point of the body is meant to be at a frame, in metres
+    /// above the floor: up on the arc of the dive, on the floor from the
+    /// contact.
+    pub fn height(&self, frame: f32) -> f32 {
+        let c = self.contact() as f32;
+        if frame <= 0.0 || frame >= c {
+            0.0
+        } else {
+            self.hop * (std::f32::consts::PI * frame / c).sin()
+        }
+    }
+
+    /// How firmly the body is held to [`Roll::height`], nought to one: not at
+    /// the push, where the feet are on the floor in the clip, nor once it is
+    /// up, where they are again; fully between.
+    pub fn held(&self, frame: f32) -> f32 {
+        let u = self.upright() as f32;
+        smooth(frame) * (1.0 - smooth((frame - (u - 2.0)) / 2.0))
     }
 }
+
+/// How far the shoulder roll's axis is tipped off the body's side, about the
+/// vertical: over the lead shoulder to the other hip.
+const SHOULDER: f32 = 0.6;
 
 /// The clip a class plays for a dodge that went this way.
 pub const fn clip(class: Class, way: Way) -> Clip {
@@ -189,14 +274,17 @@ pub const fn clip(class: Class, way: Way) -> Clip {
 pub struct Turn {
     /// How far the body is turned to face the way it is rolling, in radians
     /// about the vertical through its feet, the engine's way round: a roll to
-    /// the side turns to face the travel first, rolls forward, and turns back
+    /// the side turns to face the travel first, dives forward, and turns back
     /// as it comes up. Nought going forward or back.
     pub yaw: f32,
-    /// The roll itself, in the body's own frame once it has turned: over its
-    /// own side, forward or back.
+    /// The dive and the roll, in the body's own frame once it has turned.
     pub over: Quat,
-    /// The point it rolls about, in that frame.
+    /// The point it turns about, in that frame.
     pub about: V3,
+    /// Where the lowest point of the body is meant to be, metres above the
+    /// floor, and how firmly it is held there (`Roll::height`, `Roll::held`).
+    pub height: f32,
+    pub held: f32,
 }
 
 impl Turn {
@@ -210,63 +298,45 @@ impl Turn {
 /// at a frame: in over the push, held through the roll, back out over the
 /// rise.
 fn facing_travel(r: &Roll, frame: f32) -> f32 {
-    let ease = |t: f32| {
-        let t = t.clamp(0.0, 1.0);
-        t * t * (3.0 - 2.0 * t)
-    };
     let last = length().saturating_sub(1) as f32;
     let up = r.upright() as f32;
-    let into = ease(frame / (r.from as f32 + 1.0).max(1.0));
-    let out = ease((frame - up) / (last - up).max(1.0));
+    let into = smooth(frame / 2.0);
+    let out = smooth((frame - up) / (last - up).max(1.0));
     into * (1.0 - out)
 }
 
 /// The whole-body turn of a class's roll at a frame of the clip, in character
 /// space as the renderer draws it.
 ///
-/// Forward and back go over the body's own side. **To the side it turns to
-/// face the travel and rolls forward**, the way anybody actually rolls
-/// sideways -- a body cannot go over its own shoulder line and come up on its
-/// feet -- and turns back to the front as it rises. A pose is drawn with the
-/// body's right at `-X` (see `crate::hand_joint`), so facing the right is a
-/// quarter turn the negative way about `+Y`.
+/// Forward and back go over the body's own side, tipped onto the right
+/// shoulder from the contact. **To the side it turns to face the travel and
+/// dives forward** over the lead shoulder -- a body cannot go over its own
+/// shoulder line and come up on its feet -- and turns back to the front as it
+/// rises. A pose is drawn with the body's right at `-X` (see
+/// `crate::hand_joint`), so facing the right is a quarter turn the negative
+/// way about `+Y`.
 pub fn turned(class: Class, way: Way, frame: f32) -> Turn {
     use std::f32::consts::FRAC_PI_2;
     let r = roll(class);
-    let over = r.through(frame) * TAU;
-    let side = match way {
-        Way::Right => -FRAC_PI_2,
-        Way::Left => FRAC_PI_2,
-        Way::Forward | Way::Back => 0.0,
+    let angle = r.through(frame) * TAU;
+    let (side, sign, lead) = match way {
+        Way::Right => (-FRAC_PI_2, 1.0, 1.0),
+        Way::Left => (FRAC_PI_2, 1.0, -1.0),
+        Way::Forward => (0.0, 1.0, 1.0),
+        Way::Back => (0.0, -1.0, 1.0),
     };
-    let over = match way {
-        Way::Back => Quat::from_x(-over),
-        _ => Quat::from_x(over),
-    };
+    // Over the body's side, with the axis tipped about the vertical onto the
+    // lead shoulder: conjugating the turn by that tip is a turn about the
+    // tipped axis, and still a whole turn round to upright at the end.
+    let tip = Quat::from_y(lead * sign * SHOULDER * r.shoulder(frame));
+    let over = tip.mul(Quat::from_x(sign * angle)).mul(tip.conjugate());
     Turn {
         yaw: side * facing_travel(&r, frame),
         over,
         about: r.about,
+        height: r.height(frame),
+        held: r.held(frame),
     }
-}
-
-/// How a turned-over body is held against the floor this frame.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Floor {
-    /// Nothing holds it: a flip in the air, or not turned at all.
-    Free,
-    /// Rolling on it: its lowest point is put on the floor, by this much
-    /// (nought to one) -- all of it while the body is over, none at the two
-    /// ends where the feet are what is on the floor.
-    On(f32),
-}
-
-/// How a class's roll is held to the floor at a frame of the clip.
-pub fn floor(class: Class, frame: f32) -> Floor {
-    let r = roll(class);
-    let k = r.through(frame);
-    let w = (2.0 * (k * std::f32::consts::PI).sin()).clamp(0.0, 1.0);
-    if w <= 0.0 { Floor::Free } else { Floor::On(w) }
 }
 
 /// The lowest point of a posed body once it is turned over `turn` about
@@ -290,21 +360,22 @@ pub fn lowest(skin: &Skin, skeleton: &Skeleton, turn: Quat, about: V3) -> f32 {
     low
 }
 
-/// How far to raise (or lower) a rolling body so it is on the floor: what a
-/// roll is, a body that keeps touching the ground as it goes over it. Nought
-/// when nothing holds it.
-pub fn lift(floor: Floor, lowest: f32) -> f32 {
-    match floor {
-        Floor::Free => 0.0,
-        Floor::On(w) => -lowest * w,
-    }
+/// How far to raise (or lower) a rolling body so its lowest point is at
+/// `height`, held by `held`: up off the floor on the dive, on it through the
+/// roll.
+pub fn lift(height: f32, held: f32, lowest: f32) -> f32 {
+    (height - lowest) * held
 }
 
 /// How far the renderer raises a drawn body for its roll this frame, given the
 /// pose it is drawing on its own skeleton. See [`lift`].
 pub fn drawn_lift(p: &crate::PlayerView, skin: &Skin, skeleton: &Skeleton) -> f32 {
-    if p.roll_floor == Floor::Free {
+    if p.roll_held <= 0.0 {
         return 0.0;
     }
-    lift(p.roll_floor, lowest(skin, skeleton, p.roll, p.roll_about))
+    lift(
+        p.roll_height,
+        p.roll_held,
+        lowest(skin, skeleton, p.roll, p.roll_about),
+    )
 }

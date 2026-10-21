@@ -128,11 +128,15 @@ fn ground_speed() -> f32 {
 enum Beat {
     /// Frame zero: already going, the only grounded frame at this end.
     Push,
-    /// The hop: both feet off the floor, knees coming up.
+    /// The launch: the back leg driving, the front one lifting, the arms
+    /// swinging through.
     Off,
-    /// Tucking: chin down, hands going to the shins, going over.
-    Over,
-    /// The ball, held unchanging to the last invulnerable frame.
+    /// In the air: long, the hands out ahead, the legs trailing.
+    Dive,
+    /// The hands reach the floor: the head tucks, the lead shoulder drops,
+    /// the knees start up.
+    Contact,
+    /// The ball, rolling, held unchanging to the last invulnerable frame.
     Ball,
     /// The break: legs out for the floor, arms off the body.
     Open,
@@ -158,38 +162,38 @@ fn style(class: Class) -> Style {
     match class {
         Class::Champion => Style {
             looseness: Looseness::MARTIAL,
-            notes: "The roll everyone shares, as the Champion does it: a hop \
-                    off both feet, chin and knees to the chest, one turn along \
-                    the floor in a round ball, held unchanging while the frames \
-                    are free; on the frame the cover runs out the legs open \
-                    for the floor and he comes up in a low crouch with the \
-                    weapon hand forward. The turn itself is not here: \
-                    `view::dodge` turns the whole body over about the middle \
-                    of the ball, and to the side turns him to face the travel \
+            notes: "The dive roll everyone shares, as the Champion does it. \
+                    Off the back foot into the air, long, arms up in front of \
+                    the chest and legs trailing, pitching forward as he flies; \
+                    as the floor arrives the head tucks, the arms fold and the \
+                    knees come up, and he goes over the right shoulder in a \
+                    ball, held unchanging while the frames are free. On the \
+                    frame the cover runs out the legs open for the floor and \
+                    he comes up in a low crouch with the weapon hand forward. \
+                    The turn, the shoulder and the height of the dive are not \
+                    here: `view::dodge` turns and carries the whole body on \
+                    top of this, and to the side turns him to face the travel \
                     first, so a roll to the side is this roll.",
             dress: champion,
         },
         Class::Bulwark => Style {
-            looseness: Looseness::HEAVY,
-            notes: "The shared roll, heavier: he goes over a frame later and \
-                    is up a frame later, and the shield arm stays across the \
-                    front of the ball the whole way round. He comes up behind \
-                    the shield, deeper than anybody. HEAVY, because a big body \
-                    carries past its marks.",
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, heavier: a lower dive, to the floor a frame \
+                    later and up a frame later, the shield arm across him the \
+                    whole way round. He comes up behind the shield, deeper \
+                    than anybody.",
             dress: bulwark,
         },
         Class::ShadowReaver => Style {
-            looseness: Looseness::CRISP,
-            notes: "The shared roll, quickest: she is first over and first up, \
-                    the blades swept back off the hop and tucked in for the \
-                    turn, and she comes up light and less deep, on the balls \
-                    of her feet with the blades out low. CRISP: nothing \
-                    trails a turn this fast.",
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, highest and quickest: she leaves the floor \
+                    highest and is first up, light and less deep, with the \
+                    blades out low.",
             dress: reaver,
         },
         Class::Elementalist => Style {
             looseness: Looseness::MARTIAL,
-            notes: "The shared roll, ending somewhere different: out of the \
+            notes: "The dive roll, ending somewhere different: out of the \
                     turn she does not stand straight up, she slides on, low, \
                     her lead hand dragged flat along the floor, and only rises \
                     off it at the end.",
@@ -197,16 +201,17 @@ fn style(class: Class) -> Style {
         },
         Class::BloodMage => Style {
             looseness: Looseness::MARTIAL,
-            notes: "The shared roll, late and low: she goes over last, and \
-                    unfurls low out of it with the scythe arm thrown out wide \
-                    behind her.",
+            notes: "The dive roll, longest and flattest: she is a frame longer \
+                    in the air and further over when she lands, and unfurls \
+                    low out of it with the scythe arm thrown out wide behind \
+                    her.",
             dress: blood,
         },
         Class::DualMage => Style {
-            looseness: Looseness::FLOATY,
-            notes: "The shared roll, lightest: unhurried in and out of the \
-                    ball, the slowest turn of the six, and up with her arms \
-                    opening wide like the wings she does not have yet.",
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, floating: the highest arc after the \
+                    Reaver's and the slowest up, her arms opening wide like \
+                    the wings she does not have yet.",
             dress: dual,
         },
     }
@@ -241,15 +246,18 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
         [0.0, -1.0]
     };
 
-    // The beats, placed against the turn: tucking a frame after it starts,
-    // balled two after that, both held clear of the break.
-    let f_over = (roll.from + 1).clamp(3, brk.saturating_sub(4).max(3));
-    let f_ball = (f_over + 2).min(brk - 2);
+    // The beats, placed against the turn: launched on the second frame, long
+    // in the air from the third, tucking as the hands meet the floor, balled
+    // from the frame after, held clear of the break.
+    let f_contact = roll.contact().clamp(4, brk - 1);
+    let f_dive = 3.min(f_contact - 1);
+    let f_flight = (f_contact - 3).max(f_dive);
+    let f_ball = (f_contact + 1).min(brk - 1);
     let f_held = brk - 1;
     let f_catch = up.clamp(brk + 1, last - 4);
     let f_rise = f_catch + (last - f_catch) / 2;
 
-    // Off the shoulder it goes over, rolling to the side.
+    // Off the shoulder it goes over.
     let lean = |pose: Pose| shoulder(pose, way);
     let dress = |pose: Pose, beat: Beat| (style.dress)(pose, beat, body);
 
@@ -263,7 +271,13 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
     let keys = vec![
         Key::eased(0, dress(push(body), Beat::Push), Ease::LINEAR),
         Key::eased(1, dress(off(body), Beat::Off), Ease::LINEAR),
-        Key::eased(f_over, lean(dress(over(body), Beat::Over)), Ease::OUT),
+        Key::eased(f_dive, dress(dive(body), Beat::Dive), Ease::HOLD),
+        Key::eased(f_flight, dress(dive(body), Beat::Dive), Ease::LINEAR),
+        Key::eased(
+            f_contact,
+            lean(dress(contact(body), Beat::Contact)),
+            Ease::OUT,
+        ),
         Key::eased(f_ball, lean(dress(ball(), Beat::Ball)), Ease::HOLD),
         Key::eased(f_held, lean(dress(ball(), Beat::Ball)), Ease::STRIKE),
         Key::eased(brk, dress(open(), Beat::Open), Ease::LINEAR),
@@ -315,13 +329,13 @@ fn dedupe(keys: Vec<Key>) -> Vec<Key> {
 
 /// A shoulder roll's lean: going over the right shoulder the head tucks
 /// toward the left one and the trunk tips onto the right, so the round of the
-/// back runs from the right shoulder to the left hip. Mirrored for the left;
-/// nothing going straight forward or back.
+/// back runs from the right shoulder to the left hip -- the line the turn's
+/// tipped axis rolls it along (`view::dodge::turned`). Over the left shoulder
+/// rolling left; the right one every other way.
 fn shoulder(pose: Pose, way: Way) -> Pose {
     let s = match way {
-        Way::Right => 1.0,
         Way::Left => -1.0,
-        Way::Forward | Way::Back => return pose,
+        Way::Right | Way::Forward | Way::Back => 1.0,
     };
     let tip = |j: view::skeleton::Joint, side: f32, turn: f32| {
         move |p: Pose| {
@@ -375,9 +389,10 @@ fn push(body: Way) -> Pose {
     }
 }
 
-/// The hop. Both feet off the floor and the knees already coming up under a
-/// trunk leaning into the way it is going -- forward over the knees, or sat
-/// back behind them. Legs keyed as angles: nothing is on the floor to plant.
+/// The launch. Forward, the back leg has just driven off and is straight
+/// behind, the front knee coming up, the trunk going out over it and the arms
+/// swinging forward and up. Backward, the hop back, sitting into it. Legs
+/// keyed as angles: nothing is on the floor to plant.
 fn off(body: Way) -> Pose {
     match body {
         Way::Back => Pose::rest()
@@ -397,53 +412,89 @@ fn off(body: Way) -> Pose {
             .toe_l(24.0)
             .toe_r(26.0),
         _ => Pose::rest()
-            .hips(0.0, -0.14, 0.06)
-            .root(26.0, 0.0, -4.0)
-            .spine(18.0, 0.0, 3.0)
-            .chest(12.0, 0.0, 4.0)
-            .head(-12.0, 0.0, 1.0)
-            .shoulder_l(52.0, 18.0, 0.0)
-            .elbow_l(44.0)
-            .shoulder_r(48.0, 16.0, 0.0)
-            .elbow_r(42.0)
-            .hip_l(56.0, 8.0, 0.0)
-            .knee_l(74.0)
-            .hip_r(24.0, 6.0, 0.0)
-            .knee_r(62.0)
+            .hips(0.0, -0.12, 0.08)
+            .root(28.0, 0.0, -4.0)
+            .spine(14.0, 0.0, 3.0)
+            .chest(8.0, 0.0, 4.0)
+            .head(-24.0, 0.0, 1.0)
+            .shoulder_l(76.0, 16.0, 0.0)
+            .elbow_l(52.0)
+            .shoulder_r(72.0, 14.0, 0.0)
+            .elbow_r(52.0)
+            .hip_l(64.0, 8.0, 0.0)
+            .knee_l(80.0)
+            .hip_r(-4.0, 6.0, 0.0)
+            .knee_r(20.0)
             .toe_l(20.0)
-            .toe_r(28.0),
+            .toe_r(40.0),
     }
 }
 
-/// Tucking. The chin goes down, the back rounds, the knees come up and the
-/// hands go toward the shins: forward, with the hands still reaching a little
-/// for the floor the shoulders are about to roll across; back, with them in
-/// front of the knees.
-fn over(body: Way) -> Pose {
-    let base = Pose::rest()
-        .hips(0.0, -0.28, 0.02)
-        .root(28.0, 0.0, 0.0)
-        .spine(36.0, 0.0, 0.0)
-        .chest(28.0, 0.0, 0.0)
-        .head(32.0, 0.0, 0.0)
-        .hip_l(96.0, 12.0, 0.0)
-        .knee_l(116.0)
-        .hip_r(92.0, 10.0, 0.0)
-        .knee_r(120.0)
-        .toe_l(26.0)
-        .toe_r(26.0);
+/// In the air. Long from the head to the toes: the arms up in front of the
+/// chest -- in front of it, not stretched overhead, because it is the
+/// shoulder that meets the floor, not the hands -- the head up looking where
+/// it is going, the legs trailing off the push with the toes pointed. The whole-body turn
+/// pitches this forward as it flies, so by the contact the hands are down and
+/// the feet up behind. Backward, it is the hop back: sat in the air, knees up,
+/// chin down, hands forward, about to land on the back.
+fn dive(body: Way) -> Pose {
     match body {
-        Way::Back => base
-            .hips(0.0, -0.32, -0.06)
-            .shoulder_l(58.0, 20.0, 0.0)
-            .elbow_l(104.0)
-            .shoulder_r(54.0, 20.0, 0.0)
-            .elbow_r(108.0),
-        _ => base
-            .shoulder_l(76.0, 18.0, 0.0)
-            .elbow_l(70.0)
-            .shoulder_r(80.0, 16.0, 0.0)
-            .elbow_r(66.0),
+        Way::Back => Pose::rest()
+            .hips(0.0, -0.26, -0.06)
+            .root(26.0, 0.0, 0.0)
+            .spine(30.0, 0.0, 0.0)
+            .chest(22.0, 0.0, 0.0)
+            .head(26.0, 0.0, 0.0)
+            .shoulder_l(62.0, 20.0, 0.0)
+            .elbow_l(96.0)
+            .shoulder_r(58.0, 20.0, 0.0)
+            .elbow_r(100.0)
+            .hip_l(92.0, 12.0, 0.0)
+            .knee_l(112.0)
+            .hip_r(88.0, 10.0, 0.0)
+            .knee_r(118.0)
+            .toe_l(26.0)
+            .toe_r(26.0),
+        _ => Pose::rest()
+            .hips(0.0, -0.08, 0.06)
+            .root(16.0, 0.0, 0.0)
+            .spine(12.0, 0.0, 0.0)
+            .chest(8.0, 0.0, 0.0)
+            .head(-20.0, 0.0, 0.0)
+            .shoulder_l(92.0, 18.0, 0.0)
+            .elbow_l(64.0)
+            .shoulder_r(96.0, 16.0, 0.0)
+            .elbow_r(60.0)
+            .hip_l(4.0, 6.0, 0.0)
+            .knee_l(28.0)
+            .hip_r(-10.0, 4.0, 0.0)
+            .knee_r(46.0)
+            .toe_l(40.0)
+            .toe_r(42.0),
+    }
+}
+
+/// The floor arrives. The arms fold in, the head tucks under; the back starts to round and the
+/// knees come up. Backward, the back meets it, already most of a ball.
+fn contact(body: Way) -> Pose {
+    match body {
+        Way::Back => ball().hips(0.0, -0.32, -0.04).head(34.0, 0.0, 0.0),
+        _ => Pose::rest()
+            .hips(0.0, -0.18, 0.06)
+            .root(22.0, 0.0, 0.0)
+            .spine(26.0, 0.0, 0.0)
+            .chest(20.0, 0.0, 0.0)
+            .head(30.0, 0.0, 0.0)
+            .shoulder_l(82.0, 20.0, 0.0)
+            .elbow_l(92.0)
+            .shoulder_r(80.0, 18.0, 0.0)
+            .elbow_r(96.0)
+            .hip_l(70.0, 10.0, 0.0)
+            .knee_l(96.0)
+            .hip_r(54.0, 8.0, 0.0)
+            .knee_r(110.0)
+            .toe_l(30.0)
+            .toe_r(30.0),
     }
 }
 
@@ -459,10 +510,10 @@ fn ball() -> Pose {
         .spine(42.0, 0.0, 0.0)
         .chest(36.0, 0.0, 0.0)
         .head(42.0, 0.0, 0.0)
-        .shoulder_l(58.0, 20.0, 0.0)
-        .elbow_l(128.0)
-        .shoulder_r(60.0, 18.0, 0.0)
-        .elbow_r(130.0)
+        .shoulder_l(84.0, 22.0, 0.0)
+        .elbow_l(104.0)
+        .shoulder_r(86.0, 20.0, 0.0)
+        .elbow_r(106.0)
         .hip_l(118.0, 12.0, 0.0)
         .knee_l(146.0)
         .hip_r(118.0, 10.0, 0.0)
@@ -609,7 +660,7 @@ fn shield(pose: Pose) -> Pose {
 fn bulwark(pose: Pose, beat: Beat, _body: Way) -> Pose {
     match beat {
         Beat::Push | Beat::Off => pose.shoulder_l(52.0, -6.0, 0.0).elbow_l(98.0),
-        Beat::Over | Beat::Ball | Beat::Open => shield(pose),
+        Beat::Dive | Beat::Contact | Beat::Ball | Beat::Open => shield(pose),
         // Up behind the shield, deeper than anyone.
         Beat::Catch => shield(pose.hips(0.0, -0.44, 0.0).root(22.0, 0.0, -6.0)),
         Beat::Rise => shield(pose.hips(0.0, -0.30, 0.0)),
@@ -617,17 +668,9 @@ fn bulwark(pose: Pose, beat: Beat, _body: Way) -> Pose {
     }
 }
 
-fn reaver(pose: Pose, beat: Beat, body: Way) -> Pose {
-    // Both blades swept back off the hop, arms behind the body.
-    let swept = |p: Pose| {
-        p.shoulder_l(-16.0, 36.0, 0.0)
-            .elbow_l(30.0)
-            .shoulder_r(-16.0, 36.0, 0.0)
-            .elbow_r(30.0)
-    };
+fn reaver(pose: Pose, beat: Beat, _body: Way) -> Pose {
     match beat {
-        Beat::Push | Beat::Off if body == Way::Forward => swept(pose),
-        // Up light: not so deep, on the balls of the feet, blades out low.
+        // Up light: not so deep, the blades out low either side.
         Beat::Catch => pose
             .hips(0.0, -0.30, 0.0)
             .shoulder_l(-20.0, 46.0, 0.0)

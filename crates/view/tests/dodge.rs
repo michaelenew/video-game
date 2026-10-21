@@ -10,32 +10,41 @@ use sim::Class;
 use sim::class::ALL_CLASSES;
 use sim::state::Action;
 use sim::{Fx, Input, World};
-use view::dodge::{
-    WAYS, Way, clip, first_vulnerable, floor, length, lift, lowest, roll, turned, way,
-};
+use view::dodge::{WAYS, Way, clip, first_vulnerable, length, lift, lowest, roll, turned, way};
 use view::interp::interpolate;
 use view::math::{self, Quat};
-use view::skeleton::{skeleton_for, solve};
+use view::skeleton::{Joint, skeleton_for, solve};
 
 /// The lowest point of the body at a frame of the roll, turned over the way
-/// the renderer turns it, and how far the renderer lifts it to hold it to the
-/// floor (`view::dodge::lift`).
+/// the renderer turns it, and how far the renderer lifts it
+/// (`view::dodge::lift`).
 fn lowest_and_lift(class: Class, w: Way, frame: f32) -> (f32, f32) {
     let skeleton = skeleton_for(class);
     let pose = clip(class, w).at_fractional(frame);
     let skin = solve(&skeleton, &pose);
     let t = turned(class, w, frame);
     let low = lowest(&skin, &skeleton, t.over, t.about);
-    (low, lift(floor(class, frame), low))
+    (low, lift(t.height, t.held, low))
 }
 
-/// The frames, in quarters, while the body is properly over: neither just
-/// starting nor just finishing.
-fn over(class: Class) -> impl Iterator<Item = f32> {
+/// How high the chest is drawn at a frame, lift and all.
+fn chest_height(class: Class, w: Way, frame: f32) -> f32 {
+    let skeleton = skeleton_for(class);
+    let skin = solve(&skeleton, &clip(class, w).at_fractional(frame));
+    let t = turned(class, w, frame);
+    let (centre, _) = skin.box_of(&skeleton, Joint::Chest);
+    let drawn = math::add(t.about, t.over.rotate(math::sub(centre, t.about)));
+    drawn[1] + lowest_and_lift(class, w, frame).1
+}
+
+/// The frames, in quarters, from the shoulder meeting the floor to the body
+/// starting up: the roll proper.
+fn rolling(class: Class) -> impl Iterator<Item = f32> {
     let r = roll(class);
+    let (c, u) = (r.contact() as f32, r.upright() as f32 - 2.0);
     (0..length() as u32 * 4)
         .map(|q| q as f32 / 4.0)
-        .filter(move |&f| (0.15..=0.85).contains(&r.through(f)))
+        .filter(move |&f| f >= c && f <= u)
 }
 
 /// How far round a turn is, nought to a half.
@@ -44,22 +53,51 @@ fn angle(q: Quat) -> f32 {
 }
 
 #[test]
+fn the_dive_is_in_the_air() {
+    // The complaint that made it a dive roll (2026-10-21): the torso cannot go
+    // straight to the floor. Off the push the body leaves the ground, and
+    // until the hands reach it the chest is carried well up -- most of a
+    // standing chest's height to begin with, still clear of the floor by the
+    // contact.
+    for class in ALL_CLASSES {
+        let r = roll(class);
+        let c = r.contact() as f32;
+        for w in WAYS {
+            // Off the floor in the middle of the flight.
+            let (low, up) = lowest_and_lift(class, w, c / 2.0);
+            assert!(
+                low + up > r.hop * 0.6,
+                "{class:?} diving {w:?} is only {:.2} m off the floor mid-flight",
+                low + up
+            );
+            for q in 0..(c as u32 - 1) * 4 {
+                let f = q as f32 / 4.0;
+                let chest = chest_height(class, w, f);
+                // Forward the chest is carried on the dive; backward it sits
+                // down onto the back, a little lower.
+                let floor = if w == Way::Back { 0.5 } else { 0.6 };
+                assert!(
+                    chest > floor,
+                    "{class:?} diving {w:?} has its chest {chest:.2} m up at frame {f}, \
+                     before its hands are down"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn a_rolled_body_keeps_its_back_on_the_floor() {
-    // Drawn, with the lift: never through the floor, and -- rolling rather
-    // than vaulting -- on it while it is over.
+    // Drawn, with the lift: from the contact to the rise it rolls on the
+    // floor, neither through it nor bouncing over it.
     for class in ALL_CLASSES {
         for w in WAYS {
-            for f in over(class) {
+            for f in rolling(class) {
                 let (low, up) = lowest_and_lift(class, w, f);
                 let drawn = low + up;
                 assert!(
-                    drawn > -0.03,
-                    "{class:?} rolling {w:?} is drawn {:.2} m through the floor at frame {f}",
-                    -drawn
-                );
-                assert!(
-                    drawn < 0.03,
-                    "{class:?} rolling {w:?} is drawn {drawn:.2} m off the floor at frame {f}"
+                    drawn.abs() < 0.03,
+                    "{class:?} rolling {w:?} is drawn {drawn:.2} m from the floor at frame {f}"
                 );
             }
         }
@@ -71,11 +109,9 @@ fn a_roll_turns_about_the_middle_of_the_ball() {
     // The lift puts a rolling body on the floor whatever it turns about, so
     // what is left to get wrong is the pivot being somewhere else entirely:
     // then the lift is large and changes fast, and the body bobs as it rolls.
-    // A few centimetres either way is the arc; a third of a metre is a pivot
-    // in the wrong place.
     for class in ALL_CLASSES {
         for w in WAYS {
-            for f in over(class) {
+            for f in rolling(class) {
                 let (_, up) = lowest_and_lift(class, w, f);
                 assert!(
                     up.abs() < 0.32,
@@ -233,7 +269,7 @@ fn a_grounded_dodge_is_drawn_turned_over() {
         assert!(p.grounded, "{class:?} is not standing");
         // Half way through the turn, going forward at a dodge's speed.
         let r = roll(class);
-        let mid = (r.from + r.upright()) / 2;
+        let mid = (0..length()).find(|&f| r.through(f as f32) >= 0.5).unwrap();
         p.action = Action::Dodge {
             left: length() - mid,
         };
@@ -310,7 +346,7 @@ fn a_roll_to_the_side_faces_its_travel_and_turns_back() {
     let last = (length() - 1) as f32;
     for class in ALL_CLASSES {
         let r = roll(class);
-        let mid = (r.from + r.upright()) as f32 / 2.0;
+        let mid = (r.contact() + r.upright()) as f32 / 2.0;
         for (w, sign) in [(Way::Right, -1.0), (Way::Left, 1.0)] {
             let t = turned(class, w, mid);
             assert!(

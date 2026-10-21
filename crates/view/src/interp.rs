@@ -7,7 +7,6 @@
 //! Strictly one-directional: this reads two snapshots and produces something to
 //! draw. Nothing here is ever fed back into the simulation.
 
-use crate::dodge::Floor;
 use crate::fx;
 use crate::math::{Quat, V3};
 use sim::World;
@@ -122,11 +121,13 @@ pub struct PlayerView {
     /// The point the body is turned over about, in character space: the hips
     /// for a flip in the air, the middle of the ball for a roll on the floor.
     pub roll_about: V3,
-    /// How the turned body is held to the floor: on it through a roll, free
-    /// through a flip in the air. The renderer
-    /// raises the drawn body by `dodge::lift` of it, measured off the pose it
-    /// is drawing.
-    pub roll_floor: crate::dodge::Floor,
+    /// Where a rolling body's lowest point is meant to be, metres above the
+    /// floor, and how firmly it is held there (`dodge::Turn`): up on a dive's
+    /// arc, on the floor through the roll, nought held through a flip in the
+    /// air. The renderer raises the drawn body by `dodge::lift` of them,
+    /// measured off the pose it is drawing.
+    pub roll_height: f32,
+    pub roll_held: f32,
     /// How far the drawn body is turned about the vertical through its feet
     /// for a roll, in radians, the engine's way round: a roll to the side
     /// turns to face its travel, rolls forward and turns back
@@ -192,13 +193,19 @@ pub struct Hold {
 /// eased in and out, so it starts and ends upright. `travel` is the body's own
 /// (`PlayerView::travel`), which is what picks a roll's direction -- the same
 /// reading that picks its clip (`dodge::way`).
-pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor, f32) {
+pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> Rolled {
     use sim::moves::reaver as r;
     use std::f32::consts::TAU;
     // About the hips: a flip in the air goes over rather than cartwheeling
     // off its own toes.
     const HIPS: V3 = [0.0, 0.95, 0.0];
-    let upright = (Quat::IDENTITY, HIPS, Floor::Free, 0.0);
+    let upright = Rolled {
+        over: Quat::IDENTITY,
+        about: HIPS,
+        height: 0.0,
+        held: 0.0,
+        yaw: 0.0,
+    };
     if let Action::Dodge { left } = p.action {
         // On the floor, and travelling under its own legs: the Reaver's dash
         // to her shadow is driven along its own line, up onto a dais if it
@@ -208,7 +215,13 @@ pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor, f3
         }
         let frame = crate::dodge::length().saturating_sub(left) as f32;
         let t = crate::dodge::turned(p.class, crate::dodge::way(travel), frame);
-        return (t.over, t.about, crate::dodge::floor(p.class, frame), t.yaw);
+        return Rolled {
+            over: t.over,
+            about: t.about,
+            height: t.height,
+            held: t.held,
+            yaw: t.yaw,
+        };
     }
     if p.class != sim::Class::ShadowReaver {
         return upright;
@@ -239,7 +252,20 @@ pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> (Quat, V3, Floor, f3
         flip = ease(through(r::TUMBLE, &|m| m.startup + m.active + m.recovery / 2).unwrap_or(0.0))
             * TAU;
     }
-    (Quat::from_x(flip), HIPS, Floor::Free, 0.0)
+    Rolled {
+        over: Quat::from_x(flip),
+        ..upright
+    }
+}
+
+/// A body's whole-body turn on one snapshot. See [`PlayerView::roll`].
+#[derive(Clone, Copy, Debug)]
+pub struct Rolled {
+    pub over: Quat,
+    pub about: V3,
+    pub height: f32,
+    pub held: f32,
+    pub yaw: f32,
 }
 
 /// The turn between two snapshots' turns, the short way round. Both are a
@@ -391,16 +417,8 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     // The turn of a roll, blended like everything else continuous: a whole
     // turn in a dozen frames is thirty degrees a tick, which steps visibly on
     // any screen faster than the simulation. The pivot is the newer one's.
-    let (roll, roll_about, roll_floor, roll_yaw) = {
-        let (was, _, _, yaw_was) = roll_of(p, travel);
-        let (now, about, floor, yaw) = roll_of(c, travel);
-        (
-            roll_between(was, now, a),
-            about,
-            floor,
-            lerp(yaw_was, yaw, a),
-        )
-    };
+    let (was, now) = (roll_of(p, travel), roll_of(c, travel));
+    let roll = roll_between(was.over, now.over, a);
 
     PlayerView {
         pos,
@@ -432,9 +450,10 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         },
         shudder: shudder_of(c),
         roll,
-        roll_about,
-        roll_floor,
-        roll_yaw,
+        roll_about: now.about,
+        roll_height: lerp(was.height, now.height, a),
+        roll_held: lerp(was.held, now.held, a),
+        roll_yaw: lerp(was.yaw, now.yaw, a),
         ledge: hold_of(p, c, facing),
         wall: wall_of(c, pos, facing),
     }
