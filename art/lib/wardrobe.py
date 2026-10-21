@@ -215,7 +215,7 @@ def skin_and_gloves(body, r, gloved_to=None, bare_head=True):
 
 
 def hair(body, r, name="hair", gap=0.012, front=0.035, nape=-0.06, side=0.0, part=0.0,
-         grooves=14, depth=0.0035, material="hair", faces=2600, close=0.02):
+         grooves=9, depth=0.005, material="hair", faces=2600, close=0.02, lift=0.012):
     """Hair as a painted figure's is: one sculpted mass over the skull, not
     strands. The head inflated by ``gap``, cut back from the face along a
     hairline ``front`` above the brows, down to ``nape`` at the back (metres
@@ -233,22 +233,34 @@ def hair(body, r, name="hair", gap=0.012, front=0.035, nape=-0.06, side=0.0, par
         back = (rel[:, 2] < -0.03) & (rel[:, 1] > nape)
         return on_head & ((above_brow & (rel[:, 2] < 0.10)) | (behind & (rel[:, 1] > -0.02)) | back)
 
-    def folds(o):
+    def comb(o, grooves=grooves, depth=depth):
         co = np.zeros(len(o.data.vertices) * 3)
         o.data.vertices.foreach_get("co", co)
         pp = g.b2g(co.reshape(-1, 3))
         rel = pp - head_c
-        # Combed back from a parting: grooves run along the direction away
-        # from the hairline's middle, their angle around the skull.
-        ang = np.arctan2(rel[:, 0] - part, rel[:, 1] + 0.02)
-        groove = np.sin(ang * grooves) ** 8
         nrm = rel / np.maximum(np.linalg.norm(rel, axis=1, keepdims=True), 1e-6)
+        # Volume: the crown and the front lifted off the skull, as hair
+        # stands rather than lies.
+        crown = np.clip((pp[:, 1] - (e[1] + 0.02)) / 0.08, 0, 1)
+        pp = pp + nrm * (lift * crown ** 1.5)[:, None]
+        # Locks: grooves running back from a parting, each its own width and
+        # depth and wandering a little, so they read as hair a painter laid
+        # in rather than as rows.
+        ang = np.arctan2(rel[:, 0] - part, rel[:, 1] + 0.02)
+        wander = 0.35 * np.sin(rel[:, 2] * 41.0 + rel[:, 0] * 17.0) + 0.2 * np.sin(rel[:, 1] * 63.0)
+        phase = ang * grooves + wander
+        lock = np.floor(phase / (2 * np.pi))
+        size = 0.55 + 0.45 * ((np.sin(lock * 12.9898) * 43758.5453) % 1.0)
+        groove = (np.abs(np.sin(phase / 2)) ** 6) * size
         pp = pp - nrm * groove[:, None] * depth
         o.data.vertices.foreach_set("co", g.g2b(pp).ravel())
         o.data.update()
 
-    return piece(body, name, gap, keep, smooth=6, close=close, material=material, thick=0.004,
-                 faces=faces, voxel=0.004, trim=0.0, folds=folds)
+    ob = piece(body, name, gap, keep, smooth=6, close=close, material=material, thick=0.004,
+               faces=faces, voxel=0.004, trim=0.0, folds=comb)
+    # The game piece gets the volume too (not the locks: those are baked).
+    comb(ob, depth=0.0)
+    return ob
 
 
 def hide_covered(body, gone):

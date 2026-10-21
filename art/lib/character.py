@@ -112,7 +112,10 @@ def finish(spec, bo, br, size):
         if name == "team":
             entry["double"] = True
         materials[name] = entry
-        # One material a piece for the export.
+        # One material a piece for the export, named exactly: the game finds
+        # the team piece by it, so a placeholder of the same name moves over.
+        if name in bpy.data.materials:
+            bpy.data.materials[name].name = name + "~placeholder"
         m = bpy.data.materials.new(name)
         ob.data.materials.clear()
         ob.data.materials.append(m)

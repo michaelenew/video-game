@@ -354,13 +354,17 @@ reasoning is [`docs/design/sound.md`](docs/design/sound.md).
 
 ## A character is a script, not a file
 
-The Shadow Reaver is drawn by a skinned model, `crates/game/assets/reaver.glb`,
-and **that file is built, never edited**: `art/reaver/build.py`, run under
-Blender as a Python module (`art/blender.sh`, `./scripts/setup-tools.sh art`),
-from MakeHuman's CC0 body. Its joints are the game's twenty-one
+Every class but the Bulwark is drawn by a skinned model,
+`crates/game/assets/<class>.glb` (`game::models`), and **that file is built,
+never edited**: `art/<class>/build.py`, run under Blender as a Python module
+(`art/blender.sh`, `./scripts/setup-tools.sh art`), from MakeHuman's CC0
+body. A class is a spec -- a body recipe, an outfit, a palette -- on one
+builder (`art/lib/character.py`), and its clothes are cut with one set of
+tools (`art/lib/wardrobe.py`); a fix to either is true of every class. The
+joints are the game's twenty-one
 (`view::skeleton`), named as `Joint::name` names them and set each frame from
 the skin `apply_poses` solves, so a change to the skeleton is a rebuild there.
-Judge her lit, in the game (`SHOT_PORTRAIT`). The reasoning, what failed and
+Judge a character lit, in the game (`SHOT_PORTRAIT`). The reasoning, what failed and
 what is left is [exploration/0024](docs/design/exploration/0024_a_character_done_properly.md);
 the commands are [`art/README.md`](art/README.md).
 

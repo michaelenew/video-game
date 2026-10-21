@@ -66,7 +66,7 @@ def neck(body, r):
 
 def head_hair(body, r):
     # Short, swept back from a high forehead, close at the sides.
-    return [hair(body, r, gap=0.006, front=0.05, nape=-0.07, side=-0.055, grooves=18, depth=0.003,
+    return [hair(body, r, gap=0.006, front=0.05, nape=-0.07, side=-0.075, grooves=10, depth=0.005,
                  faces=2200)]
 
 

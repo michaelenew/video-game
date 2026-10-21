@@ -8,10 +8,26 @@ not need any of it to build: it embeds the file.
 ```
 ./scripts/setup-tools.sh art                  # Blender 5.2 and MakeHuman's CC0 data, once
 art/blender.sh art/reaver/build.py            # the Shadow Reaver -> crates/game/assets/reaver.glb
-art/blender.sh art/reaver/build.py --look target/art/look.png   # and a turnaround of her
+art/blender.sh art/champion/build.py          # the Champion -> champion.glb
+art/blender.sh art/elementalist/build.py      # the Elementalist -> elementalist.glb
+art/blender.sh art/blood_mage/build.py        # the Blood mage -> blood_mage.glb
+art/blender.sh art/dual_mage/build.py         # the Dual mage -> dual_mage.glb
+art/blender.sh art/reaver/build.py --look target/art/look.png   # and a turnaround
 art/blender.sh art/reaver/build.py --paint    # only repaint and export the last dressed model
+art/blender.sh art/reaver/build.py --only hood,eyes --no-export --look x.png   # try a few pieces
 art/blender.sh art/reaver/body_check.py target/art/body.png run_forward 6   # the bare body, posed
 ```
+
+**A class is a spec on one builder.** `lib/character.py` is the five stages
+below; each `art/<class>/` is three files: `recipe.py` (the body, as
+MakeHuman's targets), `outfit.py` (what it wears, as calls on
+`lib/wardrobe.py` and pieces of its own) and `build.py` (the palette, the
+glow, which materials are metal, and the painter's knobs where they differ).
+`lib/wardrobe.py` is the tailor: a garment cut from the inflated body, a
+strap, a band, a cape, a collar, boots, sleeves, a jerkin, coat tails, hair,
+eyes, the body's skin and glove masks and the skin nothing sees. The
+material the exporter names `team` is the one the game dyes a seat's
+colour.
 
 `build.py` needs the game's skeleton, which the animation exporter writes:
 `cargo run -p anim --bin export -- target/art/anim.json`. A full build is
@@ -50,3 +66,13 @@ read.
 - **Everything is CC0 or ours.** MakeHuman's mesh, targets and weights are
   CC0 (pinned to a commit in `scripts/setup-tools.sh`); nothing else is
   taken from anywhere.
+
+## Hair
+
+Painted figures have hair as a *mass*, not strands, and so do these:
+`wardrobe.hair` is the head inflated a few millimetres, cut back from the
+face along a hairline and down to a nape, lifted at the crown, and combed --
+on the high piece only -- with grooves of uneven width running back from a
+parting. The grooves reach the game as the normal map and the painter's
+curvature, so the locks catch the light without costing a triangle. A bun or
+a knot is `wardrobe.stone` in the hair's material, hung on the head.
