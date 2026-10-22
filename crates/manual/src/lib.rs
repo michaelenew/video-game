@@ -1057,6 +1057,10 @@ pub const SECTIONS: &[Section] = &[
                 "SHOT_PORTRAIT=seat,angle,distance,height",
                 "Take the camera off the fight and put it distance metres from that seat's fighter (0 is player one), angle degrees round from straight in front of them, looking at height metres above their feet -- how a character is looked at as a piece of art: SHOT_PORTRAIT=0,25,2.4,1.0 is the Shadow Reaver head to foot, 0,20,0.9,1.62 her face. Pair it with DEMO=0 and SHOT_FRAME, and --look brushed for the painted picture.",
             ),
+            e(
+                "SHOT_BEAST=angle,distance,height",
+                "The same round the hunt's creature: the camera distance metres from it, angle degrees round from the way it faces, looking at height metres above its feet. With --painted-cast it shows a creature's brushwork; SHOT_SPIN turns it.",
+            ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(

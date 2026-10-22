@@ -42,6 +42,21 @@ use crate::species::{Look, Paint};
 #[derive(Component)]
 pub struct Limb(pub usize, pub usize);
 
+/// **A part's brushwork** (`--painted-cast`, exploration 0025): the strokes
+/// over one drawable part, a child of its [`Limb`] with the part's scale
+/// taken back out. Which strokes depend on the species and the part, so
+/// they are swapped with them, as the form is.
+#[derive(Component)]
+pub struct Strokes(pub usize);
+
+/// Every species' parts' strokes, placed once at setup: by species, then
+/// part, with the size they were placed at. Empty without `--painted-cast`.
+#[derive(Resource, Default)]
+pub struct PartStrokes(Vec<Vec<Option<Placed>>>);
+
+/// One part's strokes, and the size they were placed at.
+type Placed = (Handle<Mesh>, Vec3);
+
 /// One drawable joint filler: which creature slot, which bone.
 #[derive(Component)]
 pub struct Knuckle(pub usize, pub usize);
@@ -148,6 +163,7 @@ pub fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut brushes: ResMut<Assets<crate::brushwork::Brushwork>>,
 ) {
     let mut skins = vec![None; kinds::COUNT];
     for sp in kinds::all() {
@@ -175,26 +191,74 @@ pub fn setup(
     // their own bone's frame, so one mesh covers all of them; rounded rather
     // than a cube so a flank reads as a flank and not a crate, with the box
     // the simulation collides against unchanged (`docs/design/forms.md`).
-    let cube = meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.22, 10, None));
+    let shapes = [
+        crate::shapes::soft_box(Vec3::ONE, 0.22, 10, None),
+        crate::shapes::soft_box(Vec3::ONE, 0.5, 10, None),
+        crate::shapes::soft_box(Vec3::ONE, 0.7, 12, None),
+    ];
+    let cube = meshes.add(shapes[0].clone());
     // Three forms a part can take, by what it is: a plate (armour, the body)
     // keeps most of its edge, a limb is rounder, a weak point is soft.
     let forms = Forms {
         plate: cube.clone(),
-        limb: meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.5, 10, None)),
-        weak: meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.7, 12, None)),
+        limb: meshes.add(shapes[1].clone()),
+        weak: meshes.add(shapes[2].clone()),
     };
+    // **The painted creatures** (`--painted-cast`): each part's strokes,
+    // placed over its own form at its own size, so a stroke is the same
+    // size in metres on every part. Any species -- a bred one too -- is
+    // painted from its table, as it is drawn from it.
+    let mut strokes = PartStrokes::default();
+    if crate::brushwork::on() {
+        strokes.0 = vec![Vec::new(); kinds::COUNT];
+        for sp in kinds::all() {
+            strokes.0[sp.id.0 as usize] = (0..sp.parts.len())
+                .map(|index| {
+                    let form = if sp.is_weak_point(index) {
+                        &shapes[2]
+                    } else if sp.parts[index].shape.breakable {
+                        &shapes[1]
+                    } else {
+                        &shapes[0]
+                    };
+                    let shape = sp.shape(index);
+                    let size = fx3(shape.max.sub(shape.min)).max(Vec3::splat(0.01));
+                    let salt = (sp.id.0 as u32) * 9_973 + index as u32 * 131;
+                    crate::brushwork::place_rigid(
+                        form,
+                        size,
+                        crate::brushwork::creature_broad(size),
+                        salt,
+                    )
+                    .map(|m| (meshes.add(m), size))
+                })
+                .collect();
+        }
+    }
+    let brush = brushes.add(crate::brushwork::creature_brush());
     commands.insert_resource(forms);
     let ball = meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap());
     let (parts, bones) = most();
     for slot in 0..BODIES {
         for index in 0..parts {
-            commands.spawn((
+            let mut limb = commands.spawn((
                 Mesh3d(cube.clone()),
                 MeshMaterial3d(any.clone()),
                 Transform::default(),
                 Visibility::Hidden,
                 Limb(slot, index),
             ));
+            if !strokes.0.is_empty() {
+                limb.with_child((
+                    Mesh3d::default(),
+                    MeshMaterial3d(brush.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    Strokes(index),
+                    NotShadowCaster,
+                    bevy::render::view::NoFrustumCulling,
+                ));
+            }
         }
         for bone in 0..bones {
             commands.spawn((
@@ -207,6 +271,66 @@ pub fn setup(
         }
     }
     commands.insert_resource(hide);
+    commands.insert_resource(strokes);
+}
+
+/// **A part's brushwork follows it** (`--painted-cast`): the strokes the
+/// part's species and index call for, the part's scale taken back out, and
+/// drawn only where the part is drawn whole -- a stroke reads its colour
+/// from the picture, and over the Veilstalker's shimmer it would paint the
+/// floor through it.
+pub fn paint_parts(
+    sim: Res<crate::Sim>,
+    placed: Res<PartStrokes>,
+    limbs: Query<(&Limb, &Visibility), Without<Strokes>>,
+    mut strokes: Query<
+        (
+            &Strokes,
+            &ChildOf,
+            &mut Mesh3d,
+            &mut Transform,
+            &mut Visibility,
+        ),
+        Without<Limb>,
+    >,
+) {
+    if placed.0.is_empty() {
+        return;
+    }
+    for (of, parent, mut mesh, mut transform, mut visible) in strokes.iter_mut() {
+        let hidden = || Visibility::Hidden;
+        let Ok((limb, seen)) = limbs.get(parent.parent()) else {
+            *visible = hidden();
+            continue;
+        };
+        let Some((beast, strength)) = body_in(&sim.cur, limb.0) else {
+            *visible = hidden();
+            continue;
+        };
+        let whole = match strength {
+            Some(s) => s.raw() >= sim::Fx::ONE.raw(),
+            None => sim.cur.shown(limb.0, of.0).raw() >= sim::Fx::ONE.raw(),
+        };
+        let Some(Some((made, size))) = placed
+            .0
+            .get(beast.species.0 as usize)
+            .and_then(|parts| parts.get(of.0))
+        else {
+            *visible = hidden();
+            continue;
+        };
+        if *seen == Visibility::Hidden || !whole {
+            *visible = hidden();
+            continue;
+        }
+        if mesh.0 != *made {
+            mesh.0 = made.clone();
+        }
+        // The part's transform scales the unit form to the part; the strokes
+        // were placed at the part's size, so they take that back out.
+        *transform = Transform::from_scale(Vec3::ONE / *size);
+        *visible = Visibility::Inherited;
+    }
 }
 
 pub fn setup_signs(

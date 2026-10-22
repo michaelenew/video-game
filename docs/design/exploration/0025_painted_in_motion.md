@@ -314,3 +314,26 @@ bottom and sides, a coat's hem, a cuff -- before the cloth is draped,
 crumpled and squeezed. Marked there as a vertex attribute, a stroke would
 know it is on a free hem without guessing from the mesh or the depth, and
 could run a little past it every time. That is a rebuild of every model.
+
+## 13. The creatures, painted (2026-10-22)
+
+The owner: *"Do the creatures in this style too."* A creature is not a
+model: it is drawn from its species table, a box per part placed by the
+simulation's own rig (`game::beast`), which is what lets a bred creature
+be drawn at all. So the brushwork is put on that, not on a hand-built body:
+every part of every species gets strokes placed over its own form at its
+own size when the game starts (`brushwork::place_rigid`), carried whole by
+the part rather than skinned, in a brush that broadens with the part --
+the cast's 3.4 cm on a part half a metre long, up to five times that on a
+big one (`creature_broad`), which is what keeps a forty-metre Siegeshell to
+a few thousand strokes. Any species, bred ones too, is painted from its
+table. Behind `--painted-cast`; `SHOT_BEAST` films one.
+
+**What it shows on the Ridgeback**: the strokes ride the parts and read as
+brushwork on the near flank -- and the animal is still a stack of grey
+boxes. The brushwork was never most of the characters' look: their bodies,
+their clothes and their painted colour are, and a creature has a box and
+one flat colour per kind of part. What would bring them into the same
+style, still generated from the table so breeding keeps working, is §14 if
+the owner wants it: one smooth skinned body grown over the skeleton from
+the parts, and a hide painted onto it by rule.

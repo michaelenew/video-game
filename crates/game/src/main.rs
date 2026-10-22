@@ -395,7 +395,7 @@ fn main() {
                     claimed::drape,
                     place_auras,
                 ),
-                beast::place,
+                (beast::place, beast::paint_parts).chain(),
                 drive_camera,
                 fade_own_body,
                 hud::toggle_class_buttons,
@@ -8261,12 +8261,38 @@ fn drive_camera(
             // Nobody's own body is faded for being near the fight's eye.
             inside.0 = 0.0;
         }
+        // `SHOT_BEAST`: the same, round the first creature -- how a creature
+        // is looked at as a piece of art.
+        if let Some([angle, distance, height]) = shot_beast() {
+            if let Some(beast) = sim.cur.monsters[0] {
+                let feet = fx3(beast.pos);
+                let at = feet + Vec3::Y * height;
+                let yaw = beast.yaw.to_f32_for_render();
+                let spin =
+                    platform::env_parsed::<f32>("SHOT_SPIN").unwrap_or(0.0) * time.elapsed_secs();
+                let turn = Quat::from_rotation_y(yaw + (angle + spin).to_radians());
+                tf.translation = at + turn * Vec3::new(0.0, distance * 0.25, distance);
+                tf.look_at(at, Vec3::Y);
+                inside.0 = 0.0;
+            }
+        }
         if settings.is_changed() {
             if let Projection::Perspective(p) = projection.as_mut() {
                 p.fov = settings.fov_radians();
             }
         }
     }
+}
+
+/// `SHOT_BEAST=angle,distance,height`: the portrait camera round the first
+/// creature, `angle` degrees round from its facing.
+fn shot_beast() -> Option<[f32; 3]> {
+    let spec = platform::env("SHOT_BEAST")?;
+    let v: Vec<f32> = spec
+        .split(',')
+        .filter_map(|v| v.trim().parse().ok())
+        .collect();
+    (v.len() == 3).then(|| [v[0], v[1], v[2]])
 }
 
 /// `SHOT_SPIN=<degrees a second>` turns that camera round them as the run goes.

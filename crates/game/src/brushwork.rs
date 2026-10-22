@@ -237,6 +237,25 @@ fn paint(
     }
 }
 
+/// The material a creature's strokes are drawn in (`beast`): the cast's.
+pub fn creature_brush() -> Brushwork {
+    Brushwork {
+        look: look_for(&StandardMaterial::default(), "creature"),
+    }
+}
+
+/// How wide a creature part's brush is (metres): the cast's on a part a
+/// body's size, broader on a bigger one -- a painter's big brush on a big
+/// mass, and what keeps a forty-metre Siegeshell to a few thousand strokes.
+pub fn creature_broad(size: Vec3) -> f32 {
+    BROAD * (size.max_element() / CREATURE_PART).clamp(1.0, CREATURE_BROADEST)
+}
+
+/// A creature part this long (metres) is painted in the cast's brush; one
+/// longer, in one as much broader, up to `CREATURE_BROADEST` times.
+const CREATURE_PART: f32 = 0.5;
+const CREATURE_BROADEST: f32 = 5.0;
+
 /// How a piece's strokes simplify the picture: the light warmed, the
 /// shade cooled, values gathered into bands.
 fn look_for(_base: &StandardMaterial, _name: &str) -> BrushLook {
@@ -341,6 +360,31 @@ const WISPS: f32 = 0.12;
 /// over the surface), each at a point of a triangle with that point's
 /// normal, texture place and the joints of its nearest corner.
 fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
+    place_with(mesh, name, model, BROAD)
+}
+
+/// The strokes over a rigid piece -- a creature's part (`beast`), carried
+/// whole by its transform rather than skinned: placed over `mesh` grown to
+/// `size`, in a brush `broad` metres wide, and drawn by an entity whose
+/// transform has the part's scale taken back out, so a stroke is the same
+/// size on every part however the part is stretched.
+pub fn place_rigid(mesh: &Mesh, size: Vec3, broad: f32, salt: u32) -> Option<Mesh> {
+    let mut grown = mesh.clone();
+    if let Some(VertexAttributeValues::Float32x3(p)) = grown.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for q in p.iter_mut() {
+            *q = (Vec3::from(*q) * size).to_array();
+        }
+    }
+    if let Some(VertexAttributeValues::Float32x3(n)) = grown.attribute_mut(Mesh::ATTRIBUTE_NORMAL) {
+        for q in n.iter_mut() {
+            *q = (Vec3::from(*q) / size).normalize_or(Vec3::Y).to_array();
+        }
+    }
+    place_with(&grown, "creature", salt, broad)
+}
+
+fn place_with(mesh: &Mesh, name: &str, model: u32, broad: f32) -> Option<Mesh> {
     let pos = match mesh.attribute(Mesh::ATTRIBUTE_POSITION)? {
         VertexAttributeValues::Float32x3(v) => v,
         _ => return None,
@@ -349,16 +393,23 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         VertexAttributeValues::Float32x3(v) => v,
         _ => return None,
     };
-    let uv = match mesh.attribute(Mesh::ATTRIBUTE_UV_0)? {
-        VertexAttributeValues::Float32x2(v) => v,
+    // A rigid piece has no texture or joints to carry: its strokes take
+    // nothing from them (the colour is the picture's), so they are made up.
+    let no_uv = vec![[0.0f32; 2]; pos.len()];
+    let uv = match mesh.attribute(Mesh::ATTRIBUTE_UV_0) {
+        Some(VertexAttributeValues::Float32x2(v)) => v,
+        _ => &no_uv,
+    };
+    let skinned = mesh.attribute(Mesh::ATTRIBUTE_JOINT_INDEX).is_some();
+    let joints: Vec<[u16; 4]> = match mesh.attribute(Mesh::ATTRIBUTE_JOINT_INDEX) {
+        Some(VertexAttributeValues::Uint16x4(v)) => v.clone(),
+        None => vec![[0; 4]; pos.len()],
         _ => return None,
     };
-    let joints: Vec<[u16; 4]> = match mesh.attribute(Mesh::ATTRIBUTE_JOINT_INDEX)? {
-        VertexAttributeValues::Uint16x4(v) => v.clone(),
-        _ => return None,
-    };
-    let weights = match mesh.attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT)? {
-        VertexAttributeValues::Float32x4(v) => v,
+    let no_weights = vec![[1.0f32, 0.0, 0.0, 0.0]; pos.len()];
+    let weights = match mesh.attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT) {
+        Some(VertexAttributeValues::Float32x4(v)) => v,
+        None => &no_weights,
         _ => return None,
     };
     let tris: Vec<[usize; 3]> = match mesh.indices()? {
@@ -425,7 +476,7 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         .map(|t| (v3(t[1]) - v3(t[0])).cross(v3(t[2]) - v3(t[0])).length() * 0.5)
         .collect();
     let total: f32 = area.iter().sum();
-    let mean_stroke = BROAD * BROAD * 3.4;
+    let mean_stroke = broad * broad * 3.4;
     let count = ((total * COVER / mean_stroke) as usize).clamp(16, 30_000);
     let mut running = Vec::with_capacity(area.len());
     let mut acc = 0.0;
@@ -512,7 +563,7 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         // Two sizes of brush: the masses, and smaller strokes laid over them.
         let detail = r(6) < 0.3;
         let free = 1.0 + (r(7) - 0.5) * LOOSE * 1.4;
-        let mut width = BROAD * size * free * if detail { 0.7 } else { 1.0 };
+        let mut width = broad * size * free * if detail { 0.7 } else { 1.0 };
         let mut length = width * (3.0 + 0.8 * r(8));
         // Near an open edge -- a hem, a cuff, the hood's mouth -- the stroke
         // lies along the edge and is no wider than the cloth left beside it,
@@ -558,7 +609,7 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
                     way = out;
                     kind = 2.0;
                     hug = 0.0;
-                    width = BROAD * size.min(1.3) * (1.0 + 0.4 * r(11));
+                    width = broad * size.min(1.3) * (1.0 + 0.4 * r(11));
                     length = width * (1.8 + 1.0 * r(12));
                 }
             }
@@ -579,23 +630,28 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
     if idx.is_empty() {
         return None;
     }
+    let made = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p_out)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, n_out)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv_out)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, c_out)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, way_out)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, brush_out)
+    .with_inserted_indices(Indices::U32(idx));
+    // A rigid piece's strokes carry no joints: the shader takes its place
+    // from the entity's transform instead of a skin.
+    if !skinned {
+        return Some(made);
+    }
     Some(
-        Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::default(),
-        )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, p_out)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, n_out)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv_out)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, c_out)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, way_out)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, brush_out)
-        .with_inserted_attribute(
+        made.with_inserted_attribute(
             Mesh::ATTRIBUTE_JOINT_INDEX,
             VertexAttributeValues::Uint16x4(j_out),
         )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, w_out)
-        .with_inserted_indices(Indices::U32(idx)),
+        .with_inserted_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, w_out),
     )
 }
 
