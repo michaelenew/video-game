@@ -74,6 +74,16 @@ def gather(objects):
         me.update()
         W = g.weights_of(ob)
         n = len(me.vertices)
+        # How far each vertex dissolves into paint (the ``paint`` group): what
+        # the painted cast reads to let its strokes leave the surface
+        # (``crates/game/src/brushwork.rs``). Most pieces have none.
+        paint = np.zeros(n)
+        grp = ob.vertex_groups.get("paint")
+        if grp is not None:
+            for v in ob.data.vertices:
+                for ge in v.groups:
+                    if ge.group == grp.index:
+                        paint[v.index] = ge.weight
         co = np.zeros(n * 3)
         me.vertices.foreach_get("co", co)
         # Where the object stands, too: a piece placed by its object rather
@@ -112,16 +122,17 @@ def gather(objects):
             uniq, first, inverse = np.unique(key, axis=0, return_index=True, return_inverse=True)
             c = corner[first]
             vi = lv[c]
-            d = out.setdefault(mname, {"pos": [], "nrm": [], "uv": [], "w": [], "idx": [], "base": 0})
+            d = out.setdefault(mname, {"pos": [], "nrm": [], "uv": [], "w": [], "paint": [], "idx": [], "base": 0})
             d["pos"].append(co[vi])
             d["nrm"].append(ln[c])
             d["uv"].append(uv[c])
             d["w"].append(W[vi])
+            d["paint"].append(paint[vi])
             d["idx"].append(inverse.ravel() + d["base"])
             d["base"] += len(uniq)
         ev.to_mesh_clear()
     for d in out.values():
-        for k in ("pos", "nrm", "uv", "w", "idx"):
+        for k in ("pos", "nrm", "uv", "w", "paint", "idx"):
             d[k] = np.concatenate(d[k])
     return out
 
@@ -211,6 +222,12 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
             uv_acc = acc(uv.astype(np.float32), FLOAT, "VEC2", 34962)
         idx = d["idx"]
         small = idx.max() < 65536
+        extra = {}
+        if d["paint"].max() > 0:
+            # The paint marker, as a second set of texture coordinates: only
+            # where some vertex has one, so every other model is unchanged.
+            mark = np.stack([d["paint"], np.zeros(len(d["paint"]))], 1).astype(np.float32)
+            extra["TEXCOORD_1"] = acc(mark, FLOAT, "VEC2", 34962)
         primitives.append({
             "attributes": {
                 "POSITION": acc(d["pos"].astype(np.float32), FLOAT, "VEC3", 34962, True),
@@ -220,6 +237,7 @@ def write(path, prims, materials, images, bind_origin, bind_rot, name="character
                 "TEXCOORD_0": uv_acc,
                 "JOINTS_0": acc(joints, U8, "VEC4", 34962),
                 "WEIGHTS_0": acc(qw.astype(np.uint8), U8, "VEC4", 34962, normalized=True),
+                **extra,
             },
             "indices": acc(idx.astype(np.uint16 if small else np.uint32), U16 if small else U32,
                            "SCALAR", 34963),

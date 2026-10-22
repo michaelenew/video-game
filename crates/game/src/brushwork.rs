@@ -320,6 +320,12 @@ fn focus(joint: usize) -> (f32, f32) {
 /// from fabric to flame (the owner, 2026-10-22).
 const WISP_REACH: f32 = 0.03;
 
+/// On what dissolves into paint (a legendary, exploration 0026): how many
+/// strokes it gets on top of its share of the cloth's, as a multiple, and
+/// how many of them leave the surface.
+const DISSOLVE_DENSE: f32 = 6.0;
+const DISSOLVE: f32 = 0.65;
+
 /// The rim of a thickened sheet (`openness`): an edge no longer than this
 /// (metres; the panels are 4 mm thick, the cloth's own edges 2 cm and up)
 /// whose two ends face apart by more than about seventy degrees.
@@ -405,6 +411,13 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         .collect();
 
     let (open, along_open) = openness(pos, nrm, &tris);
+    // How far each vertex dissolves into paint: the ``paint`` group the
+    // art build exports as a second set of texture coordinates (`art/lib/
+    // glb.py`). Only a legendary has any; every other piece has none.
+    let paint: Option<Vec<f32>> = match mesh.attribute(Mesh::ATTRIBUTE_UV_1) {
+        Some(VertexAttributeValues::Float32x2(m)) => Some(m.iter().map(|q| q[0]).collect()),
+        _ => None,
+    };
 
     let area: Vec<f32> = tris
         .iter()
@@ -419,6 +432,21 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         acc += a;
         running.push(acc);
     }
+    // What dissolves gets strokes on top of its share: a blade is too small
+    // a surface for the cloth's spacing to say anything on it.
+    let dissolves = |t: &[usize; 3]| {
+        paint
+            .as_ref()
+            .map_or(0.0, |m| (m[t[0]] + m[t[1]] + m[t[2]]) / 3.0)
+    };
+    let mut running_paint = Vec::with_capacity(area.len());
+    let mut acc = 0.0;
+    for (t, a) in tris.iter().zip(&area) {
+        acc += if dissolves(t) > 0.3 { *a } else { 0.0 };
+        running_paint.push(acc);
+    }
+    let total_paint = acc;
+    let extra = ((total_paint * COVER * DISSOLVE_DENSE / mean_stroke) as usize).min(20_000);
 
     let salt = model.wrapping_mul(7919)
         ^ name
@@ -427,12 +455,21 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
     let (mut p_out, mut n_out, mut uv_out, mut c_out, mut way_out, mut brush_out) =
         (vec![], vec![], vec![], vec![], vec![], vec![]);
     let (mut j_out, mut w_out, mut idx) = (vec![], vec![], vec![]);
-    for k in 0..count as u32 {
+    for k in 0..(count + extra) as u32 {
         let r = |s: u32| hash(salt ^ k.wrapping_mul(2_654_435_761) ^ s.wrapping_mul(40_503));
         // Stratified: the k-th stroke falls in the k-th equal share of the
-        // area, so they spread evenly rather than clumping.
-        let at = (k as f32 + r(1)) / count as f32 * total;
-        let t = running.partition_point(|&c| c < at).min(tris.len() - 1);
+        // area, so they spread evenly rather than clumping. The extra ones
+        // the same, over what dissolves.
+        let t = if (k as usize) < count {
+            let at = (k as f32 + r(1)) / count as f32 * total;
+            running.partition_point(|&c| c < at).min(tris.len() - 1)
+        } else {
+            let e = k as usize - count;
+            let at = (e as f32 + r(1)) / extra as f32 * total_paint;
+            running_paint
+                .partition_point(|&c| c < at)
+                .min(tris.len() - 1)
+        };
         let [a, b, c] = tris[t];
         let (mut u, mut v) = (r(2), r(3));
         if u + v > 1.0 {
@@ -451,7 +488,15 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
             c
         };
         let joint = top(near);
-        let (size, keep) = focus(joint);
+        let dissolving = paint
+            .as_ref()
+            .map_or(0.0, |m| m[a] * w + m[b] * u + m[c] * v);
+        // What dissolves is painted all over, whatever holds it.
+        let (size, keep) = if dissolving > 0.3 {
+            (0.9, 1.0)
+        } else {
+            focus(joint)
+        };
         if r(4) > keep {
             continue;
         }
@@ -516,6 +561,16 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
                     length = width * (1.8 + 1.0 * r(12));
                 }
             }
+        }
+        // **Dissolving into paint** (exploration 0026): a legendary's
+        // strokes leave its surface -- tongues of paint lifting off it the
+        // way the hem's do, but from all of it, and as many as stay on.
+        if dissolving > 0.3 && r(13) < DISSOLVE * dissolving {
+            way = normal;
+            kind = 3.0;
+            hug = 0.0;
+            width = BROAD * (0.7 + 0.6 * r(14));
+            length = width * (2.0 + 2.5 * r(15));
         }
         let base = p_out.len() as u32;
         for corner in [[-1.0f32, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]] {

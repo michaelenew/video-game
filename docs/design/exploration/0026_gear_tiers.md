@@ -91,3 +91,28 @@ Champion: two three-quarter views, his shoulder, his sword hand.
   distance a tier is told by the shoulder, not the blade. The feathers are
   small for the creature they come from. None of these is the approach; all
   are dials.
+
+## 5. The legendary dissolving into paint (2026-10-22)
+
+The owner: *"Try the extra brushwork on the high tier sample weapon."*
+
+![The legendary sword without and with its paint leaving it](../gallery/gear-legendary-dissolve.jpg)
+
+- **How a surface says it dissolves.** A `paint` vertex group in the art
+  build, exported as a second set of texture coordinates only on a piece
+  that has one (`art/lib/glb.py`), so every other model is byte for byte
+  what it was. The sample marks the legendary sword: blade, light and
+  shards fully, grip and pommel a little.
+- **What the painting does with it** (`brushwork.rs`, `DISSOLVE_DENSE`,
+  `DISSOLVE`). What dissolves is painted all over, whatever holds it (the
+  hands' rule of leaving a held thing alone gives way); it gets six times
+  its share of strokes, since a blade is too small for the cloth's spacing;
+  and about two in three of them are tongues of paint leaving the surface,
+  swaying on the renderer's clock as the hem's wisps do. They are not held
+  inside the lines or inside a colour shape -- leaving is the point -- and
+  only what stands in front of them hides them.
+- **What it looks like.** Standing still, the blade breaks into a fan of
+  pale strokes along its whole length; in motion they sway and change while
+  staying rooted on the blade, so it reads as a weapon shedding paint, not
+  a texture. Busy, and pale: the strokes take the blade's near-white. A
+  gold blade would shed gold.

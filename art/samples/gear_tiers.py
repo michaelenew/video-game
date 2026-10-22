@@ -429,7 +429,19 @@ def sword(r, tier):
             c = grip_c + ax * (0.87 + 0.07 * f)
             parts.append(mesh(f"shard.{f}", *blade(c, ax, side + nm * 0.3 * (f % 2), 0.05 - 0.008 * f, 0.022 - 0.004 * f, 0.005,
                                                    lambda t: 1.0 - t), "shell", j))
+    if tier == 4:
+        for p in parts:
+            dissolve(p, 0.4 if p.name.startswith(("grip", "pommel")) else 1.0)
     return parts
+
+
+def dissolve(ob, amount):
+    """Let the painted cast's strokes leave this piece's surface, ``amount``
+    of the way: a legendary dissolving into paint at its edges as the cloak
+    does into flame (exploration 0026)."""
+    grp = ob.vertex_groups.new(name="paint")
+    grp.add(list(range(len(ob.data.vertices))), amount, "REPLACE")
+    return ob
 
 
 def gear(body, r, tier):
