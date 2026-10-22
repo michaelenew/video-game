@@ -262,3 +262,55 @@ unchanged but for softer panel hems; the Champion's mantle still keeps
 inside its colour shape. Her turntable shows no popping. Her walk was
 filmed at the side-on distance the gaits are judged at, which is too far to
 judge sliding on her dark coat: that one is for F6 in a running game.
+
+## 12. Free hems past the line: what blocked it (2026-10-22)
+
+The owner, on §11: *"I'd like to see the very extremals of the clothing be
+brushed a little outside the lines to soften and give that hint of
+brushwork. Free hems that affect the outline and smooth transitions should
+be brushed over is the rule of thumb. You have the latter, but the former
+doesn't seem to happen by default."* Then: *"you say it's WISPS. Try that
+first."*
+
+Nothing of this round is in the code; what it found, in order:
+
+1. **`WISPS` from one in eight to one in two changed nothing visible.**
+   Drawing every wisp green showed why: they were made, and then erased.
+   The check that keeps a wisp off other cloth (§11) asks `ours`, whose
+   tolerance is 20 to 45 cm of depth -- and the floor just behind a hem is
+   that close, so it counted as her, and as another colour than her coat.
+   A tight tolerance (4 to 8 cm) let them show: one in two then softened
+   the skirt's hem visibly. **This fix is right and wanted.**
+2. **But a tight tolerance lets the bleed back**: a wisp off the
+   Champion's shoulder cloth reached the shirt, which at a slant is more
+   than 8 cm behind it along the eye's line; at 10 to 15 cm the floor is
+   too, and the skirt's wisps went again. Depth cannot tell the floor
+   behind a hem from cloth behind an edge.
+3. **Asked at placement instead** (`hem_is_free`: is any other garment
+   just past this edge?) it can, and it kept the shoulder and the bodice
+   clean -- but only for edges `openness` finds.
+4. **Most of her skirt's bottom edge is not found.** Three of its four
+   panels hang to the floor, crumpled; there the cloth's two faces have
+   been merged into one edge (no 4 mm thickness left to find). Counting
+   such knife edges -- two triangles facing opposite ways -- found the
+   bottom, and also every crease of the crumpled cloth: green all over.
+5. **The strokes near a hem are few.** They are scattered over the cloth,
+   so about 27 lie within 3 cm of her whole bottom hem; laying strokes
+   along every found hem at a steady step fixed the count, not the finding.
+6. **Asked of the picture instead** -- a stroke facing the eye may paint
+   past its cloth where what lies beyond is further off, and the cloth just
+   inside is at its own depth -- either let the Champion's mantle and her
+   bodice smear (lax), or refused her pleated, crumpled hem (strict).
+
+Two rules that came out of it and stand: **a band is told from a sheet by
+width** (its middle a few centimetres from its edge), not by its share of
+corners on the rim, which could not tell the Reaver's leg wraps (52%) from
+the Blood mage's panels (48%); and **only a free hem frays**, asked of the
+mesh, not of the depth.
+
+**The fix that would work is in the build, not the painting**: the
+wardrobe knows exactly where each garment ends in the open -- a panel's
+bottom and sides, a coat's hem, a cuff -- before the cloth is draped,
+crumpled and squeezed. Marked there as a vertex attribute, a stroke would
+know it is on a free hem without guessing from the mesh or the depth, and
+could run a little past it every time. That is a rebuild of every model.
