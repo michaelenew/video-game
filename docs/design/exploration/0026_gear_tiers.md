@@ -67,3 +67,26 @@ plates, a forearm guard, a plate at the throat and a sword in his free hand
 Built by the same tools as his clothes (`wardrobe.piece` for the plates, cut
 from his body inflated; rigid meshes for horns, feathers, gems and the
 sword). A sample to judge: the game's `champion.glb` is not changed.
+
+![The four tiers on the Champion, painted, in the game](../gallery/gear-tiers.jpg)
+
+## 4. What the sample shows (2026-10-22)
+
+Filmed in the game with `--painted-cast`, at frame 40 of a standing
+Champion: two three-quarter views, his shoulder, his sword hand.
+
+- **The ladder reads from across the screen.** Brown leather, then a dark
+  steel shoulder with a horn, then blued steel edged in gold with feathers
+  off it, then pale plates hanging apart. Each tier is a different outline
+  as well as a different colour, which is what the references asked for.
+- **What did not work first.** Plates cut from his inflated body, as his
+  clothes are, read as padding; plate is a geometric shape, so they are
+  bands of a sphere round the shoulder sized from the body. And the game
+  draws this model mirrored from the joint names the sample first assumed:
+  the shoulder went under his cape.
+- **What is weakest.** The legendary's gold light reads near white: the
+  strokes take the picture's colour and the bright core sits on the
+  tonemapper's knee. The swords are long and dark, and at the camera's usual
+  distance a tier is told by the shoulder, not the blade. The feathers are
+  small for the creature they come from. None of these is the approach; all
+  are dials.
