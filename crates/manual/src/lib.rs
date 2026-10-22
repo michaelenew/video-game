@@ -172,6 +172,10 @@ pub const SECTIONS: &[Section] = &[
                 "Hitbox wireframes and the Oven, both open, exactly as --dev does.",
             ),
             e(
+                "?scale=<n>",
+                "How many pixels the picture is drawn at for each pixel of the page. 1 by default, even on a screen that has two or three, because a frame in a browser is paid by the pixel: ?scale=2 is sharper on such a screen and about four times the work.",
+            ),
+            e(
                 "?shot_frame=<n>",
                 "Any environment variable, spelled in the URL. Upper or lower case, dashes or underscores.",
             ),

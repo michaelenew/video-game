@@ -210,6 +210,7 @@ fn main() {
     }
     platform::report_panics();
     platform::one_move_an_event();
+    platform::fewer_pixels();
     App::new()
         .add_plugins(
             DefaultPlugins
@@ -2413,6 +2414,11 @@ fn setup(
         // pass it reads -- the cheapest thing a frame can be asked to draw, and
         // the only way to get a depth buffer that can be sampled rather than
         // only written to. WebGL2 has neither, which is why this is a question.
+        //
+        // The browser goes without the prepass even for what it saves the
+        // main pass: Bevy copies its depth into a texture after drawing it,
+        // which WebGL2 refuses (`GL_INVALID_FRAMEBUFFER_OPERATION` from
+        // `glCopyTexSubImage2D`, every frame; tried 2026-10-21).
         commands.entity(eye).insert((
             outline::Outline::from(look::edge::LINE),
             bevy::core_pipeline::prepass::DepthPrepass,
