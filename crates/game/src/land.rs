@@ -117,15 +117,33 @@ pub fn tile_mesh(
     cells: usize,
     cache: &mut HashMap<ArenaId, look::Palette>,
 ) -> (Mesh, Option<f32>) {
+    let (mesh, water) = area_mesh(atlas, (tx, tz), 1, cells, cache);
+    (mesh, water.get(&(tx, tz)).copied())
+}
+
+/// **A square of tiles as one mesh**: `span` tiles a side from the tile at
+/// `corner`, `cells` to the whole side, its vertices relative to that tile's
+/// corner -- what the land far off is drawn as, one mesh for many tiles at
+/// the fineness their distance asks (`crate::stream`). The water's surface
+/// over each tile any of it is under, by tile; a point on the line between
+/// two tiles is under both, as it is for a tile drawn alone.
+pub fn area_mesh(
+    atlas: &Atlas,
+    corner: (i32, i32),
+    span: i32,
+    cells: usize,
+    cache: &mut HashMap<ArenaId, look::Palette>,
+) -> (Mesh, HashMap<(i32, i32), f32>) {
     let size = TILE_M as f32;
-    let (x0, z0) = (tx as f32 * size, tz as f32 * size);
+    let (x0, z0) = (corner.0 as f32 * size, corner.1 as f32 * size);
     let steepest = f(sim::tuning::terrain_steepest());
     let land = atlas.land.as_ref().expect("a map with land");
-    let mut water: Option<f32> = None;
+    let mut water: HashMap<(i32, i32), f32> = HashMap::new();
+    let last = (corner.0 + span - 1, corner.1 + span - 1);
     let mesh = grid_mesh(
         x0,
         z0,
-        size,
+        size * span as f32,
         cells,
         &|x, z| f(atlas.relief_at(fx(x), fx(z))),
         &mut |x, z, slope| {
@@ -133,7 +151,28 @@ pub fn tile_mesh(
             let palette = palette_at(atlas, x, z, cache);
             if m == Material::Water {
                 if let Some(surface) = land.sample(fx(x), fx(z)).water {
-                    water = Some(water.map_or(f(surface), |s: f32| s.max(f(surface))));
+                    // The tile it is in; on the far edge, the last one.
+                    let t = (
+                        ((x / size).floor() as i32).min(last.0),
+                        ((z / size).floor() as i32).min(last.1),
+                    );
+                    // A point on the line between tiles is under both.
+                    let on_x = x == t.0 as f32 * size && t.0 > corner.0;
+                    let on_z = z == t.1 as f32 * size && t.1 > corner.1;
+                    let mut under = vec![t];
+                    if on_x {
+                        under.push((t.0 - 1, t.1));
+                    }
+                    if on_z {
+                        under.push((t.0, t.1 - 1));
+                    }
+                    if on_x && on_z {
+                        under.push((t.0 - 1, t.1 - 1));
+                    }
+                    for t in under {
+                        let s = water.entry(t).or_insert(f(surface));
+                        *s = s.max(f(surface));
+                    }
                 }
             }
             ground_colour(&palette, m, slope, steepest, rise, path, x, z)

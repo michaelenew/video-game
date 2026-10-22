@@ -709,6 +709,29 @@ pub fn bakes_shadows() -> bool {
     !cfg!(target_arch = "wasm32")
 }
 
+/// **How much memory the game holds**, for `--profile`'s census. On Linux,
+/// what the system says is resident (`/proc/self/statm`, in its usual
+/// four-kilobyte pages). In a browser, the size of the program's own memory,
+/// which only ever grows -- memory a WebAssembly program frees is kept for
+/// its next allocation, never handed back -- so it is the high-water mark
+/// the tab costs. `None` elsewhere, where nobody has asked yet.
+pub fn memory_bytes() -> Option<u64> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        Some(core::arch::wasm32::memory_size::<0>() as u64 * 65536)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let statm = std::fs::read_to_string("/proc/self/statm").ok()?;
+        let pages: u64 = statm.split_whitespace().nth(1)?.parse().ok()?;
+        Some(pages * 4096)
+    }
+    #[cfg(not(any(target_arch = "wasm32", target_os = "linux")))]
+    {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
