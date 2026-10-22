@@ -68,8 +68,11 @@ after the souls games' roll. Three parts: **the dive** -- off the back foot *int
 air*, long, arms up in front of the chest and legs trailing, pitching forward on a low arc,
 so the torso comes down over the flight rather than on the first frame; **the shoulder** --
 as the floor arrives the head tucks and the lead shoulder drops, and the roll goes over
-diagonally, shoulder to opposite hip; **the roll and the rise** -- on the floor, carried on
-at the speed the dive arrived with, and up onto the feet over most of the recovery. Back, it is the same backward: a hop back, sat down onto the back, over
+diagonally, shoulder to opposite hip; **the roll and the rise** -- on the floor, and up
+onto the feet over most of the recovery, sinking into the landing for two frames before it
+rises. **The turn has weight**: its speed only grows through the air (a leaning body
+falling over), jumps as the shoulder meets the floor (the way forward turned into spin),
+holds through the roll and slows only as the feet take the weight. Back, it is the same backward: a hop back, sat down onto the back, over
 the shoulder. **To the side the body turns to face the travel, dives forward, and turns
 back as it rises.** The body really goes over -- `view::dodge` turns the whole drawn body
 and carries it on the dive's arc -- and it is a drawing only: the frames, the invulnerable
@@ -100,7 +103,13 @@ the roll to eight frames or more and a sixth of a turn a frame at most. The same
 found the side rolls mirrored -- turned to face away from the way the body was going -- because
 `PlayerView::travel`'s strafe is positive to the body's *left* as drawn, not its right as
 its own comment says; `view::dodge::way` reads it that way now, and a test plays a dodge
-on `D` and on `A` through the simulation and holds the drawn body to face its real motion.
+on `D` and on `A` through the simulation and holds the drawn body to face its real motion. Then, the
+same day, it "started off too fast then died off midair, like the character is made of
+feathers": the turn was two curves glued at the contact, slowing into it, and the clip
+held one pose for two or three frames in the air. Now the turn's speed is one line that
+only grows in the air and only slows at the very end, the dive keeps reaching to the
+contact, the landing sinks before it rises, and a test (`the_turn_has_weight`) holds the
+first of those.
 
 The class dodges that are not travel keep their own drawing underneath: the Dual mage's
 and the Blood mage's blinks arrive and then roll forward where they land, and the Reaver's

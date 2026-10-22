@@ -424,3 +424,39 @@ fn a_roll_to_the_side_faces_its_travel_and_turns_back() {
         }
     }
 }
+
+#[test]
+fn the_turn_has_weight() {
+    // From play (2026-10-22): a turn that started fast and died off in the
+    // air read as a body made of feathers, slowed by the air. So: through the
+    // dive the turning speed only ever grows; the impact at the contact makes
+    // it faster still; and it only slows in the last few frames, as the feet
+    // take the weight.
+    for class in ALL_CLASSES {
+        let r = roll(class);
+        let speed = |f: f32| r.through(f + 0.25) - r.through(f);
+        let c = r.contact() as f32;
+        let mut was = 0.0;
+        for q in 0..(c as u32) * 4 {
+            let now = speed(q as f32 / 4.0);
+            assert!(
+                now >= was - 1e-5,
+                "{class:?} slows in the air at frame {}",
+                q as f32 / 4.0
+            );
+            was = now;
+        }
+        assert!(
+            speed(c + 1.0) > speed(c - 1.0) * 1.3,
+            "{class:?} does not pick up speed when the shoulder meets the floor"
+        );
+        let slowing_from = r.upright() as f32 - r.settle as f32 - 0.25;
+        for q in ((c as u32 + 1) * 4)..(slowing_from * 4.0) as u32 {
+            let f = q as f32 / 4.0;
+            assert!(
+                speed(f) >= speed(c + 1.0) - 1e-5,
+                "{class:?} slows mid-roll at frame {f}"
+            );
+        }
+    }
+}

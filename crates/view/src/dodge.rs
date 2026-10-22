@@ -105,9 +105,13 @@ pub struct Roll {
     /// How high the dive carries the lowest point of the body at the top of its
     /// arc, in metres.
     pub hop: f32,
-    /// How far over the body has pitched, in turns, by the time it reaches the
-    /// floor: the angle of the dive.
-    pub dive: f32,
+    /// How fast it is turning as it leaves the floor, as a share of the speed
+    /// it reaches by the contact: low is a body that topples over slowly and
+    /// gathers, high one thrown over from the start.
+    pub leaving: f32,
+    /// Over how many frames the turn slows as the feet take the weight at the
+    /// end: the longer, the heavier the landing reads.
+    pub settle: u16,
     /// Where the body turns about, in character space (`+Y` up, `+Z` ahead):
     /// about the middle of the ball it curls into. It decides the arc; the
     /// height is [`Turn::height`]'s.
@@ -121,42 +125,48 @@ pub const fn roll(class: Class) -> Roll {
             contact: 7,
             past_cover: 6,
             hop: 0.24,
-            dive: 0.2,
+            leaving: 0.15,
+            settle: 3,
             about: [0.0, 0.50, 0.30],
         },
         Class::Bulwark => Roll {
             contact: 8,
             past_cover: 7,
             hop: 0.14,
-            dive: 0.17,
+            leaving: 0.1,
+            settle: 4,
             about: [0.0, 0.46, 0.28],
         },
         Class::ShadowReaver => Roll {
             contact: 7,
             past_cover: 5,
             hop: 0.32,
-            dive: 0.22,
+            leaving: 0.25,
+            settle: 3,
             about: [0.0, 0.54, 0.31],
         },
         Class::Elementalist => Roll {
             contact: 7,
             past_cover: 6,
             hop: 0.24,
-            dive: 0.2,
+            leaving: 0.15,
+            settle: 3,
             about: [0.0, 0.52, 0.32],
         },
         Class::BloodMage => Roll {
             contact: 8,
             past_cover: 6,
             hop: 0.2,
-            dive: 0.23,
+            leaving: 0.12,
+            settle: 3,
             about: [0.0, 0.48, 0.31],
         },
         Class::DualMage => Roll {
             contact: 7,
             past_cover: 7,
             hop: 0.34,
-            dive: 0.2,
+            leaving: 0.2,
+            settle: 3,
             about: [0.0, 0.52, 0.33],
         },
     }
@@ -195,30 +205,49 @@ impl Roll {
 
     /// How far over the body is at a frame of the clip, nought to one turn.
     ///
-    /// Through the dive it pitches forward faster and faster, to `dive` at the
-    /// contact -- a body leaving the floor leaning, and falling further over
-    /// as it flies. Then it rolls on at the speed it arrived with, gathering
-    /// through the middle of the roll and easing out as it comes up onto its
-    /// feet: one continuous turn, no snap where the floor is met (2026-10-22,
-    /// from play: the first version rolled the rest of the way in half a dozen
-    /// frames and "read too fast in motion").
+    /// **One turn with weight in it** (2026-10-22, from play: two curves glued
+    /// at the contact "started off too fast then died off midair, like the air
+    /// was slowing them down"). The turning speed gathers through the dive --
+    /// gravity pulling the top of a leaning body over, from `leaving` of full
+    /// speed on the push to [`ARRIVING`] of it by the contact -- then takes
+    /// the rest in the frame the shoulder meets the floor, the body's way
+    /// forward turned into spin, and holds it through the roll, a ball carried
+    /// round by its own momentum. It only slows over the last `settle` frames,
+    /// as the feet take the weight. Never slower in the air than a frame
+    /// before. About a quarter of the turn is spent before the contact, so the
+    /// shoulder meets the floor with the body near level, not upside down.
     pub fn through(&self, frame: f32) -> f32 {
         let (c, u) = (self.contact() as f32, self.upright() as f32);
+        let r = (self.settle as f32).clamp(1.0, (u - c - 2.0).max(1.0));
+        let a = self.leaving.clamp(0.0, ARRIVING);
+        // The turning speed, a share of full, as straight lines between these
+        // frames; the turn so far is the area under it.
+        let knots = [
+            (0.0, a),
+            (c, ARRIVING),
+            (c + 1.0, 1.0),
+            (u - r, 1.0),
+            (u, 0.0),
+        ];
+        let area = |to: f32| {
+            let mut sum = 0.0;
+            for pair in knots.windows(2) {
+                let ((f0, s0), (f1, s1)) = (pair[0], pair[1]);
+                if to <= f0 || f1 <= f0 {
+                    continue;
+                }
+                let f = to.min(f1);
+                let at = s0 + (s1 - s0) * (f - f0) / (f1 - f0);
+                sum += (s0 + at) * 0.5 * (f - f0);
+            }
+            sum
+        };
         if frame <= 0.0 {
             0.0
-        } else if frame <= c {
-            self.dive * (frame / c).powi(2)
-        } else if frame < u {
-            // A cubic from `dive` to a whole turn, leaving at the dive's own
-            // rate and arriving still.
-            let t = (frame - c) / (u - c);
-            let leaving = 2.0 * self.dive / c * (u - c);
-            let (t2, t3) = (t * t, t * t * t);
-            (2.0 * t3 - 3.0 * t2 + 1.0) * self.dive
-                + (t3 - 2.0 * t2 + t) * leaving
-                + (-2.0 * t3 + 3.0 * t2)
-        } else {
+        } else if frame >= u {
             1.0
+        } else {
+            area(frame) / area(u)
         }
     }
 
@@ -247,7 +276,9 @@ impl Roll {
         if frame <= 0.0 || frame >= c {
             0.0
         } else {
-            self.hop * (std::f32::consts::PI * frame / c).sin()
+            // Thrown and falling: a parabola, quickest at the two ends.
+            let t = frame / c;
+            self.hop * 4.0 * t * (1.0 - t)
         }
     }
 
@@ -259,6 +290,10 @@ impl Roll {
         smooth(frame) * (1.0 - smooth((frame - (u - 2.0)) / 2.0))
     }
 }
+
+/// How fast a dive is turning when the shoulder meets the floor, as a share
+/// of the roll's own speed: the rest is the impact. See [`Roll::through`].
+pub const ARRIVING: f32 = 0.6;
 
 /// How far the shoulder roll's axis is tipped off the body's side, about the
 /// vertical: over the lead shoulder to the other hip.
