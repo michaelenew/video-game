@@ -64,9 +64,10 @@ dissolves into paint at its edges as the cloak does into flame.
 `art/samples/gear_tiers.py` puts each tier on the Champion -- a shoulder of
 plates, a forearm guard, a plate at the throat and a sword in his free hand
 -- and exports it as his model, so the game draws it with `--painted-cast`.
-Built by the same tools as his clothes (`wardrobe.piece` for the plates, cut
-from his body inflated; rigid meshes for horns, feathers, gems and the
-sword). A sample to judge: the game's `champion.glb` is not changed.
+Built with the same tools as his clothes: the forearm guards cut from his
+body inflated (`wardrobe.piece`); the shoulder and throat plates as bands of
+a sphere and a ring sized from the body; horns, feathers, gems and the sword
+as rigid meshes on a joint. A sample to judge: the game's `champion.glb` is not changed.
 
 ![The four tiers on the Champion, painted, in the game](../gallery/gear-tiers.jpg)
 
