@@ -719,6 +719,10 @@ pub const SECTIONS: &[Section] = &[
                 "F2",
                 "Freeze the skeleton at rest. Tells a bad clip from a bad rig.",
             ),
+            e(
+                "F6",
+                "A close look at a character: the camera leaves the fight and goes round a fighter -- you first, F6 again for the next, and once more back to the fight. Move the mouse to go round them, the scroll wheel to come in close (a face fills the screen) or back out, and Alt with the wheel to look higher or lower on the body. Nobody fades for the camera being close and the crosshair is hidden. Only the camera moves: the keyboard and the clicks still play, so walk or swing and watch it, or pause with P and step with [ and ] to walk round one pose.",
+            ),
             e("F7", "The Oven: every tuned number in the game, live."),
             e(
                 "F9",

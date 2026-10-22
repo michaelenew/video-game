@@ -381,7 +381,8 @@ tools (`art/lib/wardrobe.py`); a fix to either is true of every class. The
 joints are the game's twenty-one
 (`view::skeleton`), named as `Joint::name` names them and set each frame from
 the skin `apply_poses` solves, so a change to the skeleton is a rebuild there.
-Judge a character lit, in the game (`SHOT_PORTRAIT`). The reasoning, what failed and
+Judge a character lit, in the game (F6 walks round one up close;
+`SHOT_PORTRAIT` for a screenshot). The reasoning, what failed and
 what is left is [exploration/0024](docs/design/exploration/0024_a_character_done_properly.md);
 the commands are [`art/README.md`](art/README.md).
 

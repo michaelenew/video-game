@@ -61,8 +61,11 @@ read.
   a change to the skeleton is a rebuild here.
 - **Judge it in the game, lit** (CLAUDE.md, "Judge a palette lit"): the
   turnaround is for shape. Colours that read well in Blender's studio came
-  out pale lavender under the arena's sun; `SHOT_PORTRAIT` puts the game's
-  camera round a fighter for this.
+  out pale lavender under the arena's sun. In a running game, **F6** puts
+  the camera on an orbit round a fighter -- mouse round, wheel in and out,
+  Alt and the wheel up and down the body, nobody faded for being close
+  (`crates/game/src/inspect.rs`); `SHOT_PORTRAIT` is the same for a
+  screenshot, fixed at launch.
 - **Everything is CC0 or ours.** MakeHuman's mesh, targets and weights are
   CC0 (pinned to a commit in `scripts/setup-tools.sh`); nothing else is
   taken from anywhere.

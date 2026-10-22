@@ -83,7 +83,9 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "F3" | "F4" => vec!["F3 and F4"],
         // Volume (docs/design/sound.md).
         "PageUp" | "PageDown" => vec!["Page Up and Page Down"],
-        "F5" | "F6" => vec!["F5 and F6"],
+        // The close look at a character, and Alt with the wheel inside it.
+        "F6" => vec!["F6"],
+        "AltLeft" | "AltRight" => vec!["Alt"],
         "F7" => vec!["F7"],
         // Every `F<n>` the game might grow needs a spelling here, so that
         // `a_documented_function_key_does_something` below can ask the question

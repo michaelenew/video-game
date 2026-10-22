@@ -41,6 +41,7 @@ mod hub;
 mod hud;
 mod impact;
 mod ink;
+mod inspect;
 mod keep;
 mod land;
 mod menu;
@@ -271,6 +272,7 @@ fn main() {
         .insert_resource(trophies::Trophies::load())
         .insert_resource(cairns::Cairns::load())
         .init_resource::<InsideOwnHead>()
+        .init_resource::<inspect::Inspect>()
         .init_resource::<beast::Boom>()
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
@@ -453,6 +455,12 @@ fn main() {
         // The window through what the camera passes through, on to where
         // the camera has just been put.
         .add_systems(Update, window::follow.after(drive_camera))
+        // The close look's orbit, read after the fight's look has been and
+        // before the camera is placed from it.
+        .add_systems(
+            Update,
+            inspect::steer.after(mouse_look).before(drive_camera),
+        )
         // The bag's key, before anything asks who owns the mouse: opening
         // it is what frees the cursor.
         .add_systems(Update, keep::toggle_bag.before(palette::sample_focus))
@@ -8034,6 +8042,7 @@ fn mouse_look(
     mut bag: ResMut<keep::Bag>,
     mut lock_seen: Local<bool>,
     mut windows: Query<&mut Window>,
+    inspect: Res<inspect::Inspect>,
 ) {
     // Sensitivity, adjustable mid-match and written straight to disk. Two people
     // sharing a machine should not have to agree on one number, and a setting
@@ -8058,7 +8067,9 @@ fn mouse_look(
         settings.save();
     }
 
-    if look.grabbed {
+    // While the camera is on a close look (F6) the mouse goes round the
+    // fighter instead, and their aim stays where it was.
+    if look.grabbed && inspect.seat.is_none() {
         let sensitivity = settings.radians_per_pixel();
         let (mut dx, mut dy) = (0.0, 0.0);
         for ev in motion.read() {
@@ -8164,6 +8175,7 @@ fn drive_camera(
     mut rig: ResMut<Rig>,
     mut inside: ResMut<InsideOwnHead>,
     mut boom: ResMut<beast::Boom>,
+    inspect: Res<inspect::Inspect>,
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
     mut origin: Local<Option<Vec3>>,
     mut portrait: Local<Option<Option<[f32; 4]>>>,
@@ -8227,6 +8239,13 @@ fn drive_camera(
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);
+        // A close look at somebody (F6): round them, and nobody faded.
+        let seat = inspect.seat.unwrap_or(me).min(MAX_PLAYERS - 1);
+        if let Some((eye, at)) = inspect.frame(frame.players[seat].pos) {
+            tf.translation = eye;
+            tf.look_at(at, Vec3::Y);
+            inside.0 = 0.0;
+        }
         if let Some([seat, angle, distance, height]) = *portrait.get_or_insert_with(shot_portrait) {
             // A portrait instead of the fight's camera: round one fighter,
             // `angle` degrees from straight in front of them.
