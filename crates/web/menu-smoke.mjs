@@ -12,8 +12,10 @@
 //
 // The menu is drawn by egui into the canvas, so its buttons have no DOM: they
 // are clicked by position. The positions are the menu's own layout (anchored
-// at 18,150 in the canvas, `crates/game/src/menu.rs`); if that layout moves,
-// so do these.
+// at 18,150 in the canvas, `crates/game/src/menu.rs`, and never taller than
+// the canvas below that, so egui does not push it up -- which it did for a
+// while, 2026-10-22, and Create a room clicked the Versus stages); if that
+// layout moves, so do these.
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 

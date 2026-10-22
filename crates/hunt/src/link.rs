@@ -34,8 +34,8 @@ const SLOW_FRAME_MS: u32 = 50;
 const HIGH_PING_MS: u32 = 150;
 /// The furthest a rollback reaches before the session stalls instead
 /// (`net::MAX_ROLLBACK_FRAMES`; this crate does not depend on `net`).
-const ROLLBACK_LIMIT: u32 = 8;
-/// Rollbacks this deep, of the session's eight, make the far fighter jump.
+const ROLLBACK_LIMIT: u32 = 12;
+/// Rollbacks this deep, of the session's twelve, make the far fighter jump.
 const DEEP_ROLLBACK: u32 = 6;
 /// Distances apart the match is cut by, in metres: close, within a fight,
 /// across a place, in different places.

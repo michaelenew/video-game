@@ -170,6 +170,8 @@ struct Exchange {
     far: Vec<Option<u32>>,
     /// Lines whose offer has been accepted: open, both ends.
     open: Vec<bool>,
+    /// Lines hung up, both ends: somebody left.
+    hung_up: Vec<bool>,
 }
 
 impl Switchboard {
@@ -180,6 +182,7 @@ impl Switchboard {
         x.queues.push(VecDeque::new());
         x.far.push(None);
         x.open.push(false);
+        x.hung_up.push(false);
         SwitchedLine {
             board: self.clone(),
             serial,
@@ -192,6 +195,28 @@ pub struct SwitchedLine {
     board: Switchboard,
     serial: u32,
     described: Option<String>,
+}
+
+impl Switchboard {
+    /// **Hang up a line**, both ends, the way a data channel closes when the
+    /// page at one end does: each end reads [`LineState::Failed`] and
+    /// nothing more is carried.
+    pub fn hang_up(&self, serial: u32) {
+        let mut x = lock(&self.0);
+        let far = x.far.get(serial as usize).copied().flatten();
+        for end in [Some(serial), far].into_iter().flatten() {
+            if let Some(h) = x.hung_up.get_mut(end as usize) {
+                *h = true;
+            }
+        }
+    }
+}
+
+impl SwitchedLine {
+    /// Which line this is, for [`Switchboard::hang_up`].
+    pub fn serial(&self) -> u32 {
+        self.serial
+    }
 }
 
 impl Line for SwitchedLine {
@@ -231,7 +256,10 @@ impl Line for SwitchedLine {
     }
 
     fn state(&mut self) -> LineState {
-        if lock(&self.board.0).open[self.serial as usize] {
+        let x = lock(&self.board.0);
+        if x.hung_up[self.serial as usize] {
+            LineState::Failed
+        } else if x.open[self.serial as usize] {
             LineState::Open
         } else {
             LineState::Negotiating
@@ -240,6 +268,9 @@ impl Line for SwitchedLine {
 
     fn send(&mut self, packet: &[u8]) {
         let mut x = lock(&self.board.0);
+        if x.hung_up[self.serial as usize] {
+            return;
+        }
         if let Some(far) = x.far[self.serial as usize] {
             x.queues[far as usize].push_back(packet.to_vec());
         }

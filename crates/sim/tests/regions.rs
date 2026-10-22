@@ -24,8 +24,9 @@ fn the_tuned_grid_is_sound() {
     );
     assert_eq!(
         g.horizon(),
-        Fx::from_int(36),
-        "24 m of reach and 8 frames at 90 m/s"
+        Fx::from_int(42),
+        "24 m of reach and 12 frames at 90 m/s -- the delay is the rollback window, twelve \
+         since 2026-10-22"
     );
 }
 

@@ -31,6 +31,7 @@ pub mod seal;
 pub use ggrs;
 pub use ggrs_glue::{
     NetInput, SessionConfig, handle_requests, handle_requests_kept, handle_requests_watched,
+    may_advance,
 };
 pub use meet::{Mesh, Progress, Rendezvous, Seat};
 
@@ -73,8 +74,13 @@ impl Rollback for World {
 }
 
 /// Number of frames of history kept. Bounds how far a peer can be behind
-/// before the session stalls instead of rolling back.
-pub const MAX_ROLLBACK_FRAMES: usize = 8;
+/// before the session stalls instead of rolling back: GGRS's prediction
+/// window (`p2p::start_with`). **Twelve since 2026-10-22**, from GGRS's
+/// eight: four friends' far inputs arrived about seven frames late, so
+/// every hiccup on any of three lines stalled the match. The price is a
+/// longer burst -- the frame budget is shared out across twelve
+/// (`sim/tests/budget.rs`) -- and a bigger jump when a far guess was wrong.
+pub const MAX_ROLLBACK_FRAMES: usize = 12;
 
 /// A local stand-in for a networked session.
 ///

@@ -38,7 +38,7 @@ From the Oven:
 |---|---|---|
 | **reach** `r` | the farthest anything reaches in one go | 24 m (the fire bolt) |
 | **speed** `c` | the fastest anything travels | 90 m/s: a blink is six metres in four frames; the Champion's javelin flies at 70, the dashes at 50 |
-| **delay** `D` | frames a neighbour's outcome may be old (at most 30, the tape's length less one) | 8 (`net::MAX_ROLLBACK_FRAMES`) |
+| **delay** `D` | frames a neighbour's outcome may be old (at most 30, the tape's length less one) | 12 (`net::MAX_ROLLBACK_FRAMES`; 8 until 2026-10-22) |
 | **overlap** `ε` | how far a checksum zone reaches past its hexagon | 4 m |
 | **hexagon size** `S` | circumradius of a hexagon | 96 m |
 | **neighbour lag** | frames a simulated neighbour's heartbeat is behind | 2 |
@@ -46,7 +46,8 @@ From the Oven:
 Derived (`sim::region::Grid`):
 
 - **horizon** `h = r + c·D/60`: how far influence can travel before a newer
-  outcome arrives. 36 m as tuned.
+  outcome arrives. 42 m as tuned (36 while `D` was 8). `h + ε` = 46 m stays
+  under half a hexagon, 48 m.
 - **A body's regions** are the hexagons within `h + ε` of it. Its peer sends
   inputs to all of them and runs all of them with full rollback.
 - **A body's checksum zones** are the hexagons within `ε` of it. Neighbouring
@@ -118,6 +119,28 @@ canvas alike, and allocates nothing after it is made. It holds:
   lag past `D` in the Oven and the game holds, then runs `D` frames behind the
   slowest neighbour, paced by its heartbeats. That is what it will do in the
   open world.
+- **Online, the gate hears the inputs before it is asked; the books are kept
+  after the advance** (2026-10-22, `net::may_advance`,
+  `Ledger::inputs_through`, `net/tests/meet.rs`, `net/tests/books_online.rs`).
+  The region you stand in is heard through the frame *confirmed*, so with
+  rollback the gate shuts whenever the friend's inputs are more than `D`
+  frames late -- one slow packet. The online driver used to tell the ledger
+  only after it made a frame, and a shut gate makes none: every match with a
+  friend froze a few seconds in. The first fix kept the whole books before
+  the gate, and that desynced: the session's confirmed frame runs ahead of
+  the frames this machine has *played* with those inputs (a rollback is
+  played on the next advance), so the crowd's aggregates were summed from
+  uncorrected worlds. Now the gate is told the confirmed frame every tick
+  (`inputs_through`, heard-through and nothing else), and the books are kept
+  after the advance, as before.
+- **Every aggregate fed is a function of the confirmed worlds** (2026-10-22).
+  Two more desyncs, found the same day by `books_online.rs`: a followed
+  stream with no peer behind it said "nobody there" on each machine's wall
+  clock, so which epochs got one hung on when the clock passed them -- it is
+  said as each frame is confirmed now; and the books began at whichever frame
+  a peer first confirmed, so a stream followed from the start was summed at a
+  different frame on each machine -- a match begins them from its agreed
+  start (`Ledger::begin`).
 
 ## The watchdog (dev mode)
 
