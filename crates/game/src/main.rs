@@ -7832,6 +7832,13 @@ fn apply_poses(
     mut joints: ResMut<Joints>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    // The time a picture stands for: real, except under `SHOT_SLOW`, where a
+    // picture is a fraction of a frame however long it took to draw, and a
+    // fade or a lean eased on the real clock would be over in a picture.
+    let dt = match shot_slow(sim.cur.frame) {
+        Some(slow) if !sim.paused => 1.0 / (view::TICK_HZ * slow as f32),
+        _ => time.delta_secs(),
+    };
 
     // One solve per fighter rather than one per bone: forward kinematics is a
     // single pass down the skeleton and there are sixteen bones hanging off it.
@@ -7843,7 +7850,7 @@ fn apply_poses(
         let class = sim.cur.players[owner].class;
         let mut input = PoseInput::of(&p, class, &frame);
         input.bind_pose = sim.bind_pose;
-        let mut pose = fades.0[owner].pose(input, time.delta_secs());
+        let mut pose = fades.0[owner].pose(input, dt);
         // The hub takes over whichever fighter it is previewing, so an edit is
         // visible on a real character in the real arena rather than in a
         // separate viewer that flatters it.
@@ -7926,7 +7933,7 @@ fn apply_poses(
             &shadow_fades.0[root.0].shadow(
                 shadow_input(&frame, root.0, ghost, sim.bind_pose),
                 ghost.doing,
-                time.delta_secs(),
+                dt,
             ),
         ));
     }

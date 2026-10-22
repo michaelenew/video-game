@@ -412,6 +412,18 @@ you start walking is not. It fades on a coarse *shape* change (an attack
 beginning, a body being hit, a sprint stopping) and also eases the travel
 direction and the gait blend, which the simulation changes in a single frame.
 
+### Leaning into the going
+
+Over the fade, `view::lean` tips a body that is on its feet and doing
+nothing but moving (2026-10-22): a few degrees forward while it travels, and
+into every change of speed -- forward into a start, back into a stop,
+sideways into a cut -- by the angle whose tangent is the acceleration over
+gravity, read off a velocity eased over 0.18 s and saturating at 14 degrees
+forward, 9 back and 9 to the side. The lean is from the ankles: the hips are
+carried ahead over the feet, the pelvis and waist tip, the head comes back
+toward level, and both feet are put back where the clip had them, so nothing
+slides (`tests/lean.rs`). Renderer-local, like the fade it sits on.
+
 ## Looking at it
 
 ```text

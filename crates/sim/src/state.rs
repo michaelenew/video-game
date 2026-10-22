@@ -19985,7 +19985,13 @@ impl World {
     /// loudness to this species, less its distance. `None` if nothing reached.
     pub fn heard_by(&self, m: &Monster, head: V3) -> Option<monster::Heard> {
         let sp = m.sp();
-        let window = m.glance_frames().max(1) as u32;
+        // A glance comes every `glance_frames + 1` frames (the count runs
+        // down to nought and the glance is the frame after), and the noises
+        // of a frame are made after its senses: so a noise made on the frame
+        // of the last glance is that many frames old at this one. A window
+        // one shorter dropped exactly those -- a footfall on a glance frame
+        // was never heard (2026-10-22).
+        let window = m.glance_frames() as u32 + 1;
         // Hunger, or deafness: its species' say on how far it hears now.
         let hearing = sp.fight.hearing.map(|f| f(m, &self.lore));
         let mut best: Option<(Fx, monster::Heard)> = None;

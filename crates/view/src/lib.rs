@@ -13,6 +13,7 @@ pub mod camera;
 pub mod clips;
 pub mod ik;
 pub mod interp;
+pub mod lean;
 pub mod math;
 pub mod play;
 pub mod pose;

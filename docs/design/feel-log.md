@@ -9756,7 +9756,42 @@ from the waist and barely kicked its heel.
   about forty-five running with elbows near a right angle.
 
 **Pins** Every Ridgeback hunt re-pinned: a fighter's stride phase is in the snapshot and its
-length changed. Nothing reads the phase but the renderer, so no fight changed.
+length changed. *Corrected the same day:* the phase is not the renderer's alone -- a footfall,
+which a creature hears, is made on each of its half-cycles (`noise::listen`), so a fighter now
+makes about a third fewer footfalls over the same ground. That is the real cadence of a step,
+and what found it was a hearing bug, below.
 
 **Verdict** open. To look for: whether the run reads as a run at fighting distance, and whether
 the walk -- seen while speeding up and slowing down -- blends into it without a hitch.
+
+### 2026-10-22 — leaning into the going
+
+The owner, on the new gaits: *they need to lean forward slightly while moving forward, and lean
+into their acceleration.*
+
+**What changed** A lean laid over the pose by the renderer (`view::lean`, `animation.md`,
+Leaning into the going). Travelling forward at a run carries the whole body four degrees ahead
+of its feet, over the clip's own trunk. A change of speed leans by the angle whose tangent is the
+acceleration over gravity, the way a body keeps the floor's push from tipping it over: forward
+into a start, back into a stop, into a cut. The simulation reaches a run in three frames, which
+read literally is a lean past horizontal, so the velocity is eased over 0.18 s and the angle
+saturates at 14 degrees forward, 9 back, 9 sideways. A start leans for about a third of a second.
+Only a body on its feet doing nothing but moving leans; attacks, dodges and flights keep their own
+weight. The lean is from the ankles, with the hips carried forward and both feet held where they
+were; where a rear leg at the end of its push cannot follow, the hips sink first and the lean
+backs off after.
+
+**Tried** The whole lean in the pelvis: the rear hip ran out of extension at the end of a run's
+push and the foot slid ten centimetres. Now a third is the pelvis and the rest the waist.
+
+**Pins** None: the lean is the renderer's, out of the snapshot.
+
+**And a hearing bug the longer stride found** `senses.rs`
+(`seeing_nobody_it_takes_its_sample_from_what_it_heard`) failed on the new stride: the first
+footfall fell on the frame of a creature's glance and was never heard. A glance comes every
+`glance_frames + 1` frames and a frame's noises are made after its senses, so a noise made on a
+glance frame is `glance_frames + 1` old at the next one -- and the window was one shorter.
+`World::heard_by` now listens over the whole interval. No pinned hunt moved.
+
+**Verdict** open. Judged on a side view of a start, a run and a stop; to look for in play is
+whether the lean into a start reads at the camera's usual distance behind the shoulder.

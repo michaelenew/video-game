@@ -346,6 +346,9 @@ pub struct Crossfade {
     /// imperceptible, and a body that snaps a quarter turn round the frame a
     /// slide starts is not.
     turn: f32,
+    /// The body's lean into its going and its changes of speed
+    /// (`crate::lean`), laid over whatever the fade says.
+    lean: crate::lean::Lean,
 }
 
 /// How fast the drawn body turns side-on to a wall, and back: the share of
@@ -364,6 +367,7 @@ impl Default for Crossfade {
             speed: 0.0,
             travel: [0.0, 1.0],
             turn: 0.0,
+            lean: crate::lean::Lean::default(),
         }
     }
 }
@@ -391,7 +395,17 @@ impl Crossfade {
         // fade at the moment it happens; only the blending is eased.
         let shape = shape_of(input);
         let target = pose_for(input);
-        self.blend_into(target, shape, dt)
+        let pose = self.blend_into(target, shape, dt);
+        // Only a body on its feet doing nothing but moving leans into it:
+        // an attack, a dodge or a flight carries its own weight.
+        let free = input.grounded
+            && !input.bind_pose
+            && input.health > 0
+            && input.ledge.is_none()
+            && input.wall.is_none()
+            && matches!(input.action, Action::Free);
+        let [forward, right] = self.lean.step(input.travel, free, dt);
+        crate::lean::lean_over(pose, forward, right)
     }
 
     /// How far the drawn body is turned off its facing this frame, in
