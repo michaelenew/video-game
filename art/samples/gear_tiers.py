@@ -230,25 +230,26 @@ def merge(*parts):
 # --- The pieces --------------------------------------------------------------
 
 def shoulder(body, r, name, material, top, bottom, gap, faces=500):
-    """A shoulder lame: the right shoulder's shell between two drops below
-    the top of the arm, on the outside of the clavicle."""
-    sy = r.o["arm.r"][1]
-    inner = r.o["clavicle.r"][0] + 0.03
+    """A shoulder lame: the shoulder's shell between two drops below the top
+    of the arm, outside the clavicle. The ``.l`` side: the one the game
+    draws bare, away from his cape (his gold coils run down that arm)."""
+    sy = r.o["arm.l"][1]
+    inner = r.o["clavicle.l"][0] - 0.03
 
     def keep(c, fw):
         y = c[..., 1] if c.ndim > 1 else c[1]
-        return (w(fw, "arm.r", "clavicle.r") > 0.25) & (y > sy - bottom) & (y < sy + 0.2 - top) & (c[..., 0] > inner)
+        return (w(fw, "arm.l", "clavicle.l") > 0.25) & (y > sy - bottom) & (y < sy + 0.2 - top) & (c[..., 0] < inner)
     return piece(body, name, gap, keep, material=material, thick=0.004, faces=faces, trim=0.008)
 
 
 def bracer(r, body, name, material, gap, at0=0.25, at1=1.02, faces=500):
-    e, h = "forearm.l", "hand.l"
+    e, h = "forearm.r", "hand.r"
     return piece(body, name, gap, lambda c, fw: w(fw, e, h) > 0.3,
                  trims=[(r.along(e, h, at0), r.dir(h, e)), (r.along(e, h, at1), r.dir(e, h))],
                  material=material, faces=faces, trim=0.008)
 
 
-def gorget(body, r, name, material, gap, low=0.06, faces=500):
+def gorget(body, r, name, material, gap, low=0.0, faces=500):
     top = r.o["neck"][1] + 0.03
     bottom = r.o["chest"][1] + low
 
@@ -282,13 +283,13 @@ def rivets(ob, joint, material, count, radius=0.006, at="low"):
 
 def sword(r, tier):
     """His sword, in the left hand, held low and forward."""
-    hand = r.o["hand.l"]
-    arm = r.dir("forearm.l", "hand.l")
+    hand = r.o["hand.r"]
+    arm = r.dir("forearm.r", "hand.r")
     fwd = np.array([0.0, 0.0, 1.0])
     ax = unit(arm * 0.55 + fwd * 0.85)
     side = unit(np.cross(ax, [1.0, 0.0, 0.0]))
-    grip_c = hand + arm * 0.07 + np.array([0.012, 0.0, 0.0])
-    j = "hand.l"
+    grip_c = hand + arm * 0.07 + np.array([-0.012, 0.0, 0.0])
+    j = "hand.r"
     parts = []
     if tier == 1:
         # An arming sword: straight, a bar guard, a leather grip, a disc.
@@ -350,20 +351,20 @@ def gear(body, r, tier):
     out = []
     if tier == 1:
         cap = shoulder(body, r, "pauldron", "hide", 0.0, 0.11, 0.028)
-        out += [cap] + rivets(cap, "arm.r", "iron", 6)
+        out += [cap] + rivets(cap, "arm.l", "iron", 6)
         vb = bracer(r, body, "bracer", "hide", 0.02)
-        out += [vb] + rivets(vb, "forearm.l", "iron", 4, at="high")
-        out.append(gorget(body, r, "gorget", "hide", 0.022, low=0.12))
+        out += [vb] + rivets(vb, "forearm.r", "iron", 4, at="high")
+        out.append(gorget(body, r, "gorget", "hide", 0.036, low=0.05))
     elif tier == 2:
         for k, (top, bottom, gap) in enumerate([(0.0, 0.07, 0.03), (0.06, 0.12, 0.036), (0.11, 0.17, 0.042)]):
             lame = shoulder(body, r, f"lame{k}", "steel", top, bottom, gap)
             trim = shoulder(body, r, f"lametrim{k}", "bronze", bottom - 0.012, bottom, gap + 0.004, faces=200)
             out += [lame, trim]
-        top = r.o["arm.r"] + np.array([0.04, 0.09, -0.02])
-        out.append(mesh("hornback", *horn(top, [0.3, 0.2, -1.0], [0.4, 1.0, 0.0], 0.2, 0.026), "horn", "arm.r"))
+        top = r.o["arm.l"] + np.array([-0.04, 0.09, -0.02])
+        out.append(mesh("hornback", *horn(top, [-0.3, 0.2, -1.0], [-0.4, 1.0, 0.0], 0.2, 0.026), "horn", "arm.l"))
         out.append(bracer(r, body, "bracer", "steel", 0.022))
         out.append(bracer(r, body, "bracertrim", "bronze", 0.026, at0=0.25, at1=0.33, faces=200))
-        out.append(gorget(body, r, "gorget", "steel", 0.024))
+        out.append(gorget(body, r, "gorget", "steel", 0.04))
         out += rivets(out[-1], "chest", "bronze", 5)
     elif tier == 3:
         for k, (top, bottom, gap) in enumerate([(0.0, 0.08, 0.03), (0.07, 0.14, 0.037)]):
@@ -374,18 +375,18 @@ def gear(body, r, tier):
                 grp = o.vertex_groups.new(name="edge")
                 grp.add(list(range(len(o.data.vertices))), 0.35, "REPLACE")
         # Galewing feathers fanned back and down off the shoulder.
-        sh = r.o["arm.r"] + np.array([0.05, 0.06, -0.03])
+        sh = r.o["arm.l"] + np.array([-0.05, 0.06, -0.03])
         for f in range(5):
             a = -0.5 + 0.28 * f
-            outd = unit([0.55 + 0.1 * f, 0.15 - 0.22 * f, -0.75])
+            outd = unit([-0.55 - 0.1 * f, 0.15 - 0.22 * f, -0.75])
             out.append(mesh(f"feather{f}", *leaf(sh + np.array([0, -0.025 * f, 0.02 * f]), outd,
                                                   np.cross(outd, [0, 1, 0]) + [0, a * 0.2, 0], 0.22 - 0.02 * f, 0.03, 0.004, curl=-0.25),
-                            "galesteel", "arm.r"))
-        out.append(mesh("shouldergem", *ball(r.o["arm.r"] + np.array([0.075, 0.05, 0.05]), 0.018, 10), "gem", "arm.r", glow=0.5))
+                            "galesteel", "arm.l"))
+        out.append(mesh("shouldergem", *ball(r.o["arm.l"] + np.array([-0.075, 0.05, 0.05]), 0.018, 10), "gem", "arm.l", glow=0.5))
         out.append(bracer(r, body, "bracer", "galesteel", 0.022))
         out.append(bracer(r, body, "bracertrim", "gold", 0.026, at0=0.25, at1=0.31, faces=200))
-        out.append(gorget(body, r, "gorget", "galesteel", 0.024))
-        gt = gorget(body, r, "gorgettrim", "gold", 0.028, low=0.21, faces=200)
+        out.append(gorget(body, r, "gorget", "galesteel", 0.04))
+        gt = gorget(body, r, "gorgettrim", "gold", 0.044, low=0.21, faces=200)
         grp = gt.vertex_groups.new(name="edge")
         grp.add(list(range(len(gt.data.vertices))), 0.35, "REPLACE")
         out.append(gt)
@@ -394,15 +395,15 @@ def gear(body, r, tier):
         for k, (top, bottom, gap) in enumerate([(0.0, 0.06, 0.05), (0.075, 0.12, 0.068), (0.135, 0.18, 0.086)]):
             out.append(shoulder(body, r, f"plate{k}", "shell", top, bottom, gap))
         for k, (y, rad) in enumerate([(0.035, 0.11), (-0.045, 0.125)]):
-            c = r.o["arm.r"] + np.array([0.03, y, -0.01])
-            out.append(mesh(f"seam{k}", *hoop(c, [0.25, 1.0, 0.0], rad, 0.004, 32), "core", "arm.r", glow=1.0))
-        out.append(mesh("crown", *hoop(r.o["arm.r"] + np.array([0.05, 0.16, 0.0]), [0.3, 1.0, 0.0], 0.06, 0.005, 28),
-                        "core", "arm.r", glow=1.0))
+            c = r.o["arm.l"] + np.array([-0.03, y, -0.01])
+            out.append(mesh(f"seam{k}", *hoop(c, [-0.25, 1.0, 0.0], rad, 0.004, 32), "core", "arm.l", glow=1.0))
+        out.append(mesh("crown", *hoop(r.o["arm.l"] + np.array([-0.05, 0.16, 0.0]), [-0.3, 1.0, 0.0], 0.06, 0.005, 28),
+                        "core", "arm.l", glow=1.0))
         out.append(bracer(r, body, "bracer", "shell", 0.03, at0=0.3, at1=0.62))
         out.append(bracer(r, body, "bracer2", "shell", 0.04, at0=0.7, at1=1.0))
-        c = r.along("forearm.l", "hand.l", 0.66)
-        out.append(mesh("wristlight", *hoop(c, r.dir("forearm.l", "hand.l"), 0.06, 0.004, 28), "core", "forearm.l", glow=1.0))
-        out.append(gorget(body, r, "gorget", "shell", 0.034))
+        c = r.along("forearm.r", "hand.r", 0.66)
+        out.append(mesh("wristlight", *hoop(c, r.dir("forearm.r", "hand.r"), 0.06, 0.004, 28), "core", "forearm.r", glow=1.0))
+        out.append(gorget(body, r, "gorget", "shell", 0.05))
         out.append(mesh("gorgetcore", *ball(r.o["chest"] + np.array([0.0, 0.17, 0.16]), 0.02, 10), "core", "chest", glow=1.0))
     return out + sword(r, tier)
 
