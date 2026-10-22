@@ -44,6 +44,15 @@ const FOV_STEP: f32 = 2.0;
 /// Master volume, nought to one, in steps of a tenth.
 const VOLUME_STEP: f32 = 0.1;
 
+/// **Input delay online**, in frames: how much later your own press takes
+/// effect, so it reaches the others before they need it. Two by default
+/// (2026-10-22): four friends' far inputs arrived about seven frames late
+/// against a window that stalled the match past eight (twelve since), so
+/// every hiccup froze it; two frames of delay take two off every one of them. Thirty-three
+/// milliseconds on your own presses. Only a match against people reads it.
+pub const DEFAULT_INPUT_DELAY: u8 = 2;
+pub const MAX_INPUT_DELAY: u8 = 6;
+
 /// Which number a key press is reaching for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Knob {
@@ -59,6 +68,9 @@ pub struct Settings {
     pub fov: f32,
     /// Master volume, nought to one. See `crate::sound`.
     pub volume: f32,
+    /// Frames of input delay in a match against people
+    /// ([`DEFAULT_INPUT_DELAY`]). See `crate::online`.
+    pub input_delay: u8,
     /// Keys we did not recognise, kept so saving does not discard them.
     other: BTreeMap<String, String>,
 }
@@ -72,6 +84,7 @@ impl Default for Settings {
             // are meant to be moving around inside.
             fov: 58.0,
             volume: 0.8,
+            input_delay: DEFAULT_INPUT_DELAY,
             other: BTreeMap::new(),
         }
     }
@@ -133,7 +146,10 @@ impl Settings {
                 }
                 ("fov", Some(v)) => s.fov = v.clamp(MIN_FOV, MAX_FOV),
                 ("volume", Some(v)) => s.volume = v.clamp(0.0, 1.0),
-                ("sensitivity" | "fov" | "volume", None) => {}
+                ("input_delay", Some(v)) => {
+                    s.input_delay = (v.round() as i64).clamp(0, MAX_INPUT_DELAY as i64) as u8
+                }
+                ("sensitivity" | "fov" | "volume" | "input_delay", None) => {}
                 _ => {
                     s.other.insert(key.to_string(), value.to_string());
                 }
@@ -147,9 +163,11 @@ impl Settings {
         out.push_str("# sensitivity: mouse turn rate, 1.0 is the default feel.\n");
         out.push_str("# fov: vertical field of view, degrees.\n");
         out.push_str("# volume: master volume, 0 to 1.\n");
+        out.push_str("# input_delay: frames your presses wait online, 0 to 6.\n");
         out.push_str(&format!("sensitivity = {:.3}\n", self.sensitivity));
         out.push_str(&format!("fov = {:.1}\n", self.fov));
         out.push_str(&format!("volume = {:.1}\n", self.volume));
+        out.push_str(&format!("input_delay = {}\n", self.input_delay));
         for (key, value) in &self.other {
             out.push_str(&format!("{key} = {value}\n"));
         }
@@ -258,6 +276,22 @@ mod tests {
         }
         assert_eq!(s.sensitivity, MAX_SENSITIVITY);
         assert_eq!(s.fov, MAX_FOV);
+    }
+
+    #[test]
+    fn the_input_delay_reads_back_and_is_clamped() {
+        let mut s = Settings::default();
+        assert_eq!(s.input_delay, DEFAULT_INPUT_DELAY);
+        s.input_delay = 0;
+        assert_eq!(Settings::parse(&s.to_text()).input_delay, 0);
+        assert_eq!(
+            Settings::parse("input_delay = 99").input_delay,
+            MAX_INPUT_DELAY
+        );
+        assert_eq!(
+            Settings::parse("input_delay = banana").input_delay,
+            DEFAULT_INPUT_DELAY
+        );
     }
 
     #[test]

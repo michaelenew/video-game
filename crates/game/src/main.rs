@@ -6578,6 +6578,7 @@ fn tick_sim(
     mut trophies: ResMut<trophies::Trophies>,
     mut scape: ResMut<sound::Soundscape>,
     mut keeping: ResMut<bag::Keeping>,
+    settings: Res<settings::Settings>,
 ) {
     // A won hunt is the player's trophy (world W1), whoever's machine it was
     // won on: each peer writes its own. Read from the world as it stands at
@@ -6776,7 +6777,11 @@ fn tick_sim(
     // The meeting first: the tick it opens the line on is the tick the match
     // starts.
     let was_online = sim.driver.online();
-    online::meet(&mut sim, real.elapsed().as_millis() as u64);
+    online::meet(
+        &mut sim,
+        real.elapsed().as_millis() as u64,
+        settings.input_delay,
+    );
     if !was_online && sim.driver.online() {
         // The mouse turns whichever fighter is yours, and the match starts
         // with it facing where yours stands facing. Player two spawns facing

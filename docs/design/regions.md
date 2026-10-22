@@ -38,7 +38,7 @@ From the Oven:
 |---|---|---|
 | **reach** `r` | the farthest anything reaches in one go | 24 m (the fire bolt) |
 | **speed** `c` | the fastest anything travels | 90 m/s: a blink is six metres in four frames; the Champion's javelin flies at 70, the dashes at 50 |
-| **delay** `D` | frames a neighbour's outcome may be old (at most 30, the tape's length less one) | 8 (`net::MAX_ROLLBACK_FRAMES`) |
+| **delay** `D` | frames a neighbour's outcome may be old (at most 30, the tape's length less one) | 12 (`net::MAX_ROLLBACK_FRAMES`; 8 until 2026-10-22) |
 | **overlap** `ε` | how far a checksum zone reaches past its hexagon | 4 m |
 | **hexagon size** `S` | circumradius of a hexagon | 96 m |
 | **neighbour lag** | frames a simulated neighbour's heartbeat is behind | 2 |
@@ -46,7 +46,8 @@ From the Oven:
 Derived (`sim::region::Grid`):
 
 - **horizon** `h = r + c·D/60`: how far influence can travel before a newer
-  outcome arrives. 36 m as tuned.
+  outcome arrives. 42 m as tuned (36 while `D` was 8). `h + ε` = 46 m stays
+  under half a hexagon, 48 m.
 - **A body's regions** are the hexagons within `h + ε` of it. Its peer sends
   inputs to all of them and runs all of them with full rollback.
 - **A body's checksum zones** are the hexagons within `ε` of it. Neighbouring

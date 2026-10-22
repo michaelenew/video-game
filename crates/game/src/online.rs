@@ -372,7 +372,9 @@ fn rendezvous(opts: &Options, start: &World) -> Option<Result<Box<dyn net::Rende
 
 /// Advance the meeting by a frame, and start the match the moment it is
 /// ready: both clients from the agreed world, practice thrown away.
-pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
+/// `delay` is the player's input delay (`Settings::input_delay`), for a
+/// match that starts here; `delay=` (`--delay`) outranks it for a run.
+pub fn meet(sim: &mut crate::Sim, now_ms: u64, delay: u8) {
     let Driver::Meeting {
         rendezvous, said, ..
     } = &mut sim.driver
@@ -402,11 +404,12 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
             else {
                 unreachable!("matched above");
             };
-            // `delay=` (`--delay`) trades some rollback back for input delay,
-            // on this side only. None is the default: see `net::p2p`.
+            // The player's own input delay, from the Esc menu, unless the
+            // run says otherwise (`delay=`): on this side only. See
+            // `net::p2p::INPUT_DELAY`.
             let delay = platform::value("--delay")
                 .and_then(|d| d.parse().ok())
-                .unwrap_or(net::p2p::INPUT_DELAY);
+                .unwrap_or(delay as usize);
             sim.driver = match net::p2p::start_with_delay(seat, delay) {
                 Ok(session) => {
                     eprintln!(
@@ -567,6 +570,19 @@ pub fn step(
         }
     }
     meter.now.quiet |= *quiet;
+
+    // **Somebody's line closed**: they left. Their seat is given up now --
+    // GGRS settles the frame with the others -- rather than after the
+    // session's fifteen silent seconds, which froze the match for everybody
+    // still in it (2026-10-22). Those seconds stay for a friend who is only
+    // busy, drawing an arena for the first time.
+    for peer in post.take_closed() {
+        let net::Peer::Line(seat) = peer;
+        if session.disconnect_player(seat as usize).is_ok() {
+            eprintln!("player {} left", seat + 1);
+            *gone = true;
+        }
+    }
 
     if session.current_state() != net::ggrs::SessionState::Running {
         return;

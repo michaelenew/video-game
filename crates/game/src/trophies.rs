@@ -33,11 +33,11 @@ use std::collections::BTreeMap;
 ///
 /// Not on the frame it is won, because that frame may be a prediction: online,
 /// a rollback can take back a killing blow up to `net::MAX_ROLLBACK_FRAMES`
-/// (eight) frames later, and a trophy for a kill that never happened is a lie
-/// written to disk. Twice that is past any rollback, and far inside the
+/// (twelve) frames later, and a trophy for a kill that never happened is a
+/// lie written to disk. Twice that is past any rollback, and far inside the
 /// pause, which is two and a half seconds. A number here rather than the net
 /// crate's because the browser build does not link `net`.
-const SETTLED: u16 = 16;
+const SETTLED: u16 = 24;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Resource)]
 pub struct Trophies {

@@ -659,6 +659,10 @@ impl Rtc0 {
                         self.channel = Some(id);
                         self.open = true;
                     }
+                    // The far end closed the channel: gone.
+                    Event::ChannelClose(_) => {
+                        self.failed = true;
+                    }
                     Event::ChannelData(data) => {
                         if self.inbox.len() < 1024 {
                             self.inbox.push_back(data.data);

@@ -223,6 +223,7 @@ pub fn seconds(ms: u64) -> String {
 pub enum LineState {
     Negotiating,
     Open,
+    /// It could not be opened, or it was open and the far end has gone.
     Failed,
 }
 
@@ -266,6 +267,8 @@ pub struct Mesh<L: Line> {
     pub post: crate::crowd::Post,
     /// How many times GGRS has polled: the post box's clock.
     polls: u32,
+    /// The lines already said to have closed.
+    gone: Vec<Peer>,
 }
 
 impl<L: Line> Mesh<L> {
@@ -274,6 +277,7 @@ impl<L: Line> Mesh<L> {
             lines,
             post,
             polls: 0,
+            gone: Vec::new(),
         }
     }
 }
@@ -297,6 +301,15 @@ impl<L: Line> NonBlockingSocket<Peer> for Mesh<L> {
         }
         let mut out = Vec::new();
         for (peer, line) in &mut self.lines {
+            // **A line that has closed is somebody gone**, said once to the
+            // game through the post box: it gives the seat up now, on a frame
+            // GGRS agrees with the others, instead of after the session's
+            // fifteen silent seconds -- which are there for a page busy
+            // drawing a new arena, not for a player who has left.
+            if line.state() == LineState::Failed && !self.gone.contains(peer) {
+                self.gone.push(*peer);
+                self.post.line_closed(*peer);
+            }
             while let Some(bytes) = line.recv() {
                 if crate::crowd::decode(&bytes).is_some() {
                     self.post.heard(*peer, &bytes, self.polls);
