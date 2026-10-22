@@ -27,12 +27,13 @@
 //! ## The one thing these clips exist to communicate
 //!
 //! `Action::invulnerable` is true for the first `dodge_iframes()` frames and
-//! false afterwards, and **the silhouette has to change on that frame**. So
-//! every recipe is built around one boundary: balled and unchanging while the
-//! frames are free, then opening -- legs out for the floor, arms off the body
-//! -- the instant they are not. The frame it happens on is derived from the
-//! Oven rather than typed, so retuning the window moves the break with it, and
-//! the turn is timed off the same two numbers.
+//! false afterwards, and **the silhouette must not open while they are free**:
+//! balled and unchanging through the cover, and the legs out for the floor no
+//! earlier than the frame it goes. Since 2026-10-22 it opens a little later
+//! than that -- when the body is most of the way round (`Roll::opens`),
+//! because a roll stretched over the recovery, so that it reads at speed,
+//! is only half way round when the cover goes. The frames are derived from the
+//! Oven rather than typed, so retuning the window moves them with it.
 //!
 //! ## Which clip plays is chosen from the velocity
 //!
@@ -136,7 +137,8 @@ enum Beat {
     /// The hands reach the floor: the head tucks, the lead shoulder drops,
     /// the knees start up.
     Contact,
-    /// The ball, rolling, held unchanging to the last invulnerable frame.
+    /// The ball, rolling, held unchanging until the body is most of the way
+    /// round (`view::dodge::Roll::opens`), never before the cover goes.
     Ball,
     /// The break: legs out for the floor, arms off the body.
     Open,
@@ -167,9 +169,9 @@ fn style(class: Class) -> Style {
                     the chest and legs trailing, pitching forward as he flies; \
                     as the floor arrives the head tucks, the arms fold and the \
                     knees come up, and he goes over the right shoulder in a \
-                    ball, held unchanging while the frames are free. On the \
-                    frame the cover runs out the legs open for the floor and \
-                    he comes up in a low crouch with the weapon hand forward. \
+                    ball, held unchanging until he is most of the way round \
+                    -- never before the cover runs out. Then the legs open \
+                    for the floor and he comes up in a low crouch with the weapon hand forward. \
                     The turn, the shoulder and the height of the dive are not \
                     here: `view::dodge` turns and carries the whole body on \
                     top of this, and to the side turns him to face the travel \
@@ -246,41 +248,45 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
         [0.0, -1.0]
     };
 
-    // The beats, placed against the turn: launched on the second frame, long
-    // in the air from the third, tucking as the hands meet the floor, balled
-    // from the frame after, held clear of the break.
-    let f_contact = roll.contact().clamp(4, brk - 1);
-    let f_dive = 3.min(f_contact - 1);
-    let f_flight = (f_contact - 3).max(f_dive);
-    let f_ball = (f_contact + 1).min(brk - 1);
-    let f_held = brk - 1;
-    let f_catch = up.clamp(brk + 1, last - 4);
-    let f_rise = f_catch + (last - f_catch) / 2;
+    // The beats, placed against the turn. Launched on the second frame and
+    // long in the air from the third, **never still in the air**: the dive
+    // keeps reaching -- legs trailing higher, hands going for the floor --
+    // right up to the contact, where it tucks, balled three frames after.
+    // Down on the feet as the turn finishes, then sinking deeper for two
+    // frames as the knees take the weight before it rises: the follow-through
+    // that says the body has mass (2026-10-22, from play: "made of feathers").
+    let f_contact = roll.contact().clamp(5, brk - 1);
+    let f_dive = 3;
+    let f_reach = f_contact - 1;
+    let f_open = roll.opens().clamp(brk, last - 6);
+    let f_ball = (f_contact + 3).min(f_open - 1);
+    let f_held = f_open - 1;
+    let f_catch = up.clamp(f_open + 1, last - 5);
+    let f_absorb = (f_catch + 2).min(last - 3);
+    let f_rise = f_absorb + (last - f_absorb) / 2;
 
     // Off the shoulder it goes over.
     let lean = |pose: Pose| shoulder(pose, way);
     let dress = |pose: Pose, beat: Beat| (style.dress)(pose, beat, body);
 
-    // The two feet the catch puts down, and where they have slid to by the
-    // rise and the last frame.
+    // The two feet the catch puts down, and where they have slid to by each
+    // key after.
     let (lead, trail) = catch_feet(body);
-    let lead_then = planted(lead, f_catch as f32, f_rise as f32, away, speed);
-    let lead_last = planted(lead, f_catch as f32, last as f32, away, speed);
-    let trail_then = planted(trail, f_catch as f32, f_rise as f32, away, speed);
+    let slid = |at: [f32; 3], f: u16| planted(at, f_catch as f32, f as f32, away, speed);
 
     let keys = vec![
         Key::eased(0, dress(push(body), Beat::Push), Ease::LINEAR),
         Key::eased(1, dress(off(body), Beat::Off), Ease::LINEAR),
-        Key::eased(f_dive, dress(dive(body), Beat::Dive), Ease::HOLD),
-        Key::eased(f_flight, dress(dive(body), Beat::Dive), Ease::LINEAR),
+        Key::eased(f_dive, dress(dive(body), Beat::Dive), Ease::LINEAR),
+        Key::eased(f_reach, dress(reach(body), Beat::Dive), Ease::IN),
         Key::eased(
             f_contact,
             lean(dress(contact(body), Beat::Contact)),
-            Ease::OUT,
+            Ease::LINEAR,
         ),
         Key::eased(f_ball, lean(dress(ball(), Beat::Ball)), Ease::HOLD),
         Key::eased(f_held, lean(dress(ball(), Beat::Ball)), Ease::STRIKE),
-        Key::eased(brk, dress(open(), Beat::Open), Ease::LINEAR),
+        Key::eased(f_open, dress(open(), Beat::Open), Ease::LINEAR),
         // The feet go down after the dressing, so a class that sinks lower
         // into its landing bends its knees for it rather than putting its
         // feet through the floor.
@@ -290,13 +296,26 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
             Ease::OUT,
         ),
         Key::eased(
+            f_absorb,
+            feet(
+                sunk(dress(catch(), Beat::Catch)),
+                slid(lead, f_absorb),
+                slid(trail, f_absorb),
+            ),
+            Ease::SMOOTH,
+        ),
+        Key::eased(
             f_rise,
-            feet(dress(rise(), Beat::Rise), lead_then, trail_then),
+            feet(
+                dress(rise(), Beat::Rise),
+                slid(lead, f_rise),
+                slid(trail, f_rise),
+            ),
             Ease::OUT,
         ),
         Key::eased(
             last,
-            settle(dress(settle_body(), Beat::Settle), lead_last, body),
+            settle(dress(settle_body(), Beat::Settle), slid(lead, last), body),
             Ease::SMOOTH,
         ),
     ];
@@ -474,6 +493,51 @@ fn dive(body: Way) -> Pose {
     }
 }
 
+/// The end of the flight: still long, but the body is falling now -- the
+/// legs trailing higher behind, the hands going down for the floor, the head
+/// still up, the back starting to round. What keeps the dive moving between
+/// leaving the floor and meeting it, rather than hanging in one pose.
+fn reach(body: Way) -> Pose {
+    match body {
+        Way::Back => dive(Way::Back)
+            .hips(0.0, -0.30, -0.08)
+            .head(30.0, 0.0, 0.0)
+            .hip_l(100.0, 12.0, 0.0)
+            .hip_r(96.0, 10.0, 0.0),
+        _ => Pose::rest()
+            .hips(0.0, -0.12, 0.08)
+            .root(20.0, 0.0, 0.0)
+            .spine(18.0, 0.0, 0.0)
+            .chest(12.0, 0.0, 0.0)
+            .head(-12.0, 0.0, 0.0)
+            .shoulder_l(98.0, 20.0, 0.0)
+            .elbow_l(70.0)
+            .shoulder_r(100.0, 18.0, 0.0)
+            .elbow_r(68.0)
+            .hip_l(16.0, 6.0, 0.0)
+            .knee_l(50.0)
+            .hip_r(-16.0, 4.0, 0.0)
+            .knee_r(40.0)
+            .toe_l(40.0)
+            .toe_r(42.0),
+    }
+}
+
+/// The landing taken: the same body as the catch, sunk lower and further
+/// over the front foot, two frames after it -- the weight arriving.
+fn sunk(pose: Pose) -> Pose {
+    let [x, y, z] = pose.root_offset();
+    let mut p = pose.hips(x, y - 0.07, z + 0.02);
+    for (j, more) in [
+        (view::skeleton::Joint::Root, 6.0),
+        (view::skeleton::Joint::Spine, 4.0),
+        (view::skeleton::Joint::Head, -4.0),
+    ] {
+        p.set_degrees(j, 0, p.degrees(j, 0) + more);
+    }
+    p
+}
+
 /// The floor arrives. The arms fold in, the head tucks under; the back starts to round and the
 /// knees come up. Backward, the back meets it, already most of a ball.
 fn contact(body: Way) -> Pose {
@@ -489,12 +553,12 @@ fn contact(body: Way) -> Pose {
             .elbow_l(92.0)
             .shoulder_r(80.0, 18.0, 0.0)
             .elbow_r(96.0)
-            .hip_l(70.0, 10.0, 0.0)
-            .knee_l(96.0)
-            .hip_r(54.0, 8.0, 0.0)
-            .knee_r(110.0)
-            .toe_l(30.0)
-            .toe_r(30.0),
+            .hip_l(48.0, 10.0, 0.0)
+            .knee_l(76.0)
+            .hip_r(30.0, 8.0, 0.0)
+            .knee_r(80.0)
+            .toe_l(32.0)
+            .toe_r(32.0),
     }
 }
 

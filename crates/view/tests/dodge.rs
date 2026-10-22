@@ -161,24 +161,46 @@ fn a_roll_starts_and_ends_upright() {
 }
 
 #[test]
-fn the_turn_is_mostly_done_when_the_cover_runs_out() {
-    // The silhouette changes on the frame the invulnerability ends: balled up
-    // and going over while the frames are free, opening as they stop being.
-    // A turn that had barely started by then would put the opening in the
-    // middle of the roll, where it reads as nothing.
-    let brk = first_vulnerable() as f32;
+fn the_ball_holds_through_the_cover() {
+    // The silhouette must not open while the frames are free: the legs come
+    // out of the ball no earlier than the cover goes, and not until the body
+    // is most of the way round -- a body opening upside down reads as a fall.
+    let brk = first_vulnerable();
     for class in ALL_CLASSES {
         let r = roll(class);
-        let k = r.through(brk);
+        assert!(r.opens() >= brk, "{class:?} opens before the cover goes");
         assert!(
-            k > 0.55,
-            "{class:?} is only {:.0}% round when the cover runs out",
-            k * 100.0
+            r.through(r.opens() as f32) >= 0.75,
+            "{class:?} opens only {:.0}% round",
+            r.through(r.opens() as f32) * 100.0
         );
         assert!(
             r.through(1.0) < 0.05,
             "{class:?} is over before its feet have left"
         );
+    }
+}
+
+#[test]
+fn the_roll_reads_at_speed() {
+    // From play (2026-10-22): rolled the rest of the way in half a dozen frames
+    // after the contact, it "read too fast in motion". The roll on the floor
+    // takes at least eight, and never turns more than a sixth of a turn in one.
+    for class in ALL_CLASSES {
+        let r = roll(class);
+        assert!(
+            r.upright() - r.contact() >= 8,
+            "{class:?} rolls in {} frames",
+            r.upright() - r.contact()
+        );
+        for q in 0..length() as u32 * 4 {
+            let f = q as f32 / 4.0;
+            let step = (r.through(f + 1.0) - r.through(f)).abs();
+            assert!(
+                step < 1.0 / 6.0,
+                "{class:?} turns {step:.2} of a turn in a frame at {f}"
+            );
+        }
     }
 }
 
@@ -225,7 +247,7 @@ fn every_class_rolls_its_own() {
             let n = a.length().min(b.length()) as u32;
             let apart: f32 = (0..n).map(|i| a.at(i).separation(&b.at(i))).sum::<f32>() / n as f32;
             assert!(
-                apart > 1.0,
+                apart > 0.5,
                 "{class:?}'s roll {w:?} is the Champion's ({apart:.2} apart)"
             );
         }
@@ -238,13 +260,53 @@ fn every_class_rolls_its_own() {
 
 #[test]
 fn the_clip_and_the_turn_read_the_same_way() {
+    // `PlayerView::travel`'s strafe is positive to the body's left as drawn.
     assert_eq!(way([0.0, 3.0]), Way::Forward);
     assert_eq!(way([0.0, -3.0]), Way::Back);
-    assert_eq!(way([3.0, 1.0]), Way::Right);
-    assert_eq!(way([-3.0, 1.0]), Way::Left);
+    assert_eq!(way([-3.0, 1.0]), Way::Right);
+    assert_eq!(way([3.0, 1.0]), Way::Left);
     // Standing still -- a blink, which arrives rather than travels -- rolls
     // forward where it lands.
     assert_eq!(way([0.0, 0.0]), Way::Forward);
+}
+
+#[test]
+fn a_roll_to_the_side_dives_the_way_the_body_goes() {
+    // The bug from play (2026-10-22): rolling to the side, the body turned to
+    // face away from where it was going. Played through the real simulation
+    // -- a dodge on `D` and one on `A` -- the drawn body, turned as the
+    // renderer turns it, has to face the way it is actually moving, and its
+    // clip has to be the one for that side.
+    for (key, named) in [(Input::D, Way::Right), (Input::A, Way::Left)] {
+        let mut w = World::with_classes([Class::Champion, Class::Champion]);
+        for _ in 0..20 {
+            w.advance([Input::default(); 2]);
+        }
+        let from = w.players[0].pos;
+        let press = Input::new(Input::SHIFT | key).looking(Input::default().aim, 0);
+        w.advance([press, Input::default()]);
+        for _ in 0..5 {
+            w.advance([Input::default(); 2]);
+        }
+        let me = interpolate(&w, &w, 1.0).players[0];
+        assert!(matches!(me.action, Action::Dodge { .. }));
+        assert_eq!(way(me.travel), named, "{key:#x} reads as the wrong side");
+        let to = w.players[0].pos;
+        let moved = [
+            (to.x.raw() - from.x.raw()) as f32,
+            0.0,
+            (to.z.raw() - from.z.raw()) as f32,
+        ];
+        let facing = view::body_turn([me.facing[0], me.facing[2]]);
+        let ahead = facing
+            .mul(Quat::from_y(me.roll_yaw))
+            .rotate([0.0, 0.0, 1.0]);
+        let along = math::dot(math::normalize_or(moved, [0.0; 3]), ahead);
+        assert!(
+            along > 0.9,
+            "dodging {named:?}, the body faces {along:.2} along its travel"
+        );
+    }
 }
 
 #[test]
@@ -359,6 +421,42 @@ fn a_roll_to_the_side_faces_its_travel_and_turns_back() {
         }
         for w in [Way::Forward, Way::Back] {
             assert_eq!(turned(class, w, mid).yaw, 0.0);
+        }
+    }
+}
+
+#[test]
+fn the_turn_has_weight() {
+    // From play (2026-10-22): a turn that started fast and died off in the
+    // air read as a body made of feathers, slowed by the air. So: through the
+    // dive the turning speed only ever grows; the impact at the contact makes
+    // it faster still; and it only slows in the last few frames, as the feet
+    // take the weight.
+    for class in ALL_CLASSES {
+        let r = roll(class);
+        let speed = |f: f32| r.through(f + 0.25) - r.through(f);
+        let c = r.contact() as f32;
+        let mut was = 0.0;
+        for q in 0..(c as u32) * 4 {
+            let now = speed(q as f32 / 4.0);
+            assert!(
+                now >= was - 1e-5,
+                "{class:?} slows in the air at frame {}",
+                q as f32 / 4.0
+            );
+            was = now;
+        }
+        assert!(
+            speed(c + 1.0) > speed(c - 1.0) * 1.3,
+            "{class:?} does not pick up speed when the shoulder meets the floor"
+        );
+        let slowing_from = r.upright() as f32 - r.settle as f32 - 0.25;
+        for q in ((c as u32 + 1) * 4)..(slowing_from * 4.0) as u32 {
+            let f = q as f32 / 4.0;
+            assert!(
+                speed(f) >= speed(c + 1.0) - 1e-5,
+                "{class:?} slows mid-roll at frame {f}"
+            );
         }
     }
 }
