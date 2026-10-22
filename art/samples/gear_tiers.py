@@ -31,6 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path[:0] = [os.path.join(ROOT, "art", "lib"), os.path.join(ROOT, "art", "champion")]
 
+import bmesh  # noqa: E402
 import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 
@@ -63,7 +64,7 @@ GEAR = {
     "gold": (0.60, 0.40, 0.12),
     "gem": (0.05, 0.25, 0.60),
     "shell": (0.55, 0.53, 0.50),         # the Siegeshell's plate, pale
-    "core": (1.00, 0.80, 0.35),          # what holds a legendary together
+    "core": (0.95, 0.58, 0.14),          # what holds a legendary together
 }
 GEAR_METAL = {"iron": (0.85, 0.55), "steel": (1.0, 0.32), "bronze": (1.0, 0.38),
               "galesteel": (1.0, 0.28), "gold": (1.0, 0.25), "shell": (0.25, 0.3), "core": (1.0, 0.2)}
@@ -93,6 +94,14 @@ def unit(v):
 
 def mesh(name, verts, faces, material, joint, glow=0.0):
     ob = stage.mesh_object(name, g.g2b(np.asarray(verts, dtype=float)), faces)
+    # Every shape here is closed; its faces turned to face out, whichever
+    # way round they were written (the game draws one side only).
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(ob.data)
+    bm.free()
     g.material(ob, wardrobe.mat(material))
     ob.data.shade_smooth()
     rigid(ob, joint)
@@ -229,17 +238,103 @@ def merge(*parts):
 
 # --- The pieces --------------------------------------------------------------
 
-def shoulder(body, r, name, material, top, bottom, gap, faces=500):
-    """A shoulder lame: the shoulder's shell between two drops below the top
-    of the arm, outside the clavicle. The ``.l`` side: the one the game
-    draws bare, away from his cape (his gold coils run down that arm)."""
-    sy = r.o["arm.l"][1]
-    inner = r.o["clavicle.l"][0] - 0.03
+def reach(body, centre, within=0.16, outward=None):
+    """How far the body (and so, with a margin, his clothes) reaches from
+    ``centre``: the furthest of its points within ``within`` of it, on the
+    ``outward`` side if one is given."""
+    p = verts_of(body)
+    d = p - centre
+    near = np.linalg.norm(d, axis=1) < within
+    if outward is not None:
+        near &= d @ unit(outward) > 0.0
+    return float(np.linalg.norm(d[near], axis=1).max())
 
-    def keep(c, fw):
-        y = c[..., 1] if c.ndim > 1 else c[1]
-        return (w(fw, "arm.l", "clavicle.l") > 0.25) & (y > sy - bottom) & (y < sy + 0.2 - top) & (c[..., 0] < inner)
-    return piece(body, name, gap, keep, material=material, thick=0.004, faces=faces, trim=0.008)
+
+def lame(body, r, name, material, th0, th1, out=0.0, phi=80.0, thick=0.006, glow=0.0):
+    """A shoulder plate: a band of a sphere round the shoulder joint, from
+    ``th0`` to ``th1`` degrees down from the top, ``phi`` either way round
+    from straight out, its lower edge rolled out a little. Hard-edged, as
+    plate is; sized from the body so it stands clear of the clothes."""
+    c = r.o["arm.l"] + np.array([0.0, 0.01, 0.0])
+    R = reach(body, c, 0.13, outward=[-1.0, 0.6, 0.0]) + 0.035 + out
+    nt, nphi = 8, 18
+    rings_out, rings_in = [], []
+    for i in range(nt + 1):
+        t = i / nt
+        th = math.radians(th0 + (th1 - th0) * t)
+        roll = 1.0 + 0.06 * t ** 3
+        ro, ri = [], []
+        for k in range(nphi + 1):
+            ph = math.radians(-phi + 2 * phi * k / nphi)
+            d = np.array([-math.sin(th) * math.cos(ph), math.cos(th), math.sin(th) * math.sin(ph)])
+            ro.append(c + d * R * roll)
+            ri.append(c + d * (R * roll - thick))
+        rings_out.append(ro)
+        rings_in.append(ri)
+    n = nphi + 1
+    verts = [p for ring in rings_out for p in ring] + [p for ring in rings_in for p in ring]
+    off = len(verts) // 2
+    faces = []
+    for i in range(nt):
+        for k in range(nphi):
+            a, b = i * n + k, i * n + k + 1
+            faces.append([a, b, b + n, a + n])
+            faces.append([off + a + n, off + b + n, off + b, off + a])
+    # The rim: the four edges closed between the faces.
+    for i in range(nt):
+        for k in (0, nphi):
+            a, b = i * n + k, (i + 1) * n + k
+            faces.append([a, b, off + b, off + a] if k == 0 else [b, a, off + a, off + b])
+    for i in (0, nt):
+        for k in range(nphi):
+            a, b = i * n + k, i * n + k + 1
+            faces.append([b, a, off + a, off + b] if i == 0 else [a, b, off + b, off + a])
+    return mesh(name, verts, faces, material, "arm.l", glow=glow)
+
+
+def plate_gorget(body, r, name, material, low=0.06, high=0.03, out=0.0, phi=95.0, thick=0.006, glow=0.0):
+    """A plate at the throat: round the front of the neck and down over the
+    top of the chest, each height's radius measured from the body round
+    it."""
+    p = verts_of(body)
+    y0, y1 = r.o["chest"][1] + low, r.o["neck"][1] + high
+    nh, nphi = 5, 20
+    rings_out, rings_in = [], []
+    for i in range(nh + 1):
+        t = i / nh
+        y = y1 + (y0 - y1) * t
+        band = p[np.abs(p[:, 1] - y) < 0.02]
+        band = band[np.abs(band[:, 0]) < 0.17]
+        ro, ri = [], []
+        for k in range(nphi + 1):
+            ph = math.radians(-phi + 2 * phi * k / nphi)
+            d = np.array([math.sin(ph), 0.0, math.cos(ph)])
+            ang = np.arctan2(band[:, 0], band[:, 2])
+            sel = band[np.abs(ang - ph) < math.radians(12)]
+            rad = float(np.max(sel[:, 0] * d[0] + sel[:, 2] * d[2])) if len(sel) else 0.12
+            rr = rad + 0.04 + out + 0.025 * t * t
+            ro.append(np.array([0.0, y, 0.0]) + d * rr)
+            ri.append(np.array([0.0, y, 0.0]) + d * (rr - thick))
+        rings_out.append(ro)
+        rings_in.append(ri)
+    n = nphi + 1
+    verts = [q for ring in rings_out for q in ring] + [q for ring in rings_in for q in ring]
+    off = len(verts) // 2
+    faces = []
+    for i in range(nh):
+        for k in range(nphi):
+            a, b = i * n + k, i * n + k + 1
+            faces.append([a, a + n, b + n, b])
+            faces.append([off + b, off + b + n, off + a + n, off + a])
+    for i in range(nh):
+        for k in (0, nphi):
+            a, b = i * n + k, (i + 1) * n + k
+            faces.append([b, a, off + a, off + b] if k == 0 else [a, b, off + b, off + a])
+    for i in (0, nh):
+        for k in range(nphi):
+            a, b = i * n + k, i * n + k + 1
+            faces.append([a, b, off + b, off + a] if i == 0 else [b, a, off + a, off + b])
+    return mesh(name, verts, faces, material, "chest", glow=glow)
 
 
 def bracer(r, body, name, material, gap, at0=0.25, at1=1.02, faces=500):
@@ -247,15 +342,6 @@ def bracer(r, body, name, material, gap, at0=0.25, at1=1.02, faces=500):
     return piece(body, name, gap, lambda c, fw: w(fw, e, h) > 0.3,
                  trims=[(r.along(e, h, at0), r.dir(h, e)), (r.along(e, h, at1), r.dir(e, h))],
                  material=material, faces=faces, trim=0.008)
-
-
-def gorget(body, r, name, material, gap, low=0.0, faces=500):
-    top = r.o["neck"][1] + 0.03
-    bottom = r.o["chest"][1] + low
-
-    def keep(c, fw):
-        return (c[..., 1] < top) & (c[..., 1] > bottom) & (c[..., 2] > -0.02) & (w(fw, "chest", "neck", "clavicle.l", "clavicle.r") > 0.4)
-    return piece(body, name, gap, keep, material=material, faces=faces, trim=0.01)
 
 
 def verts_of(ob):
@@ -350,30 +436,26 @@ def gear(body, r, tier):
     """One tier's armour and sword."""
     out = []
     if tier == 1:
-        cap = shoulder(body, r, "pauldron", "hide", 0.0, 0.11, 0.028)
+        cap = lame(body, r, "pauldron", "hide", 0, 72, thick=0.008)
         out += [cap] + rivets(cap, "arm.l", "iron", 6)
         vb = bracer(r, body, "bracer", "hide", 0.02)
         out += [vb] + rivets(vb, "forearm.r", "iron", 4, at="high")
-        out.append(gorget(body, r, "gorget", "hide", 0.036, low=0.05))
+        out.append(plate_gorget(body, r, "gorget", "hide", low=0.1, thick=0.008))
     elif tier == 2:
-        for k, (top, bottom, gap) in enumerate([(0.0, 0.07, 0.03), (0.06, 0.12, 0.036), (0.11, 0.17, 0.042)]):
-            lame = shoulder(body, r, f"lame{k}", "steel", top, bottom, gap)
-            trim = shoulder(body, r, f"lametrim{k}", "bronze", bottom - 0.012, bottom, gap + 0.004, faces=200)
-            out += [lame, trim]
+        for k, (a, b) in enumerate([(0, 44), (36, 66), (58, 92)]):
+            out.append(lame(body, r, f"lame{k}", "steel", a, b, out=0.008 * k))
+            out.append(lame(body, r, f"lametrim{k}", "bronze", b - 5, b, out=0.008 * k + 0.003, thick=0.004))
         top = r.o["arm.l"] + np.array([-0.04, 0.09, -0.02])
         out.append(mesh("hornback", *horn(top, [-0.3, 0.2, -1.0], [-0.4, 1.0, 0.0], 0.2, 0.026), "horn", "arm.l"))
         out.append(bracer(r, body, "bracer", "steel", 0.022))
         out.append(bracer(r, body, "bracertrim", "bronze", 0.026, at0=0.25, at1=0.33, faces=200))
-        out.append(gorget(body, r, "gorget", "steel", 0.04))
+        out.append(plate_gorget(body, r, "gorget", "steel"))
+        out.append(plate_gorget(body, r, "gorgettrim", "bronze", low=0.21, out=0.003, thick=0.004))
         out += rivets(out[-1], "chest", "bronze", 5)
     elif tier == 3:
-        for k, (top, bottom, gap) in enumerate([(0.0, 0.08, 0.03), (0.07, 0.14, 0.037)]):
-            out.append(shoulder(body, r, f"lame{k}", "galesteel", top, bottom, gap))
-            out.append(shoulder(body, r, f"filigree{k}", "gold", bottom - 0.01, bottom, gap + 0.004, faces=200))
-        for o in out:
-            if o.name.startswith("filigree"):
-                grp = o.vertex_groups.new(name="edge")
-                grp.add(list(range(len(o.data.vertices))), 0.35, "REPLACE")
+        for k, (a, b) in enumerate([(0, 50), (42, 80)]):
+            out.append(lame(body, r, f"lame{k}", "galesteel", a, b, out=0.01 * k))
+            out.append(lame(body, r, f"filigree{k}", "gold", b - 6, b, out=0.01 * k + 0.003, thick=0.004, glow=0.4))
         # Galewing feathers fanned back and down off the shoulder.
         sh = r.o["arm.l"] + np.array([-0.05, 0.06, -0.03])
         for f in range(5):
@@ -385,25 +467,23 @@ def gear(body, r, tier):
         out.append(mesh("shouldergem", *ball(r.o["arm.l"] + np.array([-0.075, 0.05, 0.05]), 0.018, 10), "gem", "arm.l", glow=0.5))
         out.append(bracer(r, body, "bracer", "galesteel", 0.022))
         out.append(bracer(r, body, "bracertrim", "gold", 0.026, at0=0.25, at1=0.31, faces=200))
-        out.append(gorget(body, r, "gorget", "galesteel", 0.04))
-        gt = gorget(body, r, "gorgettrim", "gold", 0.044, low=0.21, faces=200)
-        grp = gt.vertex_groups.new(name="edge")
-        grp.add(list(range(len(gt.data.vertices))), 0.35, "REPLACE")
-        out.append(gt)
+        out.append(plate_gorget(body, r, "gorget", "galesteel"))
+        out.append(plate_gorget(body, r, "gorgettrim", "gold", low=0.2, out=0.003, thick=0.004, glow=0.4))
     else:
         # Three plates hung apart round the shoulder, gold light between.
-        for k, (top, bottom, gap) in enumerate([(0.0, 0.06, 0.05), (0.075, 0.12, 0.068), (0.135, 0.18, 0.086)]):
-            out.append(shoulder(body, r, f"plate{k}", "shell", top, bottom, gap))
-        for k, (y, rad) in enumerate([(0.035, 0.11), (-0.045, 0.125)]):
-            c = r.o["arm.l"] + np.array([-0.03, y, -0.01])
-            out.append(mesh(f"seam{k}", *hoop(c, [-0.25, 1.0, 0.0], rad, 0.004, 32), "core", "arm.l", glow=1.0))
+        # Three plates hung apart, each further out, gold light in the gaps.
+        for k, (a, b) in enumerate([(0, 32), (42, 64), (74, 98)]):
+            out.append(lame(body, r, f"plate{k}", "shell", a, b, out=0.022 * k, phi=70 + 6 * k))
+        for k, (a, b) in enumerate([(35, 39), (67, 71)]):
+            out.append(lame(body, r, f"seam{k}", "core", a, b, out=0.011 + 0.022 * k, phi=60, thick=0.003, glow=1.0))
         out.append(mesh("crown", *hoop(r.o["arm.l"] + np.array([-0.05, 0.16, 0.0]), [-0.3, 1.0, 0.0], 0.06, 0.005, 28),
                         "core", "arm.l", glow=1.0))
         out.append(bracer(r, body, "bracer", "shell", 0.03, at0=0.3, at1=0.62))
         out.append(bracer(r, body, "bracer2", "shell", 0.04, at0=0.7, at1=1.0))
         c = r.along("forearm.r", "hand.r", 0.66)
         out.append(mesh("wristlight", *hoop(c, r.dir("forearm.r", "hand.r"), 0.06, 0.004, 28), "core", "forearm.r", glow=1.0))
-        out.append(gorget(body, r, "gorget", "shell", 0.05))
+        out.append(plate_gorget(body, r, "gorget", "shell", low=0.1, out=0.01))
+        out.append(plate_gorget(body, r, "gorgetlight", "core", low=0.24, high=0.0, out=0.02, thick=0.003, glow=1.0))
         out.append(mesh("gorgetcore", *ball(r.o["chest"] + np.array([0.0, 0.17, 0.16]), 0.02, 10), "core", "chest", glow=1.0))
     return out + sword(r, tier)
 
