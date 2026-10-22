@@ -26,6 +26,8 @@
 //! - **Fast travel**, in the valley: to any cairn this player has touched
 //!   ([`crate::cairns`]) -- every one in dev mode -- out of a fight. A trip
 //!   on the wire, so the other player comes too.
+//! - **Volume**: a slider for the master volume, the same setting Page Up
+//!   and Page Down step, saved as it is moved ([`volume`]).
 //! - **Progress** -- the creatures, their trophies and tempers -- on the right,
 //!   which is otherwise hidden: it is reference, not something to read
 //!   mid-fight (`hud::update_picker` writes it; [`show_progress`] shows it).
@@ -73,6 +75,7 @@ pub fn notice_cairns(sim: Res<crate::Sim>, mut cairns: ResMut<crate::cairns::Cai
     cairns.notice(&sim.cur, me);
 }
 
+#[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
 pub fn draw(
     mut contexts: EguiContexts,
     mut menu: ResMut<Menu>,
@@ -81,6 +84,7 @@ pub fn draw(
     hub: Res<crate::hub::Hub>,
     time: Res<Time<Real>>,
     cairns: Res<crate::cairns::Cairns>,
+    mut settings: ResMut<crate::settings::Settings>,
 ) {
     let now = time.elapsed_secs_f64();
     // None as the window closes: the frame the context is gone and the
@@ -195,6 +199,7 @@ pub fn draw(
             stages(ui, &mut sim);
             dummy(ui, &mut sim);
             fast_travel(ui, &mut sim, &cairns);
+            volume(ui, &mut settings);
             ui.separator();
             ui.heading("Replay");
             ui.add_space(4.0);
@@ -223,6 +228,30 @@ pub fn draw(
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
         });
+}
+
+/// **Volume**: the master volume as a slider, in the tenths Page Up and Page
+/// Down step it by, so the file keeps the number the keys would have written.
+/// Saved on each change -- a tenth at a time, so a drag is a handful of writes.
+/// What is already sounding plays out at the old level; every cue is short.
+fn volume(ui: &mut egui::Ui, settings: &mut crate::settings::Settings) {
+    ui.separator();
+    ui.heading("Sound");
+    ui.add_space(4.0);
+    let mut level = settings.volume;
+    ui.horizontal(|ui| {
+        ui.label("Volume");
+        ui.add(
+            egui::Slider::new(&mut level, 0.0..=1.0)
+                .step_by(0.1)
+                .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+        );
+    });
+    ui.label(egui::RichText::new("Page Up and Page Down set it too.").weak());
+    if level != settings.volume {
+        settings.volume = level;
+        settings.save();
+    }
 }
 
 /// **Versus stages**: a row of buttons for the floating duel stages and one
