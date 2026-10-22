@@ -323,6 +323,93 @@ headless run cannot walk away from the Wood, and from both starting points every
 giant stays in reach. It is three lines (`stream::groves`) and the tree is
 rebuilt the next time it comes within reach.
 
+## 6. Steps 2, 3 and 4, as built (2026-10-22)
+
+**Step 2: the giants' levels** (`grove::LEVELS`, `grove::detail_at`,
+`grove::meshes`' `detail`). A giant is drawn at one of four levels by the
+distance to the nearest point of its box: everything; past 100 m, 250 m and
+450 m, nothing finer than one pixel at 1080 lines at that distance (plain), or
+than the paint's brush (painted: `look::Wash::brush`, its radius at 760 lines;
+LOD-2). Four rules apply what "finer" means, every one derived from the skeleton:
+
+- **A branch thinner than the detail is left out.** By the pipe model its parent
+  is already as thick as everything it carries.
+- **A run of nodes along one limb** (one child each, the same part, borne on
+  or not alike) **is one tube** while every node it passes is within the
+  detail of the straight line, thickness included -- the line simplification
+  every map renderer does to a coastline. It turned out to be the one that
+  counts: four-fifths of a giant is wood, and most of the wood was short
+  straight pieces with caps between them.
+- **Rounds get the fewest faces** whose flats stand no more than the detail
+  inside the true round; shelves and terraces the same, never under eight.
+- **Leaf clumps closer than four times the detail are one clump**, centred
+  among them, its radius the root of the sum of their squares, so it covers the
+  same area seen from afar.
+
+Triangles for all fourteen (`grove::tests::every_level_is_a_saving`):
+
+| Look | Up close | Past 100 m | Past 250 m | Past 450 m |
+| --- | ---: | ---: | ---: | ---: |
+| Plain (a pixel) | 915,548 | 723,964 | 398,556 | 300,800 |
+| Painted, brush 2 px | 915,548 | 371,368 | 257,316 | 179,400 |
+| Painted, brush 7 px | 915,548 | 215,988 | 92,844 | 65,408 |
+
+The plain look saves least. At 100 m almost nothing on a giant is thinner than
+a pixel: the cost of a near giant is real detail, not waste.
+
+Swapping between levels is a hard switch (LOD-1), 12 m further out going coarser than
+coming finer. The far levels are kept while the tree is in reach, and the full
+one only while it is drawn. Because those meshes are held only on the graphics
+card and are handed to new entities on later frames, each level keeps its
+bounds and gives them to its entities (`stream::Grown`).
+
+**Step 3: far land in blocks** (`stream::BLOCK`, `land::area_mesh`). Past 200 m
+from its nearest point, a block of 4×4 tiles is one mesh, at the fineness its
+tiles would have had. It is built in place of its tiles, and turned back into
+them, all sixteen in one frame, so there is never a hole or an overlap. Each
+tile keeps its water, and where strokes are laid as splats, an entity to carry
+them.
+
+**Step 4: far boxes in blocks** (`stream::MERGED_FROM`, `merge_boxes`). Past
+160 m, every box in a block is appended to one of a few meshes, one per paint,
+shadow and vertex layout, so every attribute a box carries survives
+(`stream::tests::every_box_mesh_merges`). A box wider than a block, a tree's
+trunk and a giant's box are never merged. At that distance no box is in its
+near relief and the window to the fighter never reaches one.
+
+**Measured** headless against the build of steps 0 and 1:
+
+| Where | | Meshes | Entities | Mesh on the GPU | Giants | Process |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Hearth's square | before | 6,388 | 14,696 | 158.8 MB | 73.3 MB | 1,131 MB |
+| | after | 2,838 | 10,979 | 124.2 MB | 41.1 MB | 1,014 MB |
+| Over the valley (`SHOT_AT=150,60,400`) | before | 7,076 | — | 143.7 MB | 73.3 MB | 1,126 MB |
+| | after | 3,005 | — | 105.6 MB | 37.4 MB | 1,021 MB |
+| Walking into the Wood | before | 6,178 | 13,910 | 118.5 MB | 73.3 MB | 1,059 MB |
+| | after | 2,016 | 8,945 | 116.1 MB | 73.0 MB | 1,060 MB |
+
+Land pieces dropped from about 4,400 to about 1,000 (some 700 tiles plus 270
+blocks).
+
+- **Pictures.** Every view is the same picture but for the critter that
+  wanders, with one exception: in the Wood the shadows of the giants past 100 m
+  move by a pixel at their edges, because they are now cast by the coarser
+  level. Side by side the two cannot be told apart.
+- **Inside the Wood nothing is saved on the giants, and should not be:** every
+  giant's box comes within 100 m of you, so every one is drawn whole.
+- **Frame time.** It did not move under the software rasteriser, which is held up by
+  its own pixel work. Whether the 25–35% fewer entities buy processor time is
+  for a real machine (the owner's Mac) to say.
+- **Exercised:** walking into the Wood with W held (`SHOT_PRESS`). Land blocks
+  were built and split, a block of boxes split as it came near, and giants
+  changed level, with no panic. Not exercised: dropping any of it past reach,
+  which takes a walk of more than 700 m.
+
+**Step 5 (impostors) is not needed.** After step 2, the giants past 450 m are
+a third of what they were in the plain look and a tenth in a painted one, and
+they are drawn in fog. Their biggest cost is now the Wood itself, up close,
+where an impostor would not be used.
+
 ## Open questions
 
 - **LOD-1.** Is a hard switch acceptable for the giants until `paint.wgsl`

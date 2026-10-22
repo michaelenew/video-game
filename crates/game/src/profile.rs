@@ -183,10 +183,13 @@ fn census(
     );
     let s = stream.census();
     eprintln!(
-        "streamed: {} places, {} boxes, {} land tiles, {} giants drawn, their {} meshes {:.1} MB",
+        "streamed: {} places, {} boxes and {} blocks of them in {} meshes, {} land tiles and {} blocks, {} giants drawn, their {} meshes {:.1} MB",
         s.places,
         s.boxes,
+        s.merged,
+        s.merged_meshes,
         s.tiles,
+        s.blocks,
         s.giants,
         s.built.len(),
         mb(s.built
