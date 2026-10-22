@@ -31,8 +31,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path[:0] = [os.path.join(ROOT, "art", "lib"), os.path.join(ROOT, "art", "champion")]
 
-import bmesh  # noqa: E402
 import bpy  # noqa: E402
+import bmesh  # noqa: E402,I001 (after bpy, which provides it)
 import numpy as np  # noqa: E402
 
 import character  # noqa: E402
