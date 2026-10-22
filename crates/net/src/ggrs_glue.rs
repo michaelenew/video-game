@@ -175,11 +175,13 @@ fn advance_each(
                 let mut frame_inputs = [Input::default(); MAX_PLAYERS];
                 let mut played = [seats.is_none(); MAX_PLAYERS];
                 for (k, (input, status)) in inputs.iter().enumerate() {
-                    let seat = seats.map_or(Some(k), |s| s.get(k).copied());
-                    let Some(slot) = seat.and_then(|seat| {
-                        played.get_mut(seat).map(|p| *p = true);
-                        frame_inputs.get_mut(seat)
-                    }) else {
+                    let Some(seat) = seats.map_or(Some(k), |s| s.get(k).copied()) else {
+                        continue;
+                    };
+                    if let Some(p) = played.get_mut(seat) {
+                        *p = true;
+                    }
+                    let Some(slot) = frame_inputs.get_mut(seat) else {
                         continue;
                     };
                     // **A seat GGRS has given up on has left the match.** It

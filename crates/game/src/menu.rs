@@ -148,6 +148,7 @@ pub fn draw(
                     if let Some(line) = sim.driver.status() {
                         ui.label(line);
                     }
+                    start_match(ui, &mut sim);
                     ui.add_space(4.0);
                     ui.label("Send your friend this link. In a browser it opens the game; on a desktop it goes to game --join.");
                     // A `&str` is a read-only text buffer: selectable, not editable.
@@ -255,6 +256,31 @@ pub fn draw(
             });
             });
         });
+}
+
+/// **Start match**, in a room with people in it: everybody in the fight
+/// presses it, and the frame the last of them does the match starts, on every
+/// machine at once (`sim::state::World::ready`). Pressed again, taken back.
+/// On the wire as any trip is.
+fn start_match(ui: &mut egui::Ui, sim: &mut crate::Sim) {
+    if !sim.driver.online() {
+        return;
+    }
+    let seats = 0..sim::state::MAX_PLAYERS;
+    let here = seats.clone().filter(|&i| sim.cur.is_present(i)).count();
+    let ready = seats
+        .filter(|&i| sim.cur.is_present(i) && sim.cur.ready.has(i))
+        .count();
+    let mine = sim.cur.ready.has(sim.local_player());
+    ui.horizontal(|ui| {
+        if ui
+            .button(if mine { "Not ready" } else { "Start match" })
+            .clicked()
+        {
+            sim.travel = sim::input::Travel::READY;
+        }
+        ui.label(egui::RichText::new(format!("{ready} of {here} ready")).weak());
+    });
 }
 
 /// **Input delay online**: how many frames your own presses wait, so they

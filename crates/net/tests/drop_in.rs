@@ -36,6 +36,8 @@ struct Peer {
     made: Arc<Mutex<Vec<u32>>>,
     gone: bool,
     switches: u32,
+    /// Press "Start match" on the next frame made.
+    ready: bool,
     rng: u64,
 }
 
@@ -85,6 +87,7 @@ impl Room {
             made,
             gone: false,
             switches: 0,
+            ready: false,
             rng: id.wrapping_mul(0x9e37_79b9_7f4a_7c15) | 1,
         });
     }
@@ -135,6 +138,8 @@ impl Room {
             let mut input = Input::aimed((p.rng & 0x1ff) as u16, (p.rng >> 20) as u16);
             if let Some(t) = travel {
                 input = input.travelling(t);
+            } else if p.ready {
+                input = input.travelling(sim::input::Travel::READY);
             }
             if session
                 .add_local_input(handle, NetInput::from(input))
@@ -151,6 +156,8 @@ impl Room {
                 .any(|r| matches!(r, net::ggrs::GgrsRequest::AdvanceFrame { .. }));
             if travel.is_some() && advanced {
                 p.play.sent();
+            } else if p.ready && advanced {
+                p.ready = false;
             }
             let sums = &mut p.sums;
             let seats = p.play.seats.clone();
@@ -165,6 +172,36 @@ impl Room {
             );
             if let Ok(c) = u32::try_from(confirmed) {
                 p.ledger.confirm_through(c, &p.world);
+            }
+            // The crowd's leaders, as the game relays them.
+            if let Some(post) = p.play.post.clone() {
+                let grid = sim::region::Grid::tuned();
+                let epoch = (p.world.frame / sim::tuning::crowd_epoch()) as u16;
+                let members: Vec<net::cells::Member> = p
+                    .play
+                    .roster
+                    .iter()
+                    .zip(&p.play.seats)
+                    .map(|(id, &seat)| net::cells::Member { seat, id: *id })
+                    .collect();
+                let me = p.play.seat();
+                for a in p.ledger.summed() {
+                    if !net::cells::leads(&p.world, &grid, &members, a.region, epoch, me) {
+                        continue;
+                    }
+                    for (player, &other) in p.play.seats.iter().enumerate() {
+                        if player != handle
+                            && a.region.neighbours().iter().any(|n| {
+                                net::cells::leads(&p.world, &grid, &members, *n, epoch, other)
+                            })
+                        {
+                            post.post(net::Peer::Line(player as u8), a);
+                        }
+                    }
+                }
+                for a in post.collect(p.world.frame, sim::tuning::crowd_epoch()) {
+                    p.ledger.offer_heard(a);
+                }
             }
             if p.play.after(&mut p.world, &mut p.ledger) == Change::Switched {
                 p.switches += 1;
@@ -190,17 +227,24 @@ impl Room {
             .iter()
             .map(|p| {
                 format!(
-                    "{}: frame {} epoch {} seats {:?} running {} -- {}",
+                    "{}: frame {} epoch {} seats {:?} running {} state {:?} confirmed {} -- {}",
                     p.name,
                     p.world.frame,
                     p.play.epoch,
                     p.play.seats,
                     p.play.session.is_some(),
+                    p.play.session.as_ref().map(|s| s.current_state()),
+                    p.play.confirmed(),
                     p.play.lobby.status()
                 )
             })
             .collect();
-        panic!("timed out:\n{}", state.join("\n"));
+        let reports: Vec<String> = self
+            .peers
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.play.lobby.report().join(" | ")))
+            .collect();
+        panic!("timed out:\n{}\n{}", state.join("\n"), reports.join("\n"));
     }
 
     fn here(&self) -> impl Iterator<Item = &Peer> {
@@ -213,15 +257,12 @@ impl Room {
         let Some(first) = here.first() else {
             return false;
         };
+        // Frames made in the session running now: past where it began.
         here.iter().all(|p| {
             p.play.seats.len() == players
                 && p.play.epoch == first.play.epoch
                 && p.play.session.is_some()
-                && p.sums
-                    .keys()
-                    .filter(|f| **f > first.world.frame.saturating_sub(10_000))
-                    .count()
-                    > frames as usize
+                && p.world.frame > p.play.base + frames
         })
     }
 
@@ -264,7 +305,9 @@ fn two_start_and_a_third_and_fourth_drop_in_on_the_smaller_side() {
     let mut room = Room::new();
     room.arrive("a", 0x10, Class::Champion);
     room.arrive("b", 0x20, Class::Elementalist);
-    room.run_until(Duration::from_secs(20), |r| r.settled(2, 120));
+    // Long enough that the crowd's aggregates are due to every frame: a
+    // switch has to leave none waited for (`regions::Ledger::begin`).
+    room.run_until(Duration::from_secs(20), |r| r.settled(2, 400));
     room.agree();
 
     room.arrive("c", 0x30, Class::DualMage);
@@ -275,6 +318,19 @@ fn two_start_and_a_third_and_fourth_drop_in_on_the_smaller_side() {
     room.run_until(Duration::from_secs(20), |r| r.settled(4, 150));
     room.agree();
 
+    // Everybody presses "Start match": the versus match starts, on every
+    // machine alike, and they play on in step.
+    for p in room.peers.iter_mut() {
+        p.ready = true;
+    }
+    room.run_until(Duration::from_secs(20), |r| {
+        r.here().all(|p| sim::versus::of(p.world.arena).is_some())
+    });
+    let at = room.peers[0].world.frame;
+    room.run_until(Duration::from_secs(20), |r| {
+        r.here().all(|p| p.world.frame > at + 400)
+    });
+    room.agree();
     for p in room.here() {
         let w = &p.world;
         for i in 0..4 {
@@ -301,7 +357,7 @@ fn one_leaves_the_rest_play_on_and_the_next_takes_their_seat() {
     ] {
         room.arrive(name, id, class);
     }
-    room.run_until(Duration::from_secs(30), |r| r.settled(4, 120));
+    room.run_until(Duration::from_secs(30), |r| r.settled(4, 400));
     let c_seat = room.peers[2].play.seat();
 
     room.leave("c");
@@ -338,4 +394,24 @@ fn a_full_room_turns_the_fifth_away() {
     });
     assert!(room.peers[4].play.session.is_none());
     assert!(room.here().take(4).all(|p| p.play.seats.len() == 4));
+}
+
+/// **A newcomer with the lowest id of anybody** still comes into the match
+/// going on, rather than taking the hellos it heard before the host's lineup
+/// for a room nobody has started and making a first lineup of its own -- a
+/// session of its own from the link's world, alone (found playing three
+/// desktops, 2026-10-22).
+#[test]
+fn a_newcomer_with_the_lowest_id_joins_the_match_going_on() {
+    let mut room = Room::new();
+    room.arrive("a", 0x10, Class::Champion);
+    room.arrive("b", 0x20, Class::Elementalist);
+    room.run_until(Duration::from_secs(20), |r| r.settled(2, 300));
+    room.arrive("c", 0x01, Class::DualMage);
+    room.run_until(Duration::from_secs(20), |r| r.settled(3, 120));
+    room.agree();
+    assert!(
+        room.peers[2].play.base > 300,
+        "c started from the match, not the link"
+    );
 }

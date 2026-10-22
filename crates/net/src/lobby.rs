@@ -115,7 +115,21 @@ impl Lineup {
 /// **A line that outlives a session**: the lobby and every session's mesh
 /// hold the same one, so when a lineup changes the session is replaced and
 /// the lines are not.
-pub struct Shared<L>(Arc<Mutex<L>>);
+pub struct Shared<L>(Arc<Mutex<Held<L>>>);
+
+/// A shared line, and what the lobby read off it that was not its own.
+struct Held<L> {
+    line: L,
+    /// **Packets set aside**: read by the lobby looking for the world, and
+    /// not the world -- a session's, come before this machine's session did.
+    /// Handed to the next reader first. Dropped, they were a peer's GGRS
+    /// handshake, which its retry timer could put off for good: one side
+    /// stuck synchronizing while the other ran (2026-10-22).
+    aside: std::collections::VecDeque<Vec<u8>>,
+}
+
+/// The most packets set aside on a line: a few seconds' handshake.
+const ASIDE: usize = 256;
 
 impl<L> Clone for Shared<L> {
     fn clone(&self) -> Self {
@@ -125,40 +139,61 @@ impl<L> Clone for Shared<L> {
 
 impl<L> Shared<L> {
     pub fn new(line: L) -> Self {
-        Shared(Arc::new(Mutex::new(line)))
+        Shared(Arc::new(Mutex::new(Held {
+            line,
+            aside: std::collections::VecDeque::new(),
+        })))
     }
 
-    fn lock(&self) -> MutexGuard<'_, L> {
+    fn lock(&self) -> MutexGuard<'_, Held<L>> {
         self.0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
+impl<L: Line> Shared<L> {
+    /// The next packet of the world on its way in or out (tagged [`TAG`]),
+    /// setting aside anything else for whoever reads next.
+    fn recv_world(&mut self) -> Option<Vec<u8>> {
+        let mut held = self.lock();
+        while let Some(bytes) = held.line.recv() {
+            if bytes.len() >= 7 && bytes[..2] == TAG {
+                return Some(bytes);
+            }
+            if held.aside.len() < ASIDE {
+                held.aside.push_back(bytes);
+            }
+        }
+        None
+    }
+}
+
 impl<L: Line> Line for Shared<L> {
     fn offer(&mut self) {
-        self.lock().offer();
+        self.lock().line.offer();
     }
     fn answer(&mut self, offer: &str) {
-        self.lock().answer(offer);
+        self.lock().line.answer(offer);
     }
     fn accept(&mut self, answer: &str) {
-        self.lock().accept(answer);
+        self.lock().line.accept(answer);
     }
     fn description(&mut self, now_ms: u64) -> Option<String> {
-        self.lock().description(now_ms)
+        self.lock().line.description(now_ms)
     }
     fn state(&mut self) -> LineState {
-        self.lock().state()
+        self.lock().line.state()
     }
     fn send(&mut self, packet: &[u8]) {
-        self.lock().send(packet);
+        self.lock().line.send(packet);
     }
     fn recv(&mut self) -> Option<Vec<u8>> {
-        self.lock().recv()
+        let mut held = self.lock();
+        held.aside.pop_front().or_else(|| held.line.recv())
     }
     fn report(&self, out: &mut Vec<String>) {
-        self.lock().report(out);
+        self.lock().line.report(out);
     }
 }
 
@@ -211,6 +246,10 @@ enum Note<'a> {
         waited: u64,
         terms: &'a str,
         class: Class,
+        /// The epoch of the lineup they are in, nought for none: somebody
+        /// who comes and hears one is coming into a room already going, and
+        /// does not make a first lineup of their own.
+        epoch: u32,
     },
     Lineup {
         from: u64,
@@ -261,8 +300,9 @@ impl Note<'_> {
                 waited,
                 terms,
                 class,
+                epoch,
             } => format!(
-                "{head} hello {from:016x} {waited} {terms} {}",
+                "{head} hello {from:016x} {waited} {terms} {} {epoch}",
                 class_index(*class)
             ),
             Note::Lineup { from, lineup } => {
@@ -311,6 +351,7 @@ impl Note<'_> {
                 waited: words.next()?.parse().ok()?,
                 terms: words.next()?,
                 class: class_at(words.next()?.parse().ok()?)?,
+                epoch: words.next()?.parse().ok()?,
             }),
             "lineup" => {
                 let from = id(words.next())?;
@@ -373,6 +414,8 @@ struct Partner {
     waited: u64,
     last_heard: u64,
     class: Class,
+    /// The epoch of the lineup their hello says they are in.
+    epoch: u32,
 }
 
 enum Stage {
@@ -533,15 +576,33 @@ impl<B: Board, L: Line + 'static> Lobby<B, L> {
     fn host(&mut self) -> u64 {
         let me = self.me;
         match self.lineup.clone() {
+            // Never the newcomer a lineup is letting in, whatever their id:
+            // they know nothing of the room yet, and the host who seated them
+            // must go on posting the lineup until they have it.
             Some(lineup) if lineup.has(me) => {
                 let mut ids = Vec::new();
                 for m in &lineup.members {
+                    if m.id == lineup.newcomer {
+                        continue;
+                    }
                     if m.id == me || !self.link_failed(m.id) {
                         ids.push(m.id);
                     }
                 }
                 ids.into_iter().min().unwrap_or(me)
             }
+            // **Somebody already in a lineup** means a room going on: its
+            // host is one of them, never somebody just come in -- who would
+            // otherwise make a first lineup of their own, the lowest id of
+            // everybody they had heard a hello from before the host's
+            // lineup reached them.
+            _ if self.partners.iter().any(|p| p.epoch > 0) => self
+                .partners
+                .iter()
+                .filter(|p| p.epoch > 0)
+                .map(|p| p.id)
+                .min()
+                .unwrap_or(me),
             _ => self
                 .partners
                 .iter()
@@ -598,6 +659,7 @@ impl<B: Board, L: Line + 'static> Lobby<B, L> {
                     waited,
                     terms,
                     class,
+                    epoch,
                 } => {
                     if from == self.me {
                         continue;
@@ -610,12 +672,14 @@ impl<B: Board, L: Line + 'static> Lobby<B, L> {
                         p.last_heard = now;
                         p.waited = waited;
                         p.class = class;
+                        p.epoch = epoch;
                     } else {
                         self.partners.push(Partner {
                             id: from,
                             waited,
                             last_heard: now,
                             class,
+                            epoch,
                         });
                     }
                 }
@@ -772,10 +836,7 @@ impl<B: Board, L: Line + 'static> Lobby<B, L> {
             if self.running && self.in_session.contains(&self.links[k].partner) {
                 continue;
             }
-            while let Some(bytes) = self.links[k].line.recv() {
-                if bytes.len() < 7 || bytes[..2] != TAG {
-                    continue;
-                }
+            while let Some(bytes) = self.links[k].line.recv_world() {
                 let epoch = u32::from_le_bytes([bytes[3], bytes[4], bytes[5], bytes[6]]);
                 match bytes[2] {
                     // A chunk of the world.
@@ -874,11 +935,17 @@ impl<B: Board, L: Line + 'static> Gathering for Lobby<B, L> {
             self.hellos += 1;
             let terms = self.terms.clone();
             let class = self.class;
+            let epoch = self
+                .lineup
+                .as_ref()
+                .filter(|l| l.has(self.me))
+                .map_or(0, |l| l.epoch);
             self.post(Note::Hello {
                 from: self.me,
                 waited,
                 terms: &terms,
                 class,
+                epoch,
             });
         }
         // Somebody silent too long, with no open line, has gone.
@@ -1110,7 +1177,16 @@ impl<B: Board, L: Line + 'static> Gathering for Lobby<B, L> {
             ));
         }
         for link in &self.links {
-            out.push(format!("line to {:016x}:", link.partner));
+            let stage = match &link.stage {
+                Stage::Looking => "waiting for their offer".to_string(),
+                Stage::Offering { attempt, .. } => format!("offered (attempt {attempt})"),
+                Stage::Calling => "answer accepted".to_string(),
+                Stage::Answering { attempt, answer } => format!(
+                    "answering attempt {attempt}{}",
+                    if answer.is_some() { ", answered" } else { "" }
+                ),
+            };
+            out.push(format!("line to {:016x}: {stage}", link.partner));
             link.line.report(&mut out);
         }
         self.board.report(&mut out);
@@ -1129,7 +1205,15 @@ impl<B: Board, L: Line + 'static> Gathering for Lobby<B, L> {
         // `host` reads line states, which needs `&mut`; this is the same
         // rule over what is known without asking the lines.
         match &self.lineup {
-            Some(l) if l.has(self.me) => l.members.iter().map(|m| m.id).min() == Some(self.me),
+            Some(l) if l.has(self.me) => {
+                l.members
+                    .iter()
+                    .map(|m| m.id)
+                    .filter(|id| !self.departed.contains(id) && *id != l.newcomer)
+                    .min()
+                    == Some(self.me)
+            }
+            _ if self.partners.iter().any(|p| p.epoch > 0) => false,
             _ => self.partners.iter().map(|p| p.id).chain([self.me]).min() == Some(self.me),
         }
     }
@@ -1321,6 +1405,7 @@ mod tests {
                 waited: 1200,
                 terms: "b1-x",
                 class: Class::Elementalist,
+                epoch: 4,
             },
             Note::Lineup { from: 7, lineup },
             Note::Joined {

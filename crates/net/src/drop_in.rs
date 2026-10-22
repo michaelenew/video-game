@@ -51,7 +51,7 @@ pub struct DropIn {
     /// The world's frame when the session started: GGRS counts its frames
     /// from nought, and its frame `g` is the world's `base + g`.
     pub base: u32,
-    delay: usize,
+    pub delay: usize,
     /// The last confirmed frame looked through for an admission.
     scanned: u32,
     /// **Host**: an admission to go in the next input.
