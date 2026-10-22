@@ -366,6 +366,9 @@ mod host {
     /// A window's mouse arrives one move at a time already.
     pub fn one_move_an_event() {}
 
+    /// A window is drawn at the screen's own pixels.
+    pub fn fewer_pixels() {}
+
     /// A developer's line: the terminal the game was started from.
     pub fn say(line: &str) {
         eprintln!("{line}");
@@ -570,6 +573,51 @@ mod host {
         }
     }
 
+    /// **One drawn pixel per CSS pixel**, unless `?scale=` asks for more.
+    ///
+    /// winit sizes the canvas's picture by `devicePixelRatio`, so a laptop
+    /// with a 2x screen drew four times the pixels a 1x one does, and every
+    /// one of them through the whole frame -- shading, fog, the shadow
+    /// lookup, FXAA, tonemapping. A frame here is paid by the pixel
+    /// (`docs/design/web.md`, §"What a browser frame costs"), so that was a
+    /// quarter of the speed for a sharper picture.
+    ///
+    /// Two things are changed before winit reads them, the way
+    /// [`one_move_an_event`] changes `PointerEvent`: the page's
+    /// `devicePixelRatio` is held at no more than the scale, and
+    /// `ResizeObserverEntry`'s `devicePixelContentBoxSize` is removed, so
+    /// winit measures the canvas in CSS pixels times that ratio (its
+    /// Safari path) rather than in the screen's own pixels. The browser
+    /// stretches the picture to the canvas's size on the page.
+    pub fn fewer_pixels() {
+        use wasm_bindgen::JsCast;
+        use wasm_bindgen::closure::Closure;
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let scale = super::value("--scale")
+            .and_then(|v| v.parse::<f64>().ok())
+            .filter(|s| *s > 0.0)
+            .unwrap_or(1.0);
+        let ratio = window.device_pixel_ratio().min(scale);
+        let name = wasm_bindgen::JsValue::from_str;
+        let entry = js_sys::Reflect::get(&js_sys::global(), &name("ResizeObserverEntry"))
+            .and_then(|class| js_sys::Reflect::get(&class, &name("prototype")));
+        if let Ok(prototype) = entry {
+            if let Some(prototype) = prototype.dyn_ref::<js_sys::Object>() {
+                let _ =
+                    js_sys::Reflect::delete_property(prototype, &name("devicePixelContentBoxSize"));
+            }
+        }
+        let getter = Closure::<dyn Fn() -> f64>::new(move || ratio);
+        let descriptor = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(&descriptor, &name("get"), getter.as_ref());
+        let _ = js_sys::Reflect::set(&descriptor, &name("configurable"), &true.into());
+        getter.forget();
+        let window: &js_sys::Object = window.unchecked_ref();
+        js_sys::Object::define_property(window, &name("devicePixelRatio"), &descriptor);
+    }
+
     /// This page's own address, without its query or `#`: a room made here is
     /// a room on this deploy.
     pub fn page_url() -> String {
@@ -622,9 +670,9 @@ mod host {
 
 use host::read_options;
 pub use host::{
-    announce, load_cairns, load_replay, load_settings, load_trophies, log, one_move_an_event,
-    page_url, pointer_lock_lost, report_panics, save_cairns, save_replay, save_settings,
-    save_trophies, say, show_room,
+    announce, fewer_pixels, load_cairns, load_replay, load_settings, load_trophies, log,
+    one_move_an_event, page_url, pointer_lock_lost, report_panics, save_cairns, save_replay,
+    save_settings, save_trophies, say, show_room,
 };
 
 // ---------------------------------------------------------------------------

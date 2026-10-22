@@ -21,10 +21,16 @@ opt-level = 1
 lto = "thin"
 codegen-units = 1
 
-# The wasm sandbox: small and fast matters more than compile time.
+# The browser builds: small and fast matters more than compile time.
+#
+# `s` rather than `z`: the page is single-threaded, so every millisecond of
+# Bevy's own machinery is on the frame, and `z` gives up inlining to save
+# bytes. Measured 2026-10-21 on the proving ground (`docs/design/web.md`,
+# "What a browser frame costs"): the page's own work a frame went from 15.8
+# ms to 12.9 ms for 5% more download; `3` was 12.0 ms for about a quarter more.
 [profile.wasm-release]
 inherits = "release"
-opt-level = "z"
+opt-level = "s"
 panic = "abort"
 strip = true
 
