@@ -112,14 +112,54 @@ const OPEN: [Solid; 38] = [
     Solid::cm([3000, 5700, 11750], [3500, 6000, 12250], Grass),
 ];
 
-const SOLIDS: [Solid; 38 + 16] = {
-    let mut out = [OPEN[0]; 38 + 16];
+/// **A turn-around lane** (2026-10-22): a tunnel three metres wide running
+/// east out of its mouth at 60 m, a wall across the way `gap` past the mouth,
+/// and the tunnel's roof, `rise` over its floor, the landing -- reached by
+/// jumping out, kicking off the wall and coming back over it. The roof stops
+/// `short` of the mouth, so a jump out of it is not a jump into it, nor a
+/// jump straight up from its edge a catch of the roof.
+const fn turn(z: i32, rise: i32, gap: i32, short: i32) -> [Solid; 5] {
+    [
+        Solid::cm([1000, 5700, z], [4000, 6000, z + 300], Grass),
+        Solid::cm(
+            [1000, 6000 + rise - 80, z],
+            [4000 - short, 6000 + rise, z + 300],
+            Grass,
+        ),
+        Solid::cm([1000, 5700, z - 100], [4000, 6000 + rise, z], Rock),
+        Solid::cm([1000, 5700, z + 300], [4000, 6000 + rise, z + 400], Rock),
+        Solid::cm(
+            [4000 + gap, 5000, z - 100],
+            [4100 + gap, 6000 + rise + 400, z + 400],
+            Rock,
+        ),
+    ]
+}
+
+/// The turn-around lanes, as (rise, gap, how far the roof stops short of
+/// the mouth), each at [`turn_z`]: the stack's -- 6.5 m off a wall 2.5 m
+/// out, made by every mover and by none without the wall -- and one a metre
+/// higher, past the Champion and the Blood mage (2026-10-22, the feel log).
+pub const TURNS: [(i32, i32, i32); 2] = [(650, 250, 60), (750, 250, 60)];
+/// Where turn-around lane `k`'s tunnel starts, north.
+pub const fn turn_z(k: usize) -> i32 {
+    34000 + 700 * k as i32
+}
+
+const N: usize = 38 + 16 + 5 * TURNS.len();
+
+const SOLIDS: [Solid; N] = {
+    let mut out = [OPEN[0]; N];
     let mut i = 0;
-    while i < 38 + 16 {
+    while i < N {
         out[i] = if i < 38 {
             OPEN[i]
-        } else {
+        } else if i < 38 + 16 {
             GULLIES[(i - 38) / 4][(i - 38) % 4]
+        } else {
+            let k = (i - 38 - 16) / 5;
+            let (rise, gap, short) = TURNS[k];
+            turn(turn_z(k), rise, gap, short)[(i - 38 - 16) % 5]
         };
         i += 1;
     }

@@ -24,6 +24,7 @@ pub mod critter;
 pub mod crowd;
 pub mod curve;
 pub mod debris;
+pub mod drift;
 pub mod dual;
 pub mod effects;
 pub mod envelope;

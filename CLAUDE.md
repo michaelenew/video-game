@@ -166,6 +166,13 @@ Two more things that follow from it:
   frames in world coordinates has to move when the origin does (the camera's
   focus does: `CameraRig::shift`).
 
+**A box that moves is a drift** (`sim::drift`, 2026-10-22): where it is
+is a function of the frame number and nothing else, so it is never in the
+snapshot and never in `shift`. It is on the map (`Atlas::drifts`), raised
+into `Terrain` near the fighters each frame, and it carries what holds on
+to it (`World::carry_riders`); a lift, a ferry or a moving wall is one of
+these, never a solid moved by hand. `tests/drifts.rs` holds it.
+
 `arena::MAX_SOLIDS` (64) now holds only for an arena fought on alone
 (`tests/arena.rs`); the town and the reaches have no cap.
 

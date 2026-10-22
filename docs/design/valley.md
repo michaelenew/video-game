@@ -72,12 +72,35 @@ carrying an **inverted dome 90 m across and 35 m deep**, its rim over the
 town's south roofs; on the dome's top, 353 m up, **ruins**: broken walls,
 column stumps, two arches, a fallen column, a cistern. The way up:
 
-- **The stair** up the shaft's south face, the whole height, for anybody
-  (since 2026-10-16, where a vine hung): blocks four metres apart zig-zagging
-  east and west of the south, so none is over the one under it -- a landing
-  for most classes and a catch at the hands for the Bulwark -- with a wider
-  landing every forty metres and a cairn on every other one. From its top
-  you climb on to the shaft's top inside **the chimney**, and up the
+- **The climb, since 2026-10-22, in short sections with lifts between**
+  (§3, "Stones that move"; the owner: "the user shouldn't traverse but
+  maybe half the current height of the tower manually"):
+  - **the stair** up the shaft's south face to 40 m: blocks four metres
+    apart zig-zagging east and west of the south, so none is over the one
+    under it -- a landing for most classes, a catch for the rest -- to a
+    landing with a cairn. Until 2026-10-22 it went the whole height, 78
+    blocks alike.
+  - **the first lift**, 40 to 120 m: two cars side by side south of the
+    face, one going up while the other comes down, two seconds' wait at
+    either end.
+  - **the round**, 120 to 170 m: fifteen floating stones about ten metres
+    out from the axis, circling the tower counterclockwise nearly twice --
+    gaps of three to six and a half metres, rises of two to five, five
+    pins a metre and a quarter across, a long hop, a drop, a catch of five
+    up, a rest with a cairn halfway.
+  - **the second lift**, 170 to 276 m.
+  - **the crown of the shaft**, 276 to 315 m: two stones east to **the
+    shuttle**, a stone that runs ten metres east and back fast, which you
+    run along and jump off at its fastest across twelve and a half metres
+    to a rest (a cairn) that no plain jump reaches from where it stops;
+    **the stack**, three tunnels stacked 6.5 m apart north of the rest,
+    each turned round by a wall jump -- out of the mouth, off a wall across
+    the way, back over the mouth on to the tunnel's own roof, which is the
+    next tunnel's floor; and **the ferry**, a stone that goes by south of
+    the stack's top at eleven metres a second and carries you sixty metres
+    west and twelve up to the tower's face, to a stone a catch under the
+    shaft's top. About 165 m of the 353 are climbed by hand.
+  From the shaft's top you climb on inside **the chimney**, and up the
   chimney's ledges, north and south wall by turns, to a **lip stone** set in
   its mouth: a ring's edge is not caught from inside its hole, a block's is.
 - **The corkscrew**: stones jutting a quarter turn and eight metres apart --
@@ -158,6 +181,33 @@ themselves went the same day, below):
   turns, four metres apart -- a catch at the hands for the Bulwark -- the top
   one two metres under the lip: climbed, you step in over it.
   `tests/wood.rs` climbs every one with every class.
+- **Quicker ways up** (2026-10-22, the owner: "the forest needs some more
+  entertaining and artificially shortened ways up"). A broadleaf's hanging
+  root no longer goes the whole way: its fungus runs about three and a half
+  metres apart to **a landing** 36 m up (`wood::LANDING_UP`, a cairn on
+  it), where until then thirty-odd shelves went on to the lip. From the
+  landing:
+  - **an Elder's updraft**: a column of rising air over the landing to four
+    metres over the lip, at 16 m/s (`Updraft, rising speed`, 8 until
+    then): step off into it, ride it up, drift in over the lip. Seven
+    seconds up the tallest.
+  - **a Strangler's spring**: a stone beside the landing, out from the roof,
+    that shoots up 21 to 31 m in under three seconds to stop nine metres
+    under the lip -- past every plain catch from there -- so the way on is
+    a jump off it while it is still rising, its speed added to the jump's.
+    Late in its rise is the window: about a fifth of a second for the
+    Champion on the shortest, most of a second for the Dual mage.
+
+  And **a hoist up most Sentinels** (`wood::ways_up`): two cars outside the
+  trunk, where nothing of any tree is in their way, from a fungus landing
+  overlapping a lobe of the first shelf (the stair's top) to one level with
+  the highest, a cairn on it -- 126 m up the Great Tree, 84 m up three
+  more; three Sentinels have no column clear of their limbs and keep the
+  climb. Where each goes is searched out round the grown trees, so it moves
+  if they grow differently. `tests/wood.rs` climbs every broadleaf's fungus
+  to its landing and on to its roof by the updraft or the spring, and rides
+  every hoist, with every mover; on paper no plain jump catches a lip from a
+  landing or from a spring stopped at its top.
 - **The camera passes through a tree** rather than being pulled in by every
   branch (`Terrain::seen_around`) -- as it does everything small in the
   valley since 2026-10-20 (see "What holds the camera off" below) -- and the
@@ -330,14 +380,22 @@ and asked whether that should be a table mountain or islands in the sky,
   cairn on every big island. Its stretch over the mountains is a place of
   its own, **the Sky Road**, so its cairns belong somewhere.
 - **The Hanging Stones** climb from the Bank's road -- rebuilt 2026-10-16,
-  when their vines went, and again **2026-10-20, to the Sky Road's
-  difficulty** (§3): **a column of forty hops** round a square west of the
-  foot, 41 m to 203 m, and **the span** of twenty-eight north over the
-  mountains to the plane's edge, broken by three gullies. Until then it was
-  fifty identical stones 4.2 m apart and a span of identical steps, sized
-  for the Bulwark's catch. `tests/heights.rs` jumps every plain hop and
-  kicks across every gully with every mover, and holds every tool hop to
-  the envelope.
+  when their vines went, again **2026-10-20, to the Sky Road's
+  difficulty** (§3), and **2026-10-22 into short sections with things that
+  carry you between them**: **the column**, a turn of eleven stones round a
+  square west of the foot (41 to 88 m), a lift to 150 m and straight off
+  it **the riser** -- two walls rising 24 m together, kicked between -- and
+  eight stones to its top at 203 m; and **the span** north over the
+  mountains to the plane's edge: a gully and a stretch of stones and pins,
+  **a ferry** caught going by and ridden ninety-five metres up the
+  mountainside, two **turn-arounds** out of tunnels across the slope, a
+  lift and the last stones on to the lip. Until 2026-10-20 it was fifty
+  identical stones 4.2 m apart and a span of identical steps, sized for
+  the Bulwark's catch; until 2026-10-22, forty hops round the square and a
+  span of twenty-eight broken by three gullies, every metre by hand.
+  `tests/heights.rs` jumps every plain hop, kicks across the gully, rides
+  every lift, the riser and the ferry, and turns round every turn-around
+  with every mover, and holds every tool hop to the envelope.
 - **Harder than the Sky Road**, both optional (2026-10-20, "a few that are
   more difficult still than that"): **the Crown**, a climb off the plane's
   floor to a turf island fifty metres over it, 354 m up -- the highest place
@@ -542,8 +600,8 @@ along the flat.)*
 
 | Section | Where | Hops | Tools it is meant for | Main road? |
 | --- | --- | --- | --- | --- |
-| **The column** | the Bank's road, 41 → 203 m | 40: plain catches 3--5.5 m out at +3 to +5; twelve precision stones a metre across; a drop; five **high** hops of 9 m up and 2.5--3 m out, two of them back to back; two **long** hops, of 13 m level and 12 m at +2; a rest with a cairn before each tool hop | high: the Elementalist's stone, the Champion's vault, the Dual mage's second jump, the Reaver's Gallows, the Blood mage's wings; long: the second jump, the vault, the Reaver's and the Blood mage's | no |
-| **The span** | north over the mountains, 203 → 305 m | 28: three gullies (wall jumps); long hops of 14, 17 and 15 m rising 2 to 5; a zig-zag of precision stones; up the mountainside three high hops of 9 m; rests | the same | no |
+| **The column** | the Bank's road, 41 → 203 m | 22 (since 2026-10-22): a turn of eleven -- plain catches 3--5.5 m out at +3 to +5, precision stones a metre across, one **high** hop of 9 m up -- to a rest; **a lift**, 62 m; **the riser**, 24 m of kicking between two rising walls; then a catch, a pin, a rest, a **long** hop of 13 m, two pins and a catch to the top. A rest with a cairn before each tool hop | high: the Elementalist's stone, the Champion's vault, the Dual mage's second jump, the Reaver's Gallows, the Blood mage's wings; long: the second jump, the vault, the Reaver's and the Blood mage's | no |
+| **The span** | north over the mountains, 203 → 305 m | 20 (since 2026-10-22): a gully; long hops of 14 and 17 m rising 2 and 4; a zig-zag of precision stones; **a ferry** caught going by, 95 m up the mountainside; **two turn-arounds** across the slope; **a lift**, 24 m; six plain stones on to the lip | the same | no |
 | **The Crown** | on the High Plane, 304 → 354 m | 14: long hops of 15--22 m, level to +4, onto stones one and two metres across; two high hops of 10 m, past the Champion's vault; plain hops at the edge of the catch; one rest | the Dual mage's second jump and the Elementalist's stone for the high ones; the second jump and the vault for the long ones; the Reaver's and the Blood mage's, unmeasured | no: a summit, a cairn, a view |
 | **The High Line** | across the Sky Road's middle | 7, every one a tool's: 19--22 m, two of them rising two, onto stones one and two metres across | the Dual mage's second jump, the Champion's vault (by the numbers), and whatever carries the others over the Sky Road's longest | no: a shortcut past seven of the Sky Road's stones |
 | **The Waterfall** | the main road, the Pinewood's head | 14, all plain: smaller tops, gaps of 4.3--6.4 m | none: every mover's plain jump | **yes** |
@@ -560,10 +618,61 @@ mage's, the Elementalist's along the flat -- were taken on the owner's
 word that every class has one; whether each class can actually make each
 tool hop wants a person to try it.
 
-The Needle's stair and the Deep's shafts are left a plain climb: the stair
-is the one way to the Sky Road for anybody who has not learned a tool yet
-(the corkscrew round it is the mechanic band), and a shaft is the way back
-out of a dungeon, which should not trap a class.
+The Needle's climb and the Deep's shafts are left without a tool hop: the
+Needle is the one way to the Sky Road for anybody who has not learned a
+tool yet (the corkscrew round it is the mechanic band), and a shaft is the
+way back out of a dungeon, which should not trap a class. Since 2026-10-22
+the Needle is not a plain climb of identical stones, though (below).
+
+**Stones that move** (2026-10-22, `sim::drift`). The owner: "A lot of the
+sections are super long, as I requested, but they're repetitive and don't
+give enough variety to make them interesting ... Short to medium length,
+interesting sections that give some variety, then a moving platform, then
+another section. The idea with the jump sections continues to be they need
+to look longer, more exacting, and more difficult than they really are."
+And: moving stones in the challenges themselves, and sections where the
+wall jump is the way. So the long climbs are broken up by **drifts** --
+boxes that go back and forth between two stops on a fixed clock, eased in
+and out, where the frame number says and nowhere else (nothing about one is
+in the snapshot, so a rollback puts it exactly where it was). Near a
+fighter a drift is a solid like any other. **It carries what is on it** --
+standing on it, hanging from its edge, against its side -- and **a body
+that leaves it keeps its speed**, so a jump off a rising lift goes higher
+and a jump off a fast stone carries. **A wall that is moving is a lift**:
+neither rule against a ladder asks about it while it moves (waiting at a
+stop it is a wall like any other), so two walls rising together are climbed
+by kicking between them for as long as they rise.
+
+| Kind | Where | What it asks |
+| --- | --- | --- |
+| **A lift**: two cars side by side, half a cycle apart | the Needle (40 → 120, 170 → 276 m), the Hanging Stones' column (88 → 150) and span (24 m up the mountainside) | stepping on; it waits two seconds at either end |
+| **The shuttle**: a stone that runs ten metres and back in a second and a bit | the Needle's crown | run along it as it goes and jump off its front at its fastest: 12.5 m to the rest, past every plain jump from where it stops |
+| **A ferry**: a stone that goes by beside you from out of reach, fast, and carries you a long way | the Needle's crown (62 m west to the face at 11 m/s), the Hanging Stones' span (95 m up the mountainside) | a jump sideways on to a stone going past at eleven or twelve metres a second |
+| **The riser**: two walls across a slot, rising 24 m together | the Hanging Stones' column | into the slot as they set off, and kicked up between them -- a slide is slower than they rise, so stopping leaves you behind -- to a stone off the top |
+| **A turn-around**: a tunnel's mouth, a wall across the way 2.5 m on, and the tunnel's roof 6.5 m up as the landing | the Needle's stack (three, stacked), the Hanging Stones' span (two, across the slope) | out of the mouth, off the wall, back over the mouth: the roof keeps a jump from being the way up |
+| **A hoist**: a lift's pair of cars beside a Sentinel's trunk | four of the Great Wood's Sentinels (126 m up the Great Tree, 84 m up three more) | stepping on at the first shelf |
+| **A spring**: a stone that shoots up beside a landing and stops short | the Great Wood's three Stranglers | ride it and jump off while it is still rising: nine metres short of the lip where it stops |
+| **An updraft** (not a drift: a column of air, `valley::Vent`, now with a foot) | the Great Wood's five Elders, from their landings | step off into it, ride it, drift in over the lip |
+
+**Measured on the bench** (`arena::bench::TURNS`, 2026-10-22): every mover
+turns round 6.5 m off a wall 2.5 m out, and none comes back over the mouth
+without the wall -- running out and steering back, or standing at the very
+edge and jumping straight up for the roof's rim; a metre higher is past the
+Champion and the Blood mage; the Reaver alone steers back unaided, and only
+up to 4.5 m. A flue -- two still walls three metres apart -- takes nobody
+higher than a jump (3.6 m to 5.3): the ladder rules spend the kicks, which
+is why the tall climb between two walls is the riser's, and moves.
+
+`tests/spire.rs` and `tests/heights.rs` ride every lift, jump off the
+shuttle, catch and ride every ferry, kick up the riser and turn round every
+turn-around with every mover, through the stand-in player (`tests/pilot`),
+and check the tricks are tricks: no plain jump makes the shuttle's gap from
+where it stops or reaches a ferry where it waits (on paper, airdodge and
+all), and no turn-around is made without its wall. `tests/drifts.rs` holds
+the mechanism: where a drift is, a rider carried and keeping its speed, a
+ride replayed bit for bit. **Unplayed**: every timing is a guess -- how
+long a lift waits, how fast the shuttle and the ferries go, how fast the
+riser rises against a slide.
 
 **The mountains are the edge**: ground steeper than `terrain_steepest` is a
 wall you slide back down, so the valley needs no boxes to keep you in it

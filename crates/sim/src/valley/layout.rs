@@ -834,19 +834,30 @@ pub fn plan() -> Plan {
     let mut wood_boxes = Vec::new();
     let mut wood_cairns = Vec::new();
     wood::build(&grown, &mut wood_boxes, &mut wood_cairns);
-    let ladders = wood::ladders(&mut grown, &wood_boxes, &ground);
-    wood_boxes.extend(ladders);
+    let ways = wood::ways_up(&mut grown, &wood_boxes, &ground);
+    wood_boxes.extend(ways.boxes);
+    wood_cairns.extend(ways.cairns);
+    plan.drifts.extend(ways.drifts);
+    plan.vents.extend(ways.vents);
     let first = plan.extras.len();
     plan.extras.extend(wood_boxes);
     plan.hidden.push(first..plan.extras.len());
     plan.extras.extend(wood_cairns);
     plan.trees = grown;
     // The Spire, on its plaza under the town's south wall.
-    spire::build(&|x, z| land.height(x, z), &mut plan.extras);
+    spire::build(
+        &|x, z| land.height(x, z),
+        &mut plan.extras,
+        &mut plan.drifts,
+    );
     // The Deep: its lid, its warrens and its Caverns.
     deep::build(&mut plan.extras);
     // The routes up to the High Plane.
-    heights::build(&|x, z| land.height(x, z), &mut plan.extras);
+    heights::build(
+        &|x, z| land.height(x, z),
+        &mut plan.extras,
+        &mut plan.drifts,
+    );
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);

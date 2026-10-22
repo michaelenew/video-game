@@ -181,19 +181,24 @@ pub struct Vent {
     pub radius: Fx,
     /// The height it lets go at.
     pub top: Fx,
+    /// The height it starts at (2026-10-22): a column over a ledge rises from
+    /// the ledge, not from the floor under it. The floor's for one from the
+    /// ground.
+    pub from: Fx,
 }
 
 impl Vent {
-    /// From centimetres.
+    /// From centimetres: a column from the floor.
     pub const fn cm(x: i32, z: i32, radius: i32, top: i32) -> Vent {
         Vent {
             at: (Fx::ratio(x, 100), Fx::ratio(z, 100)),
             radius: Fx::ratio(radius, 100),
             top: Fx::ratio(top, 100),
+            from: Fx::from_raw(i32::MIN),
         }
     }
 
-    /// Is a body at `p` in its column, below the top?
+    /// Is a body at `p` in its column, between its foot and its top?
     pub fn carries(&self, p: V3) -> bool {
         let dx = p.x.sub(self.at.0);
         let dz = p.z.sub(self.at.1);
@@ -202,6 +207,7 @@ impl Vent {
         }
         dx.mul(dx).add(dz.mul(dz)).raw() <= self.radius.mul(self.radius).raw()
             && p.y.raw() < self.top.raw()
+            && p.y.raw() >= self.from.raw()
     }
 }
 
@@ -313,8 +319,9 @@ pub fn vent_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
         None => vent_at(ground.id, feet).is_some(),
         Some(a) => {
             let m = feet.add(ground.origin());
-            a.place_at(m.x, m.z)
-                .is_some_and(|p| vent_at(p.arena, p.from_map(m)).is_some())
+            a.vents.iter().any(|v| v.carries(m))
+                || a.place_at(m.x, m.z)
+                    .is_some_and(|p| vent_at(p.arena, p.from_map(m)).is_some())
         }
     }
 }
