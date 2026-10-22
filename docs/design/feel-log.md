@@ -213,6 +213,30 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-10-22 — the dodge is a fifth longer and a fifth further, for the dive roll
+
+**Changed**
+- `Dodge length` 22→26 frames and `Dodge invulnerability` 10→12, the same share
+  of it free.
+- `Dodge speed` 17→19.2 m/s, `Dodge decay` unchanged at 0.93: what a dodge covers
+  (`dual::dodge_travel`) 3.23→3.88 m, a fifth further. The Dual mage's blink lands
+  where a dodge would end, so it goes a fifth further too.
+- New knobs, so nothing else moved with it: `Dash to the shadow, lasts at most`
+  22 frames (the Reaver's dash had borrowed the dodge's length, which is its reach)
+  and `Swim, the pop out lasts` 11 (the Blood mage's pop out of her ground had
+  borrowed half of it).
+- `feel.rs` `every_class_has_a_move_that_carries_the_body`: the Blood mage's blink
+  to an 8 m pool is measured against what a dodge really covers (3.88 m) rather
+  than speed times length (8.3 m), a bound a decaying dodge never reaches and the
+  longer dodge pushed past the pool.
+
+**Why** From play, on the dive roll drawn the same day: "the animation needs to be a
+little slower ... make it go about 20% further and the animation play about 20%
+slower", with explicit permission to change frame data. The roll's own timing in
+`view::dodge` moved with it, a fifth later throughout.
+
+**Verdict** open.
+
 ### 2026-10-18 — the Elementalist's QoL pass, from play
 
 **Changed**

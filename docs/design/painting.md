@@ -333,6 +333,53 @@ became the default)
   at least one a frame, so a step onto a new tile is one frame's hitch
   of a tile. Next if it still shows: the finest level in quarters, or
   placing on the compute pool.
+- **The splats on in a look with no broad strokes.** `splats::on` asked
+  only whether the look was painted, so `painted` (`broad: 0`, which
+  never reads the targets) placed and drew every stroke anyway -- and at
+  its `broad_size` of 0.05, two levels finer at every distance than
+  `brushed`. Under the software renderer (`scripts/profile.sh`, the demo,
+  60 s) it was 255 ms of a 775 ms frame, and the part that climbed as the
+  land filled in (133 ms to 259 while `wash brush` held at 254); the
+  owner's machine, the same shape: 35 ms climbing to 54, against plain's
+  16.7. Off unless the look lays broad strokes now: 570 ms, flat. Done
+  in the same change, unmeasured because the software renderer charges
+  per fragment and these save vertices: a tile out of the view's frustum
+  is not drawn, and a tile walked away from drops levels two finer than
+  it needs rather than keeping them to the edge of the stream.
+  `brushed` measured the same before and after (515 ms and 553, within
+  the demo's run-to-run spread); its splats still climb, 100 ms to 290,
+  as the far land arrives -- quads behind a hill are rasterised and
+  thrown away in the shader, since there is no depth test.
+- **The brush at the screen's resolution, whatever the machine.** With
+  the strokes off, `painted` was still 30 fps on the owner's machine
+  against plain's 60, and the Kuwahara was why: `crisp: 0` puts it on
+  every pixel, forty-nine taps of eight sectors each. It is a pass of its
+  own now (`wash.wgsl` `smear`) drawn into a texture at a share of the
+  screen's resolution, which `brush` brings back edge-aware (below); the share is
+  `game::governor`'s, which steps it down (1, 0.75, 0.5, 0.35, 0.25)
+  whenever half a second's median frame runs over a sixtieth and tries a
+  step back up after three seconds clear, twice as long each time a step
+  up has to be taken back. `--smear <share>` fixes it. The brush's size is
+  in the screen's pixels at every share; only how many places it is
+  worked out at changes, so at a half it is the picture at its own 760
+  lines on a screen twice that. Measured under the software renderer
+  (the town, `--look painted`): the smear 225 ms at 1, 60 at 0.5, 16.5 at
+  0.25, the area's share as it should be; the frame 450, 262, 212, against
+  plain's 141. At 0.5 the picture is hard to tell from 1; at 0.25 an edge
+  goes to steps. What is left over plain is `brush` itself (40 ms: the
+  shading, the haze, the glow and the shafts, 42 taps a pixel) and the
+  surface pass.
+- **The brush brought back bilinear.** Read back through the plain
+  filter, the half-share brush softened every edge it had kept -- a
+  window's frame, a trunk against a wall -- and the quarter turned them to
+  stairs. The joint bilateral upsample (Kopf et al., SIGGRAPH 2007) now:
+  the four texels round a pixel weighed bilinearly and then by how like
+  the pixel each is, its colour against the pixel's own unbrushed colour
+  and its depth against the pixel's, so a pixel takes its brush from its
+  own side of an edge. At a half it is hard to tell from the whole; at a
+  quarter the edges are straight again and only the brush's inside is
+  coarser. 3.5 ms more in `brush` under the software renderer; at a share
+  of one it is the texel under the pixel, the picture exactly as before.
 - **Four corners a stroke.** The placer wrote each stroke's quad as four
   vertices of seventeen floats; one instance of twenty now, and the
   shader makes the quad, a quarter of the bytes and of the placing.

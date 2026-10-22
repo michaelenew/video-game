@@ -31,10 +31,16 @@ pub struct PlayerView {
     /// Horizontal speed, for locomotion posing.
     pub speed: f32,
     /// Which way the body is moving relative to where it is facing: `x` is
-    /// strafe (positive is the character's right), `z` is forward. This is what
-    /// picks between the walk, the backpedal and the two sidesteps, and it has
-    /// to come from velocity rather than from the input because a shove or a
-    /// dodge moves you in directions you never asked for.
+    /// strafe, `z` is forward. This is what picks between the walk, the
+    /// backpedal and the two sidesteps, and it has to come from velocity rather
+    /// than from the input because a shove or a dodge moves you in directions
+    /// you never asked for.
+    ///
+    /// **The strafe is positive to the body's *left* as drawn** (measured
+    /// 2026-10-22: `D` moves a body to its drawn right and reads negative
+    /// here; `tests/dodge.rs`, `a_roll_to_the_side_dives_the_way_the_body_goes`).
+    /// This said "right" until then, and `play::directional` still weights the
+    /// sidestep clips as if it were -- which wants checking on screen.
     pub travel: [f32; 2],
     /// Where the body is in its stride, in cycles, wrapping. Drives the walk
     /// and run clips so feet land where the body actually is rather than on a
