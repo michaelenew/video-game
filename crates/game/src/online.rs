@@ -568,6 +568,19 @@ pub fn step(
     }
     meter.now.quiet |= *quiet;
 
+    // **Somebody's line closed**: they left. Their seat is given up now --
+    // GGRS settles the frame with the others -- rather than after the
+    // session's fifteen silent seconds, which froze the match for everybody
+    // still in it (2026-10-22). Those seconds stay for a friend who is only
+    // busy, drawing an arena for the first time.
+    for peer in post.take_closed() {
+        let net::Peer::Line(seat) = peer;
+        if session.disconnect_player(seat as usize).is_ok() {
+            eprintln!("player {} left", seat + 1);
+            *gone = true;
+        }
+    }
+
     if session.current_state() != net::ggrs::SessionState::Running {
         return;
     }

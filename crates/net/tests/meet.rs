@@ -830,3 +830,160 @@ fn a_late_packet_does_not_shut_the_region_gate_for_good() {
         "the match froze after a late packet: frames {frames:?}"
     );
 }
+
+/// **Somebody closes the game, and the rest play on at once.** Three on the
+/// mesh with the session's real silence timeout (fifteen seconds); the third
+/// hangs up every line, the way closing a page closes its data channels. The
+/// two left behind must give the seat up within a couple of seconds -- not
+/// after fifteen, frozen, which is what four friends got (2026-10-22) -- and
+/// agree, frame for frame, on the world without them.
+#[test]
+fn a_player_who_closes_the_game_is_let_go_at_once() {
+    use net::loopback::Switchboard;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+    const LEAVES_AT: u32 = 200;
+    const UNTIL: u32 = 500;
+    let hall = Hall::default();
+    let switch = Switchboard::default();
+    // Every line each room makes, so the third's can be hung up.
+    let made: Vec<Arc<Mutex<Vec<u32>>>> = (0..3).map(|_| Arc::default()).collect();
+    let mut rooms: Vec<_> = [11u64, 22, 33]
+        .into_iter()
+        .zip(&made)
+        .map(|(id, mine)| {
+            let switch = switch.clone();
+            let mine = mine.clone();
+            Room::new(
+                hall.board(),
+                move || {
+                    let line = switch.line();
+                    mine.lock().unwrap().push(line.serial());
+                    line
+                },
+                id,
+                "t",
+            )
+            .with_players(3)
+        })
+        .collect();
+    let mut seats: Vec<Option<Seat>> = vec![None, None, None];
+    for f in 0..6_000u64 {
+        for (i, room) in rooms.iter_mut().enumerate() {
+            if seats[i].is_none()
+                && f >= i as u64 * 150
+                && let Progress::Ready(s) = room.poll(f * 16)
+            {
+                seats[i] = Some(s);
+            }
+        }
+        if seats.iter().all(Option::is_some) {
+            break;
+        }
+    }
+    let mut peers: Vec<_> = seats
+        .into_iter()
+        .enumerate()
+        .map(|(room, s)| {
+            let s = s.expect("seated");
+            let (h, post) = (s.handle, s.post.clone());
+            let start = World::with_classes([sim::Class::Champion; 3]);
+            let session = p2p::start(s).expect("session");
+            (
+                session,
+                start,
+                h,
+                0u32,
+                post,
+                room,
+                None::<Instant>,
+                HashMapSums::default(),
+            )
+        })
+        .collect();
+    let leaver = peers.iter().position(|p| p.2 == 2).expect("a third seat");
+    let mut hung_up: Option<Instant> = None;
+    let began = Instant::now();
+    while began.elapsed() < Duration::from_secs(30) {
+        for (k, (session, world, handle, frames, post, room, let_go, sums)) in
+            peers.iter_mut().enumerate()
+        {
+            if k == leaver {
+                if *frames >= LEAVES_AT && hung_up.is_none() {
+                    for &serial in made[*room].lock().unwrap().iter() {
+                        switch.hang_up(serial);
+                    }
+                    hung_up = Some(Instant::now());
+                }
+                if hung_up.is_some() {
+                    continue;
+                }
+            }
+            session.poll_remote_clients();
+            // What the game's driver does with a closed line.
+            for net::Peer::Line(seat) in post.take_closed() {
+                if session.disconnect_player(seat as usize).is_ok() && let_go.is_none() {
+                    *let_go = Some(Instant::now());
+                }
+            }
+            for event in session.events() {
+                if let net::ggrs::GgrsEvent::DesyncDetected { frame, .. } = event {
+                    panic!("desync at frame {frame}");
+                }
+            }
+            if session.current_state() != net::ggrs::SessionState::Running || *frames >= UNTIL {
+                continue;
+            }
+            let input = Input::aimed(Input::W, (*handle as u16) << 14);
+            if session
+                .add_local_input(*handle, NetInput::from(input))
+                .is_err()
+            {
+                continue;
+            }
+            if let Ok(requests) = session.advance_frame() {
+                net::handle_requests_watched(world, requests, |_, _, after| {
+                    sums.0.insert(after.frame, after.checksum());
+                });
+                // Frames made, not calls answered: a session that may not
+                // advance still answers, with nothing in it.
+                *frames = world.frame;
+            }
+        }
+        let stayed = peers.iter().enumerate().filter(|(k, _)| *k != leaver);
+        if stayed.clone().all(|(_, p)| p.3 >= UNTIL) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let hung_up = hung_up.expect("the third never hung up");
+    let stayed: Vec<_> = peers
+        .iter()
+        .enumerate()
+        .filter(|(k, _)| *k != leaver)
+        .map(|(_, p)| p)
+        .collect();
+    for (_, world, handle, frames, _, _, let_go, _) in &stayed {
+        let let_go =
+            let_go.unwrap_or_else(|| panic!("player {} never let the third go", handle + 1));
+        assert!(
+            let_go.duration_since(hung_up) < Duration::from_secs(2),
+            "player {} took {:?} to let the third go",
+            handle + 1,
+            let_go.duration_since(hung_up)
+        );
+        assert_eq!(*frames, UNTIL, "player {} stalled", handle + 1);
+        assert!(
+            !world.is_present(2),
+            "player {} still has the third",
+            handle + 1
+        );
+    }
+    let (a, b) = (&stayed[0].7.0, &stayed[1].7.0);
+    let parted = (1..UNTIL - 10).find(|f| a.get(f) != b.get(f));
+    assert_eq!(parted, None, "the two who stayed parted at that frame");
+}
+
+/// Each frame's checksum, the last word on it.
+#[derive(Default)]
+struct HashMapSums(std::collections::HashMap<u32, u64>);

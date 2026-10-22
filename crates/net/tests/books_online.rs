@@ -16,46 +16,65 @@
 //! - the books begun from whichever frame a peer first confirmed
 //!   (`Ledger::begin`, from the agreed start).
 
-use net::loopback::{Hall, MemoryBoard, MemoryLine, Wire};
+use net::loopback::Hall;
 use net::meet::{Rendezvous, Room};
 use net::{NetInput, Progress, Seat, handle_requests_kept, p2p};
 use sim::input::Travel;
 use sim::{Input, World};
 use std::collections::HashMap;
 
-fn seats() -> (Seat, Seat) {
+/// `n` rooms for `n` players on one hall and one switchboard, each opening
+/// the link a little after the last; their seats, by handle.
+fn seats(n: usize) -> Vec<Seat> {
+    use net::loopback::Switchboard;
     let hall = Hall::default();
-    let wire = Wire::default();
-    let room = |board: MemoryBoard, end: usize, me: u64| -> Room<MemoryBoard, MemoryLine> {
-        let wire = wire.clone();
-        Room::new(board, move || wire.end(end), me, "t")
-    };
-    let (mut a, mut b) = (room(hall.board(), 0, 7), room(hall.board(), 1, 3));
-    let (mut sa, mut sb) = (None, None);
-    for f in 0..2_000u64 {
-        if sa.is_none()
-            && let Progress::Ready(s) = a.poll(f * 16)
-        {
-            sa = Some(s);
+    let switch = Switchboard::default();
+    let mut rooms: Vec<_> = (0..n)
+        .map(|i| {
+            let switch = switch.clone();
+            Room::new(
+                hall.board(),
+                move || switch.line(),
+                11 * (i as u64 + 1),
+                "t",
+            )
+            .with_players(n)
+        })
+        .collect();
+    let mut seats: Vec<Option<Seat>> = (0..n).map(|_| None).collect();
+    for f in 0..6_000u64 {
+        for (i, room) in rooms.iter_mut().enumerate() {
+            if seats[i].is_some() || f < i as u64 * 150 {
+                continue;
+            }
+            if let Progress::Ready(s) = room.poll(f * 16) {
+                seats[i] = Some(s);
+            }
         }
-        if f >= 10
-            && sb.is_none()
-            && let Progress::Ready(s) = b.poll(f * 16)
-        {
-            sb = Some(s);
+        if seats.iter().all(Option::is_some) {
+            break;
         }
     }
-    (sa.expect("a seated"), sb.expect("b seated"))
+    let mut seats: Vec<Seat> = seats
+        .into_iter()
+        .enumerate()
+        .map(|(i, s)| s.unwrap_or_else(|| panic!("room {i} never seated")))
+        .collect();
+    seats.sort_by_key(|s| s.handle);
+    seats
 }
 
 /// The start the owner's replay began from: the town, two Champions.
-const HEARTH: &str = "p1=champion p2=champion arena=hearth temper=0 seats=2";
+const HEARTH: &str = "p1=champion p2=champion arena=hearth temper=0";
 
-/// Play `frames` frames on both peers, `trip(handle, frame)` asked for by
-/// that player on that frame of theirs; `seed` decides which polls drop.
-fn play(seed: u64, frames: u32, trip: impl Fn(usize, u32) -> Travel) {
-    let start = sim::replay::Start::parse(HEARTH).expect("start").world();
-    let (sa, sb) = seats();
+/// Play `frames` frames on `n` peers, `trip(handle, frame)` asked for by
+/// that player on that frame of theirs; `seed` decides which polls drop, and
+/// `slow` is how many polls in eight the last peer drops (the rest drop one
+/// in three): a machine behind the others, as a slow one is.
+fn play(n: usize, slow: u64, seed: u64, frames: u32, trip: impl Fn(usize, u32) -> Travel) {
+    let start = sim::replay::Start::parse(&format!("{HEARTH} seats={n}"))
+        .expect("start")
+        .world();
     struct Peer {
         session: net::ggrs::P2PSession<net::SessionConfig>,
         world: World,
@@ -67,7 +86,7 @@ fn play(seed: u64, frames: u32, trip: impl Fn(usize, u32) -> Travel) {
         /// Each frame's checksum, the last word on it: a re-advance overwrites.
         sums: HashMap<u32, u64>,
     }
-    let mut peers: Vec<Peer> = [sa, sb]
+    let mut peers: Vec<Peer> = seats(n)
         .into_iter()
         .map(|s| {
             let handle = s.handle;
@@ -101,7 +120,12 @@ fn play(seed: u64, frames: u32, trip: impl Fn(usize, u32) -> Travel) {
     for _ in 0..400_000 {
         for p in peers.iter_mut() {
             // A third of the polls never happen: the line is late, often.
-            if (next() >> 40) % 3 == 0 {
+            let drop = if p.handle == n - 1 && slow > 0 {
+                (next() >> 40) % 8 < slow
+            } else {
+                (next() >> 40) % 3 == 0
+            };
+            if drop {
                 continue;
             }
             p.session.poll_remote_clients();
@@ -132,7 +156,9 @@ fn play(seed: u64, frames: u32, trip: impl Fn(usize, u32) -> Travel) {
             handle_requests_kept(&mut p.world, requests, &mut p.ledger, |_, _, after| {
                 sums.insert(after.frame, after.checksum());
             });
-            p.done += 1;
+            // Frames made, not calls answered: a session that may not advance
+            // still answers, with nothing in it.
+            p.done = p.world.frame;
             if let Ok(confirmed) = u32::try_from(p.session.confirmed_frame()) {
                 p.ledger.confirm_through(confirmed, &p.world);
             }
@@ -148,7 +174,7 @@ fn play(seed: u64, frames: u32, trip: impl Fn(usize, u32) -> Travel) {
                 if !net::cells::leads(&p.world, &grid, &members, a.region, epoch, p.handle) {
                     continue;
                 }
-                for other in (0..2).filter(|o| *o != p.handle) {
+                for other in (0..n).filter(|o| *o != p.handle) {
                     let next_door =
                         a.region.neighbours().iter().any(|n| {
                             net::cells::leads(&p.world, &grid, &members, *n, epoch, other)
@@ -187,7 +213,7 @@ fn play(seed: u64, frames: u32, trip: impl Fn(usize, u32) -> Travel) {
 #[test]
 fn the_books_keep_two_peers_in_step_through_rollback() {
     for seed in 0..8 {
-        play(seed, 600, |_, _| Travel::NONE);
+        play(2, 0, seed, 600, |_, _| Travel::NONE);
     }
 }
 
@@ -195,7 +221,7 @@ fn the_books_keep_two_peers_in_step_through_rollback() {
 fn a_trip_from_the_town_under_rollback_does_not_desync() {
     for seed in 0..8 {
         for who in 0..2 {
-            play(seed, 600, |h, f| {
+            play(2, 0, seed, 600, |h, f| {
                 if h == who && f == 300 {
                     Travel::VERSUS
                 } else {
@@ -203,5 +229,18 @@ fn a_trip_from_the_town_under_rollback_does_not_desync() {
                 }
             });
         }
+    }
+}
+
+#[test]
+fn four_with_one_slow_machine_stay_in_step() {
+    for seed in 0..4 {
+        play(4, 6, seed, 900, |h, f| {
+            if h == 3 && f == 400 {
+                Travel::VERSUS
+            } else {
+                Travel::NONE
+            }
+        });
     }
 }

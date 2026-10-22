@@ -699,7 +699,15 @@ impl Line for RtcLine {
             return LineState::Failed;
         };
         held.with(|r| {
-            if r.failed.get() || r.pc.connection_state() == RtcPeerConnectionState::Failed {
+            // A channel closing is the far end gone: the page closed, or
+            // the game quit. Said at once, where the connection itself only
+            // notices after its own timeouts.
+            let closed = matches!(
+                r.channel.ready_state(),
+                RtcDataChannelState::Closing | RtcDataChannelState::Closed
+            );
+            if r.failed.get() || closed || r.pc.connection_state() == RtcPeerConnectionState::Failed
+            {
                 LineState::Failed
             } else if r.channel.ready_state() == RtcDataChannelState::Open {
                 LineState::Open
