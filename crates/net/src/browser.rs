@@ -20,7 +20,8 @@
 //! read -- every board here is wrapped in [`Sealed`] (see `seal.rs`). Nothing
 //! of the match goes through it.
 
-use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN, Trace, seconds};
+use crate::lobby::Lobby;
+use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, STUN, Trace, seconds};
 use crate::mqtt;
 use crate::seal::{RoomKey, Sealed};
 use std::any::Any;
@@ -44,9 +45,17 @@ use web_sys::{
 /// ones that matter -- are nearly always in within a second.
 const GATHER_MS: u64 = 2_500;
 
-/// Meet through the public brokers in the room this key names.
-pub fn public(key: &RoomKey, me: u64, terms: &str) -> Room<Sealed<Boards>, RtcLine> {
-    brokers(BROKERS, key, me, terms)
+/// A room you come and go from (`crate::lobby`), through the public
+/// brokers, in the room this key names: `capacity` players at most, this one
+/// coming in as `class`.
+pub fn public(
+    key: &RoomKey,
+    me: u64,
+    terms: &str,
+    capacity: usize,
+    class: sim::Class,
+) -> Lobby<Sealed<Boards>, RtcLine> {
+    brokers(BROKERS, key, me, terms, capacity, class)
 }
 
 /// Meet through these brokers: `wss://` (or `ws://`) URLs of MQTT brokers
@@ -57,26 +66,38 @@ pub fn brokers(
     key: &RoomKey,
     me: u64,
     terms: &str,
-) -> Room<Sealed<Boards>, RtcLine> {
+    capacity: usize,
+    class: sim::Class,
+) -> Lobby<Sealed<Boards>, RtcLine> {
     let boards = urls
         .iter()
         .map(|url| Box::new(MqttBoard::open(url, key.topic(), me)) as Box<dyn Board>)
         .collect();
-    Room::new(
+    Lobby::new(
         Sealed::new(Boards(boards), key.clone()),
         RtcLine::new,
         me,
         terms,
+        capacity,
+        class,
     )
 }
 
-/// Meet another tab of this browser.
-pub fn tabs(key: &RoomKey, me: u64, terms: &str) -> Room<Sealed<TabsBoard>, RtcLine> {
-    Room::new(
+/// A room you come and go from, among the tabs of this browser.
+pub fn tabs(
+    key: &RoomKey,
+    me: u64,
+    terms: &str,
+    capacity: usize,
+    class: sim::Class,
+) -> Lobby<Sealed<TabsBoard>, RtcLine> {
+    Lobby::new(
         Sealed::new(TabsBoard::open(key.topic()), key.clone()),
         RtcLine::new,
         me,
         terms,
+        capacity,
+        class,
     )
 }
 

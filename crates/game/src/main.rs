@@ -742,7 +742,7 @@ impl Default for Sim {
             }
         });
         let seed = w.clone();
-        let driver = online::start(opts, &w);
+        let driver = online::start(opts, &w, w.players[0].class);
         Sim {
             prev: w.clone(),
             cur: w,
