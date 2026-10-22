@@ -355,7 +355,7 @@ became the default)
   against plain's 60, and the Kuwahara was why: `crisp: 0` puts it on
   every pixel, forty-nine taps of eight sectors each. It is a pass of its
   own now (`wash.wgsl` `smear`) drawn into a texture at a share of the
-  screen's resolution, which `brush` reads back filtered; the share is
+  screen's resolution, which `brush` brings back edge-aware (below); the share is
   `game::governor`'s, which steps it down (1, 0.75, 0.5, 0.35, 0.25)
   whenever half a second's median frame runs over a sixtieth and tries a
   step back up after three seconds clear, twice as long each time a step
@@ -369,6 +369,17 @@ became the default)
   goes to steps. What is left over plain is `brush` itself (40 ms: the
   shading, the haze, the glow and the shafts, 42 taps a pixel) and the
   surface pass.
+- **The brush brought back bilinear.** Read back through the plain
+  filter, the half-share brush softened every edge it had kept -- a
+  window's frame, a trunk against a wall -- and the quarter turned them to
+  stairs. The joint bilateral upsample (Kopf et al., SIGGRAPH 2007) now:
+  the four texels round a pixel weighed bilinearly and then by how like
+  the pixel each is, its colour against the pixel's own unbrushed colour
+  and its depth against the pixel's, so a pixel takes its brush from its
+  own side of an edge. At a half it is hard to tell from the whole; at a
+  quarter the edges are straight again and only the brush's inside is
+  coarser. 3.5 ms more in `brush` under the software renderer; at a share
+  of one it is the texel under the pixel, the picture exactly as before.
 - **Four corners a stroke.** The placer wrote each stroke's quad as four
   vertices of seventeen floats; one instance of twenty now, and the
   shader makes the quad, a quarter of the bytes and of the placing.

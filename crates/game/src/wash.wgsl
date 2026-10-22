@@ -332,7 +332,8 @@ fn reach_at(px: vec2<f32>, size: vec2<f32>) -> f32 {
 // **The brush, on its own**: the Kuwahara, the costliest thing in the
 // picture by far -- forty-nine taps of eight sectors a pixel -- drawn into a
 // texture of its own at `wash.i.y` of the screen's resolution, which
-// `governor` lowers when a frame runs over and `brush` reads back filtered.
+// `governor` lowers when a frame runs over and `brush` brings back to the
+// screen edge-aware (`upsampled`).
 // In the screen's own pixels throughout, so only how many places it is
 // worked out at changes, never the brush's size; at a scale of one it is
 // the brush exactly as it was.
@@ -347,6 +348,48 @@ fn smear(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         return vec4<f32>(kuwahara(at, size, k, reach), 1.0);
     }
     return vec4<f32>(read(at, size), 1.0);
+}
+
+// How unlike the pixel a texel of the brush may be, in colour (as seen) and
+// in depth (a share of the pixel's own distance), before it stops counting.
+const LIKE_COLOUR: f32 = 0.12;
+const LIKE_DEPTH: f32 = 0.05;
+
+// **The brush brought back to the screen, edge-aware**: the joint bilateral
+// upsample (Kopf, Cohen, Lischinski and Uyttendaele, SIGGRAPH 2007). Of the
+// four texels of `smear` round a pixel, each weighed as a bilinear filter
+// would, and then by how like the pixel it is -- its colour against the
+// pixel's own unbrushed colour, and the depth it was worked out at against
+// the pixel's -- so a pixel on the near side of an edge takes its brush from
+// the near side, and an edge the brush kept stays as sharp as the screen.
+// At a share of one the pixel sits on its texel and this is that texel.
+fn upsampled(px: vec2<f32>, size: vec2<f32>, raw: vec3<f32>, z: f32) -> vec3<f32> {
+    let small = vec2<f32>(textureDimensions(smear_texture));
+    let p = px / size * small - 0.5;
+    let base = floor(p);
+    let f = p - base;
+    var sum = vec3<f32>(0.0);
+    var weight = 0.0;
+    var plain = vec3<f32>(0.0);
+    for (var n = 0; n < 4; n = n + 1) {
+        let o = vec2<f32>(f32(n & 1), f32(n >> 1));
+        let t = clamp(base + o, vec2<f32>(0.0), small - 1.0);
+        let s = textureLoad(smear_texture, vec2<i32>(t), 0).rgb;
+        let bilinear = mix(1.0 - f.x, f.x, o.x) * mix(1.0 - f.y, f.y, o.y);
+        plain += s * bilinear;
+        let zt = along(depth_at((t + 0.5) / small * size, size));
+        let dz = abs(zt - z) / (max(z, 1e-3) * LIKE_DEPTH);
+        let dc = (s - raw) / LIKE_COLOUR;
+        let w = bilinear * exp(-0.5 * dot(dc, dc)) * exp(-dz * dz);
+        sum += s * w;
+        weight += w;
+    }
+    // Nothing round it like it at all (a pixel-thin thing the brush lost):
+    // the plain filter, rather than a guess.
+    if (weight < 1e-4) {
+        return plain;
+    }
+    return sum / weight;
 }
 
 @fragment
@@ -371,7 +414,7 @@ fn brush(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     var c = read(at, size);
     if (reach_at(px, size) >= 0.75) {
-        c = textureSampleLevel(smear_texture, screen_sampler, px / size, 0.0).rgb;
+        c = upsampled(px, size, c, z);
     }
 
     // **Broad strokes across the sky** (GW2's concept art): wide dry-brush
