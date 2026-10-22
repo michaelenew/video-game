@@ -68,15 +68,15 @@ after the souls games' roll. Three parts: **the dive** -- off the back foot *int
 air*, long, arms up in front of the chest and legs trailing, pitching forward on a low arc,
 so the torso comes down over the flight rather than on the first frame; **the shoulder** --
 as the floor arrives the head tucks and the lead shoulder drops, and the roll goes over
-diagonally, shoulder to opposite hip; **the roll and the rise** -- fast, on the floor, and
-up onto the feet. Back, it is the same backward: a hop back, sat down onto the back, over
+diagonally, shoulder to opposite hip; **the roll and the rise** -- on the floor, carried on
+at the speed the dive arrived with, and up onto the feet over most of the recovery. Back, it is the same backward: a hop back, sat down onto the back, over
 the shoulder. **To the side the body turns to face the travel, dives forward, and turns
 back as it rises.** The body really goes over -- `view::dodge` turns the whole drawn body
 and carries it on the dive's arc -- and it is a drawing only: the frames, the invulnerable
 window, the speed and the hurt volume are exactly what they were. (A souls light roll is
 21-24 frames with about 11 invulnerable, which is close to this dodge's 22 and 10.) The
-turn is most of the way round on the frame the cover runs out, so the silhouette still
-opens on that frame. The classes differ in timing, the height of the dive and what the
+body stays balled through the cover and opens once it is most of the way round, never
+earlier than the cover goes. The classes differ in timing, the height of the dive and what the
 arms carry (`crates/anim/src/clips/dodge.rs`):
 
 | Class | Its roll |
@@ -92,7 +92,15 @@ Two versions before it the same day were wrong from play: the first gave the Rea
 twist, the Dual mage a laid-out aerial and a cartwheel, and rolled sideways over the
 shoulder line ("looked insane"); the second dropped the body to the floor on the first
 frame and somersaulted it ("not close -- the character needs to stay airborne, then drop
-the shoulder into a roll part way through").
+the shoulder into a roll part way through"). The dive roll itself then "read too fast in
+motion" (2026-10-22): it was upright three frames after the cover went, so the roll on the
+floor was squeezed into six frames. It is now upright five to seven frames after, the roll
+leaving at the speed the dive arrived with rather than snapping round, and a test holds
+the roll to eight frames or more and a sixth of a turn a frame at most. The same report
+found the side rolls mirrored -- turned to face away from the way the body was going -- because
+`PlayerView::travel`'s strafe is positive to the body's *left* as drawn, not its right as
+its own comment says; `view::dodge::way` reads it that way now, and a test plays a dodge
+on `D` and on `A` through the simulation and holds the drawn body to face its real motion.
 
 The class dodges that are not travel keep their own drawing underneath: the Dual mage's
 and the Blood mage's blinks arrive and then roll forward where they land, and the Reaver's

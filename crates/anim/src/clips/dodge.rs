@@ -27,12 +27,13 @@
 //! ## The one thing these clips exist to communicate
 //!
 //! `Action::invulnerable` is true for the first `dodge_iframes()` frames and
-//! false afterwards, and **the silhouette has to change on that frame**. So
-//! every recipe is built around one boundary: balled and unchanging while the
-//! frames are free, then opening -- legs out for the floor, arms off the body
-//! -- the instant they are not. The frame it happens on is derived from the
-//! Oven rather than typed, so retuning the window moves the break with it, and
-//! the turn is timed off the same two numbers.
+//! false afterwards, and **the silhouette must not open while they are free**:
+//! balled and unchanging through the cover, and the legs out for the floor no
+//! earlier than the frame it goes. Since 2026-10-22 it opens a little later
+//! than that -- when the body is most of the way round (`Roll::opens`),
+//! because a roll stretched over the recovery, so that it reads at speed,
+//! is only half way round when the cover goes. The frames are derived from the
+//! Oven rather than typed, so retuning the window moves them with it.
 //!
 //! ## Which clip plays is chosen from the velocity
 //!
@@ -136,7 +137,8 @@ enum Beat {
     /// The hands reach the floor: the head tucks, the lead shoulder drops,
     /// the knees start up.
     Contact,
-    /// The ball, rolling, held unchanging to the last invulnerable frame.
+    /// The ball, rolling, held unchanging until the body is most of the way
+    /// round (`view::dodge::Roll::opens`), never before the cover goes.
     Ball,
     /// The break: legs out for the floor, arms off the body.
     Open,
@@ -167,9 +169,9 @@ fn style(class: Class) -> Style {
                     the chest and legs trailing, pitching forward as he flies; \
                     as the floor arrives the head tucks, the arms fold and the \
                     knees come up, and he goes over the right shoulder in a \
-                    ball, held unchanging while the frames are free. On the \
-                    frame the cover runs out the legs open for the floor and \
-                    he comes up in a low crouch with the weapon hand forward. \
+                    ball, held unchanging until he is most of the way round \
+                    -- never before the cover runs out. Then the legs open \
+                    for the floor and he comes up in a low crouch with the weapon hand forward. \
                     The turn, the shoulder and the height of the dive are not \
                     here: `view::dodge` turns and carries the whole body on \
                     top of this, and to the side turns him to face the travel \
@@ -252,9 +254,10 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
     let f_contact = roll.contact().clamp(4, brk - 1);
     let f_dive = 3.min(f_contact - 1);
     let f_flight = (f_contact - 3).max(f_dive);
-    let f_ball = (f_contact + 1).min(brk - 1);
-    let f_held = brk - 1;
-    let f_catch = up.clamp(brk + 1, last - 4);
+    let f_open = roll.opens().clamp(brk, last - 5);
+    let f_ball = (f_contact + 1).min(f_open - 1);
+    let f_held = f_open - 1;
+    let f_catch = up.clamp(f_open + 1, last - 4);
     let f_rise = f_catch + (last - f_catch) / 2;
 
     // Off the shoulder it goes over.
@@ -280,7 +283,7 @@ fn dive_roll(class: Class, way: Way) -> Recipe {
         ),
         Key::eased(f_ball, lean(dress(ball(), Beat::Ball)), Ease::HOLD),
         Key::eased(f_held, lean(dress(ball(), Beat::Ball)), Ease::STRIKE),
-        Key::eased(brk, dress(open(), Beat::Open), Ease::LINEAR),
+        Key::eased(f_open, dress(open(), Beat::Open), Ease::LINEAR),
         // The feet go down after the dressing, so a class that sinks lower
         // into its landing bends its knees for it rather than putting its
         // feet through the floor.

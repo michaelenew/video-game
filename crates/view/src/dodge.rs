@@ -46,8 +46,9 @@
 //!
 //! The timing is by frames, not seconds, out of `tuning::dodge_frames` and
 //! `dodge_iframes`, so retuning the window in the Oven moves the whole roll
-//! with it; and the turn is most of the way round by the frame the
-//! invulnerability ends, so the silhouette opens on that frame.
+//! with it. The body stays balled until it is most of the way round, and
+//! that is never before the invulnerability ends, so the silhouette still
+//! opens no earlier than the cover goes.
 
 use crate::clips::Clip;
 use crate::math::{self, Quat, V3};
@@ -68,9 +69,15 @@ pub const WAYS: [Way; 4] = [Way::Forward, Way::Back, Way::Left, Way::Right];
 
 /// Which way the body is actually going, not which key was pressed: a dodge is
 /// a burst of velocity and the velocity is the honest source. `travel` is
-/// strafe and forward in the character's frame, positive to its right and
-/// ahead (`interp::PlayerView::travel`). The clip and the turn both read it
-/// here, so they can never disagree about which way the roll goes.
+/// `interp::PlayerView::travel`, strafe and forward in the character's frame.
+///
+/// **Its strafe is positive to the body's *left* as drawn**, whatever its own
+/// comment says: `D` moves a body to its right and reads negative there
+/// (2026-10-22, from play -- the first rolls turned to face away from their
+/// travel and dived the wrong way). `tests/dodge.rs`
+/// (`a_roll_to_the_side_dives_the_way_the_body_goes`) holds the roll to the
+/// body's real motion rather than to the sign. The clip and the turn both
+/// read it here, so they can never disagree about which way the roll goes.
 pub fn way(travel: [f32; 2]) -> Way {
     let [strafe, forward] = travel;
     if forward.abs() >= strafe.abs() {
@@ -80,9 +87,9 @@ pub fn way(travel: [f32; 2]) -> Way {
             Way::Back
         }
     } else if strafe >= 0.0 {
-        Way::Right
-    } else {
         Way::Left
+    } else {
+        Way::Right
     }
 }
 
@@ -112,42 +119,42 @@ pub const fn roll(class: Class) -> Roll {
     match class {
         Class::Champion => Roll {
             contact: 7,
-            past_cover: 3,
+            past_cover: 6,
             hop: 0.24,
             dive: 0.2,
             about: [0.0, 0.50, 0.30],
         },
         Class::Bulwark => Roll {
             contact: 8,
-            past_cover: 4,
+            past_cover: 7,
             hop: 0.14,
             dive: 0.17,
             about: [0.0, 0.46, 0.28],
         },
         Class::ShadowReaver => Roll {
             contact: 7,
-            past_cover: 2,
+            past_cover: 5,
             hop: 0.32,
             dive: 0.22,
             about: [0.0, 0.54, 0.31],
         },
         Class::Elementalist => Roll {
             contact: 7,
-            past_cover: 3,
+            past_cover: 6,
             hop: 0.24,
             dive: 0.2,
             about: [0.0, 0.52, 0.32],
         },
         Class::BloodMage => Roll {
             contact: 8,
-            past_cover: 3,
+            past_cover: 6,
             hop: 0.2,
             dive: 0.23,
             about: [0.0, 0.48, 0.31],
         },
         Class::DualMage => Roll {
             contact: 7,
-            past_cover: 4,
+            past_cover: 7,
             hop: 0.34,
             dive: 0.2,
             about: [0.0, 0.52, 0.33],
@@ -190,8 +197,11 @@ impl Roll {
     ///
     /// Through the dive it pitches forward faster and faster, to `dive` at the
     /// contact -- a body leaving the floor leaning, and falling further over
-    /// as it flies. Then it rolls, fast at once and slowing as it comes up:
-    /// hitting the floor is what turns it over.
+    /// as it flies. Then it rolls on at the speed it arrived with, gathering
+    /// through the middle of the roll and easing out as it comes up onto its
+    /// feet: one continuous turn, no snap where the floor is met (2026-10-22,
+    /// from play: the first version rolled the rest of the way in half a dozen
+    /// frames and "read too fast in motion").
     pub fn through(&self, frame: f32) -> f32 {
         let (c, u) = (self.contact() as f32, self.upright() as f32);
         if frame <= 0.0 {
@@ -199,11 +209,27 @@ impl Roll {
         } else if frame <= c {
             self.dive * (frame / c).powi(2)
         } else if frame < u {
+            // A cubic from `dive` to a whole turn, leaving at the dive's own
+            // rate and arriving still.
             let t = (frame - c) / (u - c);
-            self.dive + (1.0 - self.dive) * (1.0 - (1.0 - t).powi(2))
+            let leaving = 2.0 * self.dive / c * (u - c);
+            let (t2, t3) = (t * t, t * t * t);
+            (2.0 * t3 - 3.0 * t2 + 1.0) * self.dive
+                + (t3 - 2.0 * t2 + t) * leaving
+                + (-2.0 * t3 + 3.0 * t2)
         } else {
             1.0
         }
+    }
+
+    /// The frame the legs come out of the ball for the floor: the cover's
+    /// last frame or later, once the body is most of the way round.
+    pub fn opens(&self) -> u16 {
+        let from = first_vulnerable();
+        (from..self.upright())
+            .find(|&f| self.through(f as f32) >= 0.8)
+            .unwrap_or(from)
+            .max(from)
     }
 
     /// How far the roll's axis has tipped onto the lead shoulder, nought to
@@ -300,7 +326,7 @@ impl Turn {
 fn facing_travel(r: &Roll, frame: f32) -> f32 {
     let last = length().saturating_sub(1) as f32;
     let up = r.upright() as f32;
-    let into = smooth(frame / 2.0);
+    let into = smooth(frame / 4.0);
     let out = smooth((frame - up) / (last - up).max(1.0));
     into * (1.0 - out)
 }
