@@ -85,19 +85,22 @@ pub fn handle_requests_watched(
 }
 
 /// **The region gate, online**: whether the next frame may be asked of
-/// GGRS (`regions::Ledger::may_advance`, `docs/design/regions.md`). The books
-/// are brought up to the session's confirmed frame *before* the gate is asked,
-/// every tick, whether or not a frame was made: the gate opens on what has
-/// been confirmed, and a held frame makes nothing. Kept only after an advance,
-/// one packet late by more than the gate's delay shut it for good -- the
-/// freeze of 2026-10-22, every match with a friend a few seconds in.
+/// GGRS (`regions::Ledger::may_advance`, `docs/design/regions.md`). The gate
+/// is told the session's confirmed frame *before* it is asked, every tick,
+/// whether or not a frame was made (`regions::Ledger::inputs_through`): it
+/// opens on inputs in hand, and a held frame makes nothing. Told only after
+/// an advance, one packet late by more than the gate's delay shut it for
+/// good -- the freeze of 2026-10-22, every match with a friend a few seconds
+/// in. The books themselves are still kept after the advance
+/// (`Ledger::confirm_through`), once the rollback has corrected the frames
+/// they are summed from.
 ///
 /// `confirmed` is the session's, which counts this machine's own inputs too:
 /// it is never taken past the world in hand.
 pub fn may_advance(ledger: &mut regions::Ledger, confirmed: i32, world: &World) -> bool {
     ledger.tick();
     if let Ok(confirmed) = u32::try_from(confirmed) {
-        ledger.confirm_through(confirmed.min(world.frame), world);
+        ledger.inputs_through(confirmed.min(world.frame));
     }
     ledger.may_advance(world.frame.wrapping_add(1))
 }

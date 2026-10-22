@@ -118,14 +118,28 @@ canvas alike, and allocates nothing after it is made. It holds:
   lag past `D` in the Oven and the game holds, then runs `D` frames behind the
   slowest neighbour, paced by its heartbeats. That is what it will do in the
   open world.
-- **Online, the books are kept before the gate is asked** (2026-10-22,
-  `net::may_advance`, `net/tests/meet.rs`). The region you stand in is heard
-  through the frame *confirmed*, so with rollback the gate shuts whenever the
-  friend's inputs are more than `D` frames late -- one slow packet. The online
-  driver used to bring the books up to the confirmed frame only after it made
-  a frame, and a shut gate makes none: it never heard the late inputs arrive,
-  and every match with a friend froze a few seconds in. Now the books follow
-  the session's confirmed frame every tick, frame made or not.
+- **Online, the gate hears the inputs before it is asked; the books are kept
+  after the advance** (2026-10-22, `net::may_advance`,
+  `Ledger::inputs_through`, `net/tests/meet.rs`, `net/tests/books_online.rs`).
+  The region you stand in is heard through the frame *confirmed*, so with
+  rollback the gate shuts whenever the friend's inputs are more than `D`
+  frames late -- one slow packet. The online driver used to tell the ledger
+  only after it made a frame, and a shut gate makes none: every match with a
+  friend froze a few seconds in. The first fix kept the whole books before
+  the gate, and that desynced: the session's confirmed frame runs ahead of
+  the frames this machine has *played* with those inputs (a rollback is
+  played on the next advance), so the crowd's aggregates were summed from
+  uncorrected worlds. Now the gate is told the confirmed frame every tick
+  (`inputs_through`, heard-through and nothing else), and the books are kept
+  after the advance, as before.
+- **Every aggregate fed is a function of the confirmed worlds** (2026-10-22).
+  Two more desyncs, found the same day by `books_online.rs`: a followed
+  stream with no peer behind it said "nobody there" on each machine's wall
+  clock, so which epochs got one hung on when the clock passed them -- it is
+  said as each frame is confirmed now; and the books began at whichever frame
+  a peer first confirmed, so a stream followed from the start was summed at a
+  different frame on each machine -- a match begins them from its agreed
+  start (`Ledger::begin`).
 
 ## The watchdog (dev mode)
 

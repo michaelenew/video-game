@@ -813,6 +813,9 @@ fn a_late_packet_does_not_shut_the_region_gate_for_good() {
             }
             if let Ok(requests) = session.advance_frame() {
                 handle_requests_kept(world, requests, ledger, |_, _, _| {});
+                if let Ok(confirmed) = u32::try_from(session.confirmed_frame()) {
+                    ledger.confirm_through(confirmed, world);
+                }
             }
         }
         if peers.iter().all(|p| p.1.frame >= UNTIL) {

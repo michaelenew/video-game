@@ -426,6 +426,8 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64) {
                     // The books are kept for this seat's fighter: its own
                     // regions and their neighbours, nobody else's.
                     sim.ledger.sit(handle);
+                    // From the agreed start, as every peer's are.
+                    sim.ledger.begin(&sim.cur);
                     Driver::Online {
                         session: Box::new(session),
                         handle,

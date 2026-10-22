@@ -419,27 +419,12 @@ impl Ledger {
                 h.through = through;
             }
         }
-        // A followed stream with no peer behind it says, on the same clock,
-        // that nobody is there: an aggregate of nothing for every epoch its
-        // clock has reached.
-        let e = t::crowd_epoch();
-        let reached = (through / e) as u16;
-        for k in 0..self.followed_len {
-            let f = self.followed[k];
-            if !f.simulated {
-                continue;
-            }
-            let from = f.epoch.map_or(reached.saturating_sub(1), |have| have + 1);
-            let mut epoch = from;
-            while epoch <= reached {
-                self.offer(Aggregate {
-                    region: f.region,
-                    epoch,
-                    ..Aggregate::NONE
-                });
-                epoch += 1;
-            }
-        }
+        // A followed stream with no peer behind it says nobody is there --
+        // but not here, on the wall clock: which epochs that covered hung on
+        // when each machine's clock passed them, so two peers fed different
+        // nothings and their worlds parted (2026-10-22). It is said as each
+        // frame is confirmed instead ([`Ledger::confirm_through`]), the same
+        // on every machine.
     }
 
     /// Whether frame `next` may be simulated: every region next to a live one
@@ -489,6 +474,35 @@ impl Ledger {
             }
             (None, None) => true,
         }
+    }
+
+    /// **Inputs are in hand through `frame`**: every region a fighter stands
+    /// in is heard through it, for the gate, and nothing else changes. What
+    /// the online driver says every tick, before it asks
+    /// [`Ledger::may_advance`], with the session's confirmed frame -- which
+    /// can run ahead of the frames this machine has *played* with those
+    /// inputs, because a rollback is played on the next advance. So the
+    /// books are not kept here: summed from a world the rollback has not yet
+    /// corrected, the crowd's aggregates differ between the machines and the
+    /// worlds fed them part (2026-10-22). They are kept by
+    /// [`Ledger::confirm_through`] after the advance, as before.
+    pub fn inputs_through(&mut self, frame: u32) {
+        for h in self.heard[..self.heard_len].iter_mut() {
+            if !h.simulated && h.through < frame {
+                h.through = frame;
+            }
+        }
+    }
+
+    /// **Begin the books at an agreed start**: fresh books, kept for
+    /// `start` itself. What a match does as it starts, from the world every
+    /// peer starts from. Begun instead from whichever frame a peer first
+    /// happened to confirm, a stream followed from the start was summed at a
+    /// different frame on each machine, and the first aggregate the worlds
+    /// read parted them (2026-10-22).
+    pub fn begin(&mut self, start: &World) {
+        self.restart(start);
+        self.confirm(start);
     }
 
     /// Keep the books for every frame up to `frame` not yet kept. `now` is
@@ -664,6 +678,23 @@ impl Ledger {
             let live = self.live[..self.live_len].contains(&f.region);
             if live && f.epoch.is_none_or(|have| have < current) {
                 self.offer(world.aggregate(&grid, f.region, current));
+                self.followed[k].epoch = Some(current);
+            }
+        }
+        // **A followed stream with no peer behind it** says nobody is there,
+        // for every epoch a confirmed frame reaches while it is followed: a
+        // function of the confirmed worlds alone, so every peer of a match
+        // feeds the same nothing on the same frame. (On the wall clock, as it
+        // was, it was not.) Said `lookahead` frames before any frame reads it,
+        // so the gate never holds for one.
+        for k in 0..self.followed_len {
+            let f = self.followed[k];
+            if f.simulated && f.epoch.is_none_or(|have| have < current) {
+                self.offer(Aggregate {
+                    region: f.region,
+                    epoch: current,
+                    ..Aggregate::NONE
+                });
                 self.followed[k].epoch = Some(current);
             }
         }
