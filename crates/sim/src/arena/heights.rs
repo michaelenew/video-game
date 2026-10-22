@@ -331,12 +331,12 @@ const fn ferry(way: Way, run: i32, rise: i32) -> Hop {
 
 /// A lift's cars: how long along the way, how wide across (two side by
 /// side), and how far from the stones either end; its clock, in frames a
-/// metre up and down (about eight metres a second up, twelve down) and the
-/// wait at either end.
+/// metre up and down (seven and a half metres a second up, twelve down) and
+/// the wait at either end.
 pub const CAR_LONG: i32 = 300;
 pub const CAR_WIDE: i32 = 290;
 const CAR_CLEAR: i32 = 10;
-const CAR_FRAMES_A_METRE: (i32, i32) = (75, 50);
+const CAR_FRAMES_A_METRE: (i32, i32) = (8, 5);
 const CAR_WAIT: u16 = 120;
 
 /// A riser's slot: how long along the way, how wide inside, its walls'

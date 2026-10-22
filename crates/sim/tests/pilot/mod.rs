@@ -953,3 +953,137 @@ fn try_walls(
     }
     Err("never came out".into())
 }
+
+/// Steer for `to` from the air: at its middle, the stick pulled back once
+/// over it.
+fn steer_for(w: &World, o: V3, to: &Solid) -> (u16, u16) {
+    let at = feet(w, o);
+    let (dx, dz) = (
+        mid(to.min.x, to.max.x).sub(at.x),
+        mid(to.min.z, to.max.z).sub(at.z),
+    );
+    let aim = sim::math::atan2_turns(dz, dx).raw() as u16;
+    let over = to.over(at.x, at.z, Fx::ZERO.sub(Fx::ratio(1, 2)));
+    (aim, if over { Input::S } else { Input::W })
+}
+
+/// Is fighter one down on `to`, or on something as high or higher?
+fn down_on(w: &World, o: V3, to: &Solid) -> bool {
+    w.players[0].grounded
+        && (on_top(w, o, to) || feet(w, o).y.raw() >= to.max.y.sub(Fx::ratio(1, 2)).raw())
+}
+
+/// **An updraft, ridden** (2026-10-22, `sim::valley::Vent`): stood on
+/// `from` -- the ledge the column rises from -- a jump into the air over
+/// it, carried up, and once the feet are over `to`'s top, steered for it.
+/// Tried with the steering begun at a few heights; `Ok` once down on `to`.
+pub fn updraft(w: &mut World, from: Solid, to: Solid) -> Result<(), String> {
+    let o = w.map_origin();
+    let mut last = String::new();
+    for early in [0, 100, 200, 300] {
+        let (from, to) = (moved(w, o, from), moved(w, o, to));
+        let at = V3::new(
+            mid(from.min.x, from.max.x),
+            from.max.y,
+            mid(from.min.z, from.max.z),
+        );
+        stand(w, at, V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO));
+        let o = w.map_origin();
+        let mut ok = None;
+        for f in 0..900u32 {
+            let high = feet(w, o).y.raw() >= to.max.y.sub(cm(early)).raw();
+            let (aim, stick) = if high { steer_for(w, o, &to) } else { (0, 0) };
+            let space = if f < 10 { Input::SPACE } else { 0 };
+            w.advance([Input::looking_at(stick | space, aim, 0), Input::new(0)]);
+            if f > 20 && w.players[0].grounded {
+                ok = Some(down_on(w, o, &to));
+                break;
+            }
+            if w.players[0].health <= 0 {
+                break;
+            }
+        }
+        match ok {
+            Some(true) => return Ok(()),
+            Some(false) => {
+                last = format!(
+                    "came down at {:?} (steering from {early} cm under)",
+                    feet(w, o)
+                )
+            }
+            None => last = format!("never came down (steering from {early} cm under)"),
+        }
+    }
+    Err(last)
+}
+
+/// **A spring, jumped off** (2026-10-22): stood on the drift `d`'s deck
+/// while it waits, and -- `delay` frames after it sets off, for every delay
+/// through its way up -- a jump, held, steered for `to`. `Ok` with the
+/// delays that land on `to` (or higher); played once more with the first,
+/// so it ends there.
+pub fn spring(w: &mut World, d: &Drift, to: Solid) -> Result<Vec<u32>, String> {
+    let mut good = Vec::new();
+    let mut last = String::new();
+    for delay in (0..d.go as u32 + 10).step_by(4) {
+        match try_spring(w, d, to, delay) {
+            Ok(()) => good.push(delay),
+            Err(e) => last = e,
+        }
+    }
+    match good.first() {
+        Some(&k) => try_spring(w, d, to, k).map(|()| good),
+        None => Err(last),
+    }
+}
+
+fn try_spring(w: &mut World, d: &Drift, to: Solid, delay: u32) -> Result<(), String> {
+    idle_until(w, None, d, |f| waiting_at_first(d, f, 20));
+    let o = w.map_origin();
+    let to = moved(w, o, to);
+    let deck = drift_now(w, d);
+    stand(
+        w,
+        V3::new(
+            mid(deck.min.x, deck.max.x),
+            deck.max.y,
+            mid(deck.min.z, deck.max.z),
+        ),
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+    );
+    let mut moving: Option<u32> = None;
+    let mut jumped: Option<u32> = None;
+    for f in 0..900u32 {
+        if moving.is_none() && d.share(w.frame.wrapping_add(1)).raw() > 0 {
+            moving = Some(f);
+        }
+        if jumped.is_none() && moving.is_some_and(|m| f >= m + delay) {
+            jumped = Some(f);
+        }
+        let mut bits = 0;
+        let mut aim = 0;
+        if let Some(j) = jumped {
+            let (a, stick) = steer_for(w, o, &to);
+            aim = a;
+            bits = stick | if f - j < 40 { Input::SPACE } else { 0 };
+        }
+        w.advance([Input::looking_at(bits, aim, 0), Input::new(0)]);
+        if w.players[0].health <= 0 {
+            return Err(format!("died (delay {delay})"));
+        }
+        if jumped.is_some_and(|j| f > j + 10) && w.players[0].grounded {
+            let on_deck = sim::drift::attached(&w.players[0], &drift_now(w, d)).is_some();
+            if !on_deck {
+                return if down_on(w, o, &to) {
+                    Ok(())
+                } else {
+                    Err(format!("came down at {:?} (delay {delay})", feet(w, o)))
+                };
+            }
+        }
+        if jumped.is_some_and(|j| f > j + 400) {
+            return Err(format!("never came down off it (delay {delay})"));
+        }
+    }
+    Err(format!("never jumped (delay {delay})"))
+}

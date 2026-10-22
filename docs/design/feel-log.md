@@ -9902,3 +9902,39 @@ like the wall is the way, from inside the tunnel. A stale see-through window: a 
 drawn see-through when the camera's line crosses where it was at its first stop, so the shuttle
 and the ferries' windows are only right there (the lifts and the riser move straight up, and
 theirs are always right).
+
+### 2026-10-22 — the Great Wood's quick ways up
+
+From the owner: "I think the forest needs some more entertaining and artificially shortened
+ways up, and sky road is fine to leave as is." The broadleaves' roofs were reached only by a
+hanging root of thirty-odd fungus shelves a catch apart (127--146 m up an Elder, 67--76 m up a
+Strangler); a Sentinel above its first shelf only by a tool.
+
+**Changed**
+- **A hanging root's fungus stops at a landing 36 m up** (a cairn), 3.1 m apart below it
+  where it was 3.9 (`wood::LANDING_UP`). Over an Elder's landing, **an updraft** to four metres
+  over the lip (`valley::Vent` has a foot now, so a column can rise from a ledge; the map keeps
+  its own, `Atlas::vents`, and `game::stream` draws them). Beside a Strangler's, **a spring**: a
+  drift that shoots up and stops nine metres under the lip, so the way on is a jump off it
+  while it rises.
+- **A hoist** (a lift's pair of cars) up four Sentinels, from the first shelf to one level with
+  the highest, searched out round each trunk for a column clear of every tree.
+- `Updraft, rising speed` 8 → 16 m/s: at 8 the tallest Elder's was fourteen seconds of floating.
+  Nothing else in the valley has an updraft.
+- The Hanging Stones' lifts were written at 75 frames a metre where 7.5 was meant: the column's
+  took 77 seconds. Now 8 up and 5 down (about seven and a half metres a second up).
+
+**Tried and dropped, the same day**
+- *A spring stopping ten metres short, at 8.6 m/s.* Only the Reaver, the Elementalist and the
+  Dual mage made it on every Strangler; at nine short and twelve metres a second every mover
+  does.
+- *Clearing a column of every roof.* It cleared the next Elder's as well, and one updraft rose
+  straight under it; now only the tree's own roof, which the column rises beside.
+- *A landing 2.2 m across.* Its cairn left no room to climb up from its edge.
+- *Shelves four metres apart.* The Champion missed a catch of four off a shelf with no run-up.
+
+**Verdict** open -- unplayed. To feel for: whether the updraft's drift in over the lip reads
+(the column is a faint cylinder); whether the spring's timing is legible -- a jump too early
+falls short and too late is off a stone already slowing -- and whether a fifth of a second for
+the Champion is a skill or a coin flip; whether the hoists make the Sentinels' crowns a place
+people go.

@@ -98,6 +98,8 @@ pub struct Stream {
     /// moved to where it is between the last two simulated frames, as
     /// everything that moves is.
     drifts: Vec<(Entity, Vec3)>,
+    /// Whether the map's own updrafts (`Atlas::vents`) are drawn: once.
+    vents: bool,
     /// The land's tiles by (column, row): the tile -- for one of a far block
     /// drawn whole, an entity that only carries its strokes, or
     /// `Entity::PLACEHOLDER` where there are none -- how finely it is drawn,
@@ -303,6 +305,7 @@ pub fn stream(
         st.merged.clear();
         st.gates.clear();
         st.drifts.clear();
+        st.vents = false;
         st.tiles.clear();
         st.blocks.clear();
         st.groves.clear();
@@ -397,6 +400,25 @@ pub fn stream(
                 true,
             );
             st.drifts.push((e, mid));
+        }
+    }
+    // The map's own updrafts: drawn once, standing still.
+    if !st.vents {
+        st.vents = true;
+        for v in &atlas.vents {
+            let Some(place) = atlas.place_at(v.at.0, v.at.1).or(atlas.places.first()) else {
+                continue;
+            };
+            let palette = look::palette::of(place.arena);
+            crate::valley::draw_vent(
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                v,
+                v.from,
+                &palette,
+                Under::Parent(root),
+            );
         }
     }
     let alpha = sim.clock.alpha();

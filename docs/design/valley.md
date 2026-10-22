@@ -181,6 +181,33 @@ themselves went the same day, below):
   turns, four metres apart -- a catch at the hands for the Bulwark -- the top
   one two metres under the lip: climbed, you step in over it.
   `tests/wood.rs` climbs every one with every class.
+- **Quicker ways up** (2026-10-22, the owner: "the forest needs some more
+  entertaining and artificially shortened ways up"). A broadleaf's hanging
+  root no longer goes the whole way: its fungus runs about three and a half
+  metres apart to **a landing** 36 m up (`wood::LANDING_UP`, a cairn on
+  it), where until then thirty-odd shelves went on to the lip. From the
+  landing:
+  - **an Elder's updraft**: a column of rising air over the landing to four
+    metres over the lip, at 16 m/s (`Updraft, rising speed`, 8 until
+    then): step off into it, ride it up, drift in over the lip. Seven
+    seconds up the tallest.
+  - **a Strangler's spring**: a stone beside the landing, out from the roof,
+    that shoots up 21 to 31 m in under three seconds to stop nine metres
+    under the lip -- past every plain catch from there -- so the way on is
+    a jump off it while it is still rising, its speed added to the jump's.
+    Late in its rise is the window: about a fifth of a second for the
+    Champion on the shortest, most of a second for the Dual mage.
+
+  And **a hoist up most Sentinels** (`wood::ways_up`): two cars outside the
+  trunk, where nothing of any tree is in their way, from a fungus landing
+  overlapping a lobe of the first shelf (the stair's top) to one level with
+  the highest, a cairn on it -- 126 m up the Great Tree, 84 m up three
+  more; three Sentinels have no column clear of their limbs and keep the
+  climb. Where each goes is searched out round the grown trees, so it moves
+  if they grow differently. `tests/wood.rs` climbs every broadleaf's fungus
+  to its landing and on to its roof by the updraft or the spring, and rides
+  every hoist, with every mover; on paper no plain jump catches a lip from a
+  landing or from a spring stopped at its top.
 - **The camera passes through a tree** rather than being pulled in by every
   branch (`Terrain::seen_around`) -- as it does everything small in the
   valley since 2026-10-20 (see "What holds the camera off" below) -- and the
@@ -623,6 +650,9 @@ by kicking between them for as long as they rise.
 | **A ferry**: a stone that goes by beside you from out of reach, fast, and carries you a long way | the Needle's crown (62 m west to the face at 11 m/s), the Hanging Stones' span (95 m up the mountainside) | a jump sideways on to a stone going past at eleven or twelve metres a second |
 | **The riser**: two walls across a slot, rising 24 m together | the Hanging Stones' column | into the slot as they set off, and kicked up between them -- a slide is slower than they rise, so stopping leaves you behind -- to a stone off the top |
 | **A turn-around**: a tunnel's mouth, a wall across the way 2.5 m on, and the tunnel's roof 6.5 m up as the landing | the Needle's stack (three, stacked), the Hanging Stones' span (two, across the slope) | out of the mouth, off the wall, back over the mouth: the roof keeps a jump from being the way up |
+| **A hoist**: a lift's pair of cars beside a Sentinel's trunk | four of the Great Wood's Sentinels (126 m up the Great Tree, 84 m up three more) | stepping on at the first shelf |
+| **A spring**: a stone that shoots up beside a landing and stops short | the Great Wood's three Stranglers | ride it and jump off while it is still rising: nine metres short of the lip where it stops |
+| **An updraft** (not a drift: a column of air, `valley::Vent`, now with a foot) | the Great Wood's five Elders, from their landings | step off into it, ride it, drift in over the lip |
 
 **Measured on the bench** (`arena::bench::TURNS`, 2026-10-22): every mover
 turns round 6.5 m off a wall 2.5 m out, and none comes back over the mouth

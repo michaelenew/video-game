@@ -677,17 +677,36 @@ fn the_road_to_the_wood_can_be_walked() {
 /// **every roof is reached** by a hanging root off its lip (`wood::ladders`,
 /// 2026-10-16, where a liana hung): every class climbs its shelves from the
 /// ground, landed or caught at the hands, and steps in over the lip.
+/// A broadleaf's roof: its rim's pad, and the box of its top a body lands
+/// on, on the side toward `toward` -- the lip's own top, halfway across it.
+fn lip_toward(rim: &trees::Pad, toward: (Fx, Fx)) -> Solid {
+    let (rx, rz) = (cm(rim.at[0]), cm(rim.at[2]));
+    let into = sim::math::wide_normalized(V3::new(toward.0.sub(rx), Fx::ZERO, toward.1.sub(rz)));
+    let at = V3::new(rx, Fx::ZERO, rz).add(into.scale(cm((rim.inner + rim.outer) / 2)));
+    let h = Fx::ratio(3, 2);
+    Solid {
+        min: V3::new(at.x.sub(h), cm(rim.at[1] - 100), at.z.sub(h)),
+        max: V3::new(at.x.add(h), cm(rim.at[1]), at.z.add(h)),
+        material: sim::arena::Material::Grass,
+        shape: Shape::Box,
+    }
+}
+
+/// **Every broadleaf has a roof, and a way up to it that is not all climb**
+/// (since 2026-10-22): a hanging root off its lip with bracket fungus up it
+/// a catch apart, to a landing [`wood::LANDING_UP`] over the ground with a
+/// cairn -- and from the landing an Elder's updraft or a Strangler's spring.
+/// Every mover climbs the fungus to the landing and gets on to the roof the
+/// way it is meant to: carried up the updraft and drifting in over the lip,
+/// or jumping off the spring while it is still going up.
 #[test]
-fn every_broadleaf_has_a_roof_its_hanging_root_climbs_to() {
+fn every_broadleaf_has_a_roof_and_a_quick_way_up_to_it() {
     let atlas = sim::atlas::valley();
-    let broad: Vec<(usize, &Tree)> = atlas
-        .trees
-        .iter()
-        .enumerate()
-        .filter(|(_, t)| t.kind != Kind::Sentinel)
-        .collect();
     let mut failed = Vec::new();
-    for (k, t) in broad {
+    for (k, t) in atlas.trees.iter().enumerate() {
+        if t.kind == Kind::Sentinel {
+            continue;
+        }
         let roof: Vec<&trees::Pad> = t
             .pads
             .iter()
@@ -698,18 +717,22 @@ fn every_broadleaf_has_a_roof_its_hanging_root_climbs_to() {
         assert_eq!(rim.kind, trees::PadKind::Rim, "tree {k}");
         let inside = roof[roof.len() - 2];
         assert!(rim.at[1] > inside.at[1] + 80, "tree {k}: its lip is no lip");
-        for pair in roof[..roof.len() - 1].windows(2) {
-            assert!((pair[0].at[1] - pair[1].at[1]).abs() <= 40, "tree {k}");
-        }
-        let shelves: Vec<Solid> = t
+        let shelves: Vec<&trees::Pad> = t
             .pads
             .iter()
             .filter(|p| p.kind == trees::PadKind::Shelf)
-            .map(pad_solid)
             .collect();
         assert!(shelves.len() > 3, "tree {k} has no way up");
-        // From the ground beside the root's foot, up, and in over the lip.
-        let first = shelves[0];
+        let landing = **shelves.last().unwrap();
+        assert_eq!(landing.outer, wood::LANDING_R, "tree {k}: no landing");
+        let ground = atlas.relief_at(cm(landing.at[0]), cm(landing.at[2]));
+        assert!(
+            (cm(landing.at[1]).sub(ground).to_int() - wood::LANDING_UP / 100).abs() <= 2,
+            "tree {k}: its landing is {} m up",
+            cm(landing.at[1]).sub(ground).to_int()
+        );
+        // From the ground beside the root's foot, up the shelves.
+        let first = pad_solid(shelves[0]);
         let (fx, fz) = first.middle();
         let toward = V3::new(cm(rim.at[0]).sub(fx), Fx::ZERO, cm(rim.at[2]).sub(fz));
         let out = sim::math::wide_normalized(toward).scale(Fx::from_int(-4));
@@ -718,27 +741,191 @@ fn every_broadleaf_has_a_roof_its_hanging_root_climbs_to() {
         let mut route = vec![Solid::cm([0, 0, 0], [0, 0, 0], sim::arena::Material::Grass)];
         route[0].min = V3::new(gx.sub(Fx::ONE), ground.sub(Fx::ONE), gz.sub(Fx::ONE));
         route[0].max = V3::new(gx.add(Fx::ONE), ground, gz.add(Fx::ONE));
-        route.extend(shelves);
-        let into = sim::math::wide_normalized(toward);
-        let lip =
-            V3::new(cm(rim.at[0]), Fx::ZERO, cm(rim.at[2])).sub(into.scale(cm(rim.outer - 160)));
-        let h = Fx::ratio(3, 2);
-        let mut over = route[0];
-        over.min = V3::new(lip.x.sub(h), cm(rim.at[1] - 100), lip.z.sub(h));
-        over.max = V3::new(lip.x.add(h), cm(rim.at[1]), lip.z.add(h));
-        route.push(over);
+        route.extend(shelves.iter().map(|p| pad_solid(p)));
+        let landing_box = *route.last().unwrap();
+        let lip = lip_toward(rim, (cm(landing.at[0]), cm(landing.at[2])));
+        // What takes you on: the updraft over the landing, or the spring
+        // beside it.
+        let draft = atlas.vents.iter().find(|v| {
+            v.at.0.sub(cm(landing.at[0])).abs().raw() < Fx::ONE.raw()
+                && v.at.1.sub(cm(landing.at[2])).abs().raw() < Fx::ONE.raw()
+        });
+        let spring = atlas.drifts.iter().find(|d| {
+            d.solid.material == sim::arena::Material::Sand
+                && d.solid.max.y.raw() == cm(landing.at[1]).raw()
+                && d.solid.middle().0.sub(cm(landing.at[0])).abs().raw() < Fx::from_int(6).raw()
+                && d.solid.middle().1.sub(cm(landing.at[2])).abs().raw() < Fx::from_int(6).raw()
+        });
+        match t.kind {
+            Kind::Elder => assert!(draft.is_some(), "Elder {k} has no updraft"),
+            _ => assert!(spring.is_some(), "Strangler {k} has no spring"),
+        }
         for class in sim::class::MOVERS {
             let mut w = World::arrive([class, class], open_journey(), ArenaId::WOOD, Some(0), 1);
+            let mut ok = true;
             for (n, pair) in route.windows(2).enumerate() {
                 let (a, b) = (pilot::local(&w, pair[0]), pilot::local(&w, pair[1]));
                 if let Err(e) = pilot::jump(&mut w, a, b) {
-                    failed.push(format!("tree {k}, {}: step {}: {e}", class.name(), n + 1));
+                    failed.push(format!("tree {k}, {}: shelf {}: {e}", class.name(), n + 1));
+                    ok = false;
                     break;
                 }
+            }
+            if !ok {
+                continue;
+            }
+            let (from, to) = (pilot::local(&w, landing_box), pilot::local(&w, lip));
+            let done = match (draft, spring) {
+                (Some(_), _) => pilot::updraft(&mut w, from, to),
+                (None, Some(d)) => pilot::spring(&mut w, d, to).map(|_| ()),
+                _ => Err("nothing to take it on up".into()),
+            };
+            if let Err(e) = done {
+                failed.push(format!("tree {k}, {}: on to the roof: {e}", class.name()));
             }
         }
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// **The quick ways up are the ways up**: from a landing, no plain jump --
+/// run, jump, airdodge, on paper -- catches the lip; nor from a spring
+/// stopped at its top, so the spring is jumped off while it rises.
+#[test]
+fn a_broadleaf_s_lip_is_out_of_reach_but_for_the_quick_way() {
+    use sim::envelope::{self as e, Extra};
+    let atlas = sim::atlas::valley();
+    for class in sim::class::MOVERS {
+        let mut paths = vec![e::off_the_edge(class, Extra::Nothing)];
+        paths.extend(e::airdodge_paths(class));
+        let apex = paths.iter().map(e::path_apex).fold(Fx::ZERO, Fx::max);
+        let reach = apex.add(sim::tuning::ledge_reach_high());
+        for t in atlas.trees.iter().filter(|t| t.kind != Kind::Sentinel) {
+            let rim = t
+                .pads
+                .iter()
+                .find(|p| p.kind == trees::PadKind::Rim)
+                .unwrap();
+            let landing = t
+                .pads
+                .iter()
+                .rev()
+                .find(|p| p.kind == trees::PadKind::Shelf)
+                .unwrap();
+            let from_spring = cm(rim.at[1] - wood::SPRING_SHORT);
+            let from = if t.kind == Kind::Elder {
+                cm(landing.at[1])
+            } else {
+                from_spring
+            };
+            assert!(
+                reach.raw() < cm(rim.at[1]).sub(from).raw(),
+                "{}: catches a lip {} m up",
+                class.name(),
+                cm(rim.at[1]).sub(from).to_f32_for_render()
+            );
+        }
+    }
+}
+
+/// **A hoist up the Great Tree and up most Sentinels**: two cars from a
+/// fungus landing on the first shelf to one level with the highest, and
+/// every mover steps on from the shelf's landing and rides to the top.
+#[test]
+fn the_sentinels_hoists_carry_every_mover_to_the_top_shelf() {
+    let atlas = sim::atlas::valley();
+    let mut hoisted = 0;
+    let mut failed = Vec::new();
+    for (k, t) in atlas.trees.iter().enumerate() {
+        if t.kind != Kind::Sentinel {
+            continue;
+        }
+        let pads: Vec<&trees::Pad> = t
+            .pads
+            .iter()
+            .filter(|p| p.outer == wood::HOIST_PAD)
+            .collect();
+        if pads.is_empty() {
+            continue;
+        }
+        let (foot, head) = (pads[0], pads[1]);
+        let car = atlas
+            .drifts
+            .iter()
+            .find(|d| {
+                d.solid.material == sim::arena::Material::Wood
+                    && d.solid.max.y.raw() == cm(foot.at[1]).raw()
+                    && (d.solid.middle().0.sub(cm(foot.at[0])).abs().raw() < Fx::from_int(8).raw())
+                    && (d.solid.middle().1.sub(cm(foot.at[2])).abs().raw() < Fx::from_int(8).raw())
+            })
+            .expect("a car at the foot's landing");
+        assert_eq!(
+            car.travel.y.raw(),
+            cm(head.at[1] - foot.at[1]).raw(),
+            "tree {k}: its cars go to its head"
+        );
+        hoisted += 1;
+        let top = pad_solid(head);
+        for class in sim::class::MOVERS {
+            let mut w = World::arrive([class, class], open_journey(), ArenaId::WOOD, Some(0), 1);
+            let to = pilot::local(&w, top);
+            if let Err(e) = pilot::ride(&mut w, car, to) {
+                failed.push(format!("tree {k}, {}: {e}", class.name()));
+            }
+        }
+    }
+    assert!(hoisted >= 3, "{hoisted} Sentinels have hoists");
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// **Nothing stands in a hoist's or a spring's way**: no tree's wood is in
+/// what a car or a spring sweeps, a little in from its sides, but the
+/// landings it stops at.
+#[test]
+fn nothing_stands_in_what_moves_in_the_wood() {
+    let atlas = sim::atlas::valley();
+    let mut wood_boxes = Vec::new();
+    for t in &atlas.trees {
+        trees::solids(t, &mut wood_boxes);
+    }
+    let skin = Fx::ratio(1, 10);
+    for d in atlas.drifts.iter().filter(|d| {
+        let (x, z) = d.solid.middle();
+        atlas
+            .place_at(x, z)
+            .is_some_and(|p| p.arena == ArenaId::WOOD)
+    }) {
+        let mut room = d.swept();
+        room.min = room.min.add(V3::new(skin, skin, skin));
+        room.max = room.max.sub(V3::new(skin, skin, skin));
+        room.max.y = room.max.y.add(Fx::from_int(2));
+        for s in &wood_boxes {
+            let meets = s.min.x.raw() < room.max.x.raw()
+                && s.max.x.raw() > room.min.x.raw()
+                && s.min.y.raw() < room.max.y.raw()
+                && s.max.y.raw() > room.min.y.raw()
+                && s.min.z.raw() < room.max.z.raw()
+                && s.max.z.raw() > room.min.z.raw();
+            let stop = s.max.y == d.solid.max.y || s.max.y == d.solid.max.y.add(d.travel.y);
+            assert!(
+                !meets
+                    || stop
+                    || s.side_push(
+                        room.middle().0,
+                        room.middle().1,
+                        Fx::ratio(13, 10),
+                        room.min.y,
+                        room.max.y
+                    )
+                    .is_none(),
+                "something of a tree from {} to {} m up is in a drift's way at ({}, {})",
+                s.min.y.to_f32_for_render(),
+                s.max.y.to_f32_for_render(),
+                room.middle().0.to_f32_for_render(),
+                room.middle().1.to_f32_for_render()
+            );
+        }
+    }
 }
 
 /// **A limb is walked along, not stopped on** (2026-10-16, from play: "the

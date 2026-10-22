@@ -834,8 +834,11 @@ pub fn plan() -> Plan {
     let mut wood_boxes = Vec::new();
     let mut wood_cairns = Vec::new();
     wood::build(&grown, &mut wood_boxes, &mut wood_cairns);
-    let ladders = wood::ladders(&mut grown, &wood_boxes, &ground);
-    wood_boxes.extend(ladders);
+    let ways = wood::ways_up(&mut grown, &wood_boxes, &ground);
+    wood_boxes.extend(ways.boxes);
+    wood_cairns.extend(ways.cairns);
+    plan.drifts.extend(ways.drifts);
+    plan.vents.extend(ways.vents);
     let first = plan.extras.len();
     plan.extras.extend(wood_boxes);
     plan.hidden.push(first..plan.extras.len());
