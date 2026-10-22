@@ -483,6 +483,17 @@ has left is not anybody still standing, so the one who stays in a duel is not ha
 every few seconds. `net/tests/meet.rs` drops one of three mid-match and checks the two who
 stay agree on the world without them to the last frame.
 
+**Somebody who closes the game is let go at once** (2026-10-22). GGRS gives a silent seat
+up after fifteen seconds -- long, on purpose, because a page is silent for seconds drawing
+an arena for the first time -- and four friends sat frozen for all fifteen when one of them
+left. But a player who has *left* closes their data channels, which is a different thing
+from going quiet: the line reads `LineState::Failed` (a closed channel in a browser,
+`ChannelClose` on a desktop), the mesh says so once through the post box
+(`PostBox::line_closed`), and the game hands the seat to `disconnect_player` straight
+away, which settles the frame with the others the way the timeout would.
+`a_player_who_closes_the_game_is_let_go_at_once` holds it under two seconds with the real
+timeout.
+
 ## Why not Unreal or Unity
 
 Not because they are slow. Unreal is not slow, and frame time will not be the problem.
