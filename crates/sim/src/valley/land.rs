@@ -513,6 +513,11 @@ impl Land {
             best = held;
             best_rise = Fx::ZERO;
         }
+        // The Sleeper (`super::dragon`): a dragon lying on the mountains,
+        // under their noise and crags like the rest of them.
+        let slept = super::dragon::lift(x, z, best_rise);
+        best = best.add(slept);
+        best_rise = best_rise.add(slept);
         // A hand's breadth on a floor, metres up a mountainside.
         let amp = Fx::ratio(3, 10).add(best_rise.min(Fx::from_int(60)).mul(Fx::ratio(3, 25)));
         let amp = match by_pad {
@@ -534,7 +539,10 @@ impl Land {
         } else {
             Fx::ZERO
         };
-        let height = best.add(noise(x, z).mul(amp)).add(crag);
+        // Its body is smoother than the range round it: a plate stands out
+        // of the spine because nothing random stands as tall beside it.
+        let smooth = Fx::ONE.sub(slept.div(Fx::from_int(24)).min(Fx::ratio(3, 4)));
+        let height = best.add(noise(x, z).mul(amp)).add(crag.mul(smooth));
         Sample {
             height,
             rise: best_rise,

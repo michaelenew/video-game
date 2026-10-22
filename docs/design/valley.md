@@ -431,6 +431,43 @@ Not built from world.md §2: the Crossing (the herd's escort mode stays a
 `--hunt hornback-escort` fight). A room is visible from its side path now,
 but its creature is not put on its marks until you walk in.
 
+### 1f · The Sleeper (2026-10-22)
+
+The owner: "take one of the mountains, make it a sleeping terrestrial
+dragon. Make it subtle, mostly art for now. The dragon itself should
+essentially be the mountain, and its dragon-like features should be just
+discernible only from certain angles. Maybe it wakes up eventually."
+
+**The mountain north of the Pinewood, east of the High Plane, is a dragon
+asleep** (`sim::valley::dragon`). It is the land, not a creature and not a
+box: a height added to the mountain wherever its body lies, before the
+land's noise and crags go over it, so it wears the same rock and snow as
+the range round it, and what is drawn is what a foot would stand on. It
+lies with its chest at (770, 360) on the map, its snout pointing south at
+the valley, about 270 m across and 400 m from snout to haunch, standing up
+to a hundred metres over the mountain it lies on -- under the plane's 300.
+
+- **From the road** (the Pinewood, the Saddle) it is seen head on: a
+  massif with a serrated ridge. The ridge is its spine, a row of plates
+  eighteen metres apart, and it is the one regular thing on the skyline:
+  the land's crags are damped on the body so nothing random stands as tall
+  beside a plate.
+- **From the High Plane's east edge**, looking down, it is a body curled
+  round on itself: wings folded with their wrists up over the shoulders,
+  forelegs folded with the chin resting between the paws, horns swept back
+  along the neck, haunches, and the tail drawn round the east flank to lie
+  by the snout.
+- **From the side**, a long neck falling from the shoulders to a skull,
+  brow and horns.
+
+It is level data (`tests/knobs.rs`): a table of chains of joints, each a
+point, a width and a height, every piece between two a mound rounded across
+its top. Nothing shows until the mountain under it has risen forty metres
+off its floor, and all of it by a hundred, so no valley, foothill, road or
+room is touched (`tests/valley.rs` walks them all as before).
+
+**Waking it** is not built (§6, item 8).
+
 ## 2 · The rules
 
 All of them are in `World::step_valley` and `sim::valley::open`, and all
@@ -749,3 +786,12 @@ for a pair who does not.** The five reaches are 974 m end to end with about
    with it.
 7. **One map**: everything [atlas.md](atlas.md) §Open lists -- how the joins
    read, the sky changing at a doorway, the Long Valley's loop.
+8. **The Sleeper wakes?** (§1f; the owner: "maybe it wakes up
+   eventually. That'd be fun.") Nothing of it moves yet. What waking could
+   be, cheapest first: a breath -- mist off its nostrils on the frame
+   clock, renderer only; an eye that opens when somebody stands on the
+   High Plane's edge; then a shrug that sends rocks down its flanks, which
+   is the first thing that would be the simulation's. A dragon that gets up
+   is a creature the size of a mountain, and its body is the land: it
+   would need the land to be a function of the frame where it lies, the
+   way a drift is (`sim::drift`), which nothing is yet.
