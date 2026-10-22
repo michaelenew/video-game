@@ -1283,6 +1283,12 @@ scalars! {
     // least this freezes both of them for it, as between two fighters.
     // Lighter blows freeze nothing, as before.
     FreezeHeavyOnCreature, "Offence", "Impact freeze on a creature, a move's at least",     Frames, 0, 30;
+    // **The pick before a versus round** (2026-10-22, from the owner): a
+    // class change used to restart everybody's fight, which against people
+    // is the whole match stopping for one player. Now every versus round
+    // opens with this long to choose, and the classes are locked for the
+    // round itself (`Phase::Picking`).
+    ClassPick,            "Match",    "Versus, time to choose classes before a round",       Frames, 0, 3600;
 }
 
 // ---------------------------------------------------------------------------

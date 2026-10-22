@@ -3,7 +3,7 @@
 //! "A room you come and go from").
 //!
 //! - "Start match" is a flag each seat flips on the wire
-//!   (`Travel::READY`); the frame every seat in the fight has it -- two at
+//!   (`Travel::START`); the frame every seat in the fight has it -- two at
 //!   least -- the world starts the match itself, so every machine starts it
 //!   on the same frame.
 //! - A newcomer takes a free seat on the smaller side (`World::open_seat`),
@@ -19,7 +19,7 @@ fn wire(n: usize, ready: &[usize]) -> [Input; MAX_PLAYERS] {
     let mut w = [Input::default(); MAX_PLAYERS];
     for &i in ready {
         if i < n {
-            w[i] = Input::default().travelling(Travel::READY);
+            w[i] = Input::default().travelling(Travel::START);
         }
     }
     w
@@ -38,7 +38,7 @@ fn hub(n: u8) -> World {
 fn the_match_starts_the_frame_everybody_is_ready_and_not_before() {
     let mut w = hub(2);
     w.advance(wire(2, &[0]));
-    assert!(w.ready.has(0) && !w.ready.has(1));
+    assert!(w.starting.has(0) && !w.starting.has(1));
     assert!(
         sim::versus::of(w.arena).is_none(),
         "one ready is not a match"
@@ -59,7 +59,7 @@ fn the_match_starts_the_frame_everybody_is_ready_and_not_before() {
         sim::versus::STAGES[0].arena,
         "from the town, the first duel stage"
     );
-    assert!(!w.ready.any(), "a fresh match has nobody ready");
+    assert!(!w.starting.any(), "a fresh match has nobody ready");
     assert!(w.is_present(0) && w.is_present(1));
 }
 
@@ -68,7 +68,7 @@ fn pressing_again_takes_it_back() {
     let mut w = hub(2);
     w.advance(wire(2, &[0]));
     w.advance(wire(2, &[0]));
-    assert!(!w.ready.any());
+    assert!(!w.starting.any());
     w.advance(wire(2, &[1]));
     assert!(
         sim::versus::of(w.arena).is_none(),
@@ -85,7 +85,7 @@ fn on_a_stage_ready_is_a_fresh_round_of_it() {
     }
     w.advance(wire(2, &[0, 1]));
     assert_eq!(w.arena, stage);
-    assert!(!w.ready.any());
+    assert!(!w.starting.any());
 }
 
 #[test]

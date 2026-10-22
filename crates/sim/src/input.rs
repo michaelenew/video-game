@@ -69,8 +69,9 @@ pub struct Input {
 /// Where a [`Input::travel`] request goes. One byte, and a second for seats.
 ///
 /// `0` is no request and `1` is versus. `2`, `3` and `4` are restart, pause
-/// and step. `001s sccc` is a class change: seat `s` becomes class `c`, in a
-/// restart of the same fight -- the seat's low two bits there and the rest in
+/// and step. `001s sccc` is a class change: seat `s` becomes class `c` where
+/// it stands (`c` seven, a class there is not, is seat `s` ready to fight)
+/// -- the seat's low two bits there and the rest in
 /// the high byte, which every other request leaves zero. One byte held four
 /// seats, and an assertion stopped the build at a fifth; the high byte holds
 /// every seat there can be, and a byte written before it reads the same. A hunt sets the top bit, keeps the
@@ -99,10 +100,15 @@ pub enum Destination {
     Pause,
     /// Pause if running, and play exactly this frame: `]`.
     Step,
-    /// The same fight, restarted, with this seat's fighter as this class.
-    /// Tab, and the class pickers: on the wire for the reason every trip is,
-    /// so a class can change mid-match against a person.
+    /// This seat's fighter becomes this class, where it stands: nobody else
+    /// is touched. Tab, and the class pickers: on the wire for the reason
+    /// every trip is, so a class can change mid-match against a person. In
+    /// a versus round the classes are locked, and the request is only heard
+    /// in the pick before it ([`crate::state::Phase::Picking`]).
     Class { seat: usize, class: crate::Class },
+    /// **This seat is done choosing**: Enter, in the pick before a versus
+    /// round. The round starts as soon as every seat in it has said so.
+    Ready { seat: usize },
     /// **The valley** (`crate::valley`): Hearth's square, with the journey so
     /// far kept. What a run starts in, and what `V` goes back to.
     Valley,
@@ -137,16 +143,18 @@ pub enum Destination {
     /// the newcomer has a line to everybody, so every machine seats them on
     /// the same frame -- the frame the match's lineup then changes at.
     Admit { seat: usize, class: crate::Class },
-    /// **"Start match"**, pressed or taken back: this seat's ready flag
-    /// flips ([`crate::state::World::ready`]). When every seat in the fight
-    /// is ready the world starts the match itself, on the same frame on
-    /// every machine.
-    Ready,
+    /// **"Start match"**, pressed or taken back: this seat's flag flips
+    /// ([`crate::state::World::starting`]). When every seat in the fight has
+    /// it the world starts the match itself, on the same frame on every
+    /// machine. Not [`Destination::Ready`], which is done choosing a class in
+    /// a round's pick.
+    Start,
 }
 
 const _: () = assert!(
-    crate::class::ALL_CLASSES.len() <= 8 && crate::state::MAX_PLAYERS <= 4 << 8,
-    "a class change is three bits of class and ten of seat"
+    crate::class::ALL_CLASSES.len() < Travel::READY_INDEX as usize
+        && crate::state::MAX_PLAYERS <= 4 << 8,
+    "a class change is three bits of class (the last of them is ready) and ten of seat"
 );
 
 impl Travel {
@@ -161,10 +169,10 @@ impl Travel {
     pub const VALLEY: Travel = Travel(5);
     /// See [`Destination::Left`].
     pub const LEFT: Travel = Travel(6);
-    /// See [`Destination::Ready`]: the last byte of the credits' range,
+    /// See [`Destination::Start`]: the last byte of the credits' range,
     /// which no creature reaches ([`Travel::credit`] refuses it).
-    pub const READY: Travel = Travel(Travel::READY_BYTE);
-    const READY_BYTE: u16 = Travel::CLASS - 1;
+    pub const START: Travel = Travel(Travel::START_BYTE);
+    const START_BYTE: u16 = Travel::CLASS - 1;
     /// `7`, the cairn in the high byte: see [`Destination::Cairn`].
     const CAIRN: u16 = 7;
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
@@ -182,13 +190,15 @@ impl Travel {
     /// cccc` while there were two seats; [`Travel::from_two_seats`] reads a
     /// byte written that way.
     const CLASS: u16 = 0x20;
-    /// The high byte's mark of an admission, on [`Travel::READY`]'s byte.
+    /// The high byte's mark of an admission, on [`Travel::START`]'s byte.
     const ADMIT: u16 = 0x40;
     /// An admission's seat bits in the high byte: seats up to eight.
     const ADMIT_SEATS: u16 = 0x38;
     const SEAT_SHIFT: u16 = 3;
     const SEATS: u16 = 0x18;
     const CLASS_INDEX: u16 = 0x07;
+    /// The class index no class has: `001s s111` is seat `s` ready.
+    const READY_INDEX: u16 = 0x07;
     const SPECIES: u16 = 0x1F;
     const TEMPER_SHIFT: u16 = 5;
     const TEMPER: u16 = 0x03;
@@ -224,7 +234,7 @@ impl Travel {
     /// Credit a creature to the valley's journey. A species past what the
     /// byte holds is no request.
     pub const fn credit(species: SpeciesId) -> Travel {
-        if species.0 as u32 + Travel::CREDIT as u32 >= Travel::READY_BYTE as u32 {
+        if species.0 as u32 + Travel::CREDIT as u32 >= Travel::START_BYTE as u32 {
             Travel::NONE
         } else {
             Travel(Travel::CREDIT + species.0 as u16)
@@ -232,12 +242,12 @@ impl Travel {
     }
 
     /// Seat `seat` is taken, mid-fight, by a newcomer playing `class`:
-    /// [`Travel::READY`]'s byte with `01ss sccc` in the high byte -- every
+    /// [`Travel::START`]'s byte with `01ss sccc` in the high byte -- every
     /// other byte's high byte is spoken for, a class change's by seats up to
     /// a thousand.
     pub const fn admit(seat: usize, class: crate::Class) -> Travel {
         Travel(
-            Travel::READY_BYTE
+            Travel::START_BYTE
                 | (Travel::ADMIT
                     | ((seat as u16) << Travel::SEAT_SHIFT & Travel::ADMIT_SEATS)
                     | (class as u16 & Travel::CLASS_INDEX))
@@ -245,12 +255,22 @@ impl Travel {
         )
     }
 
-    /// Seat `seat`'s fighter becomes `class`, in a restart of the same fight.
+    /// Seat `seat`'s fighter becomes `class`, where it stands.
     pub const fn class(seat: usize, class: crate::Class) -> Travel {
+        Travel::seat_word(seat, class as u16 & Travel::CLASS_INDEX)
+    }
+
+    /// Seat `seat` is done choosing its class: see [`Destination::Ready`].
+    pub const fn ready(seat: usize) -> Travel {
+        Travel::seat_word(seat, Travel::READY_INDEX)
+    }
+
+    /// A class change's word for `seat`, with `index` in the class bits.
+    const fn seat_word(seat: usize, index: u16) -> Travel {
         Travel(
             Travel::CLASS
                 | ((seat as u16) << Travel::SEAT_SHIFT & Travel::SEATS)
-                | (class as u16 & Travel::CLASS_INDEX)
+                | index
                 | ((seat as u16 >> 2) & Travel::LOW) << 8,
         )
     }
@@ -301,7 +321,7 @@ impl Travel {
         // An item, fed or granted: a credit's byte with the item in the
         // high byte.
         let low = self.0 & Travel::LOW;
-        if self.0 >> 8 != 0 && low >= Travel::CREDIT && low < Travel::READY_BYTE {
+        if self.0 >> 8 != 0 && low >= Travel::CREDIT && low < Travel::START_BYTE {
             let s = SpeciesId((low - Travel::CREDIT) as u8);
             let high = self.0 >> 8;
             let item = match (high & !Travel::FED) as usize {
@@ -323,7 +343,7 @@ impl Travel {
         }
         // An admission, by its high byte on the ready byte.
         let high = self.0 >> 8;
-        if low == Travel::READY_BYTE && high != 0 {
+        if low == Travel::START_BYTE && high != 0 {
             let index = (high & Travel::CLASS_INDEX) as usize;
             if high & !(Travel::ADMIT | Travel::ADMIT_SEATS | Travel::CLASS_INDEX) != 0
                 || high & Travel::ADMIT == 0
@@ -348,17 +368,21 @@ impl Travel {
             4 => Some(Destination::Step),
             5 => Some(Destination::Valley),
             6 => Some(Destination::Left),
-            Travel::READY_BYTE => Some(Destination::Ready),
+            Travel::START_BYTE => Some(Destination::Start),
             b if b >= Travel::CREDIT && b < Travel::CLASS => {
                 Some(Destination::Credit(SpeciesId((b - Travel::CREDIT) as u8)))
             }
             b if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS => {
                 let index = (b & Travel::CLASS_INDEX) as usize;
+                let seat = ((b & Travel::SEATS) >> Travel::SEAT_SHIFT | high << 2) as usize;
+                if index == Travel::READY_INDEX as usize {
+                    return Some(Destination::Ready { seat });
+                }
                 if index >= crate::class::ALL_CLASSES.len() {
                     return None;
                 }
                 Some(Destination::Class {
-                    seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT | high << 2) as usize,
+                    seat,
                     class: crate::class::ALL_CLASSES[index],
                 })
             }

@@ -139,7 +139,7 @@ impl Room {
             if let Some(t) = travel {
                 input = input.travelling(t);
             } else if p.ready {
-                input = input.travelling(sim::input::Travel::READY);
+                input = input.travelling(sim::input::Travel::START);
             }
             if session
                 .add_local_input(handle, NetInput::from(input))

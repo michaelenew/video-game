@@ -547,6 +547,28 @@ Two diagnostics are worth knowing about when a clip is not behaving:
   thing a body does. Six or seven per cent means a grip or a foot target wants
   moving a few centimetres closer.
 
+## A body that turns over is turned outside the clip
+
+The root has fifty degrees of forward swing, which is a body that folds rather than one
+that inverts, so **no clip turns a body over**. What does is the whole-body turn the
+renderer puts on top of the pose (`view::PlayerView::roll`, about `roll_about`): the
+Reaver's flips since 2026-10-10, and since 2026-10-21 **every class's grounded dodge**,
+which is a roll (`view::dodge`, [defense.md](defense.md#dodge)). The clip is what a
+body does *inside* the turn -- dive, ball, open, catch -- and authoring the turn there as
+well would be two.
+
+A roll's **height is set, not left to the pivot**: `dodge::Turn::height` is where the
+lowest point of the body should be -- up on the arc of the dive, on the floor from the
+moment the shoulder meets it -- and the renderer measures the lowest corner of the turned
+pose it is about to draw and moves the body so that corner is there (`view::dodge::lift`).
+So the point a roll turns about decides the arc and not whether the body is in the floor;
+it is set to the middle of the class's ball, and
+`cargo test -p view --test dodge report_ball_middles -- --ignored --nocapture` prints
+where that is after a clip is changed. The roll goes over the lead shoulder by turning
+about an axis tipped off the body's side, and a roll to the side is first turned, about
+the vertical through the feet, to face its travel (`PlayerView::roll_yaw`): it is the
+forward roll, and turns back to the front as it rises.
+
 ## The creature has its own rig
 
 The Ridgeback goes through the same factory and almost none of the same code,

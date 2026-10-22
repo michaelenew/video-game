@@ -269,15 +269,15 @@ fn start_match(ui: &mut egui::Ui, sim: &mut crate::Sim) {
     let seats = 0..sim::state::MAX_PLAYERS;
     let here = seats.clone().filter(|&i| sim.cur.is_present(i)).count();
     let ready = seats
-        .filter(|&i| sim.cur.is_present(i) && sim.cur.ready.has(i))
+        .filter(|&i| sim.cur.is_present(i) && sim.cur.starting.has(i))
         .count();
-    let mine = sim.cur.ready.has(sim.local_player());
+    let mine = sim.cur.starting.has(sim.local_player());
     ui.horizontal(|ui| {
         if ui
             .button(if mine { "Not ready" } else { "Start match" })
             .clicked()
         {
-            sim.travel = sim::input::Travel::READY;
+            sim.travel = sim::input::Travel::START;
         }
         ui.label(egui::RichText::new(format!("{ready} of {here} ready")).weak());
     });
@@ -408,7 +408,9 @@ fn dummy(ui: &mut egui::Ui, sim: &mut crate::Sim) {
     ui.add_space(4.0);
     let (mut mode, mut with) = (sim.dummy, sim.with_dummy);
     let mut class = sim.cur.players[1].class;
-    if sim.cur.pvp() {
+    // A duel's pick is still a duel, though nobody can be hurt in it.
+    let duel = sim.cur.pvp() || matches!(sim.cur.phase, sim::state::Phase::Picking { .. });
+    if duel {
         ui.label(egui::RichText::new("A duel always has its opponent.").weak());
     } else {
         let here = sim.cur.is_present(1);

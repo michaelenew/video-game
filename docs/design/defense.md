@@ -63,6 +63,41 @@ vertical takeoff and dodge moved onto shift alone. See
 Dodge is the universal answer to a read you made correctly. It is punished by attacks
 that cover space or arrive late.
 
+**On the ground it is drawn as a dive roll, and every class rolls its own** (2026-10-21),
+after the souls games' roll. Three parts: **the dive** -- off the back foot *into the
+air*, long, arms up in front of the chest and legs trailing, pitching forward on a low arc,
+so the torso comes down over the flight rather than on the first frame; **the shoulder** --
+as the floor arrives the head tucks and the lead shoulder drops, and the roll goes over
+diagonally, shoulder to opposite hip; **the roll and the rise** -- fast, on the floor, and
+up onto the feet. Back, it is the same backward: a hop back, sat down onto the back, over
+the shoulder. **To the side the body turns to face the travel, dives forward, and turns
+back as it rises.** The body really goes over -- `view::dodge` turns the whole drawn body
+and carries it on the dive's arc -- and it is a drawing only: the frames, the invulnerable
+window, the speed and the hurt volume are exactly what they were. (A souls light roll is
+21-24 frames with about 11 invulnerable, which is close to this dodge's 22 and 10.) The
+turn is most of the way round on the frame the cover runs out, so the silhouette still
+opens on that frame. The classes differ in timing, the height of the dive and what the
+arms carry (`crates/anim/src/clips/dodge.rs`):
+
+| Class | Its roll |
+| --- | --- |
+| Champion | The roll as it is; up with the weapon hand forward |
+| Bulwark | Lower and later to the floor, heavier, the shield arm across him, up behind the shield |
+| Shadow Reaver | The highest, quickest dive, up light |
+| Elementalist | Slides on out of it, low, a hand dragged along the floor |
+| Blood mage | The longest, flattest dive, unfurls low with the scythe arm thrown out wide |
+| Dual mage | A high, floating dive, slowest up, arms opening wide |
+
+Two versions before it the same day were wrong from play: the first gave the Reaver a
+twist, the Dual mage a laid-out aerial and a cartwheel, and rolled sideways over the
+shoulder line ("looked insane"); the second dropped the body to the floor on the first
+frame and somersaulted it ("not close -- the character needs to stay airborne, then drop
+the shoulder into a roll part way through").
+
+The class dodges that are not travel keep their own drawing underneath: the Dual mage's
+and the Blood mage's blinks arrive and then roll forward where they land, and the Reaver's
+dash to her shadow is not turned over at all. The airdodge is unchanged.
+
 The crouch-roll (`crouch → jump`) is **not built** and is not currently wanted: crouch is
 its own input and lowers your hurtbox, and a second, slower reposition has nothing to do
 that the dodge's own tail does not already do.
