@@ -60,6 +60,10 @@ pub struct Start {
     pub temper: u8,
     /// How many fighters are played: one to four ([`World::seated`]).
     pub seats: u8,
+    /// Versus rounds open with a pick and lock the classes after it
+    /// ([`World::drafting`]): what the game plays, and not what a bare
+    /// harness fight is.
+    pub draft: bool,
 }
 
 impl Start {
@@ -72,7 +76,9 @@ impl Start {
             (None, Some(a)) => World::versus_in(self.classes, a),
             (None, None) => World::with_classes(self.classes),
         };
-        w.tempered(self.temper).seated(self.seats)
+        w.tempered(self.temper)
+            .seated(self.seats)
+            .drafting(self.draft)
     }
 
     /// The settings a world was started from, read back off it: the inverse
@@ -91,6 +97,7 @@ impl Start {
             arena: (w.arena != own).then_some(w.arena),
             temper: w.temper(),
             seats: w.seats,
+            draft: w.draft,
         }
         .tidied()
     }
@@ -131,6 +138,9 @@ impl Start {
             out.push_str(&format!(" arena={}", a.get().slug()));
         }
         out.push_str(&format!(" temper={} seats={}", self.temper, self.seats));
+        if self.draft {
+            out.push_str(" draft=1");
+        }
         out
     }
 
@@ -143,6 +153,7 @@ impl Start {
             arena: None,
             temper: 0,
             seats: 2,
+            draft: false,
         };
         for word in line.split_whitespace() {
             let Some((key, value)) = word.split_once('=') else {
@@ -171,6 +182,7 @@ impl Start {
                 }
                 "temper" => start.temper = value.parse().map_err(|_| "bad temper")?,
                 "seats" => start.seats = value.parse().map_err(|_| "bad seats")?,
+                "draft" => start.draft = value == "1",
                 _ => {}
             }
         }
@@ -860,6 +872,7 @@ mod tests {
                     arena: None,
                     temper: 1,
                     seats,
+                    draft: seats == 2,
                 };
                 let w = start.world();
                 assert_eq!(Start::of(&w), start, "{}", sp.name);
@@ -873,6 +886,7 @@ mod tests {
                 arena: (a.id != ArenaId::PROVING_GROUND).then_some(a.id),
                 temper: 0,
                 seats: 2,
+                draft: true,
             };
             let w = start.world();
             assert_eq!(Start::of(&w), start, "{}", a.name);

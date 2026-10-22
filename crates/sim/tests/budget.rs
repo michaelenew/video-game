@@ -3,7 +3,7 @@
 //! The simulation is not the expensive part of this game and it must stay that
 //! way, because it is the part that runs *more than once* per picture. A
 //! rendered frame draws once; a rollback re-simulates a whole prediction window
-//! -- `net::MAX_ROLLBACK_FRAMES`, eight at the time of writing -- inside that
+//! -- `net::MAX_ROLLBACK_FRAMES`, twelve at the time of writing -- inside that
 //! same 16.7 ms, and saves a snapshot for every one of them. So a cost that
 //! looks harmless per frame arrives multiplied, and it arrives exactly when the
 //! player is already having a bad time: mid-rollback, which is to say mid-lag.
@@ -40,13 +40,14 @@ const FRAME_NS: u128 = 1_000_000_000 / TICK_HZ as u128;
 
 /// What one call to `World::advance` may cost.
 ///
-/// A quarter of the frame for the simulation, divided by the eight frames a
+/// A quarter of the frame for the simulation, divided by the twelve frames a
 /// rollback may re-simulate inside one -- see the note on this file. Roughly
-/// half a millisecond, against a measured worst case of around fifty
-/// microseconds for the heaviest class in a hunt, so there is an order of
+/// a third of a millisecond (half of one while the window was eight, until
+/// 2026-10-22), against a measured worst case of around fifty microseconds
+/// for the heaviest class in a hunt, so there is still most of an order of
 /// magnitude in hand. That margin is deliberate and is not slack to be spent:
 /// it is what lets this run on a loaded laptop without crying wolf.
-const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 32;
+const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 48;
 
 /// The most a `World` may weigh.
 ///
@@ -174,7 +175,7 @@ fn a_frame_of_simulation_fits_its_budget() {
     assert!(
         ns <= ADVANCE_BUDGET_NS,
         "a simulation frame costs {ns} ns ({where_}), over the {ADVANCE_BUDGET_NS} ns budget.\n\
-         That budget is a quarter of a {FRAME_NS} ns frame, shared out across the eight frames a \
+         That budget is a quarter of a {FRAME_NS} ns frame, shared out across the twelve frames a \
          rollback re-simulates inside one -- so this is not a frame being slightly slow, it is a \
          rollback no longer fitting in the time it has."
     );

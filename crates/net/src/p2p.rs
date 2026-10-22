@@ -22,19 +22,18 @@ use std::time::Duration;
 /// they disagree, which is the whole reason the simulation is integer-only.
 const DESYNC_CHECK_INTERVAL: u32 = 30;
 
-/// Frames before your own input takes effect. **None**: a press acts on the
-/// next frame, exactly as it does playing locally, and rollback hides the
-/// network -- which is the reason to have rollback at all.
+/// Frames before your own input takes effect, when nothing else says.
 ///
 /// It was two, the usual starting point for a fighting game, and the first
-/// people to play online felt it at once against the local game. The price
-/// of zero is that every surprise from the far side is corrected rather than
-/// waited for: rollbacks are as long as half the round trip instead of two
-/// frames shorter, which the frame budget allows for up to the session's
-/// eight-frame prediction window (`docs/design/architecture.md`). A link that
-/// rolls back so much the other fighter jitters can trade some of it back with
-/// `delay=` (`--delay`), per player, since each side's delay is its own.
-pub const INPUT_DELAY: usize = 0;
+/// people to play online felt it at once against the local game; then none,
+/// so a press acted on the next frame and rollback hid the network. **Two
+/// again since 2026-10-22**, and a setting in the Esc menu
+/// (`game::settings::Settings::input_delay`): with four in a room the far
+/// inputs arrived about seven frames late, every hiccup stalled the match,
+/// and two frames of delay take two off every input's lateness -- for
+/// thirty-three milliseconds on your own presses. Each side's delay is its
+/// own; `delay=` (`--delay`) overrides it for a run.
+pub const INPUT_DELAY: usize = 2;
 
 /// How long the other side may go silent before it counts as gone. GGRS's
 /// default is two seconds, and a page goes silent for longer than that drawing
@@ -72,6 +71,7 @@ pub fn start_with(
     let mut builder = SessionBuilder::<SessionConfig>::new()
         .with_num_players(seat.players)
         .with_input_delay(delay)
+        .with_max_prediction_window(crate::MAX_ROLLBACK_FRAMES)
         .with_disconnect_timeout(disconnect_after)
         .with_disconnect_notify_delay(SILENT_AFTER)
         .with_desync_detection_mode(DesyncDetection::On {

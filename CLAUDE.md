@@ -232,10 +232,10 @@ every time a rollback happens.
 ## A frame costs what it is budgeted, and a frame never allocates
 
 The simulation runs **more than once per picture**: a rollback re-simulates up to
-eight frames and saves a snapshot for each, inside the same 16.7 ms that still
+twelve frames and saves a snapshot for each, inside the same 16.7 ms that still
 has to draw. So per-frame cost arrives multiplied, exactly when the connection
 is already struggling. One rollback burst gets a quarter of the frame, one
-`advance` a thirty-second of it, one frame of `view` an eighth. Enforced by
+`advance` a forty-eighth of it, one frame of `view` an eighth. Enforced by
 `crates/sim/tests/budget.rs`, `view/tests/budget.rs` and `net/tests/budget.rs`.
 
 **Add to the `no floats, no deps, no I/O` list: no allocation.** A simulation

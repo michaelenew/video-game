@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 749] = [
+pub const SCALARS: [i32; 750] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -438,7 +438,7 @@ pub const SCALARS: [i32; 749] = [
              300, // valley.range,_rests_after_it_is_beaten_(s) = 300
          1572864, // regions.reach,_farthest_anything_acts_(m) = 24
          5898240, // regions.speed,_fastest_anything_moves_(m/s) = 90
-               8, // regions.delay,_oldest_outcome_a_region_takes = 8
+              12, // regions.delay,_oldest_outcome_a_region_takes = 12
           262144, // regions.checksum_zone,_reaches_past_its_hexagon_(m) = 4
          6291456, // regions.hexagon_size,_centre_to_corner_(m) = 96
                2, // regions.simulated_neighbour,_heartbeat_lag = 2
@@ -757,6 +757,7 @@ pub const SCALARS: [i32; 749] = [
              300, // match.king_of_the_hill,_the_dead_are_back_after = 300
           458752, // match.king_of_the_hill,_the_point_counts_up_to_(m) = 7
                8, // offence.impact_freeze_on_a_creature,_a_move's_at_least = 8
+             900, // match.versus,_time_to_choose_classes_before_a_round = 900
 ];
 
 #[rustfmt::skip]

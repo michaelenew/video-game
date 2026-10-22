@@ -172,6 +172,10 @@ pub const SECTIONS: &[Section] = &[
                 "Hitbox wireframes and the Oven, both open, exactly as --dev does.",
             ),
             e(
+                "?scale=<n>",
+                "How many pixels the picture is drawn at for each pixel of the page. 1 by default, even on a screen that has two or three, because a frame in a browser is paid by the pixel: ?scale=2 is sharper on such a screen and about four times the work.",
+            ),
+            e(
                 "?shot_frame=<n>",
                 "Any environment variable, spelled in the URL. Upper or lower case, dashes or underscores.",
             ),
@@ -693,7 +697,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Tab",
-                "Cycle your class. Restarts the fight. Works against a person too: both games restart on the same frame, with your new class and whatever they have.",
+                "Cycle your class, where you stand: nobody else's fight is touched, and against a person it changes on both games on the same frame. In a hunt, a course or the valley, any time. In versus, every round opens with fifteen seconds to choose -- move about and try your moves, nobody can be hurt -- and the classes are locked once the round starts.",
+            ),
+            e(
+                "Enter",
+                "In the pick before a versus round: done choosing. The round starts as soon as everybody is ready, or when the fifteen seconds run out. At one keyboard it readies both seats.",
             ),
             e(
                 "F8",

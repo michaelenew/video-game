@@ -177,14 +177,58 @@ clips! {
         "Kicking off a wall on her left: coiled against it, both legs driving out from the face, then gathered and turned away into the flight. Indexed by how far off the face she has got, not by time.";
 
     // -- Dodging -----------------------------------------------------------
+    // Every class's grounded dodge is a **dive roll** (2026-10-21): the clip is
+    // what the body does inside the roll, and `view::dodge` turns the whole
+    // body over on top of it. These four are the Champion's, and the five sets
+    // after them are the other classes' own.
     DodgeForward,    "dodge_forward",   Dodge, "dodge", Length::Dodge, false,
-        "A committed dive forward. Invulnerable early, vulnerable late -- and the two halves must look different.";
+        "A roll forward: a hop, chin and knees to the chest, one turn along the floor, up in a low crouch. Tucked while invulnerable, opening the frame it ends.";
     DodgeBack,       "dodge_back",      Dodge, "dodge", Length::Dodge, false,
-        "Hop backwards out of range. Reads as evasive from across the arena.";
+        "A backward roll: sat back, tucked, over the shoulders and up facing the same way.";
     DodgeLeft,       "dodge_left",      Dodge, "dodge", Length::Dodge, false,
-        "Roll left. Low and tucked through the invulnerable frames, then rising.";
+        "To the left: turned to face the travel, the forward roll over the left shoulder, turned back as it rises.";
     DodgeRight,      "dodge_right",     Dodge, "dodge", Length::Dodge, false,
-        "Roll right.";
+        "To the right: the same over the right shoulder.";
+    BulwarkDodgeForward, "bulwark_dodge_forward", Dodge, "dodge", Length::Dodge, false,
+        "The shared roll, heavier: later over and up, the shield arm across the ball, up behind the shield.";
+    BulwarkDodgeBack, "bulwark_dodge_back", Dodge, "dodge", Length::Dodge, false,
+        "The Bulwark's roll, backward.";
+    BulwarkDodgeLeft, "bulwark_dodge_left", Dodge, "dodge", Length::Dodge, false,
+        "The Bulwark's roll to the left: turned to the travel, rolled forward, turned back.";
+    BulwarkDodgeRight, "bulwark_dodge_right", Dodge, "dodge", Length::Dodge, false,
+        "The Bulwark's roll to the right.";
+    ReaverDodgeForward, "reaver_dodge_forward", Dodge, "dodge", Length::Dodge, false,
+        "The shared roll, quickest: blades swept back off the hop, up light with them out low.";
+    ReaverDodgeBack, "reaver_dodge_back", Dodge, "dodge", Length::Dodge, false,
+        "The Reaver's roll, backward.";
+    ReaverDodgeLeft, "reaver_dodge_left", Dodge, "dodge", Length::Dodge, false,
+        "The Reaver's roll to the left: turned to the travel, rolled forward, turned back.";
+    ReaverDodgeRight, "reaver_dodge_right", Dodge, "dodge", Length::Dodge, false,
+        "The Reaver's roll to the right.";
+    ElementalistDodgeForward, "elementalist_dodge_forward", Dodge, "dodge", Length::Dodge, false,
+        "The shared roll, sliding on out of it low with a hand dragged along the floor.";
+    ElementalistDodgeBack, "elementalist_dodge_back", Dodge, "dodge", Length::Dodge, false,
+        "The Elementalist's roll, backward.";
+    ElementalistDodgeLeft, "elementalist_dodge_left", Dodge, "dodge", Length::Dodge, false,
+        "The Elementalist's roll to the left: turned to the travel, rolled forward, turned back.";
+    ElementalistDodgeRight, "elementalist_dodge_right", Dodge, "dodge", Length::Dodge, false,
+        "The Elementalist's roll to the right.";
+    BloodDodgeForward, "blood_dodge_forward", Dodge, "dodge", Length::Dodge, false,
+        "The shared roll, last over: unfurling low with the scythe arm thrown out wide.";
+    BloodDodgeBack, "blood_dodge_back", Dodge, "dodge", Length::Dodge, false,
+        "The Blood mage's roll, backward.";
+    BloodDodgeLeft, "blood_dodge_left", Dodge, "dodge", Length::Dodge, false,
+        "The Blood mage's roll to the left: turned to the travel, rolled forward, turned back.";
+    BloodDodgeRight, "blood_dodge_right", Dodge, "dodge", Length::Dodge, false,
+        "The Blood mage's roll to the right.";
+    DualDodgeForward, "dual_dodge_forward", Dodge, "dodge", Length::Dodge, false,
+        "The shared roll, slowest and lightest: up with her arms opening wide.";
+    DualDodgeBack, "dual_dodge_back", Dodge, "dodge", Length::Dodge, false,
+        "The Dual mage's roll, backward.";
+    DualDodgeLeft, "dual_dodge_left", Dodge, "dodge", Length::Dodge, false,
+        "The Dual mage's roll to the left: turned to the travel, rolled forward, turned back.";
+    DualDodgeRight, "dual_dodge_right", Dodge, "dodge", Length::Dodge, false,
+        "The Dual mage's roll to the right.";
     AirDodge,        "air_dodge",       Dodge, "dodge", Length::AirDodge, false,
         "A sideways commitment in mid-air, once per jump. Should read as a decision, not as flight.";
 
@@ -547,9 +591,24 @@ impl Clip {
 pub fn for_class(class: Class) -> Vec<Clip> {
     ALL.iter()
         .copied()
-        .filter(|c| match c.move_slot() {
-            Some((owner, _)) => owner == class,
+        .filter(|c| match c.owner() {
+            Some(owner) => owner == class,
             None => true,
         })
         .collect()
+}
+
+impl Clip {
+    /// The one class that plays this clip, if only one does: a move's, or a
+    /// class's own dodge (`crate::dodge::clip`).
+    pub fn owner(self) -> Option<Class> {
+        if let Some((class, _)) = self.move_slot() {
+            return Some(class);
+        }
+        sim::class::ALL_CLASSES.into_iter().find(|&class| {
+            crate::dodge::WAYS
+                .iter()
+                .any(|&way| crate::dodge::clip(class, way) == self)
+        })
+    }
 }

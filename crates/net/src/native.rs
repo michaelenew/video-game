@@ -16,7 +16,8 @@
 //! the channel is negotiated the same way (id 0, unordered, never resent) --
 //! which is the whole of what makes a desktop and a page able to meet.
 
-use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN, Trace, seconds};
+use crate::lobby::Lobby;
+use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, STUN, Trace, seconds};
 use crate::mqtt;
 use crate::seal::{RoomKey, Sealed};
 use std::collections::VecDeque;
@@ -30,9 +31,17 @@ use str0m::channel::{ChannelConfig, ChannelId, Reliability};
 use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc};
 
-/// Meet through the public brokers in the room this key names.
-pub fn public(key: &RoomKey, me: u64, terms: &str) -> Room<Sealed<Boards>, RtcLine> {
-    brokers(BROKERS, key, me, terms)
+/// A room you come and go from (`crate::lobby`), through the public
+/// brokers, in the room this key names: `capacity` players at most, this one
+/// coming in as `class`.
+pub fn public(
+    key: &RoomKey,
+    me: u64,
+    terms: &str,
+    capacity: usize,
+    class: sim::Class,
+) -> Lobby<Sealed<Boards>, RtcLine> {
+    brokers(BROKERS, key, me, terms, capacity, class)
 }
 
 /// Meet through these brokers: `wss://` (or `ws://`) URLs.
@@ -41,16 +50,20 @@ pub fn brokers(
     key: &RoomKey,
     me: u64,
     terms: &str,
-) -> Room<Sealed<Boards>, RtcLine> {
+    capacity: usize,
+    class: sim::Class,
+) -> Lobby<Sealed<Boards>, RtcLine> {
     let boards = urls
         .iter()
         .map(|url| Box::new(MqttBoard::open(url, key.topic(), me)) as Box<dyn Board>)
         .collect();
-    Room::new(
+    Lobby::new(
         Sealed::new(Boards(boards), key.clone()),
         RtcLine::new,
         me,
         terms,
+        capacity,
+        class,
     )
 }
 
@@ -529,6 +542,10 @@ struct Rtc0 {
     description: Option<String>,
     channel: Option<ChannelId>,
     open: bool,
+    /// The far end closed the channel: gone. Not `failed`, which any error
+    /// the connection reports sets -- a stray packet's included -- and which
+    /// once open means nothing about whether anybody is still there.
+    closed: bool,
     failed: bool,
     /// The last ICE state str0m reported, for [`Line::report`].
     ice: Option<IceConnectionState>,
@@ -591,6 +608,7 @@ impl Rtc0 {
             description: None,
             channel: None,
             open: false,
+            closed: false,
             failed: false,
             ice: None,
             inbox: VecDeque::new(),
@@ -659,6 +677,10 @@ impl Rtc0 {
                         self.channel = Some(id);
                         self.open = true;
                     }
+                    // The far end closed the channel: gone.
+                    Event::ChannelClose(_) => {
+                        self.closed = true;
+                    }
                     Event::ChannelData(data) => {
                         if self.inbox.len() < 1024 {
                             self.inbox.push_back(data.data);
@@ -723,6 +745,20 @@ impl Rtc0 {
     }
 }
 
+/// **A line let go says goodbye**: the connection closes -- an SCTP
+/// shutdown and a DTLS close -- and what that puts out is sent before the
+/// socket goes, so the far end reads the line closed at once
+/// (`Event::ChannelClose`, or a connection no longer alive) and gives the seat
+/// up then, as a page's does. Dropped silent, a player who pressed Leave held
+/// everybody still in the match for the session's fifteen silent seconds.
+impl Drop for Rtc0 {
+    fn drop(&mut self) {
+        if self.open && self.rtc.close().is_ok() {
+            self.drain();
+        }
+    }
+}
+
 impl RtcLine {
     fn with<R>(&self, f: impl FnOnce(&mut Rtc0) -> R) -> Option<R> {
         self.0.as_ref().map(|m| f(&mut lock(m)))
@@ -765,10 +801,20 @@ impl Line for RtcLine {
     fn state(&mut self) -> LineState {
         self.with(|r| {
             r.pump();
-            if r.failed || (r.open && !r.rtc.is_alive()) {
+            // **Open, a line is gone only if its far end is**: the channel
+            // closed, or the connection is dead. An error on the way --
+            // which sets `failed` -- is the end of a line still opening and
+            // nothing to one already carrying a match: read as gone, it
+            // dropped a friend from every desktop match a few seconds in
+            // (2026-10-22).
+            if r.open {
+                if r.closed || !r.rtc.is_alive() {
+                    LineState::Failed
+                } else {
+                    LineState::Open
+                }
+            } else if r.failed {
                 LineState::Failed
-            } else if r.open {
-                LineState::Open
             } else {
                 LineState::Negotiating
             }

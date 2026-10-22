@@ -1231,7 +1231,7 @@ impl Report {
         self.outcome = match w.phase {
             Phase::RoundOver { winner, .. } if winner == QUARRY => Outcome::Died,
             Phase::RoundOver { .. } => Outcome::Killed(w.frame),
-            Phase::Fighting => Outcome::Unresolved,
+            Phase::Fighting | Phase::Picking { .. } => Outcome::Unresolved,
         };
     }
 

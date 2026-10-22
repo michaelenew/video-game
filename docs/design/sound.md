@@ -124,7 +124,8 @@ spatial source at its place in the arena, so a creature winding up behind you
 is heard behind you. Distance is scaled down for the mixer (an arena is thirty
 metres across and the camera a dozen back) and the fall-off is the game's own:
 full to eight metres, a quarter at forty. **Page Up and Page Down** set the
-volume, a tenth a step, kept with the sensitivity and the field of view.
+volume, a tenth a step, kept with the sensitivity and the field of view; the
+Esc menu has the same volume as a slider.
 
 The Linux desktop build now needs ALSA's headers (`libasound2-dev`;
 `./scripts/setup-tools.sh desktop`). The browser build needs nothing new.

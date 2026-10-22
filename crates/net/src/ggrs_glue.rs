@@ -76,12 +76,33 @@ pub fn handle_requests_watched(
     requests: Vec<GgrsRequest<SessionConfig>>,
     mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
 ) {
-    advance_each(world, requests, |world, inputs| {
+    advance_each(world, requests, None, |world, inputs| {
         // A flat copy, like every snapshot the session saves: no heap.
         let before = world.clone();
         world.advance(inputs);
         watch(&before, inputs, world);
     });
+}
+
+/// **The region gate, online**: whether the next frame may be asked of
+/// GGRS (`regions::Ledger::may_advance`, `docs/design/regions.md`). The gate
+/// is told the session's confirmed frame *before* it is asked, every tick,
+/// whether or not a frame was made (`regions::Ledger::inputs_through`): it
+/// opens on inputs in hand, and a held frame makes nothing. Told only after
+/// an advance, one packet late by more than the gate's delay shut it for
+/// good -- the freeze of 2026-10-22, every match with a friend a few seconds
+/// in. The books themselves are still kept after the advance
+/// (`Ledger::confirm_through`), once the rollback has corrected the frames
+/// they are summed from.
+///
+/// `confirmed` is the session's, which counts this machine's own inputs too:
+/// it is never taken past the world in hand.
+pub fn may_advance(ledger: &mut regions::Ledger, confirmed: i32, world: &World) -> bool {
+    ledger.tick();
+    if let Ok(confirmed) = u32::try_from(confirmed) {
+        ledger.inputs_through(confirmed.min(world.frame));
+    }
+    ledger.may_advance(world.frame.wrapping_add(1))
 }
 
 /// [`handle_requests_watched`], **kept on the region ledger**: every frame
@@ -95,7 +116,7 @@ pub fn handle_requests_kept(
     ledger: &mut regions::Ledger,
     mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
 ) {
-    advance_each(world, requests, |world, inputs| {
+    advance_each(world, requests, None, |world, inputs| {
         let before = world.clone();
         ledger.record(&before, inputs);
         let (fed, n) = ledger.due(world.frame.wrapping_add(1));
@@ -104,18 +125,46 @@ pub fn handle_requests_kept(
     });
 }
 
-/// The one loop under both: GGRS's saves and loads, and `advance(world,
-/// inputs)` for every frame it asks made, with the inputs as the simulation
-/// reads them (a disconnected seat's as a departure).
+/// [`handle_requests_kept`] for **a lineup** (`crate::lobby`): GGRS's player
+/// `k` plays world seat `seats[k]`, and every seat nobody in the session
+/// plays has left -- a room for four with two in it has two empty seats, and
+/// a seat whose player went is free for the next to come. What a room's
+/// session is driven by, since its players and their seats change.
+pub fn handle_requests_seated(
+    world: &mut World,
+    requests: Vec<GgrsRequest<SessionConfig>>,
+    ledger: &mut regions::Ledger,
+    seats: &[usize],
+    mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
+) {
+    advance_each(world, requests, Some(seats), |world, inputs| {
+        let before = world.clone();
+        ledger.record(&before, inputs);
+        let (fed, n) = ledger.due(world.frame.wrapping_add(1));
+        world.advance_with(inputs, &fed[..n]);
+        watch(&before, inputs, world);
+    });
+}
+
+/// The one loop under all of them: GGRS's saves and loads, and
+/// `advance(world, inputs)` for every frame it asks made, with the inputs as
+/// the simulation reads them (a disconnected seat's as a departure). With
+/// `seats`, GGRS's player `k` is world seat `seats[k]` and a seat nobody
+/// plays has left; without, player `k` is seat `k`.
 fn advance_each(
     world: &mut World,
     requests: Vec<GgrsRequest<SessionConfig>>,
+    seats: Option<&[usize]>,
     mut advance: impl FnMut(&mut World, [Input; MAX_PLAYERS]),
 ) {
     for request in requests {
         match request {
             GgrsRequest::SaveGameState { cell, frame } => {
-                debug_assert_eq!(frame, world.frame as i32);
+                // GGRS counts from nought in every session; the world counts
+                // on. Equal for a match's one session -- not for a room's
+                // later ones, which start at the frame their lineup changed
+                // (`crate::drop_in::DropIn::base`).
+                debug_assert!(seats.is_some() || frame == world.frame as i32);
                 let checksum = world.checksum();
                 cell.save(frame, Some(world.clone()), Some(checksum as u128));
             }
@@ -124,7 +173,17 @@ fn advance_each(
             }
             GgrsRequest::AdvanceFrame { inputs } => {
                 let mut frame_inputs = [Input::default(); MAX_PLAYERS];
-                for (slot, (input, status)) in frame_inputs.iter_mut().zip(inputs.iter()) {
+                let mut played = [seats.is_none(); MAX_PLAYERS];
+                for (k, (input, status)) in inputs.iter().enumerate() {
+                    let Some(seat) = seats.map_or(Some(k), |s| s.get(k).copied()) else {
+                        continue;
+                    };
+                    if let Some(p) = played.get_mut(seat) {
+                        *p = true;
+                    }
+                    let Some(slot) = frame_inputs.get_mut(seat) else {
+                        continue;
+                    };
                     // **A seat GGRS has given up on has left the match.** It
                     // marks the seat disconnected from the same frame on
                     // every peer, and from then on hands us a blank input
@@ -138,6 +197,11 @@ fn advance_each(
                         }
                         _ => (*input).into(),
                     };
+                }
+                for (slot, played) in frame_inputs.iter_mut().zip(played) {
+                    if !played {
+                        *slot = Input::default().travelling(sim::input::Travel::LEFT);
+                    }
                 }
                 advance(world, frame_inputs);
             }

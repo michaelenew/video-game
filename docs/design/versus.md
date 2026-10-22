@@ -26,6 +26,35 @@ jump courses); and `--arena <name>` / `?arena=<name>` starts on one:
 
 ## 1 · The rules
 
+### Every versus round opens with a pick (2026-10-22)
+
+From the owner: a class change used to restart the whole fight, which
+against people is everybody's round stopping because one player pressed
+Tab. Now **a class change never resets anybody**, in any mode: the fighter
+who asked is recast where they stand (`World::recast_in_place`) -- the
+same spot, facing, wins and share of their bar, so it is not a heal -- and
+whatever their old class had out in the world is taken back.
+
+In versus that alone would let a player swap to whatever counters the
+fight in front of them, so **a versus round opens with a pick**
+(`Phase::Picking`): fifteen seconds ("Versus, time to choose classes before
+a round", Match family) in which everybody stands on their marks, moves
+about and tries their moves, nobody can be hurt (`World::pvp` is false),
+and a fall off a stage is back on your mark. `Tab` and the class pickers
+work; `Enter` says you are done (`Travel::ready`), and the round starts as
+soon as every seat is ready or the clock runs out -- fresh on the marks,
+with **the classes locked** for the round (`World::classes_locked`: the
+request is not heard). The next round opens with the next pick. At one
+keyboard, `Enter` readies both seats, since the dummy cannot press it.
+
+It applies to the duel in the proving ground, the floating stages and the
+hills -- not to a hunt, a jump course or the valley, where a class can be
+changed whenever anybody asks. It is on in a world the game plays
+(`World::drafting`, `draft=1` on a replay's start line) and off in one
+built bare, which is every test and harness duel that fights from its first
+frame, and the game's own scripted runs (`DEMO=1`, `SHOT_FRAME`). Pinned by
+`crates/sim/tests/recast.rs`.
+
 ### A stage is a table of rules beside its arena
 
 `versus::Stage` names, for an arena built for versus, its **kind** (duel or
@@ -243,3 +272,87 @@ dressing in `game::arenas::stages`, and a sky each in `look::skies`.
   reached by every class that moves (`tests/versus.rs`).
 - **Nothing here has been played.** Every size, every clock and every height
   is a first guess, judged by the walking test and by screenshots.
+
+## 6 · A room you come and go from
+
+*Built 2026-10-22, from the owner: "players should be able to join and leave a
+room at will -- a 4 player room is max 4 players, and players leaving doesn't
+mess everyone else up. The match starts when everyone currently joined clicks
+Start match; people joining during the vs phase go to whichever team is
+smaller, randomly if they're the same size, dropped right into the fight on
+whatever class they joined the room as."*
+
+**What a player sees.** A room's link carries its size (`players=`, chosen
+beside *Create a room*). The first two in start playing together at once, in
+the world the link describes; anybody else who opens the link is let into
+the match going on, up to the room's size, and a fifth is told the room is
+full. Everybody in the fight presses **Start match** in the Esc menu (it says
+how many are ready); the frame the last of them does, the match starts on
+every machine at once -- a fresh round of the versus stage they are on, or
+the first floating duel from anywhere else. Somebody joining after that
+drops into the fight on the smaller side, as what they came in as. Somebody
+leaving -- Leave, or closing the page -- is let go within a second, and
+their seat is the next newcomer's.
+
+**How it works.**
+
+- **The world's half** (`sim::state::World`): `ready`, a flag per seat flipped
+  by `Travel::START`, and `all_starting` starting the match inside the step, so
+  the frame is agreed by the inputs themselves. `open_seat` picks a free seat
+  on the smaller side (`versus::side`, seats alternate), a coin when level;
+  `seat_join` stands a newcomer where a fresh start of the same fight would
+  and touches nobody else. `Travel::admit(seat, class)` carries it on the
+  wire. `crates/sim/tests/join.rs`.
+- **The room's half** (`net::lobby`): a lobby that stays open for the room's
+  life. The **lineup** -- who is in which seat, numbered by an epoch -- is the
+  host's (the lowest id still in it, never the newcomer it is letting in),
+  posted on the board. Every pair in it has a line, and lines outlive a
+  session (`Shared`). Notes are version three; a hello says whether its
+  sender is already in a lineup, so a newcomer never makes a first lineup of
+  its own.
+- **The session's half** (`net::drop_in`): one GGRS session per lineup.
+  GGRS's player `k` is world seat `lineup.members[k].seat`, and a seat
+  nobody in the session plays reads as left (`handle_requests_seated`). When
+  somebody comes, the host's game picks their seat and the lobby posts the
+  new lineup; once the newcomer has a line to everybody, the host's own
+  input carries the admission, so every machine seats them on the same
+  frame. When that frame is confirmed, everybody starts the next session
+  from the world at it -- a hitch of the few frames played past it -- and the
+  host sends that world to the newcomer in chunks until they say they have
+  it, checked against its checksum. Each session's GGRS messages carry its
+  epoch (`Mesh::for_epoch`): one peer's new session and another's old one
+  share the lines for a moment, and GGRS indexed past its players on a
+  message from a session of another size.
+- `crates/net/tests/drop_in.rs` drives four peers the way the game does --
+  two start, two more drop in on the smaller side, everybody starts the
+  match and plays on in step; one of four leaves and the next takes the seat;
+  a fifth is turned away; a newcomer with the lowest id of all still joins.
+
+**Found on the way, in four desktop copies over a local broker**:
+
+- A desktop line read as gone on any error its WebRTC library reported -- a
+  stray packet's included -- so every desktop match dropped a friend a few
+  seconds in, after the leave fix of #219. Open, a line is gone now only if
+  its channel closed or the connection died (`net::native`).
+- A desktop line dropped without a word, so a player pressing Leave held
+  everybody for the session's fifteen silent seconds; it closes politely
+  now, and the others let the seat go in about half a second.
+- The lobby, looking for the world on a line before its session ran, threw
+  away a peer's GGRS handshake, and GGRS's retry timer could put it off for
+  good; packets it reads that are not the world are set aside for the
+  session now.
+- A crowd aggregate a cell's leader sent could stand in for one a machine
+  summed itself, depending on when it arrived -- a desync the frame a match
+  started. Within one session every live region is summed by everybody, so
+  a leader's word on a live region is not taken
+  (`regions::Ledger::offer_heard`).
+
+**Decided while building, for a person to review.** The match starts with
+two, not when the room is full. The newcomer's side, when the two are level,
+is the low bit of their id. A session switch rewinds the frames played past
+the admission -- at most the rollback window, twelve. A newcomer who joins
+from a desktop into a page's room relies on the world's layout being the
+same on both; the checksum check says so plainly if it ever is not. Somebody
+whose game vanishes without closing (a crash, a lost network) is still let
+go only after GGRS's fifteen silent seconds, which are there for a page
+drawing an arena for the first time.
