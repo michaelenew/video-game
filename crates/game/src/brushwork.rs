@@ -88,8 +88,12 @@ impl Material for Brushwork {
         ShaderRef::Handle(SHADER)
     }
 
-    /// Cut out, not blended: every stroke writes depth, so the nearest is
-    /// the one seen and nothing needs sorting.
+    /// Cut out, but not opaque: a stroke is thinner in its middle than at
+    /// its edges, where a loaded brush leaves more paint, and the cloth
+    /// shows through it (the owner, 2026-10-22). It does its own blending
+    /// -- its paint over the picture at its pixel, which it already reads
+    /// -- because a blended material is drawn after the copy of the
+    /// picture is made only when something else on screen asks for it.
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Mask(0.5)
     }
@@ -188,6 +192,11 @@ fn paint(
             // Not the hair: its cards are already strands, and a stroke
             // laid over them is a block on the head.
             if name.starts_with("hair") {
+                continue;
+            }
+            // Nor the skin, for now (the owner, 2026-10-22): the clothes
+            // first.
+            if name == "body" {
                 continue;
             }
             let Some(base) = skins.get(&material.0).map(|s| &s.base) else {

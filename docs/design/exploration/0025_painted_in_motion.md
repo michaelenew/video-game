@@ -179,3 +179,26 @@ body held about a quarter of the way from fabric to flame.
   tip. Very rarely one lifts off the silhouette where it faces up. The first
   try had a third of the outline's strokes lift off as long points and read
   as a porcupine; a quarter of the way to flame is a soft fray, not spines.
+
+## 9. Colour inside the stroke, thin in its middle, clothes only (2026-10-22)
+
+The owner, on §8: *worse; don't do the skin yet, add some variation in the
+colour inside the stroke, and turn down the opacity a bit in the middle of
+the stroke.*
+
+- **Clothes only**: no strokes on the body piece (skin) for now.
+- **Colour inside a stroke**: each bristle's lane a little lighter or
+  darker, warmer or cooler than its neighbours -- streaks along the stroke
+  -- and the paint richer where the brush was loaded, paler toward the dry
+  tail.
+- **Thin in the middle**: a stroke's paint is about half there across its
+  middle and fuller at its edges, where a loaded brush leaves its ridge, soft
+  at the very edge and thinning at the tail; the cloth shows through.
+
+**A trap on the way.** Made a blended material, a stroke is drawn in Bevy's
+transparent pass, and the copy of the picture it reads is only made when
+something in the *transmissive* pass asks for it -- the Reaver's ink shadow
+did, the Champion's fight had nothing, and his strokes read a white
+placeholder. So a stroke stays cut out (drawn in the transmissive pass,
+where the copy is always made) and does its own blending: its paint over
+the picture at its own pixel, which it already reads.

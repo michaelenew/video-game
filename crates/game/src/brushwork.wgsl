@@ -256,12 +256,11 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
     let own = in.seed.x;
     let s1 = fract(own * 7.31);
     let s2 = fract(own * 13.17);
-    // Turning away, a stroke thins out stroke by stroke rather than all at
-    // once: a dither fixed to the stroke, not to the screen.
-    if (hash12(vec2<f32>(own * 97.0, 3.1)) > in.seed.y && in.seed.z < 0.5) {
-        discard;
-    }
-    var shade = 1.0;
+    // How the paint lies at this point of the stroke: `along` from the tail
+    // (-1, dry) to the head (1, loaded) and `lane`, which bristle it is.
+    var along = 0.0;
+    var lane = 0.0;
+    var alpha = 0.0;
     if (in.seed.z < 0.5) {
         // **The land's stroke** (`splats.wgsl`): along it `u`, across it `v`,
         // bowed by its curve, its ends tapered and dry by how loose, its
@@ -271,35 +270,58 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
         let v = in.corner.y * 1.8 - curve * u * u;
         let taper = mix(1.0, sqrt(max(1.0 - u * u, 0.0)), 0.25 + 0.6 * LOOSE);
         let bristle = noise2(vec2<f32>(u * 4.0 + s1 * 9.0, v * 5.0 + s2 * 9.0)) - 0.5;
-        let inside = abs(v) < taper * (1.0 + bristle * 0.35 * LOOSE) && abs(u) < 1.0 + bristle * 0.5;
-        if (!inside) {
+        let reach = taper * (1.0 + bristle * 0.35 * LOOSE);
+        if (abs(v) >= reach || abs(u) >= 1.0 + bristle * 0.5) {
             discard;
         }
-        shade = 0.85 + 0.15 * bristle * 2.0;
+        along = u;
+        lane = v / max(reach, 0.05);
+        // Thinner in the middle, fuller at the edges where the brush leaves
+        // its ridge; soft at its very edge and thinning out at the dry tail.
+        let across = abs(lane);
+        alpha = mix(0.55, 0.85, smoothstep(0.35, 0.85, across))
+            * (1.0 - smoothstep(0.85, 1.0, across))
+            * mix(0.55, 1.0, smoothstep(-1.1, -0.2, u));
     } else {
         // **A wisp**: a tongue of paint from its root on the body to a dry
-        // tip, narrowing as it goes, its bristles giving out toward the end.
+        // tip, narrowing as it goes, thinning out toward the end.
         let t = in.corner.x * 0.5 + 0.5;
-        // Curling one way or the other as it rises.
         let v = in.corner.y - (s1 - 0.5) * 1.4 * t * t;
         let bristle = noise2(vec2<f32>(t * 6.0 + s1 * 9.0, v * 4.0 + s2 * 9.0)) - 0.5;
-        // Full from the root through half its length, then rounding off.
         let width = sqrt(max(1.0 - pow(t, 2.2), 0.0)) * 0.9;
-        if (abs(v) > width * (1.0 + bristle * 0.5)) {
+        let reach = width * (1.0 + bristle * 0.5);
+        if (abs(v) >= reach) {
             discard;
         }
-        if (bristle + 0.5 < t * 1.1 - 0.35) {
-            discard;
-        }
-        shade = mix(0.9 + 0.2 * bristle, 1.18, t * 0.6);
+        along = 1.0 - 2.0 * t;
+        lane = v / max(reach, 0.05);
+        alpha = mix(0.8, 0.0, smoothstep(0.2, 1.0, t)) * (1.0 - smoothstep(0.8, 1.0, abs(lane)));
     }
+    // Turning away, a stroke fades.
+    alpha *= in.seed.y;
     let paint = painted(in.centre, in.reach, in.depth, own);
-    if (paint.a < 0.5) {
+    if (paint.a < 0.5 || alpha < 0.01) {
         discard;
     }
-    // A stroke's own small shift, as the land's: lighter or darker, warmer
-    // or cooler, so a flat colour reads as laid by a brush.
+    // **Colour inside the stroke**: each bristle laid a little lighter or
+    // darker, warmer or cooler than its neighbours -- streaks along the
+    // stroke -- and the paint richer where the brush was loaded, paler
+    // where it ran thin at the tail.
+    let streak = noise2(vec2<f32>(lane * 4.5 + s1 * 31.0, along * 0.6 + s2 * 17.0)) - 0.5;
+    let hue = noise2(vec2<f32>(lane * 2.5 + s2 * 23.0, along * 0.4 + s1 * 11.0)) - 0.5;
+    let load = along * 0.5 + 0.5;
+    var colour = paint.rgb * (1.0 + streak * 0.22);
+    colour *= vec3<f32>(1.0 + hue * 0.12, 1.0, 1.0 - hue * 0.12);
+    colour = mix(vec3<f32>(dot(colour, LUMA)), colour, mix(0.85, 1.15, load));
+    colour *= mix(1.08, 0.96, load);
+    // The stroke's own shift, as the land's: warmer or cooler as a whole.
     let warm = (s2 - 0.5) * 0.08;
-    let colour = paint.rgb * shade * vec3<f32>(1.0 + warm, 1.0, 1.0 - warm);
-    return vec4<f32>(colour, 1.0);
+    colour *= vec3<f32>(1.0 + warm, 1.0, 1.0 - warm);
+    alpha = clamp(alpha * (1.0 + streak * 0.3), 0.0, 1.0);
+    // Below a little paint, no stroke: what it would write is the cloth.
+    if (alpha < 0.1) {
+        discard;
+    }
+    let here = (in.clip.xy - view.viewport.xy) / view.viewport.zw;
+    return vec4<f32>(mix(picture(here), colour, alpha), 1.0);
 }
