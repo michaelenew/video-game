@@ -67,7 +67,8 @@ the right of the screen.
 **The tape describes exactly the world on screen.** It begins again whenever
 the world is replaced outside a tick (a match starting from an agreed world,
 the rehearsal), and it is cut back when `[` rewinds. Everything else that
-changes the fight already travels as input: a restart, a class change, a trip
+changes the fight already travels as input: a restart, a class change (and a
+seat's ready in a versus round's pick), a trip
 to another arena or creature are all a `Travel` byte on the wire
 ([arenas.md](arenas.md)), so a replay crosses them without being told. Which
 made one thing visible: in training, Backspace used to rebuild the world

@@ -40,6 +40,8 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "Space" => vec!["Space"],
         "Escape" => vec!["Esc"],
         "Tab" => vec!["Tab"],
+        // Done choosing, in the pick before a versus round.
+        "Enter" => vec!["Enter"],
         "KeyE" => vec!["E"],
         "KeyH" => vec!["H"],
         "KeyJ" => vec!["J"],

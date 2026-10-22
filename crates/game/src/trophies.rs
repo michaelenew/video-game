@@ -147,7 +147,7 @@ impl Trophies {
             sim::state::Phase::RoundOver { left, .. } => {
                 left.saturating_add(SETTLED) < sim::tuning::round_over_frames()
             }
-            sim::state::Phase::Fighting => false,
+            sim::state::Phase::Fighting | sim::state::Phase::Picking { .. } => false,
         };
         if self.recorded || !settled {
             return false;

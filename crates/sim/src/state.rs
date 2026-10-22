@@ -252,6 +252,18 @@ pub enum Phase {
         winner: u8,
         left: u16,
     },
+    /// **The pick before a versus round** (2026-10-22): `left` frames to
+    /// choose a class in, and a bit for each seat that has said it is done
+    /// ([`crate::input::Destination::Ready`]). Everybody moves and tries
+    /// their moves, nobody can hurt anybody ([`World::pvp`]), and a class
+    /// change recasts only the fighter who asked. It ends when the clock
+    /// runs out or every seat is ready, and the round starts fresh on the
+    /// marks with the classes locked until the next pick. Only in a world
+    /// that drafts ([`World::draft`]).
+    Picking {
+        left: u16,
+        ready: u8,
+    },
 }
 
 /// A jump attack's window and its trip off the ground, for a class whose
@@ -1722,6 +1734,13 @@ pub struct World {
     /// sides' clocks, and who is waiting to stand back up. Off, and not
     /// hashed, on every arena that has no hill.
     pub hill: crate::versus::Koth,
+    /// **Versus rounds open with a pick** ([`Phase::Picking`]), and the
+    /// classes are locked for the round after it. Set by the game for play
+    /// ([`World::drafting`]) and carried through every trip; off in a world
+    /// built bare, which is every test and harness that starts a duel and
+    /// fights it on the first frame. Only a versus fight drafts: a hunt, a
+    /// course and the valley change class whenever anybody asks.
+    pub draft: bool,
 }
 
 impl World {
@@ -1773,6 +1792,7 @@ impl World {
             loose: [None; crate::keep::LOOSE],
             picked: [None; MAX_PLAYERS],
             hill: crate::versus::Koth::NONE,
+            draft: false,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -2142,6 +2162,7 @@ impl World {
     fn travelled(&self, to: Travel, classes: [Class; MAX_PLAYERS]) -> Option<World> {
         let world = match to.destination()? {
             Destination::Class { .. }
+            | Destination::Ready { .. }
             | Destination::Pause
             | Destination::Step
             | Destination::Left
@@ -2165,17 +2186,24 @@ impl World {
                 World::versus_in(classes, place)
             }
         };
-        Some(World {
-            frame: self.frame,
-            paused: self.paused,
-            ..world.seated(self.seats)
-        })
+        Some(
+            World {
+                frame: self.frame,
+                paused: self.paused,
+                ..world.seated(self.seats)
+            }
+            .drafting(self.draft),
+        )
     }
 
     /// This frame's class changes, from both sides: each [`Destination::Class`]
     /// on the wire sets that seat's class, player one's first. `None` if there
-    /// were none.
+    /// were none -- and always while a versus round has the classes locked
+    /// ([`World::classes_locked`]): the request is not heard at all.
     fn recast(&self, wire: &[Input; MAX_PLAYERS]) -> Option<[Class; MAX_PLAYERS]> {
+        if self.classes_locked() {
+            return None;
+        }
         let mut classes = self.players.map(|p| p.class);
         let mut any = false;
         for input in wire {
@@ -2281,6 +2309,7 @@ impl World {
             paused: self.paused,
             ..World::arrive_all(classes, self.valley, seam.to, Some(seam.at), self.seats)
         }
+        .drafting(self.draft)
     }
 
     /// **A hunt in the valley, lost**: you wake outside, at the seam you went
@@ -2311,7 +2340,8 @@ impl World {
                     None,
                     self.seats,
                 )
-            },
+            }
+            .drafting(self.draft),
         }
     }
 
@@ -2410,10 +2440,114 @@ impl World {
     }
 
     /// **May the fighters hurt each other?** In versus, yes; in a hunt and in
-    /// the valley's peaceful places, no. The one question every blow between
-    /// fighters asks.
+    /// the valley's peaceful places, no -- nor in the pick before a versus
+    /// round, which is for trying a class rather than fighting with it. The
+    /// one question every blow between fighters asks.
     pub fn pvp(&self) -> bool {
-        !self.hunting() && !self.peaceful()
+        !self.hunting() && !self.peaceful() && !matches!(self.phase, Phase::Picking { .. })
+    }
+
+    /// **The world, drafting or not** ([`World::draft`]): the game's play
+    /// sets it as the world is built, and a versus fight then opens in its
+    /// pick. Part of a fight's initial state, like [`World::seated`].
+    pub fn drafting(mut self, on: bool) -> World {
+        self.draft = on;
+        if self.picks_classes() && matches!(self.phase, Phase::Fighting) {
+            self.open_pick();
+            self.park_absent();
+        }
+        self
+    }
+
+    /// **Does this fight choose its classes in a pick before each round?**
+    /// A drafting world, fighting each other on a stage: not a hunt, not a
+    /// jump course, not the valley.
+    pub fn picks_classes(&self) -> bool {
+        self.draft && !self.hunting() && !self.valley.on && crate::course::of(self.arena).is_none()
+    }
+
+    /// **Are the classes locked?** For a versus round, from the moment its
+    /// pick ends until the next one opens. Nowhere else, ever.
+    pub fn classes_locked(&self) -> bool {
+        self.picks_classes() && !matches!(self.phase, Phase::Picking { .. })
+    }
+
+    /// Open the pick: everybody back on their marks, the clock full.
+    fn open_pick(&mut self) {
+        self.reset_positions();
+        self.phase = Phase::Picking {
+            left: t::class_pick(),
+            ready: 0,
+        };
+    }
+
+    /// **A round starts**: fresh on the marks, and in a drafting versus fight
+    /// with the pick before it.
+    fn begin_round(&mut self) {
+        if self.picks_classes() {
+            self.open_pick();
+        } else {
+            self.reset_positions();
+            self.phase = Phase::Fighting;
+        }
+    }
+
+    /// **Seat `i` becomes `class`, where it stands**, and nobody else is
+    /// touched (2026-10-22, from the owner: a class change used to restart
+    /// the whole fight, which against people is everybody's round stopping
+    /// for one player). The fighter is a fresh one of the new class on the
+    /// same spot, facing the same way, with the same wins and the same share
+    /// of its bar -- a change is not a heal -- and whatever the old class
+    /// had out in the world is taken back, because it was the old class's.
+    fn recast_in_place(&mut self, i: usize, class: Class) {
+        let was = self.players[i];
+        if was.class == class {
+            return;
+        }
+        let full = t::health_of(class);
+        let share = if was.health <= 0 {
+            0
+        } else {
+            let old = was.full_health().max(1) as i64;
+            ((was.health as i64 * full as i64 / old) as i32).clamp(1, full)
+        };
+        let p = &mut self.players[i];
+        *p = Player {
+            pos: was.pos,
+            facing: was.facing,
+            rounds_won: was.rounds_won,
+            health: share,
+            ..Player::new(class)
+        };
+        if let Mechanic::Shadow(_) = p.mechanic {
+            p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+        }
+        let who = i as u8;
+        for e in self.effects.iter_mut() {
+            if e.is_some_and(|e| e.owner == who) {
+                *e = None;
+            }
+        }
+        for patch in self.ground.iter_mut() {
+            if patch.live() && patch.owner == who {
+                *patch = crate::ground::Patch::default();
+            }
+        }
+        for b in self.bolts.iter_mut() {
+            if b.is_some_and(|b| b.owner == who) {
+                *b = None;
+            }
+        }
+        for d in self.debris.iter_mut() {
+            if d.is_some_and(|d| d.owner == who) {
+                *d = None;
+            }
+        }
+        for g in self.gusts.iter_mut() {
+            if g.is_some_and(|g| g.owner == who) {
+                *g = None;
+            }
+        }
     }
 
     /// **Fighter `i`'s own side**, as seat bits, leaving `i` out: who their
@@ -2762,22 +2896,29 @@ impl World {
         // if both send one on the same frame, which both machines agree on
         // because both have both inputs.
         //
-        // A class change is the same kind of thing (Tab, and the pickers): the
-        // same fight restarted with the new classes, on the frame it arrives.
+        // A class change is not (Tab, and the pickers): the seat that asked
+        // is recast where it stands and the frame goes on, for everybody.
         // Both players may ask on one frame and both are honoured, and a trip
-        // on that frame keeps them.
+        // on that frame keeps them. In a versus round the classes are locked
+        // and nobody is heard until the next pick (`World::recast`).
         let recast = self.recast(&wire);
         let classes = recast.unwrap_or_else(|| self.players.map(|p| p.class));
-        let next = wire
-            .iter()
-            .find_map(|i| self.travelled(i.travel, classes))
-            .or_else(|| {
-                recast.map(|classes| World {
-                    frame: self.frame,
-                    paused: self.paused,
-                    ..self.restarted(classes).seated(self.seats)
-                })
-            });
+        let next = wire.iter().find_map(|i| self.travelled(i.travel, classes));
+        if next.is_none() && recast.is_some() {
+            for (i, class) in classes.into_iter().enumerate() {
+                self.recast_in_place(i, class);
+            }
+        }
+        // Done choosing, in the pick: the seat's bit, from whoever sent it.
+        if let Phase::Picking { ready, .. } = &mut self.phase {
+            for input in &wire {
+                if let Some(Destination::Ready { seat }) = input.travel.destination()
+                    && seat < MAX_PLAYERS
+                {
+                    *ready |= 1 << seat;
+                }
+            }
+        }
         // Pause and step, from either side: one press is one toggle, and a
         // step pauses as well as playing its frame.
         let asked = |d: Destination| wire.iter().any(|i| i.travel.destination() == Some(d));
@@ -2858,9 +2999,24 @@ impl World {
                 }
                 return;
             }
-            self.reset_positions();
-            self.phase = Phase::Fighting;
+            self.begin_round();
             return;
+        }
+        // **The pick runs out**, or every seat in the fight is ready: the
+        // round starts, fresh on the marks, with the classes as they stand.
+        if let Phase::Picking { left, ready } = self.phase {
+            let all = (0..self.present())
+                .filter(|&i| !self.away.has(i))
+                .all(|i| ready & (1 << i) != 0);
+            if left == 0 || all {
+                self.reset_positions();
+                self.phase = Phase::Fighting;
+                return;
+            }
+            self.phase = Phase::Picking {
+                left: left - 1,
+                ready,
+            };
         }
 
         // Stones move before the fighters do, so what a fighter walks into --
@@ -3994,6 +4150,18 @@ impl World {
         // **Versus stages** (`crate::versus`): off a floating stage's edge is
         // out, and a hill's point, clocks and respawns decide the round
         // rather than the last one standing.
+        // In the pick, off the edge -- or down, by anything at all -- is back
+        // on your mark: nobody is out yet.
+        if matches!(self.phase, Phase::Picking { .. }) {
+            let pit = crate::versus::of(self.arena).and_then(|s| s.pit());
+            for i in 0..self.present() {
+                let p = &self.players[i];
+                if p.health <= 0 || pit.is_some_and(|pit| p.pos.y.raw() < pit.raw()) {
+                    self.stand_on_mark(i);
+                }
+            }
+            return;
+        }
         if matches!(self.phase, Phase::Fighting) && self.pvp() && !self.valley.on {
             if let Some(pit) = crate::versus::of(self.arena).and_then(|s| s.pit()) {
                 for p in self.players.iter_mut() {
@@ -4277,6 +4445,10 @@ impl World {
             hash_monster(&mut h, slot, m);
         }
         hash_phase(&mut h, self.phase);
+        // Drafting, only while set: every world built bare hashes as it did.
+        if self.draft {
+            h.write_u32(0xD4AF);
+        }
         // The hill, only where there is one: every other fight hashes as it
         // did before there were hills.
         if self.hill.on {
@@ -11869,6 +12041,10 @@ fn hash_phase(h: &mut Fnv, phase: Phase) {
             h.write_u32(1);
             h.write_u32(winner as u32);
             h.write_u32(left as u32);
+        }
+        Phase::Picking { left, ready } => {
+            h.write_u32(2);
+            h.write_u32(left as u32 | (ready as u32) << 16);
         }
     }
 }

@@ -693,7 +693,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Tab",
-                "Cycle your class. Restarts the fight. Works against a person too: both games restart on the same frame, with your new class and whatever they have.",
+                "Cycle your class, where you stand: nobody else's fight is touched, and against a person it changes on both games on the same frame. In a hunt, a course or the valley, any time. In versus, every round opens with fifteen seconds to choose -- move about and try your moves, nobody can be hurt -- and the classes are locked once the round starts.",
+            ),
+            e(
+                "Enter",
+                "In the pick before a versus round: done choosing. The round starts as soon as everybody is ready, or when the fifteen seconds run out. At one keyboard it readies both seats.",
             ),
             e(
                 "F8",

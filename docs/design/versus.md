@@ -26,6 +26,35 @@ jump courses); and `--arena <name>` / `?arena=<name>` starts on one:
 
 ## 1 · The rules
 
+### Every versus round opens with a pick (2026-10-22)
+
+From the owner: a class change used to restart the whole fight, which
+against people is everybody's round stopping because one player pressed
+Tab. Now **a class change never resets anybody**, in any mode: the fighter
+who asked is recast where they stand (`World::recast_in_place`) -- the
+same spot, facing, wins and share of their bar, so it is not a heal -- and
+whatever their old class had out in the world is taken back.
+
+In versus that alone would let a player swap to whatever counters the
+fight in front of them, so **a versus round opens with a pick**
+(`Phase::Picking`): fifteen seconds ("Versus, time to choose classes before
+a round", Match family) in which everybody stands on their marks, moves
+about and tries their moves, nobody can be hurt (`World::pvp` is false),
+and a fall off a stage is back on your mark. `Tab` and the class pickers
+work; `Enter` says you are done (`Travel::ready`), and the round starts as
+soon as every seat is ready or the clock runs out -- fresh on the marks,
+with **the classes locked** for the round (`World::classes_locked`: the
+request is not heard). The next round opens with the next pick. At one
+keyboard, `Enter` readies both seats, since the dummy cannot press it.
+
+It applies to the duel in the proving ground, the floating stages and the
+hills -- not to a hunt, a jump course or the valley, where a class can be
+changed whenever anybody asks. It is on in a world the game plays
+(`World::drafting`, `draft=1` on a replay's start line) and off in one
+built bare, which is every test and harness duel that fights from its first
+frame, and the game's own scripted runs (`DEMO=1`, `SHOT_FRAME`). Pinned by
+`crates/sim/tests/recast.rs`.
+
 ### A stage is a table of rules beside its arena
 
 `versus::Stage` names, for an arena built for versus, its **kind** (duel or
