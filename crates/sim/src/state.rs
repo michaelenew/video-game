@@ -2212,6 +2212,7 @@ impl World {
         let mut ground = if self.valley.on {
             let mut g = self.valley_ground();
             g.den = self.den();
+            self.raise_drifts(&mut g);
             g
         } else {
             Terrain::bare(self.arena.get())
@@ -3306,6 +3307,12 @@ impl World {
         // below reads it (the swim, the strong version), so before it.
         self.mark_the_blood();
 
+        // **The drifts carry whoever holds on to one** (`crate::drift`),
+        // before anybody steps or is seen: every body on a moving stone, or
+        // hanging from or sliding down one, starts the frame where the stone
+        // took it.
+        let carried = self.carry_riders();
+
         // Everything the aiming ray can meet, as it stood at the top of the
         // frame. Copied rather than borrowed because the loop below takes each
         // fighter mutably -- and snapshotting is right anyway: both players
@@ -3342,6 +3349,8 @@ impl World {
             step_aloft(p, &field, here);
             fade_grey(p, frame);
         }
+        // And a body that let go of one keeps its speed.
+        self.let_riders_go(carried);
         self.land_the_thornfall(&seen);
         // **Falls** (bestiary P6), and **noise** (P5): both read what the step
         // just did to each body, against the body as the frame found it.
@@ -7548,13 +7557,17 @@ fn step_player(
     // both ways, rather than the frame of it.
     let kept = p.wall_press > 0 && on_wall;
     p.wall_press = p.wall_press.saturating_sub(1);
+    // **A wall on its way is a lift** (`crate::drift`): neither rule
+    // against a ladder asks about it while it moves, and a kick off it is
+    // not counted against the next.
+    let moving = p.wall.is_some() && scene.arena.moving_face(p.pos, p.wall.normal);
     let wall_jump = (pressed_space && near_wall || kept)
         && !p.grounded
         && !carrying
         && p.action.actionable()
-        && may_wall_jump(p);
+        && (moving || may_wall_jump(p));
     if wall_jump {
-        jump_off_the_wall(p, mob.jump, input);
+        jump_off_the_wall(p, mob.jump, input, moving);
         p.wall_press = 0;
     }
     let mut beat = false;
@@ -8210,9 +8223,13 @@ fn may_wall_jump(p: &Player) -> bool {
 /// forward*, where the player is steering, and a run carried on to the wall
 /// faster than that keeps its own speed. The stick straight away from the
 /// wall, into it or let go carries nothing more than the run.
-fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input) {
+///
+/// Off a wall that `moves` (a drift), the jump is worth its whole rise and
+/// leaves no record against the next: the ladder rules are for walls that
+/// stand still.
+fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input, moves: bool) {
     let mut rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
-    for _ in 0..p.wall_jumps {
+    for _ in 0..if moves { 0 } else { p.wall_jumps } {
         rise = rise.mul(t::wall_jump_falloff());
     }
     p.vel.y = p.vel.y.max(rise);
@@ -8245,11 +8262,13 @@ fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input) {
         }
     }
     p.jump_hold = 0;
-    p.wall_jumped = Wall {
-        at: p.pos,
-        normal: p.wall.normal,
-    };
-    p.wall_jumps = p.wall_jumps.saturating_add(1);
+    if !moves {
+        p.wall_jumped = Wall {
+            at: p.pos,
+            normal: p.wall.normal,
+        };
+        p.wall_jumps = p.wall_jumps.saturating_add(1);
+    }
     p.wall_since = u8::MAX;
 }
 

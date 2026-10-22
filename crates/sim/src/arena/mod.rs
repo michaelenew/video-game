@@ -1696,7 +1696,7 @@ fn min_penetration(v: Fx, lo: Fx, hi: Fx) -> Fx {
 /// The most solids a fight can raise at runtime: the Mireback's six slag
 /// mounds and two objectives -- and, in the valley, the waystone doors that
 /// are shut.
-pub const MAX_RAISED: usize = 16;
+pub const MAX_RAISED: usize = 32;
 
 /// **The ground as it stands this frame**: the arena's table -- or, in the
 /// valley, the whole map around it -- the solids a fight has raised on it
@@ -1726,6 +1726,8 @@ pub struct Terrain {
     origin: V3,
     raised: [Solid; MAX_RAISED],
     raised_len: u8,
+    /// Which of the raised solids are drifts (`crate::drift`), a bit each.
+    moving: u32,
     /// The floor hazards, placed: `crate::hazard`.
     pub floor: crate::hazard::Floor,
     /// **The hunt's home**, as seen from here: what a creature reads of its
@@ -1838,6 +1840,7 @@ impl Terrain {
             origin: V3::ZERO,
             raised: [Solid::new(V3::ZERO, V3::ZERO); MAX_RAISED],
             raised_len: 0,
+            moving: 0,
             floor: crate::hazard::Floor::NONE,
             den: Den::of(arena),
         }
@@ -1873,6 +1876,38 @@ impl Terrain {
             self.raised[self.raised_len as usize] = s;
             self.raised_len += 1;
         }
+    }
+
+    /// The same ground with a drift's box raised on it as it stands this
+    /// frame (`crate::drift`), if there is room: a solid like any other, and
+    /// -- if it is on its way between its stops this frame -- one
+    /// [`Terrain::moving_face`] knows moves.
+    pub fn raise_moving(&mut self, s: Solid, on_its_way: bool) {
+        if (self.raised_len as usize) < MAX_RAISED {
+            if on_its_way {
+                self.moving |= 1 << self.raised_len;
+            }
+            self.raise(s);
+        }
+    }
+
+    /// **Is a body at `at` against the side of a drift on its way**, the
+    /// face looking `normal`? What the wall jump asks before its two rules
+    /// against a ladder (`state::may_wall_jump`): a wall that is carrying you
+    /// is a lift, and is climbed for as long as it goes. Waiting at a stop it
+    /// is a wall like any other.
+    pub fn moving_face(&self, at: V3, normal: V3) -> bool {
+        let reach = t::body_radius().add(SKIN).add(SKIN).add(SKIN);
+        self.raised()
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| self.moving & (1 << k) != 0)
+            .any(|(_, s)| {
+                let probe = at.sub(normal.scale(reach));
+                s.over(probe.x, probe.z, Fx::ZERO)
+                    && at.y.raw() < s.max.y.raw()
+                    && at.y.add(t::body_height()).raw() > s.min.y.raw()
+            })
     }
 
     /// The solids raised this fight.

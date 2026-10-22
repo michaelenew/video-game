@@ -16,13 +16,17 @@
 //!   south-west corner. Gaps of seven to twenty-six metres, stones from a
 //!   metre and a half across to twenty; a cairn on every big island.
 //! - **The Hanging Stones** ([`LADDER`], [`SPAN`]) climb from the Bank's road:
-//!   a column of forty hops round a square, then a span north over the
-//!   mountains broken three times by **a gully** -- twelve metres of drop
-//!   between two walls, crossed by jumping from wall to wall
-//!   ([`super::gully`]). Until 2026-10-16 it was stones seven metres apart
-//!   with vines between them, which the owner found awful to get stuck in;
-//!   until 2026-10-20, fifty stones each 4.2 m over the last and a span of
-//!   identical steps, sized for the Bulwark's catch.
+//!   a column -- a turn of stones, a lift, **the riser** (two walls rising
+//!   together, kicked between), a short climb -- then a span north over the
+//!   mountains: a gully (twelve metres of drop between two walls, crossed by
+//!   jumping from wall to wall, [`super::gully`]) and a stretch of stones,
+//!   **a ferry** caught going by, two **turn-arounds** out of tunnels, a lift
+//!   and the last stones (2026-10-22, `crate::drift`). Until 2026-10-16 it
+//!   was stones seven metres apart with vines between them, which the owner
+//!   found awful to get stuck in; until 2026-10-20, fifty stones each 4.2 m
+//!   over the last and a span of identical steps, sized for the Bulwark's
+//!   catch; until 2026-10-22, forty hops round a square and a span of
+//!   twenty-eight, every metre by hand.
 //!
 //! **Since 2026-10-20 the Hanging Stones are at the Sky Road's difficulty,
 //! and two routes are harder still.** The owner, on the Sky Road: "the only
@@ -53,6 +57,7 @@
 
 use super::rim::Rim;
 use super::{Arena, ArenaId, Bounds, Mark, Material, Shape, Solid, Spawns};
+use crate::drift::Drift;
 use crate::fixed::Fx;
 use crate::math::V3;
 use crate::valley::{Kind, Place};
@@ -201,14 +206,48 @@ pub enum Hop {
     Gully {
         way: Way,
     },
+    /// **A lift** (2026-10-22, `crate::drift`): two cars side by side
+    /// beyond the last stone along `way`, carrying `rise` up to a rest
+    /// beyond them, one up while the other comes down.
+    Lift {
+        way: Way,
+        rise: i32,
+    },
+    /// **A riser** (2026-10-22): two walls across a slot beyond the last
+    /// stone along `way`, rising `rise` together; jumped into at their foot
+    /// and ridden up by kicking from one to the other, because a slide down
+    /// a wall that rises slower than it slides leaves you behind. Off at the
+    /// top on to a stone beyond the slot. The owner: "a pair of vertically
+    /// moving walls requires you to wall jump between them to ascend".
+    Riser {
+        way: Way,
+        rise: i32,
+    },
+    /// **A turn-around** (2026-10-22): a tunnel out of the last stone along
+    /// `way`, a wall across its mouth's way a gap past it, and its roof the
+    /// landing -- out, off the wall and back over the mouth (`super::spire`'s
+    /// stack, one tier). The landing here is the roof's mouth end.
+    Turn {
+        way: Way,
+    },
+    /// **A ferry** (2026-10-22): a stone that goes by beside the last one
+    /// along `way` from out of reach behind it, `run` long and rising
+    /// `rise`, caught going past and ridden to a stone a hop over where it
+    /// stops.
+    Ferry {
+        way: Way,
+        run: i32,
+        rise: i32,
+    },
 }
 
 impl Hop {
-    /// What it asks: a gully asks the wall jump, which every class has.
+    /// What it asks, of a stone: a plain jump or a tool. Anything else -- a
+    /// gully, a lift, a riser, a turn-around, a ferry -- asks what it is.
     pub const fn need(self) -> Option<Need> {
         match self {
             Hop::Stone { need, .. } => Some(need),
-            Hop::Gully { .. } => None,
+            _ => None,
         }
     }
 }
@@ -268,6 +307,84 @@ const fn gully(way: Way) -> Hop {
     Hop::Gully { way }
 }
 
+/// A lift along `way`, `rise` up.
+const fn lift(way: Way, rise: i32) -> Hop {
+    Hop::Lift { way, rise }
+}
+
+/// A riser along `way`, `rise` up.
+const fn riser(way: Way, rise: i32) -> Hop {
+    Hop::Riser { way, rise }
+}
+
+/// A turn-around along `way`.
+const fn turn(way: Way) -> Hop {
+    Hop::Turn { way }
+}
+
+/// A ferry along `way`, `run` long, `rise` up.
+const fn ferry(way: Way, run: i32, rise: i32) -> Hop {
+    Hop::Ferry { way, run, rise }
+}
+
+// ---- What moves, and what turns you ---------------------------------------
+
+/// A lift's cars: how long along the way, how wide across (two side by
+/// side), and how far from the stones either end; its clock, in frames a
+/// metre up and down (about eight metres a second up, twelve down) and the
+/// wait at either end.
+pub const CAR_LONG: i32 = 300;
+pub const CAR_WIDE: i32 = 290;
+const CAR_CLEAR: i32 = 10;
+const CAR_FRAMES_A_METRE: (i32, i32) = (75, 50);
+const CAR_WAIT: u16 = 120;
+
+/// A riser's slot: how long along the way, how wide inside, its walls'
+/// thickness, and how far they run under and over the stone it is entered
+/// from at their foot; how much higher than that the stone off its top is;
+/// its clock -- the wait at the foot, the way up (frames a metre: four
+/// metres a second, six at its fastest, past a slide's 3.6), the stay at the
+/// top, the way down.
+pub const SLOT_LONG: i32 = 500;
+pub const SLOT_WIDE: i32 = 260;
+const SLOT_WALL: i32 = 100;
+pub const SLOT_UNDER: i32 = 150;
+pub const SLOT_OVER: i32 = 900;
+pub const RISER_EXIT: i32 = 200;
+const RISER_FRAMES_A_METRE: i32 = 15;
+const RISER_CLOCK: (u16, u16, u16) = (150, 180, 240);
+
+/// A turn-around: the tunnel's length, its width inside, how far its roof is
+/// over its floor, how far the roof stops short of the mouth, and how far
+/// the wall stands off the mouth -- the Needle's stack's, measured on the
+/// bench (`super::bench::TURNS`).
+pub const TUNNEL_LONG: i32 = 800;
+pub const TUNNEL_WIDE: i32 = 300;
+pub const ROOF_UP: i32 = super::spire::TIER_RISE;
+const ROOF_SHORT: i32 = 60;
+const ROOF_DEEP: i32 = 80;
+const TURN_GAP: i32 = super::spire::TURN_GAP;
+
+/// A ferry's deck, how far behind the stone it is caught from it waits (past
+/// the Dual mage's plain jump with its airdodge), how
+/// far out to the side it goes by, how far over its stop the stone off it
+/// is, and its clock: the wait out of reach, the run (frames a metre: ten
+/// metres a second, fifteen at its fastest), the stay at the far end, the way
+/// back.
+pub const FERRY_DECK: i32 = 400;
+pub const FERRY_BACK: i32 = 2000;
+pub const FERRY_SIDE: i32 = 300;
+pub const FERRY_UP: i32 = 300;
+const FERRY_FRAMES_A_METRE: i32 = 6;
+const FERRY_CLOCK: (u16, u16, u16) = (60, 150, 360);
+
+/// Across a way, to its right, looking down from above with north up:
+/// north's right is east, east's is south.
+const fn right(way: Way) -> (i32, i32) {
+    let (dx, dz) = way.step();
+    (dz, -dx)
+}
+
 /// **A stone this wide carries a cairn** (half its side, centimetres): a
 /// rest, a gully's landing, the Crown. The Sky Road's islands have their own
 /// rule ([`build`]).
@@ -319,10 +436,250 @@ pub const fn lay<const K: usize>(from: Stone, hops: &[Hop; K], grounded: usize) 
                     grounded: false,
                 }
             }
+            Hop::Lift { way, rise } => {
+                let (dx, dz) = way.step();
+                let d = last.half + CAR_CLEAR + CAR_LONG + CAR_CLEAR + REST;
+                Stone {
+                    x: last.x + dx * d,
+                    z: last.z + dz * d,
+                    top: last.top + rise,
+                    half: REST,
+                    grounded: false,
+                }
+            }
+            Hop::Riser { way, rise } => {
+                let (dx, dz) = way.step();
+                let d = last.half + CAR_CLEAR + SLOT_LONG + CAR_CLEAR + 150;
+                Stone {
+                    x: last.x + dx * d,
+                    z: last.z + dz * d,
+                    top: last.top + rise + RISER_EXIT,
+                    half: 150,
+                    grounded: false,
+                }
+            }
+            Hop::Turn { way } => {
+                let (dx, dz) = way.step();
+                let d = last.half + TUNNEL_LONG - ROOF_SHORT - 150;
+                Stone {
+                    x: last.x + dx * d,
+                    z: last.z + dz * d,
+                    top: last.top + ROOF_UP,
+                    half: 150,
+                    grounded: false,
+                }
+            }
+            Hop::Ferry { way, run, rise } => {
+                let (dx, dz) = way.step();
+                let (rx, rz) = right(way);
+                let side = last.half + FERRY_SIDE + FERRY_DECK / 2;
+                let along = run - FERRY_BACK + FERRY_DECK / 2 + CAR_CLEAR * 3 + 150;
+                Stone {
+                    x: last.x + dx * along + rx * side,
+                    z: last.z + dz * along + rz * side,
+                    top: ferry_top(&last, run, rise) + rise + FERRY_UP,
+                    half: 150,
+                    grounded: false,
+                }
+            }
         };
         out[k] = next;
         last = next;
         k += 1;
+    }
+    out
+}
+
+/// Where a ferry's deck's top is when it waits out of reach: low enough that
+/// it goes by the stone it is caught from half a metre under its top -- its
+/// height and its way along are eased alike, so it is there when it is a
+/// [`FERRY_BACK`] of its run along.
+pub const fn ferry_top(last: &Stone, run: i32, rise: i32) -> i32 {
+    last.top - 50 - rise * FERRY_BACK / run
+}
+
+/// A box on the map from its corners (centimetres).
+const fn boxed(min: [i32; 3], max: [i32; 3], m: Material) -> Solid {
+    Solid::cm(min, max, m)
+}
+
+/// A box `along` a way and `across` it from a point, its heights `y`: the
+/// ranges are from the point, along the way's step and its right.
+const fn laid(
+    at: (i32, i32),
+    way: Way,
+    along: (i32, i32),
+    across: (i32, i32),
+    y: (i32, i32),
+    m: Material,
+) -> Solid {
+    let (dx, dz) = way.step();
+    let (rx, rz) = right(way);
+    let (ax, az) = (
+        at.0 + dx * along.0 + rx * across.0,
+        at.1 + dz * along.0 + rz * across.0,
+    );
+    let (bx, bz) = (
+        at.0 + dx * along.1 + rx * across.1,
+        at.1 + dz * along.1 + rz * across.1,
+    );
+    let (x0, x1) = if ax < bx { (ax, bx) } else { (bx, ax) };
+    let (z0, z1) = if az < bz { (az, bz) } else { (bz, az) };
+    boxed([x0, y.0, z0], [x1, y.1, z1], m)
+}
+
+/// The middle of a stone's edge on `way`.
+const fn edge_of(s: &Stone, way: Way) -> (i32, i32) {
+    let (dx, dz) = way.step();
+    (s.x + dx * s.half, s.z + dz * s.half)
+}
+
+/// A drift from a box at its first stop, `rise` up or `travel` (x, y, z)
+/// away, on a clock of (wait, go, stay, back) frames, `phase` into it.
+fn moving(solid: Solid, travel: (i32, i32, i32), clock: (u16, u16, u16, u16), phase: u16) -> Drift {
+    Drift {
+        solid,
+        travel: V3::new(cm(travel.0), cm(travel.1), cm(travel.2)),
+        wait: clock.0,
+        go: clock.1,
+        stay: clock.2,
+        back: clock.3,
+        phase,
+    }
+}
+
+/// **A lift's two cars**, from the stone before it: side by side across the
+/// way, one half a cycle behind the other.
+pub fn lift_cars(last: &Stone, way: Way, rise: i32) -> [Drift; 2] {
+    let at = edge_of(last, way);
+    let up = (rise / 100 * CAR_FRAMES_A_METRE.0) as u16;
+    let down = (rise / 100 * CAR_FRAMES_A_METRE.1) as u16;
+    let clock = (CAR_WAIT, up, CAR_WAIT, down);
+    let period = 2 * CAR_WAIT as u32 + up as u32 + down as u32;
+    let car = |k: i32| {
+        let across = if k == 0 {
+            (-CAR_WIDE, -5)
+        } else {
+            (5, CAR_WIDE)
+        };
+        let deck = laid(
+            at,
+            way,
+            (CAR_CLEAR, CAR_CLEAR + CAR_LONG),
+            across,
+            (last.top - 40, last.top),
+            Material::Wood,
+        );
+        moving(deck, (0, rise, 0), clock, (k as u32 * period / 2) as u16)
+    };
+    [car(0), car(1)]
+}
+
+/// **A riser's two walls**, from the stone before it, at their foot.
+pub fn riser_walls(last: &Stone, way: Way, rise: i32) -> [Drift; 2] {
+    let at = edge_of(last, way);
+    let (wait, stay, back) = RISER_CLOCK;
+    let go = (rise / 100 * RISER_FRAMES_A_METRE) as u16;
+    let h = SLOT_WIDE / 2;
+    let wall = |across: (i32, i32)| {
+        let w = laid(
+            at,
+            way,
+            (CAR_CLEAR, CAR_CLEAR + SLOT_LONG),
+            across,
+            (last.top - SLOT_UNDER, last.top + SLOT_OVER),
+            Material::Stone,
+        );
+        moving(w, (0, rise, 0), (wait, go, stay, back), 0)
+    };
+    [wall((-h - SLOT_WALL, -h)), wall((h, h + SLOT_WALL))]
+}
+
+/// **A turn-around's boxes**, from the stone before it: the tunnel's floor
+/// and its two sides, its roof (the landing), and the wall across its
+/// mouth's way.
+pub fn turn_parts(last: &Stone, way: Way) -> [Solid; 5] {
+    let at = edge_of(last, way);
+    let h = TUNNEL_WIDE / 2;
+    let (floor, roof) = (last.top, last.top + ROOF_UP);
+    let side = 100;
+    [
+        laid(
+            at,
+            way,
+            (0, TUNNEL_LONG),
+            (-h, h),
+            (floor - 120, floor),
+            Material::Rock,
+        ),
+        laid(
+            at,
+            way,
+            (0, TUNNEL_LONG - ROOF_SHORT),
+            (-h, h),
+            (roof - ROOF_DEEP, roof),
+            Material::Grass,
+        ),
+        laid(
+            at,
+            way,
+            (0, TUNNEL_LONG),
+            (-h - side, -h),
+            (floor - 120, roof),
+            Material::Rock,
+        ),
+        laid(
+            at,
+            way,
+            (0, TUNNEL_LONG),
+            (h, h + side),
+            (floor - 120, roof),
+            Material::Rock,
+        ),
+        laid(
+            at,
+            way,
+            (TUNNEL_LONG + TURN_GAP, TUNNEL_LONG + TURN_GAP + side),
+            (-h - 200, h + 200),
+            (floor - 400, roof + 300),
+            Material::Rock,
+        ),
+    ]
+}
+
+/// **A ferry**, from the stone it is caught from: where it waits, behind and
+/// to the right, and its run along the way and up.
+pub fn ferry_of(last: &Stone, way: Way, run: i32, rise: i32) -> Drift {
+    let (dx, dz) = way.step();
+    let (rx, rz) = right(way);
+    let side = last.half + FERRY_SIDE + FERRY_DECK / 2;
+    let (cx, cz) = (
+        last.x - dx * FERRY_BACK + rx * side,
+        last.z - dz * FERRY_BACK + rz * side,
+    );
+    let top = ferry_top(last, run, rise);
+    let h = FERRY_DECK / 2;
+    let deck = boxed(
+        [cx - h, top - 60, cz - h],
+        [cx + h, top, cz + h],
+        Material::Sand,
+    );
+    let (wait, stay, back) = FERRY_CLOCK;
+    let go = (run / 100 * FERRY_FRAMES_A_METRE) as u16;
+    moving(deck, (dx * run, rise, dz * run), (wait, go, stay, back), 0)
+}
+
+/// **Every drift a route's hops put down**, from its first stone.
+pub fn drifts_of(from: Stone, hops: &[Hop], stones: &[Stone]) -> Vec<Drift> {
+    let mut out = Vec::new();
+    for (k, h) in hops.iter().enumerate() {
+        let last = if k == 0 { from } else { stones[k - 1] };
+        match *h {
+            Hop::Lift { way, rise } => out.extend(lift_cars(&last, way, rise)),
+            Hop::Riser { way, rise } => out.extend(riser_walls(&last, way, rise)),
+            Hop::Ferry { way, run, rise } => out.push(ferry_of(&last, way, run, rise)),
+            _ => {}
+        }
     }
     out
 }
@@ -348,7 +705,7 @@ pub fn gullies_of(
                 super::gully::walls(takeoff(&last, way), way.step(), Material::Rock),
             ))
         }
-        Hop::Stone { .. } => None,
+        _ => None,
     })
 }
 
@@ -373,25 +730,25 @@ pub const FOOT: Stone = Stone {
     grounded: true,
 };
 
-/// **The column** (2026-10-20, from fifty stones each 4.2 m over the last
-/// round a six-metre square): forty hops climbing round a square west of the
-/// foot, 41 m to 203 m. The owner, on the Sky Road: "the only thing
-/// resembling challenging ... there's variety in the jumps and it forces you
-/// to learn class's mobility tools." So no two stretches are alike:
+/// **The column** (2026-10-20; cut short and broken up 2026-10-22): from
+/// the foot by the Bank's road, 41 m, to 203 m. Until 2026-10-22 it was
+/// forty hops round a square; the owner, on the long sections: "they're
+/// repetitive and don't give enough variety ... Short to medium length,
+/// interesting sections that give some variety, then a moving platform, then
+/// another section." So, in three:
 ///
-/// - **plain catches** at the edge of the shortest jumper's reach -- three to
-///   five and a half metres out and three to five up, landed by the best
-///   jumpers and caught at the hands by the Champion and the Blood mage;
-/// - **precision stones** a metre across among them, a run of two now and
-///   then, and one drop of three metres;
-/// - **a rest** six metres across with a cairn in front of every tool hop,
-///   and the tool hops themselves: **high** -- nine metres up and two and a
-///   half out, which no plain jump catches (the best, the Dual mage's, hangs
-///   from 8.2) -- and **long**: twelve or thirteen metres, level or a little
-///   up, past the longest plain jump caught with its airdodge (10.5).
+/// - **The first turn**, as it was: plain catches three to five and a half
+///   metres out and three to five up, precision stones a metre across, a
+///   rest and a high tool hop, to a rest 88 m up.
+/// - **A lift**, 62 m, to a rest at 150 m -- and straight off it **the
+///   riser**: two walls rising together 24 m, ridden by kicking between
+///   them, to a stone two metres over where they stop.
+/// - **The top**: a catch, a pin, a rest, a long tool hop of thirteen
+///   metres, two pins and a catch, to the column's top.
 ///
-/// Every turn of the square is one loop, and no loop is the last over again.
-pub const LADDER_HOPS: [Hop; 40] = [
+/// Every turn of the old square is gone above the first; the hops by hand are
+/// eighteen, where they were forty.
+pub const LADDER_HOPS: [Hop; 22] = [
     // The first turn: plain, then a rest and the first high hop.
     on(W, 500, 400),
     pin(W, 450, 300),
@@ -404,59 +761,40 @@ pub const LADDER_HOPS: [Hop; 40] = [
     on(E, 400, 450),
     on(S, 550, 300),
     pin(S, 400, 400),
-    // The second: the first long hop, and a high one.
     rest(W, 300, 300),
-    tool(W, 200, 1300, 0),
-    on(W, 450, 450),
+    // Up: a lift, and the riser off its head.
+    lift(W, 6200),
+    riser(W, 2400),
+    // The top.
+    on(N, 450, 450),
+    pin(N, 450, 300),
+    rest(E, 300, 400),
+    tool(E, 200, 1300, 0),
     pin(N, 400, 350),
-    on(N, 300, 500),
+    on(N, 400, 450),
+    pin(W, 450, 300),
     rest(N, 300, 400),
-    tool(N, 200, 250, 900),
-    on(E, 500, 400),
-    pin(E, 450, 250),
-    pin(E, 400, 300),
-    on(S, 300, 500),
-    on(S, 500, -300),
-    // The third: two high hops back to back, then long and up.
-    rest(S, 300, 500),
-    tool(W, 200, 250, 900),
-    tool(W, 150, 250, 900),
-    pin(N, 450, 300),
-    on(N, 450, 450),
-    pin(N, 400, 300),
-    rest(E, 300, 300),
-    tool(E, 200, 1200, 200),
-    on(E, 500, 400),
-    pin(S, 450, 350),
-    on(S, 450, 450),
-    // The fourth: a high hop off a rest, a run of pins, the top.
-    rest(W, 300, 400),
-    tool(W, 150, 300, 900),
-    pin(W, 450, 350),
-    pin(N, 450, 300),
-    on(N, 450, 450),
-    rest(N, 300, 300),
 ];
 
 /// The column, its foot first.
 pub const LADDER: [Stone; LADDER_HOPS.len()] = lay(FOOT, &LADDER_HOPS, 0);
 
-/// **The span** (2026-10-20, from four stretches of four stones stepping up
-/// 2.5 m with 4.2 m gaps, each ending in a gully, and seven steeper ones to
-/// the plane): north from the column's top over the mountains to the plane's
-/// south edge, 203 m to 305 m, in three stretches.
+/// **The span** (2026-10-20; broken up 2026-10-22): north from the
+/// column's top over the mountains to the plane's south edge, 203 m to
+/// 305 m, in four:
 ///
-/// - **Over the low ground**: a gully straight off the column's top, a long
-///   hop east and up, three precision stones zig-zagging, a rest, seventeen
-///   metres and four up -- the longest of the Hanging Stones -- and a second
-///   gully.
-/// - **To the mountains' foot**: plain catches five up, a rest, fifteen
-///   metres and five up, a rest, the third gully.
-/// - **Up the mountainside**, where the land rises a metre for a metre under
-///   it: high hops of nine metres, a rest between them, plain catches of five
-///   up and precision stones, and three plain stones onto the plane's lip,
-///   the last two standing on the land the plane's rim holds up.
-pub const SPAN_HOPS: [Hop; 28] = [
+/// - **Over the low ground**, as it was: a gully straight off the column's
+///   top, a long hop east and up, three precision stones zig-zagging, a
+///   rest, seventeen metres and four up, a catch.
+/// - **The ferry**: caught going by on your right, sideways, at twelve
+///   metres a second, and ridden ninety-five metres up the mountainside,
+///   thirty up, to a stone a hop over where it stops.
+/// - **Two turn-arounds** across the slope: out of a tunnel east, off a wall
+///   across its way and back over its mouth on to its roof, 6.5 m up; a
+///   catch north; and the same going west.
+/// - **A lift**, 24 m, and **on to the lip**: a pin, five catches and
+///   stones, the last two standing on the land the plane's rim holds up.
+pub const SPAN_HOPS: [Hop; 20] = [
     // Over the low ground.
     gully(N),
     on(N, 500, 400),
@@ -467,27 +805,20 @@ pub const SPAN_HOPS: [Hop; 28] = [
     rest(N, 450, 400),
     tool(N, 200, 1700, 400),
     on(N, 400, 500),
-    gully(N),
-    // To the mountains' foot.
-    on(W, 400, 500),
-    pin(N, 450, 400),
-    rest(N, 450, 500),
-    tool(N, 200, 1500, 500),
-    rest(E, 400, 400),
-    gully(N),
-    // Up the mountainside.
-    tool(N, 200, 300, 900),
-    on(N, 400, 500),
-    pin(N, 350, 400),
-    rest(E, 400, 500),
-    tool(N, 200, 350, 900),
-    rest(N, 300, 400),
-    tool(N, 200, 350, 900),
-    on(W, 350, 500),
-    pin(N, 350, 400),
+    // The ferry, up the mountainside.
+    ferry(N, 9500, 3000),
+    // The turn-arounds, along the slope: east, and back west.
+    turn(E),
     on(N, 400, 300),
-    on(N, 400, 200),
-    on(N, 300, 100),
+    turn(W),
+    // A lift, and on to the lip.
+    lift(N, 2400),
+    pin(N, 400, 300),
+    on(N, 500, 300),
+    on(N, 500, 300),
+    on(N, 500, 300),
+    on(N, 450, 200),
+    on(N, 400, 100),
 ];
 
 /// Where the span starts: over the column's last stone.
@@ -731,12 +1062,16 @@ pub fn sky_road() -> Vec<Stone> {
 /// table; these are the stones of both routes up, the gullies' walls, the
 /// Crown and the High Line, and a cairn on every rest, every gully's
 /// landing, the Crown's island and every one of the Sky Road's islands.
-pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>) {
-    let hanging = core::iter::once(&FOOT)
-        .chain(LADDER.iter())
-        .chain(SPAN.iter());
+pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>, moving: &mut Vec<Drift>) {
+    let hanging = LADDER_HOPS
+        .iter()
+        .zip(LADDER.iter())
+        .chain(SPAN_HOPS.iter().zip(SPAN.iter()))
+        // A turn-around's landing is its tunnel's roof, built with it.
+        .filter(|(h, _)| !matches!(h, Hop::Turn { .. }))
+        .map(|(_, s)| s);
     let crown = core::iter::once(&CROWN_FOOT).chain(CROWN.iter());
-    for s in hanging.chain(crown) {
+    for s in core::iter::once(&FOOT).chain(hanging).chain(crown) {
         stone(s, height(cm(s.x), cm(s.z)), out);
         if rests(s) {
             out.push(cairn_on(s.x, s.z, s.top));
@@ -745,6 +1080,10 @@ pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>) {
     for (_, walls) in gullies() {
         out.extend(walls);
     }
+    for (_, parts) in turns() {
+        out.extend(parts);
+    }
+    moving.extend(drifts());
     for s in sky_road() {
         stone(&s, Fx::ZERO, out);
         if s.half >= 600 {
@@ -754,4 +1093,27 @@ pub fn build(height: &dyn Fn(Fx, Fx) -> Fx, out: &mut Vec<Solid>) {
     for s in high_line() {
         stone(&s, Fx::ZERO, out);
     }
+}
+
+/// **The Hanging Stones' turn-arounds**: for each, the hop it is (an index
+/// into the column's hops, then on into the span's) and its boxes.
+pub fn turns() -> impl Iterator<Item = (usize, [Solid; 5])> {
+    let col = LADDER_HOPS.iter().zip(core::iter::once(FOOT).chain(LADDER));
+    let span = SPAN_HOPS
+        .iter()
+        .zip(core::iter::once(LADDER[LADDER.len() - 1]).chain(SPAN));
+    col.chain(span)
+        .enumerate()
+        .filter_map(|(k, (h, last))| match *h {
+            Hop::Turn { way } => Some((k, turn_parts(&last, way))),
+            _ => None,
+        })
+}
+
+/// **The Hanging Stones' drifts**: the column's and the span's lifts, the
+/// riser's walls and the ferry, in that order.
+pub fn drifts() -> Vec<Drift> {
+    let mut out = drifts_of(FOOT, &LADDER_HOPS, &LADDER);
+    out.extend(drifts_of(LADDER[LADDER.len() - 1], &SPAN_HOPS, &SPAN));
+    out
 }

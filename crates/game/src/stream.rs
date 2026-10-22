@@ -93,6 +93,11 @@ pub struct Stream {
     at: Option<Vec3>,
     /// The waystones' doors: one slab per gated doorway, shown while shut.
     gates: Vec<(usize, Entity)>,
+    /// **The boxes that move** (`sim::drift`), by their index on the map:
+    /// each drawn once as the box it is at its first stop, and every frame
+    /// moved to where it is between the last two simulated frames, as
+    /// everything that moves is.
+    drifts: Vec<(Entity, Vec3)>,
     /// The land's tiles by (column, row): the tile -- for one of a far block
     /// drawn whole, an entity that only carries its strokes, or
     /// `Entity::PLACEHOLDER` where there are none -- how finely it is drawn,
@@ -282,6 +287,7 @@ pub fn stream(
     mut standard: ResMut<Assets<StandardMaterial>>,
     mut paints: ResMut<Assets<Paint>>,
     mut gates: Query<&mut Visibility>,
+    mut moving: Query<&mut Transform, Without<crate::MainCamera>>,
 ) {
     let mut materials = Materials {
         standard: &mut standard,
@@ -296,6 +302,7 @@ pub fn stream(
         st.solids.clear();
         st.merged.clear();
         st.gates.clear();
+        st.drifts.clear();
         st.tiles.clear();
         st.blocks.clear();
         st.groves.clear();
@@ -361,6 +368,44 @@ pub fn stream(
     // What the camera passes through is drawn see-through round the line
     // to the fighter (`crate::window`): the small boxes and the giants.
     let see = windows.white(materials.paint);
+
+    // The drifts: drawn the first time, and put where they are every frame.
+    if st.drifts.is_empty() && !atlas.drifts.is_empty() {
+        for d in &atlas.drifts {
+            let mid = (v3(d.solid.min) + v3(d.solid.max)) * 0.5;
+            let (x, z) = (
+                sim::Fx::from_raw(d.solid.min.x.raw() / 2 + d.solid.max.x.raw() / 2),
+                sim::Fx::from_raw(d.solid.min.z.raw() / 2 + d.solid.max.z.raw() / 2),
+            );
+            let Some(place) = atlas.place_at(x, z).or(atlas.places.first()) else {
+                continue;
+            };
+            let look = st
+                .looks
+                .entry(place.arena)
+                .or_insert_with(|| PlaceLook::of(place.get()))
+                .clone();
+            let e = draw_solid(
+                &mut commands,
+                &mut meshes,
+                &d.solid,
+                Vec3::ZERO,
+                true,
+                &look,
+                (&white, &see),
+                Under::Parent(root),
+                true,
+            );
+            st.drifts.push((e, mid));
+        }
+    }
+    let alpha = sim.clock.alpha();
+    for (d, &(e, mid)) in atlas.drifts.iter().zip(&st.drifts) {
+        let (a, b) = (v3(d.offset(sim.prev.frame)), v3(d.offset(w.frame)));
+        if let Ok(mut t) = moving.get_mut(e) {
+            t.translation = mid + a.lerp(b, alpha);
+        }
+    }
     let Ok(eye) = camera.single() else {
         return;
     };

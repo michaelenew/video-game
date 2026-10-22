@@ -842,11 +842,19 @@ pub fn plan() -> Plan {
     plan.extras.extend(wood_cairns);
     plan.trees = grown;
     // The Spire, on its plaza under the town's south wall.
-    spire::build(&|x, z| land.height(x, z), &mut plan.extras);
+    spire::build(
+        &|x, z| land.height(x, z),
+        &mut plan.extras,
+        &mut plan.drifts,
+    );
     // The Deep: its lid, its warrens and its Caverns.
     deep::build(&mut plan.extras);
     // The routes up to the High Plane.
-    heights::build(&|x, z| land.height(x, z), &mut plan.extras);
+    heights::build(
+        &|x, z| land.height(x, z),
+        &mut plan.extras,
+        &mut plan.drifts,
+    );
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);

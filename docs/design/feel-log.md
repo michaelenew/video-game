@@ -9813,3 +9813,68 @@ the hunt unwinnable. Pinned by `tests/monster.rs`
 **Verdict** open -- unplayed. Play for: whether a creature stopping mid-swing for a hammer's 9
 frames reads as weight or as a hitch, and whether 8 is the right line between heavy and light.
 
+
+### 2026-10-22 — stones that move, and the long climbs broken up
+
+From the owner: "A lot of the sections are super long, as I requested, but they're repetitive
+and don't give enough variety to make them interesting." For the Needle: the stair as it was
+for a first section, then a moving platform, floating stones and harder jumps round the tower,
+another lift, a harder section, the top, "the user shouldn't traverse but maybe half the
+current height of the tower manually" -- and the same for the other long sections. Moving
+stones in the challenges themselves (walls rising for a wall-jump climb, a fast stone caught at
+an angle that carries you, a jump off a stone timed for its momentum), and sections where the
+wall jump is the way: a tall one between two walls, and turn-arounds out of a tunnel.
+
+**Changed**
+- **Drifts** (`sim::drift`): boxes that go back and forth between two stops on a fixed clock,
+  eased in and out, positioned by the frame number alone -- nothing in the snapshot, so rollback
+  is untouched and `World` is no bigger. Raised into the terrain within five tiles of a fighter
+  (`World::terrain`, `MAX_RAISED` 16 → 32). A body on one, hanging from it or against its side
+  is carried with it before it steps (`World::carry_riders`); a body that lets go has the
+  drift's velocity added (`World::let_riders_go`), and a body that comes against a moving wall
+  has the wall's rise taken off, or a kick between two rising walls kept their speed once a
+  kick. **A wall on its way is a lift**: the same-wall drop and the falloff do not ask about it
+  while it moves (`Terrain::moving_face`); at a stop it is a wall like any other. Drawn by
+  `game::stream`, one entity each, moved between the last two frames as everything is.
+- **The Needle**: the stair to 40 m; a lift to 120; the round (fifteen floating stones round
+  the tower, gaps 3--6.5 m, rises 2--5, five pins, a drop, a rest); a lift to 276; the crown of
+  the shaft -- the shuttle (run along it, jump at its fastest across 12.5 m), the stack (three
+  turn-arounds stacked, 6.5 m each), the ferry (caught sideways at 11 m/s, 62 m to the face);
+  the chimney as it was. About 165 m of 353 by hand, where it was all of it.
+- **The Hanging Stones**: the column's first turn as it was, a lift, **the riser** (two walls
+  rising 24 m together, kicked between), a short top; the span's first stretch as it was, a
+  ferry 95 m up the mountainside, two turn-arounds across the slope, a lift, the last stones.
+  Eighteen hops by hand on the column where there were forty; the span's three gullies are one.
+- **Measured on the bench** (`arena::bench::TURNS`): a turn-around of 6.5 m off a wall 2.5 m
+  out is made by every mover and by none without the wall; 7.5 m is past the Champion and the
+  Blood mage; the Reaver alone turns back unaided, up to 4.5 m. A flue of two still walls 3 m
+  apart takes nobody higher than a jump (Champion 3.6 m, Dual mage 5.3): kicked while still
+  rising, `p.vel.y.max(rise)` adds nothing, and the falloff spends the rest.
+
+**Tried and dropped, the same day**
+- *Moving walls free of the ladder rules always.* Two drift walls standing still at their
+  stop were then an endless ladder: kicking alone climbed them at about 5 m/s. Now only while
+  they move.
+- *A riser six metres tall.* The best jumpers' hands reach a top six metres up from the stone
+  they wait on; at nine they do not. And the stand-in player kicked up to the top and caught it,
+  which is a fair way to ride it -- you kicked nine metres to get there -- so it stays.
+- *A slot three metres long.* A body meeting a wall at its end has less than the 0.8 m of face a
+  wall needs (2026-10-20, "only enough wall is a wall"), so the first touch was no wall; five
+  metres.
+- *A shuttle out and back in two-thirds of a second.* Nobody could be running across it at its
+  fastest; a second and a bit, ten metres.
+- *The span's turn-arounds at the mountains' foot, before the ferry.* With the column's top
+  they made 67 m by hand with nothing between; and north up the slope their tunnels were in the
+  land. After the ferry, and across the slope.
+
+**Verdict** open -- unplayed. Every timing is a guess. To feel for: whether a two-second wait at
+a lift is long enough to walk on and short enough not to bore; whether the shuttle's window
+(about half a second of jump timing for every mover in the stand-in player) reads as a timing
+challenge or a coin flip; whether catching the ferry sideways at eleven metres a second is
+exciting or cheap (the Dual mage's window in the stand-in player is the narrowest, a few
+frames); whether the riser, rising faster than a slide, makes the rhythm of kicking obvious or
+leaves people falling out the bottom without knowing why; and whether 6.5 m turn-arounds look
+like the wall is the way, from inside the tunnel. A stale see-through window: a small box is
+drawn see-through when the camera's line crosses where it was at its first stop, so the shuttle
+and the ferries' windows are only right there (the lifts and the riser move straight up, and
+theirs are always right).
