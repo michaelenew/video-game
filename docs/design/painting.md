@@ -333,6 +333,23 @@ became the default)
   at least one a frame, so a step onto a new tile is one frame's hitch
   of a tile. Next if it still shows: the finest level in quarters, or
   placing on the compute pool.
+- **The splats on in a look with no broad strokes.** `splats::on` asked
+  only whether the look was painted, so `painted` (`broad: 0`, which
+  never reads the targets) placed and drew every stroke anyway -- and at
+  its `broad_size` of 0.05, two levels finer at every distance than
+  `brushed`. Under the software renderer (`scripts/profile.sh`, the demo,
+  60 s) it was 255 ms of a 775 ms frame, and the part that climbed as the
+  land filled in (133 ms to 259 while `wash brush` held at 254); the
+  owner's machine, the same shape: 35 ms climbing to 54, against plain's
+  16.7. Off unless the look lays broad strokes now: 570 ms, flat. Done
+  in the same change, unmeasured because the software renderer charges
+  per fragment and these save vertices: a tile out of the view's frustum
+  is not drawn, and a tile walked away from drops levels two finer than
+  it needs rather than keeping them to the edge of the stream.
+  `brushed` measured the same before and after (515 ms and 553, within
+  the demo's run-to-run spread); its splats still climb, 100 ms to 290,
+  as the far land arrives -- quads behind a hill are rasterised and
+  thrown away in the shader, since there is no depth test.
 - **Four corners a stroke.** The placer wrote each stroke's quad as four
   vertices of seventeen floats; one instance of twenty now, and the
   shader makes the quad, a quarter of the bytes and of the placing.
