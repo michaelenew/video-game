@@ -3964,6 +3964,13 @@ pub fn dash_flip() -> u16 {
     oven::scalar(Scalar::DashFlip).max(1) as u16
 }
 
+/// The longest the dash to her shadow lasts, and so, with its speed, how far
+/// it reaches. Its own knob since 2026-10-22: it was the dodge's length, and
+/// the dodge grew.
+pub fn shadow_dash_frames() -> u16 {
+    oven::scalar(Scalar::ShadowDashFrames).max(1) as u16
+}
+
 /// How far apart, in turns, the blades of a fan are: the Tumble's down from the crosshair's line, the Fan's level either side of it.
 pub fn thrown_spread() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrownSpread)).max(Fx::ZERO)
@@ -4797,6 +4804,13 @@ pub fn swim_height() -> Fx {
 /// Swim, pops out at the edge at (m/s): the burst she leaves her ground with when she swims off it.
 pub fn swim_pop() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SwimPop).max(0))
+}
+
+/// How long her pop out of her ground lasts, and so, with its speed, how far
+/// it goes. Its own knob since 2026-10-22: it was half the dodge's length,
+/// and the dodge grew.
+pub fn swim_pop_frames() -> u16 {
+    oven::scalar(Scalar::SwimPopFrames).max(1) as u16
 }
 
 /// Thrall, on her ground bites (x).

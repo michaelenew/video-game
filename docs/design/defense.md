@@ -54,9 +54,11 @@ worth having, and it means a shield is a real loadout choice rather than a stric
 vertical takeoff and dodge moved onto shift alone. See
 [controls.md](controls.md#why-space-stopped-being-clever).
 
-- A brief invulnerability window — 10 frames of a 22-frame dodge.
+- A brief invulnerability window — 12 frames of a 26-frame dodge (10 of 22 until
+  2026-10-22, when it went a fifth longer and a fifth further for the dive roll; see
+  the feel log).
 - A committed direction — you go where you pointed.
-- Recovery frames at the end: the back twelve are vulnerable, which is the punish window.
+- Recovery frames at the end: the back fourteen are vulnerable, which is the punish window.
 - **Airborne it is the airdodge**, once per airtime: 16 frames, and it wipes vertical speed
   rather than adding to it, so it can never be a second jump.
 
@@ -77,7 +79,8 @@ the shoulder. **To the side the body turns to face the travel, dives forward, an
 back as it rises.** The body really goes over -- `view::dodge` turns the whole drawn body
 and carries it on the dive's arc -- and it is a drawing only: the frames, the invulnerable
 window, the speed and the hurt volume are exactly what they were. (A souls light roll is
-21-24 frames with about 11 invulnerable, which is close to this dodge's 22 and 10.) The
+21-24 frames with about 11 invulnerable; this dodge is 26 and 12, a little slower, from
+play.) The
 body stays balled through the cover and opens once it is most of the way round, never
 earlier than the cover goes. The classes differ in timing, the height of the dive and what the
 arms carry (`crates/anim/src/clips/dodge.rs`):

@@ -11221,7 +11221,7 @@ fn swim_or_surface(p: &mut Player, input: Input) {
         p.swim = SWIM_SPENT;
         let flat = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
         if flat.flat_len().raw() > 0 {
-            let frames = (t::dodge_frames() / 2).max(1);
+            let frames = t::swim_pop_frames();
             let reach = t::swim_pop().mul(DT).mul(Fx::from_int(frames as i32));
             let to = p.pos.add(flat.normalized().scale(reach));
             begin_haul(p, to, t::swim_pop(), frames + 1);

@@ -201,13 +201,16 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// creature too** (`Monster::frozen`, `state::freeze_on_the_creature`): a
 /// fighter's blow from a move with an impact freeze of at least
 /// `Impact freeze on a creature, a move's at least` freezes both bodies.
+/// **Every class but the Champion moved 2026-10-22, deliberately**: the
+/// grounded dodge is 26 frames, 12 of them invulnerable, at 19.2 m/s -- a fifth
+/// longer and a fifth further, for the dive roll (feel-log.md).
 const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0xbd4cab44aeaa618d),
-    (Class::Bulwark, 0x6068f28dbace5003),
-    (Class::ShadowReaver, 0xe495206c7778d905),
-    (Class::BloodMage, 0x2c74c2988baf3681),
-    (Class::DualMage, 0x551d9cf70010beb1),
-    (Class::Elementalist, 0x2e82853948c438e8),
+    (Class::Bulwark, 0x56ad8f11ef65fd1c),
+    (Class::ShadowReaver, 0x050b21f887393ea4),
+    (Class::BloodMage, 0x39e804ca2c52e015),
+    (Class::DualMage, 0x23eadd8d7f590ccc),
+    (Class::Elementalist, 0xb069ad1f71463fe7),
 ];
 
 #[test]

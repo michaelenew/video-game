@@ -1283,6 +1283,14 @@ scalars! {
     // least this freezes both of them for it, as between two fighters.
     // Lighter blows freeze nothing, as before.
     FreezeHeavyOnCreature, "Offence", "Impact freeze on a creature, a move's at least",     Frames, 0, 30;
+    // **The dodge grew, these two did not** (2026-10-22): the grounded dodge
+    // went from 22 frames to 26 and a fifth further, from play, and the
+    // Reaver's dash to her shadow and the Blood mage's pop out of her ground
+    // had borrowed its length. Each keeps the length it had as its own knob,
+    // so the dodge's feel is not also a change to how far either reaches.
+    // Appended: `tuned::SCALARS` is read by this enum's own discriminant.
+    ShadowDashFrames,     "Shadow Reaver", "Dash to the shadow, lasts at most",              Frames, 1, 60;
+    SwimPopFrames,        "Blood mage", "Swim, the pop out lasts",                          Frames, 1, 60;
 }
 
 // ---------------------------------------------------------------------------
