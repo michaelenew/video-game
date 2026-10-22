@@ -65,7 +65,8 @@ Requirements 2 and 3 above are performance claims, so they get numbers and tests
 
 A rendered frame at 60 Hz is **16.7 ms**, and the simulation is the part of it that runs
 more than once. A rollback restores a snapshot and re-simulates every frame since the peer
-and this machine stopped agreeing — up to `net::MAX_ROLLBACK_FRAMES`, eight — taking a
+and this machine stopped agreeing — up to `net::MAX_ROLLBACK_FRAMES`, twelve (eight until
+2026-10-22, when four friends' far inputs ran seven frames late against it) — taking a
 fresh snapshot for each, all inside one frame that still has to draw a picture at the end.
 So a cost that reads as harmless per frame arrives multiplied, and it arrives at the worst
 possible moment: mid-rollback, which is to say while the connection is already struggling.
@@ -74,8 +75,8 @@ The frame is divided accordingly:
 
 | Part | Budget | Why |
 | --- | --- | --- |
-| One rollback burst | ¼ frame | Eight advances, eight saves and a restore, worst case |
-| One `World::advance` | ¹⁄₃₂ frame | The burst budget, shared across the window |
+| One rollback burst | ¼ frame | Twelve advances, twelve saves and a restore, worst case |
+| One `World::advance` | ¹⁄₄₈ frame | The burst budget, shared across the window |
 | One frame of `view` | ⅛ frame | Interpolation, camera and posing run once per picture |
 | The renderer | The rest | It is the part that talks to the GPU |
 
@@ -482,6 +483,17 @@ afresh every frame, so a trip or restart built inside the tick keeps them gone).
 has left is not anybody still standing, so the one who stays in a duel is not handed a round
 every few seconds. `net/tests/meet.rs` drops one of three mid-match and checks the two who
 stay agree on the world without them to the last frame.
+
+**Somebody who closes the game is let go at once** (2026-10-22). GGRS gives a silent seat
+up after fifteen seconds -- long, on purpose, because a page is silent for seconds drawing
+an arena for the first time -- and four friends sat frozen for all fifteen when one of them
+left. But a player who has *left* closes their data channels, which is a different thing
+from going quiet: the line reads `LineState::Failed` (a closed channel in a browser,
+`ChannelClose` on a desktop), the mesh says so once through the post box
+(`PostBox::line_closed`), and the game hands the seat to `disconnect_player` straight
+away, which settles the frame with the others the way the timeout would.
+`a_player_who_closes_the_game_is_let_go_at_once` holds it under two seconds with the real
+timeout.
 
 ## Why not Unreal or Unity
 

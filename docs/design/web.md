@@ -315,6 +315,10 @@ In it:
   (`picker::describe`). The match starts from the world *the link* describes,
   built by the same function a friend's client will use (`start_world`), so
   the two agree even where the link cannot say everything about the practice.
+  Beside the button, **for 2 / 3 / 4 players** (2026-10-22): the link carries
+  `players=`, and the match starts when that many have opened it. Without it
+  every room made here was for two -- the practice only ever has two -- and a
+  third friend was quietly paired off into a match of their own.
 - **Join**: paste a friend's link. It is unpacked exactly as `--join` is.
 - **The active room**, while there is one: its name, how meeting is going, the
   link with a **Copy link** button, and **Leave**. In a browser the link also
