@@ -68,13 +68,13 @@ const menu = async (p) => {
 const first = await page('first');
 await menu(first);
 await first.screenshot({ path: `${prefix}-menu.png` });
-await click(first, await at(first, 70, 228));
+await click(first, await at(first, 70, 77));
 await first.waitForTimeout(4_000);
 const link = await first.evaluate(() => location.href);
 await first.screenshot({ path: `${prefix}-room.png` });
 console.log(`first tab made: ${link}`);
 // Copy link: the button under the link, and then the clipboard holds it.
-await click(first, await at(first, 54, 318));
+await click(first, await at(first, 54, 167));
 const copied = await first.evaluate(() => navigator.clipboard.readText()).catch((e) => `(unreadable: ${e})`);
 console.log(`clipboard after Copy link: ${copied}`);
 if (copied !== link) errors.push(`Copy link put ${JSON.stringify(copied)} on the clipboard, not the link`);
@@ -82,10 +82,10 @@ if (!link.includes('room=') || !link.includes('#key=')) errors.push(`no room in 
 
 const second = await page('second');
 await menu(second);
-await click(second, await at(second, 160, 304));
+await click(second, await at(second, 160, 153));
 await second.keyboard.type(link, { delay: 5 });
 await second.waitForTimeout(1_500);
-await click(second, await at(second, 316, 304));
+await click(second, await at(second, 316, 153));
 
 const deadline = Date.now() + 150_000;
 let a = '', b = '';

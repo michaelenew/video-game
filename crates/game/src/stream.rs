@@ -182,9 +182,21 @@ impl Stream {
         &self.tiles
     }
 
-    /// How many places and boxes are drawn: what the dev overlay shows.
+    /// How many places, boxes and tiles of land are drawn -- a box drawn in
+    /// a merged block, and a tile drawn in a block, counted as drawn: what
+    /// the dev overlay shows.
     pub fn loaded(&self) -> (usize, usize, usize) {
-        (self.places.len(), self.solids.len(), self.tiles.len())
+        let merged: usize = self
+            .merged
+            .keys()
+            .filter_map(|b| self.box_blocks.get(b))
+            .map(Vec::len)
+            .sum();
+        (
+            self.places.len(),
+            self.solids.len() + merged,
+            self.tiles.len(),
+        )
     }
 
     /// What is streamed in, counted.
