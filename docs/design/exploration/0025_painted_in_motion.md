@@ -215,3 +215,13 @@ body is drawn there (the depth under it within a few centimetres of its
 own -- not the wall past the outline, and not an arm crossing in front),
 and the wisps that lifted off the outline are gone. The hem's wisps are the
 one exception: they run on past the cloth's real edge by intent.
+
+**Inside its own colour shape, too** (the owner, the same day: the
+Champion's shoulder cloth "shouldn't bleed because they're inside the
+character outline, it reads messy"). The mantle lies on the shirt at the
+same depth, so depth alone let its strokes run onto the shirt. A stroke now
+keeps to its own *stuff*, as a painter keeps a colour shape: it fades out
+where the picture under a pixel is clearly another colour than the one it
+was taken from (`same`, a relative difference past about a third), and the
+points it averages its colour from count only where they are its own stuff,
+so a stroke at a seam is one material's colour, not a mix of two.

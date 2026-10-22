@@ -198,23 +198,40 @@ fn ours(uv: vec2<f32>, depth: f32) -> f32 {
 // bands (soft, so a band's edge is a step of strokes rather than a line),
 // its hue kept and a little enriched, the light warmed and the shade
 // cooled, and its value nudged by its own number.
-fn painted(centre: vec2<f32>, reach: vec4<f32>, depth: f32, own: f32) -> vec4<f32> {
-    let a = reach.xy;
-    let b = reach.zw;
-    var sum = vec3<f32>(0.0);
-    var weight = 0.0;
-    let taps = array<vec2<f32>, 5>(vec2<f32>(0.0), a, -a, b, -b);
-    for (var i = 0; i < 5; i++) {
-        let uv = centre + taps[i];
-        let w = ours(uv, depth) * select(1.0, 2.0, i == 0);
-        sum += picture(uv) * w;
-        weight += w;
-    }
-    // Nothing of the body under it: the stroke is not laid (alpha 0).
-    if (weight < 0.05) {
+// How much two colours of the picture are the same stuff: 1 for the same
+// cloth in a little more or less light, 0 for another material beside it
+// (the light mantle on the dark shirt). What keeps a stroke inside its own
+// colour shape, as a painter keeps a shape.
+fn same(a: vec3<f32>, b: vec3<f32>) -> f32 {
+    let diff = length(a - b) / (length(b) + 0.04);
+    return 1.0 - smoothstep(0.3, 0.55, diff);
+}
+
+// The picture under a stroke: its own point's colour, and the average of
+// the points round it that are its own body and its own stuff -- so a
+// stroke at the edge of a material is that material's colour, not a mix.
+// `a` is 0 where none of its body is under it.
+fn under(centre: vec2<f32>, reach: vec4<f32>, depth: f32) -> vec4<f32> {
+    if (ours(centre, depth) < 0.5) {
         return vec4<f32>(0.0);
     }
-    let seen = sum / weight;
+    let middle = picture(centre);
+    let a = reach.xy;
+    let b = reach.zw;
+    var sum = middle * 2.0;
+    var weight = 2.0;
+    let taps = array<vec2<f32>, 4>(a, -a, b, -b);
+    for (var i = 0; i < 4; i++) {
+        let uv = centre + taps[i];
+        let seen = picture(uv);
+        let w = ours(uv, depth) * same(seen, middle);
+        sum += seen * w;
+        weight += w;
+    }
+    return vec4<f32>(sum / weight, 1.0);
+}
+
+fn painted(seen: vec3<f32>, own: f32) -> vec4<f32> {
     let l = max(dot(seen, LUMA), 1e-5);
     // Bands on a perceptual scale.
     let v = sqrt(l);
@@ -297,10 +314,11 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
     }
     // Turning away, a stroke fades.
     alpha *= in.seed.y;
-    let paint = painted(in.centre, in.reach, in.depth, own);
-    if (paint.a < 0.5 || alpha < 0.01) {
+    let base = under(in.centre, in.reach, in.depth);
+    if (base.a < 0.5 || alpha < 0.01) {
         discard;
     }
+    let paint = painted(base.rgb, own);
     // **Colour inside the stroke**: each bristle laid a little lighter or
     // darker, warmer or cooler than its neighbours -- streaks along the
     // stroke -- and the paint richer where the brush was loaded, paler
@@ -325,8 +343,17 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
     // drawn -- not the wall past the outline, not an arm in front -- except
     // a wisp off the hem, where the cloth really ends and the paint runs
     // on by intent.
-    if (in.seed.z < 0.5 && ours(here, in.depth) < 0.5) {
-        discard;
+    let there = picture(here);
+    if (in.seed.z < 0.5) {
+        if (ours(here, in.depth) < 0.5) {
+            discard;
+        }
+        // And only over its own colour shape: where the picture here is
+        // another material, the stroke stops at the boundary.
+        alpha *= same(there, base.rgb);
+        if (alpha < 0.1) {
+            discard;
+        }
     }
-    return vec4<f32>(mix(picture(here), colour, alpha), 1.0);
+    return vec4<f32>(mix(there, colour, alpha), 1.0);
 }
