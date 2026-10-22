@@ -16,7 +16,8 @@
 //! the channel is negotiated the same way (id 0, unordered, never resent) --
 //! which is the whole of what makes a desktop and a page able to meet.
 
-use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, Room, STUN, Trace, seconds};
+use crate::lobby::Lobby;
+use crate::meet::{BROKERS, Board, Boards, Line, LineState, Reach, STUN, Trace, seconds};
 use crate::mqtt;
 use crate::seal::{RoomKey, Sealed};
 use std::collections::VecDeque;
@@ -30,9 +31,17 @@ use str0m::channel::{ChannelConfig, ChannelId, Reliability};
 use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc};
 
-/// Meet through the public brokers in the room this key names.
-pub fn public(key: &RoomKey, me: u64, terms: &str) -> Room<Sealed<Boards>, RtcLine> {
-    brokers(BROKERS, key, me, terms)
+/// A room you come and go from (`crate::lobby`), through the public
+/// brokers, in the room this key names: `capacity` players at most, this one
+/// coming in as `class`.
+pub fn public(
+    key: &RoomKey,
+    me: u64,
+    terms: &str,
+    capacity: usize,
+    class: sim::Class,
+) -> Lobby<Sealed<Boards>, RtcLine> {
+    brokers(BROKERS, key, me, terms, capacity, class)
 }
 
 /// Meet through these brokers: `wss://` (or `ws://`) URLs.
@@ -41,16 +50,20 @@ pub fn brokers(
     key: &RoomKey,
     me: u64,
     terms: &str,
-) -> Room<Sealed<Boards>, RtcLine> {
+    capacity: usize,
+    class: sim::Class,
+) -> Lobby<Sealed<Boards>, RtcLine> {
     let boards = urls
         .iter()
         .map(|url| Box::new(MqttBoard::open(url, key.topic(), me)) as Box<dyn Board>)
         .collect();
-    Room::new(
+    Lobby::new(
         Sealed::new(Boards(boards), key.clone()),
         RtcLine::new,
         me,
         terms,
+        capacity,
+        class,
     )
 }
 

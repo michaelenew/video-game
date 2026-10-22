@@ -132,6 +132,11 @@ pub enum Destination {
     /// to say (the ones they have touched; every one in `--dev`); the world
     /// only checks it is a cairn.
     Cairn(u8),
+    /// **Somebody joins the fight in progress** at this seat, as this class
+    /// ([`crate::state::World::seat_join`]): sent by the room's host, once
+    /// the newcomer has a line to everybody, so every machine seats them on
+    /// the same frame -- the frame the match's lineup then changes at.
+    Admit { seat: usize, class: crate::Class },
     /// **"Start match"**, pressed or taken back: this seat's ready flag
     /// flips ([`crate::state::World::ready`]). When every seat in the fight
     /// is ready the world starts the match itself, on the same frame on
@@ -177,6 +182,9 @@ impl Travel {
     /// cccc` while there were two seats; [`Travel::from_two_seats`] reads a
     /// byte written that way.
     const CLASS: u16 = 0x20;
+    /// The high byte's mark of an admission rather than a class change: no
+    /// seat reaches it (a class change's high byte holds seat bits past two).
+    const ADMIT: u16 = 0x80;
     const SEAT_SHIFT: u16 = 3;
     const SEATS: u16 = 0x18;
     const CLASS_INDEX: u16 = 0x07;
@@ -220,6 +228,17 @@ impl Travel {
         } else {
             Travel(Travel::CREDIT + species.0 as u16)
         }
+    }
+
+    /// Seat `seat` is taken, mid-fight, by a newcomer playing `class`: a
+    /// class change's byte with [`Travel::ADMIT`] in the high byte.
+    pub const fn admit(seat: usize, class: crate::Class) -> Travel {
+        Travel(
+            Travel::CLASS
+                | ((seat as u16) << Travel::SEAT_SHIFT & Travel::SEATS)
+                | (class as u16 & Travel::CLASS_INDEX)
+                | Travel::ADMIT << 8,
+        )
     }
 
     /// Seat `seat`'s fighter becomes `class`, in a restart of the same fight.
@@ -319,6 +338,12 @@ impl Travel {
                 let index = (b & Travel::CLASS_INDEX) as usize;
                 if index >= crate::class::ALL_CLASSES.len() {
                     return None;
+                }
+                if high & Travel::ADMIT != 0 {
+                    return Some(Destination::Admit {
+                        seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT) as usize,
+                        class: crate::class::ALL_CLASSES[index],
+                    });
                 }
                 Some(Destination::Class {
                     seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT | high << 2) as usize,

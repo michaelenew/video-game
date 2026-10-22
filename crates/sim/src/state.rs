@@ -2230,6 +2230,7 @@ impl World {
             | Destination::Step
             | Destination::Left
             | Destination::Ready
+            | Destination::Admit { .. }
             | Destination::Credit(_)
             | Destination::Feed(_)
             | Destination::Grant(_)
@@ -2759,8 +2760,14 @@ impl World {
         self.park_absent();
         // A fresh fight built inside the step -- a trip, a restart, waking
         // outside -- is built knowing nothing of who has gone: they are
-        // still gone in it.
-        let away = self.away;
+        // still gone in it. A seat admitted this frame has come, not gone:
+        // it had nobody's input until now.
+        let mut away = self.away;
+        for input in &all {
+            if let Some(Destination::Admit { seat, .. }) = input.travel.destination() {
+                away.unset(seat);
+            }
+        }
         self.step(all);
         self.away = away;
         self.park_absent();
@@ -2853,6 +2860,13 @@ impl World {
         // on that frame keeps them.
         let recast = self.recast(&wire);
         let classes = recast.unwrap_or_else(|| self.players.map(|p| p.class));
+        // A newcomer seated by the room's host, before anything else this
+        // frame reads who is in the fight.
+        for input in &wire {
+            if let Some(Destination::Admit { seat, class }) = input.travel.destination() {
+                self.seat_join(seat, class);
+            }
+        }
         // "Start match", from anybody in the fight: their flag flips. A seat
         // not in the fight has none.
         for (i, input) in wire.iter().enumerate() {

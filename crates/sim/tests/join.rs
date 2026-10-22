@@ -169,3 +169,40 @@ fn a_newcomer_stands_where_a_fresh_start_would_and_nobody_else_moves() {
     assert_eq!(a.checksum(), b.checksum());
     assert!(a.is_present(2));
 }
+
+#[test]
+fn the_host_admits_a_newcomer_on_the_wire() {
+    // A room for four, two in it: the empty seats are said to have left.
+    let mut w = hub(4);
+    let mut wire = [Input::default(); MAX_PLAYERS];
+    wire[2] = Input::default().travelling(Travel::LEFT);
+    wire[3] = Input::default().travelling(Travel::LEFT);
+    w.advance(wire);
+    assert!(!w.is_present(2) && !w.is_present(3));
+    // The host seats a newcomer in seat three; seat two is still nobody's.
+    let mut admit = wire;
+    admit[0] = Input::default().travelling(Travel::admit(3, Class::DualMage));
+    w.advance(admit);
+    assert!(w.is_present(3), "seated on the frame it arrives");
+    assert_eq!(w.players[3].class, Class::DualMage);
+    assert!(!w.is_present(2));
+    // From the next frame the newcomer has an input of their own.
+    let mut next = [Input::default(); MAX_PLAYERS];
+    next[2] = Input::default().travelling(Travel::LEFT);
+    w.advance(next);
+    assert!(w.is_present(3));
+    assert_eq!(
+        Travel::admit(3, Class::DualMage).destination(),
+        Some(sim::input::Destination::Admit {
+            seat: 3,
+            class: Class::DualMage
+        })
+    );
+    assert!(
+        matches!(
+            Travel::class(3, Class::DualMage).destination(),
+            Some(sim::input::Destination::Class { .. })
+        ),
+        "a class change is still a class change"
+    );
+}

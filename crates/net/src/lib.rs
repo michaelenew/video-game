@@ -15,7 +15,9 @@ pub mod cells;
 pub mod crowd;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod direct;
+pub mod drop_in;
 pub mod ggrs_glue;
+pub mod lobby;
 pub mod loopback;
 pub mod meet;
 pub mod mqtt;
@@ -30,8 +32,8 @@ pub mod seal;
 /// this crate's business.
 pub use ggrs;
 pub use ggrs_glue::{
-    NetInput, SessionConfig, handle_requests, handle_requests_kept, handle_requests_watched,
-    may_advance,
+    NetInput, SessionConfig, handle_requests, handle_requests_kept, handle_requests_seated,
+    handle_requests_watched, may_advance,
 };
 pub use meet::{Mesh, Progress, Rendezvous, Seat};
 
