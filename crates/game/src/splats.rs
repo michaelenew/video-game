@@ -41,6 +41,7 @@ use bevy::prelude::*;
 use bevy::render::diagnostic::RecordDiagnostics;
 use bevy::render::extract_component::{ExtractComponent, ExtractComponentPlugin};
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+use bevy::render::primitives::{Aabb, Frustum};
 use bevy::render::render_asset::{RenderAssetUsages, RenderAssets};
 use bevy::render::render_graph::{
     NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
@@ -49,7 +50,7 @@ use bevy::render::render_resource::binding_types::uniform_buffer;
 use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue};
 use bevy::render::texture::GpuImage;
-use bevy::render::view::{ViewUniform, ViewUniformOffset, ViewUniforms};
+use bevy::render::view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms};
 use bevy::render::{Render, RenderApp, RenderSet};
 use bevy::window::PrimaryWindow;
 use sim::atlas::{self, Atlas, TILE_M};
@@ -69,10 +70,15 @@ pub const TARGET_ODD: Handle<Image> = weak_handle!("5f1a7b0c-7e1e-4a4e-9c1d-0b2a
 
 const SHADER: Handle<Shader> = weak_handle!("5f1a7b0c-7e1e-4a4e-9c1d-0b2a3f4e5d6d");
 
-/// Whether the strokes are drawn as splats: the painted looks, unless
-/// `--exact` asks for the brush at the pixel (or the sheets).
+/// Whether the strokes are drawn as splats: the painted looks that lay
+/// broad strokes at all, unless `--exact` asks for the brush at the pixel
+/// (or the sheets). A look with no broad strokes (`painted`) never reads
+/// the targets, and placing and drawing them anyway was a third of its
+/// frame under the software renderer, and the third that climbed as the
+/// land filled in (2026-10-22).
 pub fn on() -> bool {
     crate::wash::painted()
+        && crate::wash::style().broad > 0.0
         && crate::platform::value("--exact").is_none()
         && crate::platform::draws_splats()
 }
@@ -84,11 +90,14 @@ const FINEST: i32 = -2;
 /// The coarsest: sixty-four-metre strokes, for the far mountains.
 const COARSEST: i32 = 8;
 
-/// A tile's strokes, on the GPU: one instance each, drawn as a quad.
+/// A tile's strokes, on the GPU: one instance each, drawn as a quad; and
+/// the box, in the map's coordinates, every quad lies inside, so a tile out
+/// of the view is not drawn at all.
 #[derive(Component, Clone, ExtractComponent)]
 pub struct Splats {
     strokes: Buffer,
     count: u32,
+    reach: (Vec3, Vec3),
 }
 
 /// What the pass needs of the frame: the map origin and the look.
@@ -284,8 +293,13 @@ fn follow(
         let l_max = (broad_size * far * size_hi).max(0.05).log2();
         let lo = (l_min.floor() as i32).clamp(FINEST, COARSEST);
         let hi = (l_max.ceil() as i32 + 1).clamp(FINEST, COARSEST);
+        // Kept while it has every level wanted and at most one finer: a
+        // tile walked past at the finest level is four times the strokes
+        // of the next, and was kept so until it left the stream, 700 m on
+        // (2026-10-22). One finer is the slack that keeps a step to and
+        // fro from rebuilding.
         let have = built.levels.get(&t).copied();
-        if have.is_some_and(|(he, hlo, hhi)| he == e && hlo <= lo && hhi >= hi) {
+        if have.is_some_and(|(he, hlo, hhi)| he == e && hlo <= lo && hlo >= lo - 1 && hhi >= hi) {
             continue;
         }
         work.push(Want {
@@ -406,10 +420,21 @@ impl Splats {
         };
         let mut strokes: Vec<f32> = Vec::new();
         let mut count = 0u32;
+        // The box the quads lie in: the tile, from its lowest ground to its
+        // highest, grown by the biggest quad's reach -- `splats.wgsl` lays a
+        // corner 1.2 lengths and 1.8 widths out, and tilts it with the
+        // ground, so three times that is room in every direction.
+        let (mut low, mut high) = (f32::MAX, f32::MIN);
+        let mut grow = 0.0f32;
+        for l in &lattice {
+            low = low.min(l[0]);
+            high = high.max(l[0]);
+        }
         for level in lo..=hi {
             for s in look::strokes::place(level, [x0, z0], [x0 + size, z0 + size], &kind) {
                 let (g, _) = read(s.centre[0], s.centre[1]);
                 count += 1;
+                grow = grow.max(3.0 * (1.2 * s.long + 1.8 * s.wide));
                 strokes.extend_from_slice(&[
                     s.centre[0],
                     g[0],
@@ -440,7 +465,15 @@ impl Splats {
             contents: &bytes,
             usage: BufferUsages::VERTEX,
         });
-        Splats { strokes, count }
+        let reach = (
+            Vec3::new(x0 - grow, low - grow, z0 - grow),
+            Vec3::new(x0 + size + grow, high + grow, z0 + size + grow),
+        );
+        Splats {
+            strokes,
+            count,
+            reach,
+        }
     }
 }
 
@@ -557,13 +590,17 @@ impl FromWorld for SplatsPipeline {
 struct SplatsNode;
 
 impl ViewNode for SplatsNode {
-    type ViewQuery = (&'static ViewUniformOffset, &'static ViewPrepassTextures);
+    type ViewQuery = (
+        &'static ViewUniformOffset,
+        &'static ViewPrepassTextures,
+        &'static ExtractedView,
+    );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (view_offset, prepass): QueryItem<Self::ViewQuery>,
+        (view_offset, prepass, view): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let pipeline = world.resource::<SplatsPipeline>();
@@ -625,7 +662,18 @@ impl ViewNode for SplatsNode {
         let span = diagnostics.pass_span(&mut pass, "splats");
         pass.set_render_pipeline(ready);
         pass.set_bind_group(0, &bind, &[view_offset.offset]);
+        // Only the tiles this view can see: the stream holds every tile
+        // all the way round the eye, to 700 m.
+        let frustum = Frustum::from_clip_from_world(
+            &(view.clip_from_view * view.world_from_view.compute_matrix().inverse()),
+        );
+        let origin = world.resource::<Frame>().origin.truncate();
         for s in &batch.0 {
+            let (lo, hi) = (s.reach.0 - origin, s.reach.1 - origin);
+            let aabb = Aabb::from_min_max(lo, hi);
+            if !frustum.intersects_obb(&aabb, &bevy::math::Affine3A::IDENTITY, true, false) {
+                continue;
+            }
             pass.set_vertex_buffer(0, s.strokes.slice(..));
             pass.draw(0..6, 0..s.count);
         }
