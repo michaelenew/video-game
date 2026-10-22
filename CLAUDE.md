@@ -382,7 +382,10 @@ joints are the game's twenty-one
 (`view::skeleton`), named as `Joint::name` names them and set each frame from
 the skin `apply_poses` solves, so a change to the skeleton is a rebuild there.
 Judge a character lit, in the game (F6 walks round one up close;
-`SHOT_PORTRAIT` for a screenshot). The reasoning, what failed and
+`SHOT_PORTRAIT` for a screenshot). **The owner's rules for a character's
+look and motion, and the recipe for painting one, are
+[`docs/design/cast-look.md`](docs/design/cast-look.md): follow it rather than
+rediscovering them.** The reasoning, what failed and
 what is left is [exploration/0024](docs/design/exploration/0024_a_character_done_properly.md);
 the commands are [`art/README.md`](art/README.md).
 
