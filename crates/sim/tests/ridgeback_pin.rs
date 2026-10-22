@@ -193,12 +193,12 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// platforms' edges, the Elementalist's stones. Re-pinned once more on merging
 /// main's Elementalist pass above.
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xc9aeada703d9903d),
-    (Class::Bulwark, 0x76869afd57557183),
-    (Class::ShadowReaver, 0xf38da36ffa8d8baf),
-    (Class::BloodMage, 0xf8141302e4e18fb1),
-    (Class::DualMage, 0x510e33528d365dc1),
-    (Class::Elementalist, 0xc32f72e9884a63d8),
+    (Class::Champion, 0xcadcc6985403c2db),
+    (Class::Bulwark, 0x1ba889494ff2d283),
+    (Class::ShadowReaver, 0x12db9710a976eba7),
+    (Class::BloodMage, 0x272d2d73f00db113),
+    (Class::DualMage, 0xf0f3fac57f4986c3),
+    (Class::Elementalist, 0x15f6448387a6cff9),
 ];
 
 #[test]

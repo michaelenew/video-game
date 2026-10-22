@@ -29,7 +29,7 @@
 use crate::bake::{Key, Looseness, Recipe};
 use crate::ease::Ease;
 use view::clips::Clip;
-use view::play::{RUN_STRIDE, WALK_STRIDE};
+use view::play::{RUN_AT, RUN_STRIDE, WALK_STRIDE};
 use view::pose::{ANKLE_ON_GROUND as GROUND, Pose};
 
 /// Where the feet sit either side of the centre line.
@@ -202,18 +202,26 @@ fn walk(clip: Clip, travel: Travel) -> Recipe {
         travel,
         cycle,
         stride: WALK_STRIDE * travel.stride_scale(),
-        stance: 0.53,
-        lift: 0.16,
+        // Stance is three-fifths of a walk's cycle and swing two-fifths, so
+        // each foot's contact overlaps the other's last tenth: the double
+        // support that makes it a walk (Perry and Burnfield, *Gait Analysis*).
+        stance: 0.60,
+        lift: 0.17,
         contact_height: GROUND,
         tuck: if matches!(travel, Travel::Left | Travel::Right) {
             0.10
         } else {
             0.0
         },
-        toe_rise: 0.085,
+        toe_rise: 0.10,
         roll_from: 0.55,
         run_in: 0.34,
         alternate: !matches!(travel, Travel::Left | Travel::Right),
+        ahead: 0.38,
+        knee: &WALK_KNEE,
+        flight: None,
+        sway: 0.022,
+        kick: 0.0,
     };
     // Key frames as whole numbers, used for both the timing and the foot
     // arithmetic. Working the two out separately is how a planted foot ends up
@@ -224,10 +232,12 @@ fn walk(clip: Clip, travel: Travel) -> Recipe {
         (cycle * 0.40).round(),
     );
 
+    // Upright: a walking trunk leans forward two or three degrees, not a
+    // fighter's hunch.
     let lean = match travel {
-        Travel::Forward => 7.0,
-        Travel::Back => -5.0,
-        _ => 2.0,
+        Travel::Forward => 3.0,
+        Travel::Back => -3.0,
+        _ => 1.5,
     };
     // A sidestep turns its hips toward where it is going and keeps its
     // shoulders square. That is not a flourish: a leg cannot abduct far enough
@@ -259,29 +269,34 @@ fn walk(clip: Clip, travel: Travel) -> Recipe {
     //
     // The arms swing from the shoulder, loosely, a hand's width off the
     // body: back nearly straight, forward with the elbow softening.
-    let contact = torso(-0.070, 11.0, 1.5, 3.0)
-        .shoulder_l(-32.0, 15.0, 0.0)
-        .elbow_l(16.0)
-        .shoulder_r(24.0, 14.0, 0.0)
-        .elbow_r(38.0);
+    //
+    // The arms hang close and swing about twenty degrees each way, opposite
+    // the legs, the elbow a little bent and bending more as the arm comes
+    // forward. The hips' height is not keyed here: it comes from the
+    // standing leg (`Step::hip_height`).
+    let contact = torso(0.0, 6.0, 1.5, 2.0)
+        .shoulder_l(-20.0, 7.0, 0.0)
+        .elbow_l(12.0)
+        .shoulder_r(18.0, 7.0, 0.0)
+        .elbow_r(28.0);
     // Down: the weight is taken and the hips reach their lowest.
-    let down = torso(-0.095, 5.0, 2.5, 4.0)
-        .shoulder_l(-24.0, 15.0, 0.0)
-        .elbow_l(14.0)
-        .shoulder_r(15.0, 14.0, 0.0)
-        .elbow_r(32.0);
+    let down = torso(0.0, 3.0, 2.5, 3.0)
+        .shoulder_l(-15.0, 7.0, 0.0)
+        .elbow_l(12.0)
+        .shoulder_r(12.0, 7.0, 0.0)
+        .elbow_r(24.0);
     // Passing: the swinging leg comes under the body, the hips rise.
-    let passing = torso(-0.048, -1.0, 2.0, 0.0)
-        .shoulder_l(-8.0, 14.0, 0.0)
-        .elbow_l(18.0)
-        .shoulder_r(-2.0, 14.0, 0.0)
-        .elbow_r(22.0);
-    // Up: the standing leg straightens into its push, the swing leg reaches.
-    let up = torso(-0.036, -9.0, 0.5, -1.5)
-        .shoulder_l(11.0, 14.0, 0.0)
-        .elbow_l(30.0)
-        .shoulder_r(-25.0, 15.0, 0.0)
+    let passing = torso(0.0, -0.5, 2.0, 0.0)
+        .shoulder_l(-3.0, 6.0, 0.0)
+        .elbow_l(14.0)
+        .shoulder_r(0.0, 6.0, 0.0)
         .elbow_r(16.0);
+    // Up: the standing leg straightens into its push, the swing leg reaches.
+    let up = torso(0.0, -5.0, 0.5, -1.0)
+        .shoulder_l(12.0, 7.0, 0.0)
+        .elbow_l(24.0)
+        .shoulder_r(-16.0, 7.0, 0.0)
+        .elbow_r(12.0);
 
     let shapes = [
         (0.0, contact),
@@ -318,8 +333,13 @@ fn run(clip: Clip, travel: Travel) -> Recipe {
         travel,
         cycle,
         stride: RUN_STRIDE * travel.stride_scale(),
-        stance: 0.25,
-        lift: 0.32,
+        // A little over a fifth of the cycle on the ground at seven metres a
+        // second -- about an eighth of a second a foot -- and the rest in
+        // the air (Novacheck, *The biomechanics of running*, 1998).
+        stance: 0.22,
+        // The heel comes up behind toward the seat before the knee drives
+        // through.
+        lift: 0.48,
         // A run lands on the ball of the foot, not the heel.
         // Barely above the floor. A run lands on the ball of the foot, but the
         // foot's own angle lags the leg by two and a half frames -- so a steep
@@ -327,10 +347,18 @@ fn run(clip: Clip, travel: Travel) -> Recipe {
         // the ankle to the ground, and the toe goes through it.
         contact_height: GROUND + 0.015,
         tuck: 0.0,
-        toe_rise: 0.125,
-        roll_from: 0.30,
+        // Off the toe with the ankle well up: the push.
+        toe_rise: 0.17,
+        // The heel stays down until past mid-stance, where the body is lowest
+        // over a bent knee; then the foot rolls up into the push.
+        roll_from: 0.55,
         run_in: 0.16,
         alternate: !matches!(travel, Travel::Left | Travel::Right),
+        ahead: 0.36,
+        knee: &RUN_KNEE,
+        flight: Some(RUN_STRIDE / RUN_AT),
+        sway: 0.01,
+        kick: 1.0,
     };
     let (f_absorb, f_drive, f_flight) = (
         (cycle * 0.09).round(),
@@ -338,10 +366,12 @@ fn run(clip: Clip, travel: Travel) -> Recipe {
         (cycle * 0.38).round(),
     );
 
+    // A runner leans a little from the ankles, not from the waist: five to
+    // ten degrees at this speed.
     let lean = match travel {
-        Travel::Forward => 15.0,
-        Travel::Back => -10.0,
-        _ => 5.0,
+        Travel::Forward => 7.0,
+        Travel::Back => -6.0,
+        _ => 3.0,
     };
     // At a sprint the hips have to open a long way toward the direction of
     // travel -- a sideways run is a crossover run, and it looks like one.
@@ -369,29 +399,33 @@ fn run(clip: Clip, travel: Travel) -> Recipe {
     // arc is set back by about that much: even about the *upright*, in front
     // and behind. Centred on the chest instead, both hands rode in front of
     // her, and the back one sat on her hip.
-    let contact = torso(-0.040, 15.0, 2.0, 4.0)
-        .shoulder_l(-64.0, 20.0, 0.0)
-        .elbow_l(80.0)
-        .shoulder_r(40.0, 18.0, 0.0)
-        .elbow_r(70.0);
-    let absorb = torso(-0.088, 7.0, 3.0, 6.0)
-        .shoulder_l(-50.0, 20.0, 0.0)
-        .elbow_l(78.0)
-        .shoulder_r(28.0, 18.0, 0.0)
-        .elbow_r(72.0);
-    // Drive: the last of the stance, up on the toe and pushing back.
-    let drive = torso(-0.016, -5.0, 1.0, 1.0)
-        .shoulder_l(-4.0, 19.0, 0.0)
-        .elbow_l(76.0)
-        .shoulder_r(-32.0, 19.0, 0.0)
+    //
+    // About forty-five degrees each way, elbows near a right angle -- closing
+    // a little as the hand comes forward to the chest, opening as it drives
+    // back past the hip -- and close to the body, not winged out.
+    let contact = torso(0.0, 10.0, 2.0, 3.0)
+        .shoulder_l(-48.0, 10.0, 0.0)
+        .elbow_l(95.0)
+        .shoulder_r(38.0, 9.0, 0.0)
         .elbow_r(80.0);
+    let absorb = torso(0.0, 5.0, 3.0, 4.0)
+        .shoulder_l(-38.0, 10.0, 0.0)
+        .elbow_l(92.0)
+        .shoulder_r(26.0, 9.0, 0.0)
+        .elbow_r(82.0);
+    // Drive: the last of the stance, up on the toe and pushing back.
+    let drive = torso(0.0, -3.0, 1.0, 1.0)
+        .shoulder_l(-4.0, 9.0, 0.0)
+        .elbow_l(88.0)
+        .shoulder_r(-20.0, 9.0, 0.0)
+        .elbow_r(88.0);
     // Flight: both feet off the ground and the body at its highest. Without
     // this shape the clip is a fast walk, and a viewer can tell at a glance.
-    let flight = torso(0.028, -14.0, -0.5, -2.0)
-        .shoulder_l(34.0, 18.0, 0.0)
-        .elbow_l(70.0)
-        .shoulder_r(-62.0, 20.0, 0.0)
-        .elbow_r(80.0);
+    let flight = torso(0.0, -10.0, -0.5, -1.5)
+        .shoulder_l(34.0, 9.0, 0.0)
+        .elbow_l(80.0)
+        .shoulder_r(-46.0, 10.0, 0.0)
+        .elbow_r(95.0);
 
     let shapes = [
         (0.0, contact),
@@ -446,7 +480,47 @@ struct Step {
     /// going forwards and backwards; false sideways, where the two steps are a
     /// lead and a trail rather than a left and a right.
     alternate: bool,
+    /// How much of a foot's ground contact lies ahead of the hip, as a
+    /// fraction: a foot lands a little ahead and leaves further behind, up on
+    /// its toe.
+    ahead: f32,
+    /// The standing knee's bend through stance, `(fraction of stance,
+    /// degrees)`: what decides how high the hips ride (`hip_height`).
+    knee: &'static [(f32, f32)],
+    /// Seconds a cycle takes at the speed the clip is played at full weight,
+    /// if the gait has a flight: the hips follow gravity while no foot is
+    /// down.
+    flight: Option<f32>,
+    /// How far the hips move over the standing foot, metres.
+    sway: f32,
+    /// How much the swing kicks the heel up behind before reaching forward:
+    /// 0 a walk's low swing, 1 a run's heel recovery.
+    kick: f32,
 }
+
+/// The standing knee through a walk's stance: nearly straight at the heel's
+/// strike, giving about fifteen degrees as the weight arrives, straight again
+/// over the foot, then bending into the push-off (Perry and Burnfield).
+const WALK_KNEE: [(f32, f32); 6] = [
+    (0.0, 3.0),
+    (0.17, 15.0),
+    (0.45, 4.0),
+    (0.72, 6.0),
+    (0.9, 22.0),
+    (1.0, 36.0),
+];
+
+/// And a run's: landing at about twenty degrees, sinking to forty-odd at
+/// mid-stance -- the spring of the stride -- and opening again to drive off.
+const RUN_KNEE: [(f32, f32); 4] = [(0.0, 20.0), (0.45, 45.0), (0.85, 24.0), (1.0, 16.0)];
+
+/// The reference leg (`view::pose::reference`): hip joint 0.93 m up at rest,
+/// thigh and shin.
+const HIP_HEIGHT: f32 = 0.93;
+const THIGH: f32 = 0.46;
+const SHIN: f32 = 0.41;
+/// The hip joints, either side of the centre line.
+const HIP_SIDE: f32 = 0.105;
 
 /// Ankle to toe, in metres on the reference body.
 const FOOT: f32 = 0.22;
@@ -523,7 +597,8 @@ impl Step {
         // hard in the first few frames after toe-off and then reaches; a
         // symmetric arc leaves the toe scraping along exactly where the body is
         // moving fastest over it.
-        let arc = (u.powf(0.7) * std::f32::consts::PI).sin();
+        // A run's swing peaks earlier still: the heel kicks up behind first.
+        let arc = (u.powf(0.7 - 0.2 * self.kick) * std::f32::consts::PI).sin();
         // The swing begins where the stance ended -- already up on the toe --
         // rather than back down at floor level. Forgetting that leaves a
         // seven-centimetre drop on the frame the foot leaves the ground, and
@@ -545,6 +620,9 @@ impl Step {
             let a = self.planted(lift, left, 0.0);
             let b = self.planted(-run_in, left, 0.0);
             let t = ((s - lift) / (land - run_in - lift)).clamp(0.0, 1.0);
+            // Kicked, the foot stays back while it rises and then comes
+            // through fast under a driving knee.
+            let t = t + (t * t * (3.0 - 2.0 * t) - t) * self.kick * 0.8;
             let (dx, dz) = self.travel.drift();
             // Pass behind the standing leg rather than around it, which keeps a
             // sidestep from reading as a stumble.
@@ -561,7 +639,7 @@ impl Step {
         let base = if left { L } else { R };
         // Half the ground the foot covers while planted, so the stance is
         // centred under the body rather than all in front of it.
-        let lead = self.stride * self.stance * 0.5;
+        let lead = self.stride * self.stance * self.ahead;
         let along = self.stride * s / self.cycle - lead;
         [base + dx * along, height, dz * along]
     }
@@ -614,10 +692,91 @@ impl Step {
                 pose.toe_floor_r()
             }
         } else if left {
-            pose.toe_l(0.0)
+            // Flat on the floor: levelled, whatever angle the shin is at --
+            // a runner's leans well forward over a bent knee.
+            pose.level_l()
         } else {
-            pose.toe_r(0.0)
+            pose.level_r()
         }
+    }
+
+    /// The standing knee's bend `s` frames into a foot's stance, degrees.
+    fn knee_at(&self, s: f32) -> f32 {
+        let lift = (self.cycle * self.stance).round().max(1.0);
+        let u = (s / lift).clamp(0.0, 1.0);
+        let k = self.knee;
+        for w in k.windows(2) {
+            let ((a, da), (b, db)) = (w[0], w[1]);
+            if u <= b {
+                let t = ((u - a) / (b - a).max(1e-4)).clamp(0.0, 1.0);
+                return da + (db - da) * t;
+            }
+        }
+        k[k.len() - 1].1
+    }
+
+    /// **How high the hips ride, from the leg that stands** (2026-10-22).
+    /// A foot on the ground with its knee bent so far puts the hip joint at
+    /// most the leg's reach above it: the ankle's height plus what is left of
+    /// that reach once the horizontal distance to the hip is taken out. With
+    /// both feet down, the lower of the two. So the hips are lowest just after
+    /// a walk's heel lands, with the leg reaching, and highest over a straight
+    /// leg at mid-stance -- the rise and fall of a real walk, four or five
+    /// centimetres, out of the geometry rather than keyed. Returns the hips'
+    /// channel (metres from standing), or `None` with no foot down.
+    fn stood(&self, f: f32, half: f32, sway: f32) -> Option<f32> {
+        let lift = (self.cycle * self.stance).round();
+        let mut best: Option<f32> = None;
+        let feet = [(true, f), (false, f + self.cycle - half)]
+            .map(|(left, s)| (left, s.rem_euclid(self.cycle)));
+        let down = |s: f32| s <= lift;
+        for (left, s) in feet {
+            if !down(s) {
+                continue;
+            }
+            // A foot pushing off holds nothing up: its knee bends because it
+            // is leaving, not to lower the body. Counted only if it is the
+            // one foot down.
+            let leaving = s > lift * 0.8;
+            if leaving && feet.iter().any(|&(other, o)| other != left && down(o)) {
+                continue;
+            }
+            let ankle = self.foot(s, left);
+            let hip_x = if left { -HIP_SIDE } else { HIP_SIDE } + sway;
+            let d2 = (ankle[0] - hip_x).powi(2) + ankle[2].powi(2);
+            let bend = self.knee_at(s).to_radians();
+            let reach2 = THIGH * THIGH + SHIN * SHIN + 2.0 * THIGH * SHIN * bend.cos();
+            let up = ankle[1] + (reach2 - d2).max(0.0).sqrt() - HIP_HEIGHT;
+            best = Some(best.map_or(up, |b: f32| b.min(up)));
+        }
+        best
+    }
+
+    /// The hips' height at frame `f`: from the standing leg, or in a run's
+    /// flight a fall under gravity from the toe-off to the next landing.
+    fn hip_height(&self, f: f32, half: f32, sway: f32) -> f32 {
+        if let Some(h) = self.stood(f, half, sway) {
+            return h;
+        }
+        let Some(seconds) = self.flight else {
+            return 0.0;
+        };
+        // The last frame a foot was down and the next one that will be.
+        let (mut a, mut b) = (f, f);
+        while self.stood(a, half, sway).is_none() && f - a < self.cycle {
+            a -= 0.25;
+        }
+        while self.stood(b, half, sway).is_none() && b - f < self.cycle {
+            b += 0.25;
+        }
+        let (ha, hb) = (
+            self.stood(a, half, sway).unwrap_or(0.0),
+            self.stood(b, half, sway).unwrap_or(0.0),
+        );
+        let dt = seconds / self.cycle;
+        let (ta, tb) = ((f - a) * dt, (b - f) * dt);
+        let t = ((f - a) / (b - a).max(1e-3)).clamp(0.0, 1.0);
+        ha + (hb - ha) * t + 0.5 * 9.8 * ta * tb
     }
 
     /// Turn a handful of upper-body shapes into a full set of keys.
@@ -628,7 +787,10 @@ impl Step {
     /// gap that difference is four centimetres of drift under a planted foot;
     /// over a two-frame gap it is under one.
     fn keys(&self, shapes: &[(f32, Pose)], half: f32, cycle: f32) -> Vec<Key> {
-        let spacing = (half / 6.0).round().max(2.0);
+        // Every frame (2026-10-22): the hips now rise and fall with the
+        // standing leg, faster than angles interpolated over three frames
+        // can follow without the planted foot drifting.
+        let spacing = 1.0;
         let mut keys = Vec::new();
         let mut f = 0.0;
         while f < cycle - 0.5 {
@@ -650,6 +812,13 @@ impl Step {
             } else {
                 upper
             };
+            // The hips over the standing foot, and as high as it lets them
+            // ride. The left foot's mid-stance is a quarter of the way in.
+            let sway = -self.sway
+                * (std::f32::consts::TAU * (f / cycle - 0.25 * self.stance / 0.5 + 0.25)).sin()
+                * if self.alternate { 1.0 } else { 0.0 };
+            let hips = upper.channels;
+            let upper = upper.hips(hips[0] + sway, self.hip_height(f, half, sway), hips[2]);
             keys.push(Key::eased(
                 f as u16,
                 self.place(upper, f, half),

@@ -9725,3 +9725,38 @@ other pin moved, and every Mireback, Broodmother and Siegeshell test held.
 **Verdict** open -- unplayed. To feel for: whether the Mireback is fenced out of anything it used
 to reach; whether the Broodmother finds her way round the Hollows' stones or looks stuck behind
 them; whether the Siegeshell's march still reaches its siege line.
+
+### 2026-10-22 — a walk and a run a person would recognise
+
+From the owner: "Fix all of their gaits. Those don't look accurate at all. Read about how to
+make a natural walk and run, then go do it."
+
+**What was wrong**, against the gait literature (Perry and Burnfield, *Gait Analysis*; Novacheck,
+*The biomechanics of running*): a cycle covered 1.1 m walking and 2.7 m running, so at the speeds
+the clips play at the legs went at four and five steps a second -- a person takes about two and a
+half walking briskly and three running. The hips were keyed six to ten centimetres low all the way
+round, so no standing leg ever straightened (the reason the stride had been kept short: a low hip
+runs a leg out of reach). Stance was 53% of a walk (it is 60%). The run leaned fifteen degrees
+from the waist and barely kicked its heel.
+
+**Changed** (`anim::clips::locomotion`, `sim::tuning`)
+- Strides 1.5 m walking and 3.9 m running (`WALK_STRIDE`, `RUN_STRIDE`).
+- **The hips ride on the standing leg** (`Step::hip_height`): at every frame as high as the
+  planted foot allows with its knee bent as a real stance bends it -- a walk nearly straight at
+  heel-strike, giving fifteen degrees as the weight lands, straight over the foot; a run landing
+  at twenty, sinking to forty-five at mid-stance. A foot pushing off holds nothing up. A walk is
+  lowest just after the heel lands and highest at mid-stance, about five centimetres between; a
+  run is lowest at mid-stance and follows gravity through its flight, about six. Keyed every frame.
+- A walk's stance 60% of the cycle, a run's 22%; a foot lands about a third of its contact ahead
+  of the hip and leaves further behind; a run rolls onto its toe only past mid-stance, its
+  standing foot levelled to the floor, and its swing kicks the heel up behind before the knee
+  drives through.
+- Upright: a walk leans three degrees, a run seven. The hips sway two centimetres over the
+  standing foot. Arms close to the body, about twenty degrees each way walking with soft elbows,
+  about forty-five running with elbows near a right angle.
+
+**Pins** Every Ridgeback hunt re-pinned: a fighter's stride phase is in the snapshot and its
+length changed. Nothing reads the phase but the renderer, so no fight changed.
+
+**Verdict** open. To look for: whether the run reads as a run at fighting distance, and whether
+the walk -- seen while speeding up and slowing down -- blends into it without a hitch.

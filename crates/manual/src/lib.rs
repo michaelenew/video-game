@@ -117,6 +117,10 @@ pub const SECTIONS: &[Section] = &[
                 "Paints the picture in one of the looks built in docs/design/painting.md. They are opt-in: the game is plain by default until a painted look is cheap enough to carry. brushed is Guild Wars 2's broad strokes (crisp near, painted far, strokes that follow paths and slopes, colour that follows the land's contours); the others are painted (soft painted tones, violet shade, coloured haze, cut stones), depths (the same in one blue hue, in layers), wash (watercolour on paper). On the web it is ?look=brushed; there only the surface half of a look is drawn, since the rest reads a depth buffer the browser build cannot. The brush's strokes are placed once per tile of land and drawn as splats, a pass of their own, which is what keeps the brush the same size on the screen for the cost of a particle pass; --exact <m> instead works the brush out at every pixel within so many metres and reads baked sheets beyond, --exact 999 at every pixel everywhere (the reference the splats are measured against), and --exact 0 the sheets everywhere.",
             ),
             e(
+                "cargo run -p game --release -- --painted-cast",
+                "The Shadow Reaver and the Champion painted over: brushstrokes riding their clothes, each one a point on the skin carried by the skeleton and drawn square to the eye, so the brushwork moves with the body and never slides or squashes as they turn. Clothes only for now, and at a hem or a cuff a stroke frays past the edge like a cloak turning to flame. The other classes are drawn as without it. The reasoning and what was tried is docs/design/exploration/0025_painted_in_motion.md.",
+            ),
+            e(
                 "cargo run -p manual",
                 "This text, without building the game.",
             ),
