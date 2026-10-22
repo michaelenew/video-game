@@ -1705,6 +1705,13 @@ pub struct World {
     /// left it, a target for everybody, turned to face one way because their
     /// look on the wire had become zero.
     pub away: Fighters,
+    /// **Who has pressed "Start match"** ([`Destination::Ready`]): a seat's
+    /// flag flips with each press, and the frame every seat in the fight has
+    /// it -- two of them at least -- the world starts the match itself
+    /// ([`World::match_start`]), so every machine starts it on the same frame.
+    /// A seat that leaves loses its flag. Empty in every fresh fight. Hashed
+    /// only while somebody is ready, so every pinned checksum stays pinned.
+    pub ready: Fighters,
     /// **The crowd field** (`crate::crowd`, exploration 0018): what the
     /// world knows of the regions round the fighters' own, fed once an
     /// epoch and read slowly. Which regions it follows is decided here, in
@@ -1769,6 +1776,7 @@ impl World {
             seats: MAX_PLAYERS as u8,
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
+            ready: Fighters::EMPTY,
             crowd: crate::crowd::Field::NONE,
             loose: [None; crate::keep::LOOSE],
             picked: [None; MAX_PLAYERS],
@@ -2026,6 +2034,82 @@ impl World {
         i < self.present() && !self.away.has(i)
     }
 
+    /// **Has everybody in the fight pressed "Start match"?** Two at least:
+    /// one alone is not a match.
+    pub fn all_ready(&self) -> bool {
+        let mut players = 0;
+        for i in 0..MAX_PLAYERS {
+            if self.is_present(i) {
+                if !self.ready.has(i) {
+                    return false;
+                }
+                players += 1;
+            }
+        }
+        players >= 2
+    }
+
+    /// **The match everybody was ready for**: a fresh round of the versus
+    /// stage the fight is on, or the first floating duel stage from anywhere
+    /// else -- the hub, a hunt, a course. Its frame is this one, as a trip's.
+    fn match_start(&self, classes: [Class; MAX_PLAYERS]) -> World {
+        let place = match crate::versus::of(self.arena) {
+            Some(_) => self.arena,
+            None => crate::versus::STAGES[0].arena,
+        };
+        World {
+            frame: self.frame,
+            paused: self.paused,
+            ..World::versus_in(classes, place).seated(self.seats)
+        }
+    }
+
+    /// **Which seat a newcomer takes**: a free one on the smaller side
+    /// ([`crate::versus::side`]), or on the side `coin` says when the two
+    /// are level, or any free seat if that side has none. `None` when every
+    /// seat is somebody's. Asked by whoever seats them (the room's host);
+    /// [`World::seat_join`] is what every machine then does with the answer.
+    pub fn open_seat(&self, coin: bool) -> Option<usize> {
+        let mut on = [0usize; crate::versus::SIDES];
+        for i in 0..MAX_PLAYERS {
+            if self.is_present(i) {
+                on[crate::versus::side(i) as usize] += 1;
+            }
+        }
+        let side = if on[0] == on[1] {
+            coin as u8
+        } else {
+            (on[1] < on[0]) as u8
+        };
+        let free = |i: &usize| !self.is_present(*i);
+        (0..MAX_PLAYERS)
+            .filter(free)
+            .find(|&i| crate::versus::side(i) == side)
+            .or_else(|| (0..MAX_PLAYERS).find(free))
+    }
+
+    /// **Somebody joins the fight in progress**, at seat `seat` as `class`:
+    /// their fighter stands where a fresh start of this same fight would
+    /// stand it -- built, and that one fighter taken from it -- and nobody
+    /// else is touched. Applied to the same world by every machine of a
+    /// match as its seats change (`net`'s lineup), so they agree.
+    pub fn seat_join(&mut self, seat: usize, class: Class) {
+        if seat >= MAX_PLAYERS {
+            return;
+        }
+        let seats = self.seats.max(seat as u8 + 1);
+        let mut classes = self.players.map(|p| p.class);
+        classes[seat] = class;
+        let mut grown = self.clone();
+        grown.seats = seats;
+        grown.away.unset(seat);
+        let fresh = grown.restarted(classes);
+        self.seats = seats;
+        self.away.unset(seat);
+        self.ready.unset(seat);
+        self.players[seat] = fresh.players[seat];
+    }
+
     /// **Put every fighter past [`World::present`] out of the world**: dead,
     /// still, and under the middle of the place's floor, where nothing reaches
     /// it and nothing draws it in view. What the valley has always done with
@@ -2145,6 +2229,7 @@ impl World {
             | Destination::Pause
             | Destination::Step
             | Destination::Left
+            | Destination::Ready
             | Destination::Credit(_)
             | Destination::Feed(_)
             | Destination::Grant(_)
@@ -2768,6 +2853,22 @@ impl World {
         // on that frame keeps them.
         let recast = self.recast(&wire);
         let classes = recast.unwrap_or_else(|| self.players.map(|p| p.class));
+        // "Start match", from anybody in the fight: their flag flips. A seat
+        // not in the fight has none.
+        for (i, input) in wire.iter().enumerate() {
+            if input.travel.destination() == Some(Destination::Ready) && self.is_present(i) {
+                if self.ready.has(i) {
+                    self.ready.unset(i);
+                } else {
+                    self.ready.set(i);
+                }
+            }
+        }
+        for i in 0..MAX_PLAYERS {
+            if !self.is_present(i) {
+                self.ready.unset(i);
+            }
+        }
         let next = wire
             .iter()
             .find_map(|i| self.travelled(i.travel, classes))
@@ -2777,7 +2878,8 @@ impl World {
                     paused: self.paused,
                     ..self.restarted(classes).seated(self.seats)
                 })
-            });
+            })
+            .or_else(|| self.all_ready().then(|| self.match_start(classes)));
         // Pause and step, from either side: one press is one toggle, and a
         // step pauses as well as playing its frame.
         let asked = |d: Destination| wire.iter().any(|i| i.travel.destination() == Some(d));
@@ -4220,6 +4322,12 @@ impl World {
         // has and every pinned checksum stays pinned.
         if self.paused {
             h.write_u32(0x7061_7573);
+        }
+        if self.ready.any() {
+            h.write_u32(0x7265_6479);
+            for w in self.ready.words() {
+                h.write_u32(*w);
+            }
         }
         for b in &self.bolts {
             match b {

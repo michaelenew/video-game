@@ -132,6 +132,11 @@ pub enum Destination {
     /// to say (the ones they have touched; every one in `--dev`); the world
     /// only checks it is a cairn.
     Cairn(u8),
+    /// **"Start match"**, pressed or taken back: this seat's ready flag
+    /// flips ([`crate::state::World::ready`]). When every seat in the fight
+    /// is ready the world starts the match itself, on the same frame on
+    /// every machine.
+    Ready,
 }
 
 const _: () = assert!(
@@ -151,6 +156,10 @@ impl Travel {
     pub const VALLEY: Travel = Travel(5);
     /// See [`Destination::Left`].
     pub const LEFT: Travel = Travel(6);
+    /// See [`Destination::Ready`]: the last byte of the credits' range,
+    /// which no creature reaches ([`Travel::credit`] refuses it).
+    pub const READY: Travel = Travel(Travel::READY_BYTE);
+    const READY_BYTE: u16 = Travel::CLASS - 1;
     /// `7`, the cairn in the high byte: see [`Destination::Cairn`].
     const CAIRN: u16 = 7;
     /// `000c cccc` from eight: a creature credited, see [`Destination::Credit`].
@@ -206,7 +215,7 @@ impl Travel {
     /// Credit a creature to the valley's journey. A species past what the
     /// byte holds is no request.
     pub const fn credit(species: SpeciesId) -> Travel {
-        if species.0 as u32 + Travel::CREDIT as u32 >= Travel::CLASS as u32 {
+        if species.0 as u32 + Travel::CREDIT as u32 >= Travel::READY_BYTE as u32 {
             Travel::NONE
         } else {
             Travel(Travel::CREDIT + species.0 as u16)
@@ -302,6 +311,7 @@ impl Travel {
             4 => Some(Destination::Step),
             5 => Some(Destination::Valley),
             6 => Some(Destination::Left),
+            Travel::READY_BYTE => Some(Destination::Ready),
             b if b >= Travel::CREDIT && b < Travel::CLASS => {
                 Some(Destination::Credit(SpeciesId((b - Travel::CREDIT) as u8)))
             }
