@@ -350,6 +350,25 @@ became the default)
   the demo's run-to-run spread); its splats still climb, 100 ms to 290,
   as the far land arrives -- quads behind a hill are rasterised and
   thrown away in the shader, since there is no depth test.
+- **The brush at the screen's resolution, whatever the machine.** With
+  the strokes off, `painted` was still 30 fps on the owner's machine
+  against plain's 60, and the Kuwahara was why: `crisp: 0` puts it on
+  every pixel, forty-nine taps of eight sectors each. It is a pass of its
+  own now (`wash.wgsl` `smear`) drawn into a texture at a share of the
+  screen's resolution, which `brush` reads back filtered; the share is
+  `game::governor`'s, which steps it down (1, 0.75, 0.5, 0.35, 0.25)
+  whenever half a second's median frame runs over a sixtieth and tries a
+  step back up after three seconds clear, twice as long each time a step
+  up has to be taken back. `--smear <share>` fixes it. The brush's size is
+  in the screen's pixels at every share; only how many places it is
+  worked out at changes, so at a half it is the picture at its own 760
+  lines on a screen twice that. Measured under the software renderer
+  (the town, `--look painted`): the smear 225 ms at 1, 60 at 0.5, 16.5 at
+  0.25, the area's share as it should be; the frame 450, 262, 212, against
+  plain's 141. At 0.5 the picture is hard to tell from 1; at 0.25 an edge
+  goes to steps. What is left over plain is `brush` itself (40 ms: the
+  shading, the haze, the glow and the shafts, 42 taps a pixel) and the
+  surface pass.
 - **Four corners a stroke.** The placer wrote each stroke's quad as four
   vertices of seventeen floats; one instance of twenty now, and the
   shader makes the quad, a quarter of the bytes and of the placing.

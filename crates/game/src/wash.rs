@@ -8,7 +8,9 @@
 //! - the paper half is two passes over the finished picture, `wash.wgsl`:
 //!   **brush** after tonemapping and before the line (the wet pigment), and
 //!   **paper** after the line and before the antialiasing (the sheet it
-//!   dried on).
+//!   dried on). The brush's Kuwahara is a pass of its own before it,
+//!   **smear**, into a texture at the share of the screen's resolution
+//!   `crate::governor` can afford.
 //!
 //! Both read the depth prepass the outline already asks for, so where there
 //! is none -- the browser build, whose WebGL2 cannot sample depth -- there is
@@ -41,7 +43,9 @@ use bevy::render::render_resource::binding_types::{
 };
 use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue};
+use bevy::render::texture::{CachedTexture, TextureCache};
 use bevy::render::view::ViewTarget;
+use bevy::render::{Render, RenderSet};
 
 const SHADER: Handle<Shader> = weak_handle!("b4d1c0e7-3a5f-4e92-8c61-0f7e2d9a5b38");
 
@@ -144,7 +148,8 @@ pub struct Wash {
     /// The sun on screen: x, y in normalised device coordinates, and how far
     /// it is in front (0 behind).
     pub sun: Vec4,
-    /// edges
+    /// edges, the share of the screen's resolution the brush is drawn at
+    /// (`crate::governor`)
     pub i: Vec4,
     /// crisp until, painted from (metres), broad strokes, frame
     pub j: Vec4,
@@ -181,7 +186,7 @@ impl Wash {
             cam: Vec4::ZERO,
             lens: Vec4::new(0.5, 1.6, 0.1, 450.0),
             sun: Vec4::ZERO,
-            i: Vec4::new(w.edges, 0.0, 0.0, 0.0),
+            i: Vec4::new(w.edges, 1.0, 0.0, 0.0),
             j: Vec4::new(w.crisp, w.painted_from, w.strokes, w.frame),
             right: Vec4::X,
             up: Vec4::Y,
@@ -202,8 +207,10 @@ pub fn follow(
         &mut Wash,
     )>,
     sun: Query<&GlobalTransform, With<crate::arenas::Sun>>,
+    governor: Option<Res<crate::governor::Governor>>,
 ) {
     for (camera, at, projection, fog, mut wash) in &mut cams {
+        wash.i.y = governor.as_ref().map_or(1.0, |g| g.scale());
         if let Some(fog) = fog {
             let c = fog.color.to_srgba();
             wash.fog = Vec4::new(c.red, c.green, c.blue, 1.0);
@@ -256,10 +263,13 @@ impl Plugin for WashPlugin {
         app.add_plugins((
             ExtractComponentPlugin::<Wash>::default(),
             UniformComponentPlugin::<Wash>::default(),
-        ));
+        ))
+        .init_resource::<crate::governor::Governor>()
+        .add_systems(Update, crate::governor::govern);
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
+        render_app.add_systems(Render, prepare_smear.in_set(RenderSet::PrepareResources));
         // The paper pass only where there is paper or a frame to draw: for
         // the rest it would be a copy of the whole picture.
         let paper = style().on_paper || style().frame > 0.0;
@@ -316,8 +326,49 @@ struct WashPipeline {
     sheet_sampler: Sampler,
     /// Depth is read point by point, never filtered.
     depth_sampler: Sampler,
+    smear: CachedRenderPipelineId,
     brush: CachedRenderPipelineId,
     paper: CachedRenderPipelineId,
+    blank: TextureView,
+}
+
+/// The brush's texture: what `smear` writes, as seen (so half floats, not
+/// eight bits, or a sky's gradient bands).
+const SMEAR_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+
+/// A view's brush texture, the governor's share of its size.
+#[derive(Component)]
+struct Smear(CachedTexture);
+
+fn prepare_smear(
+    mut commands: Commands,
+    mut cache: ResMut<TextureCache>,
+    device: Res<RenderDevice>,
+    views: Query<(Entity, &ViewTarget, &Wash)>,
+) {
+    for (e, target, wash) in &views {
+        let full = target.main_texture().size();
+        let share = wash.i.y.clamp(0.1, 1.0);
+        let size = Extent3d {
+            width: ((full.width as f32 * share).ceil() as u32).max(1),
+            height: ((full.height as f32 * share).ceil() as u32).max(1),
+            depth_or_array_layers: 1,
+        };
+        let texture = cache.get(
+            &device,
+            TextureDescriptor {
+                label: Some("smear"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: SMEAR_FORMAT,
+                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            },
+        );
+        commands.entity(e).insert(Smear(texture));
+    }
 }
 
 impl FromWorld for WashPipeline {
@@ -335,6 +386,7 @@ impl FromWorld for WashPipeline {
                     sampler(SamplerBindingType::Filtering),
                     texture_depth_2d(),
                     sampler(SamplerBindingType::NonFiltering),
+                    texture_2d(TextureSampleType::Float { filterable: true }),
                 ),
             ),
         );
@@ -379,7 +431,25 @@ impl FromWorld for WashPipeline {
             mipmap_filter: FilterMode::Nearest,
             ..default()
         });
-        let queue = |entry: &'static str| RenderPipelineDescriptor {
+        // What binds the brush's texture in the passes that do not read it
+        // (and in `smear`, which is writing it).
+        let blank = device
+            .create_texture(&TextureDescriptor {
+                label: Some("smear blank"),
+                size: Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: SMEAR_FORMAT,
+                usage: TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
+            .create_view(&TextureViewDescriptor::default());
+        let queue = |entry: &'static str, format: TextureFormat| RenderPipelineDescriptor {
             label: Some(format!("wash {entry}").into()),
             layout: vec![layout.clone()],
             vertex: fullscreen_shader_vertex_state(),
@@ -388,7 +458,7 @@ impl FromWorld for WashPipeline {
                 shader_defs: vec![],
                 entry_point: entry.into(),
                 targets: vec![Some(ColorTargetState {
-                    format: TextureFormat::bevy_default(),
+                    format,
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],
@@ -399,11 +469,18 @@ impl FromWorld for WashPipeline {
             push_constant_ranges: vec![],
             zero_initialize_workgroup_memory: false,
         };
-        let (brush, paper) = (queue("brush"), queue("paper"));
+        let screen = TextureFormat::bevy_default();
+        let (smear, brush, paper) = (
+            queue("smear", SMEAR_FORMAT),
+            queue("brush", screen),
+            queue("paper", screen),
+        );
         let cache = world.resource_mut::<PipelineCache>();
         WashPipeline {
+            smear: cache.queue_render_pipeline(smear),
             brush: cache.queue_render_pipeline(brush),
             paper: cache.queue_render_pipeline(paper),
+            blank,
             layout,
             sampler,
             sheet,
@@ -422,13 +499,15 @@ impl<const PAPER: bool> ViewNode for WashNode<PAPER> {
         &'static ViewTarget,
         &'static ViewPrepassTextures,
         &'static DynamicUniformIndex<Wash>,
+        &'static Wash,
+        Option<&'static Smear>,
     );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (target, prepass, offset): QueryItem<Self::ViewQuery>,
+        (target, prepass, offset, wash, smear): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let pipeline = world.resource::<WashPipeline>();
@@ -450,21 +529,61 @@ impl<const PAPER: bool> ViewNode for WashNode<PAPER> {
         let Some(depth) = prepass.depth_view() else {
             return Ok(());
         };
+        // The brush first, into its own texture, if this pass reads it:
+        // the brush pass of a look with a brush. Not drawn at all until
+        // both are ready, so no frame reads a brush nobody laid.
+        let laid = if !PAPER && wash.a.x > 0.0 {
+            let (Some(smear), Some(smear_ready)) = (
+                smear,
+                world
+                    .resource::<PipelineCache>()
+                    .get_render_pipeline(pipeline.smear),
+            ) else {
+                return Ok(());
+            };
+            Some((smear, smear_ready))
+        } else {
+            None
+        };
         let post = target.post_process_write();
-        let bind = render_context.render_device().create_bind_group(
-            "wash bind group",
-            &pipeline.layout,
-            &BindGroupEntries::sequential((
-                post.source,
-                &pipeline.sampler,
-                binding.clone(),
-                &pipeline.sheet,
-                &pipeline.sheet_sampler,
-                depth,
-                &pipeline.depth_sampler,
-            )),
-        );
+        let device = render_context.render_device().clone();
+        let bind_with = |brushed: &TextureView| {
+            device.create_bind_group(
+                "wash bind group",
+                &pipeline.layout,
+                &BindGroupEntries::sequential((
+                    post.source,
+                    &pipeline.sampler,
+                    binding.clone(),
+                    &pipeline.sheet,
+                    &pipeline.sheet_sampler,
+                    depth,
+                    &pipeline.depth_sampler,
+                    brushed,
+                )),
+            )
+        };
         let diagnostics = render_context.diagnostic_recorder();
+        if let Some((smear, smear_ready)) = laid {
+            let bind = bind_with(&pipeline.blank);
+            let mut pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("wash smear"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &smear.0.default_view,
+                    resolve_target: None,
+                    ops: Operations::default(),
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            let span = diagnostics.pass_span(&mut pass, "wash smear");
+            pass.set_render_pipeline(smear_ready);
+            pass.set_bind_group(0, &bind, &[offset.index()]);
+            pass.draw(0..3, 0..1);
+            span.end(&mut pass);
+        }
+        let bind = bind_with(laid.map_or(&pipeline.blank, |(s, _)| &s.0.default_view));
         let mut pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some(if PAPER { "wash paper" } else { "wash brush" }),
             color_attachments: &[Some(RenderPassColorAttachment {
