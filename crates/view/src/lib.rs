@@ -11,6 +11,7 @@ pub mod arms;
 pub mod baked;
 pub mod camera;
 pub mod clips;
+pub mod dodge;
 pub mod ik;
 pub mod interp;
 pub mod math;

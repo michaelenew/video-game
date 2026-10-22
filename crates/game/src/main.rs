@@ -7422,9 +7422,14 @@ fn apply_poses(
     }
     // Placed after the poses, because posing is what eases the drawn body
     // round side-on to a wall (`Crossfade::turn`).
+    // A rolling body is held to the floor by what it is drawn in this frame
+    // (`view::dodge::lift`), so it is measured off the pose just solved.
+    let lifts: [f32; MAX_PLAYERS] = std::array::from_fn(|owner| {
+        view::dodge::drawn_lift(&frame.players[owner], &skins[owner], &skeletons[owner])
+    });
     for (fighter, mut tf) in roots.iter_mut() {
         let p = frame.players[fighter.0];
-        let (origin, turn) = body_frame(&p, fades.0[fighter.0].turn());
+        let (origin, turn) = body_frame(&p, fades.0[fighter.0].turn(), lifts[fighter.0]);
         tf.translation = origin;
         tf.rotation = turn;
     }
@@ -7433,7 +7438,7 @@ fn apply_poses(
     // so whatever is holding something can be placed against it.
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
-        let (origin, turn) = body_frame(&p, fades.0[owner].turn());
+        let (origin, turn) = body_frame(&p, fades.0[owner].turn(), lifts[owner]);
         // The body's **left** hand, which in a drawn pose is not the slot of
         // that name -- see `view::hand_joint`.
         let (at, rot) = skins[owner].box_of(&skeletons[owner], view::hand_joint(true));
@@ -7799,29 +7804,29 @@ fn drive_camera(
 /// draws the arm on. This is the two-line conversion into Bevy's quaternion,
 /// and it is the only place the renderer is allowed to build that rotation.
 /// Where a fighter's body is drawn from, and how it is turned: the facing,
-/// and over it the whole-body roll of a flip or a spin (`view::PlayerView::
-/// roll`), turned about the hips rather than the feet so a flip goes over
-/// rather than cartwheeling off its own toes. Everything carried on the body
+/// and over it the whole-body roll of a flip or a dive roll
+/// (`view::PlayerView::roll`), turned about `roll_about` -- the hips for a
+/// flip, the middle of the ball for a roll -- rather than the feet, so it goes
+/// over rather than cartwheeling off its own toes. Everything carried on the body
 /// is placed through this, so a blade in hand flips with the hand.
+///
+/// `lift` raises it, for a roll held to the floor (`view::dodge::drawn_lift`).
 ///
 /// `turned` is how far the drawn body is turned off the facing about the
 /// vertical, the posing's own eased answer (`view::play::Crossfade::turn`):
 /// side-on to a wall it is sliding down (2026-10-20), nought otherwise.
-fn body_frame(p: &view::PlayerView, turned: f32) -> (Vec3, Quat) {
+fn body_frame(p: &view::PlayerView, turned: f32, lift: f32) -> (Vec3, Quat) {
     // Swimming, she is drawn sunk into her ground, a hump of her showing.
-    let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY, p.pos[2]);
-    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned);
-    if p.roll == [0.0, 0.0] {
+    let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY + lift, p.pos[2]);
+    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned + p.roll_yaw);
+    if p.roll == view::math::Quat::IDENTITY {
         return (feet, turn);
     }
-    let rot = turn * Quat::from_rotation_y(p.roll[1]) * Quat::from_rotation_x(p.roll[0]);
-    let hips = Vec3::Y * ROLL_PIVOT;
-    (feet + turn * hips - rot * hips, rot)
+    let [x, y, z, w] = p.roll.0;
+    let rot = turn * Quat::from_xyzw(x, y, z, w);
+    let about = Vec3::from_array(p.roll_about);
+    (feet + turn * about - rot * about, rot)
 }
-
-/// How high above the feet a flip turns the body over: about the hips.
-/// Presentation, not a rule.
-const ROLL_PIVOT: f32 = 0.95;
 
 /// How far under her ground a swimming Blood mage is drawn: her shoulders
 /// and head still above it. Presentation, not a rule -- her hurt volume is
