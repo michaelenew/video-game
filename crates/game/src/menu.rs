@@ -4,7 +4,8 @@
 //! the mouse back and puts it away. While it is up:
 //!
 //! - **Play a friend.** *Create a room* makes one from the fight being
-//!   practised and shows its link with a *Copy link* button; *Join* takes a
+//!   practised, for two, three or four players (chosen beside it), and
+//!   shows its link with a *Copy link* button; *Join* takes a
 //!   link a friend sent. While a room is active it is listed instead -- its
 //!   name, how meeting is going, the link, *Copy link* and *Leave*. Rooms
 //!   are `online.rs`; this only draws them.
@@ -53,6 +54,9 @@ pub struct Menu {
     /// The last replay saved, and when: shown on the screen for a moment
     /// whether or not the menu is open.
     told: Option<(String, f64)>,
+    /// How many the next room is for, beside *Create a room*; zero until
+    /// chosen, which is two.
+    players: u8,
 }
 
 /// How long "replay saved" stays on the screen (s).
@@ -157,13 +161,22 @@ pub fn draw(
                         ui.label(egui::RichText::new(why).weak());
                         ui.add_space(4.0);
                     }
-                    if ui.button("Create a room").clicked() {
-                        crate::online::create(&mut sim);
-                        menu.refused = None;
-                    }
+                    let mut players = menu.players.max(2);
+                    ui.horizontal(|ui| {
+                        if ui.button("Create a room").clicked() {
+                            crate::online::create(&mut sim, players);
+                            menu.refused = None;
+                        }
+                        ui.label("for");
+                        for n in 2..=sim::state::MAX_PLAYERS as u8 {
+                            ui.selectable_value(&mut players, n, n.to_string());
+                        }
+                        ui.label("players");
+                    });
+                    menu.players = players;
                     ui.label(
                         egui::RichText::new(
-                            "Makes a link for the fight you are practising: these two classes, this creature, this arena.",
+                            "Makes a link for the fight you are practising: these classes, this creature, this arena.",
                         )
                         .weak(),
                     );
