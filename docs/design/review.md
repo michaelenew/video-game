@@ -57,7 +57,8 @@ cargo run --release -p game -- --hunt hornback-escort         # the Hornback's c
 | `H` | hunt the Ridgeback / back to versus |
 | `Shift+H` | the next creature, in its own arena — all eleven, round and back |
 | `T` | the same creature at the next temper you have earned (`--temper` offers all four) |
-| `Tab` | cycle your class (restarts the fight) |
+| `Tab` | cycle your class, where you stand (in versus, only in the pick before a round) |
+| `Enter` | in the pick before a versus round: ready |
 | `Backspace` | restart |
 | `F1` | hitbox, hurtbox and senses overlay |
 | `F7` | the Oven: every tuned number, live |

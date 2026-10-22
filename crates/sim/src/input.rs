@@ -69,8 +69,9 @@ pub struct Input {
 /// Where a [`Input::travel`] request goes. One byte, and a second for seats.
 ///
 /// `0` is no request and `1` is versus. `2`, `3` and `4` are restart, pause
-/// and step. `001s sccc` is a class change: seat `s` becomes class `c`, in a
-/// restart of the same fight -- the seat's low two bits there and the rest in
+/// and step. `001s sccc` is a class change: seat `s` becomes class `c` where
+/// it stands (`c` seven, a class there is not, is seat `s` ready to fight)
+/// -- the seat's low two bits there and the rest in
 /// the high byte, which every other request leaves zero. One byte held four
 /// seats, and an assertion stopped the build at a fifth; the high byte holds
 /// every seat there can be, and a byte written before it reads the same. A hunt sets the top bit, keeps the
@@ -99,10 +100,15 @@ pub enum Destination {
     Pause,
     /// Pause if running, and play exactly this frame: `]`.
     Step,
-    /// The same fight, restarted, with this seat's fighter as this class.
-    /// Tab, and the class pickers: on the wire for the reason every trip is,
-    /// so a class can change mid-match against a person.
+    /// This seat's fighter becomes this class, where it stands: nobody else
+    /// is touched. Tab, and the class pickers: on the wire for the reason
+    /// every trip is, so a class can change mid-match against a person. In
+    /// a versus round the classes are locked, and the request is only heard
+    /// in the pick before it ([`crate::state::Phase::Picking`]).
     Class { seat: usize, class: crate::Class },
+    /// **This seat is done choosing**: Enter, in the pick before a versus
+    /// round. The round starts as soon as every seat in it has said so.
+    Ready { seat: usize },
     /// **The valley** (`crate::valley`): Hearth's square, with the journey so
     /// far kept. What a run starts in, and what `V` goes back to.
     Valley,
@@ -135,8 +141,9 @@ pub enum Destination {
 }
 
 const _: () = assert!(
-    crate::class::ALL_CLASSES.len() <= 8 && crate::state::MAX_PLAYERS <= 4 << 8,
-    "a class change is three bits of class and ten of seat"
+    crate::class::ALL_CLASSES.len() < Travel::READY_INDEX as usize
+        && crate::state::MAX_PLAYERS <= 4 << 8,
+    "a class change is three bits of class (the last of them is ready) and ten of seat"
 );
 
 impl Travel {
@@ -171,6 +178,8 @@ impl Travel {
     const SEAT_SHIFT: u16 = 3;
     const SEATS: u16 = 0x18;
     const CLASS_INDEX: u16 = 0x07;
+    /// The class index no class has: `001s s111` is seat `s` ready.
+    const READY_INDEX: u16 = 0x07;
     const SPECIES: u16 = 0x1F;
     const TEMPER_SHIFT: u16 = 5;
     const TEMPER: u16 = 0x03;
@@ -213,12 +222,22 @@ impl Travel {
         }
     }
 
-    /// Seat `seat`'s fighter becomes `class`, in a restart of the same fight.
+    /// Seat `seat`'s fighter becomes `class`, where it stands.
     pub const fn class(seat: usize, class: crate::Class) -> Travel {
+        Travel::seat_word(seat, class as u16 & Travel::CLASS_INDEX)
+    }
+
+    /// Seat `seat` is done choosing its class: see [`Destination::Ready`].
+    pub const fn ready(seat: usize) -> Travel {
+        Travel::seat_word(seat, Travel::READY_INDEX)
+    }
+
+    /// A class change's word for `seat`, with `index` in the class bits.
+    const fn seat_word(seat: usize, index: u16) -> Travel {
         Travel(
             Travel::CLASS
                 | ((seat as u16) << Travel::SEAT_SHIFT & Travel::SEATS)
-                | (class as u16 & Travel::CLASS_INDEX)
+                | index
                 | ((seat as u16 >> 2) & Travel::LOW) << 8,
         )
     }
@@ -307,11 +326,15 @@ impl Travel {
             }
             b if b & (Travel::HUNT | Travel::ARENA | Travel::CLASS) == Travel::CLASS => {
                 let index = (b & Travel::CLASS_INDEX) as usize;
+                let seat = ((b & Travel::SEATS) >> Travel::SEAT_SHIFT | high << 2) as usize;
+                if index == Travel::READY_INDEX as usize {
+                    return Some(Destination::Ready { seat });
+                }
                 if index >= crate::class::ALL_CLASSES.len() {
                     return None;
                 }
                 Some(Destination::Class {
-                    seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT | high << 2) as usize,
+                    seat,
                     class: crate::class::ALL_CLASSES[index],
                 })
             }

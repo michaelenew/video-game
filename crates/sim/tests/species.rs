@@ -433,6 +433,8 @@ fn the_hunt_is_not_over_until_every_creature_is_down() {
     w.advance([Input::default(); 2]);
     match w.phase {
         Phase::RoundOver { winner, .. } => assert_ne!(winner, QUARRY),
-        Phase::Fighting => panic!("both creatures down and the hunt went on"),
+        Phase::Fighting | Phase::Picking { .. } => {
+            panic!("both creatures down and the hunt went on")
+        }
     }
 }

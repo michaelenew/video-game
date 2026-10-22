@@ -1420,7 +1420,7 @@ pub fn update(
         // Between fighters, how far the next blow throws this one, where Smash
         // shows its percent: the number that decides whether a hit is a shove
         // or a round ender. See `docs/design/stun.md`.
-        let name = if sim.cur.pvp() {
+        let name = if sim.cur.pvp() || matches!(sim.cur.phase, Phase::Picking { .. }) {
             format!(
                 "{}   launch x{:.1}",
                 p.class.name(),
@@ -1459,6 +1459,20 @@ pub fn update(
     if let Ok(mut t) = banner.single_mut() {
         let line = match sim.cur.phase {
             Phase::Fighting => String::new(),
+            // The pick before a versus round: the seconds left, and who is
+            // done. Rounded up, so it reads 1 until the round starts.
+            Phase::Picking { left, ready } => {
+                let secs = (left as u32).div_ceil(60);
+                let me = sim.local_player();
+                let present = sim.cur.present();
+                let waiting = (0..present).filter(|&i| ready & (1 << i) == 0).count();
+                let you = if ready & (1 << me) != 0 {
+                    format!("ready -- waiting on {waiting}")
+                } else {
+                    "Tab to change class, Enter when ready".to_string()
+                };
+                format!("choose your class  {secs}\n{you}")
+            }
             Phase::RoundOver { winner, .. } if winner == sim::state::QUARRY => {
                 match sim.cur.hunted().into_iter().flatten().next() {
                     Some(s) => format!("the {} stands", s.get().name),
@@ -1842,9 +1856,8 @@ pub fn update_online(sim: Res<crate::Sim>, mut text: Query<&mut Text, With<Onlin
 
 /// Click a picker to cycle that player's class.
 ///
-/// Restarts the match, exactly as Tab does, because a class change mid-round
-/// would leave the mechanic holding somebody else's state — a shield in flight
-/// belonging to a class that no longer has one.
+/// Recasts that fighter where they stand, exactly as Tab does, and like Tab it
+/// is not heard in a versus round once its pick is over.
 pub fn class_buttons(
     mut sim: ResMut<crate::Sim>,
     show: Res<ShowClassButtons>,
@@ -1860,7 +1873,7 @@ pub fn class_buttons(
         {
             continue;
         }
-        // Asked for on the wire, as Tab is, so a peer restarts on the same
+        // Asked for on the wire, as Tab is, so a peer recasts on the same
         // frame.
         let who = seat(&sim, button.0);
         let classes = cycle_class(sim.cur.players.map(|p| p.class), who);

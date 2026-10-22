@@ -190,10 +190,11 @@ fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
             r.arena,
             Some(0),
             2,
-        );
+        )
+        .drafting(drafts());
         return seated(w, dummy);
     }
-    let w = picker::world(chosen_start(opts), chosen_classes(opts));
+    let w = picker::world(chosen_start(opts), chosen_classes(opts), drafts());
     match chosen_players(opts) {
         n if n > 2 => w.seated(n),
         _ => seated(w, dummy),
@@ -645,8 +646,8 @@ fn reseat(sim: &mut Sim) {
 /// **The Esc menu's dummy** (`menu::dummy`): bring it in or send it away,
 /// change what it does, or its class. Training only, as the dummy keys are.
 /// In or out restarts the fight, since a fighter is placed as a fight is
-/// built; a class change restarts it anyway, as Tab does; what it does
-/// changes on the spot.
+/// built; a class change recasts it where it stands, as Tab does; what it
+/// does changes on the spot.
 fn change_dummy(sim: &mut Sim, mode: Dummy, with: bool, class: sim::Class) {
     if sim.driver.online() {
         return;
@@ -6688,13 +6689,20 @@ fn tick_sim(
         sim.bind_pose = !sim.bind_pose;
     }
     if keys.just_pressed(KeyCode::Tab) {
-        // Cycle your own class. Restarts the fight, since a class change
-        // mid-round would leave the mechanic in someone else's state -- and
-        // asked for on the wire rather than done here, like the picker below,
-        // so against a person both machines restart on the same frame.
+        // Cycle your own class, where you stand: nobody else is touched.
+        // Asked for on the wire rather than done here, like the picker below,
+        // so against a person both machines recast you on the same frame --
+        // and in a versus round, where the classes are locked, the world does
+        // not hear it (`World::classes_locked`).
         let me = sim.local_player();
         let next = sim.cur.players[me].class.next_in_rotation();
         sim.travel = sim::input::Travel::class(me, next);
+    }
+    // `Enter`: done choosing, in the pick before a versus round.
+    if keys.just_pressed(KeyCode::Enter)
+        && matches!(sim.cur.phase, sim::state::Phase::Picking { .. })
+    {
+        sim.travel = sim::input::Travel::ready(sim.local_player());
     }
     // A restart goes on the wire in training too, now that the simulation
     // seats the fresh fight itself (`World::seats`): one path, and the one
@@ -6870,6 +6878,12 @@ fn tick_sim(
                 .unwrap_or_else(|| scripted_or(scripted, held))
                 .travelling(travel);
             pair[1] = two;
+            // **One keyboard readies both seats**: player two, or the dummy,
+            // is in this room, and a dummy cannot press Enter.
+            if travel == sim::input::Travel::ready(0) && pair[1].travel == sim::input::Travel::NONE
+            {
+                pair[1].travel = sim::input::Travel::ready(1);
+            }
             // A replay playing back outranks everything: both seats are
             // the tape's, and the camera turns with the look it recorded.
             // It runs out by handing the controls back.
@@ -7100,6 +7114,13 @@ fn looking_at_her_feet(w: &World) -> (u16, i16) {
 /// verify posing and framing without a human at the controls.
 fn demo_mode() -> bool {
     platform::env("DEMO").as_deref() == Some("1")
+}
+
+/// **Does play open versus rounds with a pick** (`World::drafting`)? Yes,
+/// except in a scripted run -- `DEMO=1`, or a screenshot at `SHOT_FRAME` --
+/// which is a fight from its first frame and sets the world up for one.
+fn drafts() -> bool {
+    !demo_mode() && platform::env("SHOT_FRAME").is_none()
 }
 
 /// Quantised angle of a flat direction.
