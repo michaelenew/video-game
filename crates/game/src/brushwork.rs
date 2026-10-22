@@ -39,13 +39,17 @@ use crate::still::SkinMaterial;
 const SHADER: Handle<Shader> = weak_handle!("7d3b2e91-5c4a-4f08-b6e1-9a2c8d5f3e47");
 
 /// Whether the cast is painted, and which of them: the Shadow Reaver and
-/// the Champion first (the owner, 2026-10-21); the rest as they were.
+/// the Champion first (the owner, 2026-10-21), the Blood mage by following
+/// `docs/design/cast-look.md` (2026-10-22); the rest as they were.
 pub fn on() -> bool {
     crate::platform::flag("--painted-cast")
 }
 
 fn painted(class: sim::Class) -> bool {
-    matches!(class, sim::Class::ShadowReaver | sim::Class::Champion)
+    matches!(
+        class,
+        sim::Class::ShadowReaver | sim::Class::Champion | sim::Class::BloodMage
+    )
 }
 
 /// How a stroke is lit and laid, as one uniform.
@@ -315,6 +319,15 @@ fn focus(joint: usize) -> (f32, f32) {
 /// many there do: the cloth's hem going to paint, a quarter of the way
 /// from fabric to flame (the owner, 2026-10-22).
 const WISP_REACH: f32 = 0.03;
+
+/// The rim of a thickened sheet (`openness`): an edge no longer than this
+/// (metres; the panels are 4 mm thick, the cloth's own edges 2 cm and up)
+/// whose two ends face apart by more than about seventy degrees.
+const FOLD: f32 = 0.007;
+const FOLD_TURN: f32 = 0.35;
+/// A shell with more than this share of its corners on the rim is a band,
+/// not a sheet (`openness`).
+const BAND: f32 = 0.35;
 const WISPS: f32 = 0.12;
 
 /// The strokes over one model piece: placed by area, evenly (stratified
@@ -391,7 +404,7 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         })
         .collect();
 
-    let (open, along_open) = openness(pos, &tris);
+    let (open, along_open) = openness(pos, nrm, &tris);
 
     let area: Vec<f32> = tris
         .iter()
@@ -544,7 +557,16 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
 /// the surface), and which way that edge runs. Corners split for a texture
 /// seam are welded first, so a seam is not an edge; what is left with one
 /// triangle on it is the cloth's real edge.
-fn openness(pos: &[[f32; 3]], tris: &[[usize; 3]]) -> (Vec<f32>, Vec<Vec3>) {
+///
+/// **And the rim of a thickened sheet** (2026-10-22). A coat's panels are
+/// given a few millimetres of thickness when they are built
+/// (`wardrobe.coat_tails`, `g.thicken`), which closes the sheet: every edge
+/// has two triangles on it, and no panel on any class had a hem to fray --
+/// found painting the Blood mage, whose skirt is all panels. Its edge is
+/// where the sheet folds back on itself: an edge no longer than the
+/// thickness whose two ends face well apart. Cloth that only bends never
+/// does both.
+fn openness(pos: &[[f32; 3]], nrm: &[[f32; 3]], tris: &[[usize; 3]]) -> (Vec<f32>, Vec<Vec3>) {
     use std::cmp::Ordering;
     use std::collections::BinaryHeap;
 
@@ -563,9 +585,12 @@ fn openness(pos: &[[f32; 3]], tris: &[[usize; 3]]) -> (Vec<f32>, Vec<Vec3>) {
         .collect();
     let count = weld.len();
     let mut at = vec![Vec3::ZERO; count];
+    let mut facing = vec![Vec3::ZERO; count];
     for (i, p) in pos.iter().enumerate() {
         at[id[i]] = Vec3::from(*p);
+        facing[id[i]] += Vec3::from(nrm[i]);
     }
+    let facing: Vec<Vec3> = facing.iter().map(|n| n.normalize_or_zero()).collect();
     let mut edges: HashMap<(usize, usize), u32> = HashMap::new();
     let mut links: Vec<Vec<usize>> = vec![Vec::new(); count];
     for t in tris {
@@ -581,17 +606,73 @@ fn openness(pos: &[[f32; 3]], tris: &[[usize; 3]]) -> (Vec<f32>, Vec<Vec3>) {
     }
     let mut dist = vec![f32::INFINITY; count];
     let mut dir = vec![Vec3::ZERO; count];
+    // Summed with a consistent sign, so a corner between two edge pieces
+    // takes their average.
+    let along = |dir: &mut Vec<Vec3>, a: usize, b: usize| {
+        let e = at[b] - at[a];
+        let e = if e.dot(dir[a]) < 0.0 { -e } else { e };
+        dir[a] += e;
+        let e = if e.dot(dir[b]) < 0.0 { -e } else { e };
+        dir[b] += e;
+    };
     for (&(a, b), &n) in &edges {
         if n == 1 {
-            let e = at[b] - at[a];
             dist[a] = 0.0;
             dist[b] = 0.0;
-            // Summed with a consistent sign, so a corner between two edge
-            // pieces takes their average.
-            let e = if e.dot(dir[a]) < 0.0 { -e } else { e };
-            dir[a] += e;
-            let e = if e.dot(dir[b]) < 0.0 { -e } else { e };
-            dir[b] += e;
+            along(&mut dir, a, b);
+        }
+    }
+    // The folds: each end of one is on the rim. The rim runs along the
+    // edges between two such corners that face the same way -- the fold
+    // itself runs across the thickness, which is not the hem's direction.
+    let rim: Vec<bool> = {
+        let mut rim = vec![false; count];
+        for &(a, b) in edges.keys() {
+            if at[a].distance(at[b]) < FOLD && facing[a].dot(facing[b]) < FOLD_TURN {
+                rim[a] = true;
+                rim[b] = true;
+            }
+        }
+        rim
+    };
+    // Only a sheet's rim is a hem. A band -- a belt, a strap, a collar, a
+    // cuff's trim -- is nearly all rim, and its edge is not where cloth
+    // ends but where a band is narrow: so a shell more than `BAND` rim
+    // keeps no rim at all. Measured on the Blood mage: her coat, panels,
+    // sleeves and boots are 8 to 20% rim, her belt and straps 55 to 75%.
+    let rim = {
+        let mut rim = rim;
+        let mut seen = vec![false; count];
+        for start in 0..count {
+            if seen[start] {
+                continue;
+            }
+            seen[start] = true;
+            let mut shell = vec![start];
+            let mut k = 0;
+            while k < shell.len() {
+                for &u in &links[shell[k]] {
+                    if !seen[u] {
+                        seen[u] = true;
+                        shell.push(u);
+                    }
+                }
+                k += 1;
+            }
+            let on = shell.iter().filter(|&&v| rim[v]).count();
+            if on as f32 > shell.len() as f32 * BAND {
+                for &v in &shell {
+                    rim[v] = false;
+                }
+            }
+        }
+        rim
+    };
+    for &(a, b) in edges.keys() {
+        if rim[a] && rim[b] && facing[a].dot(facing[b]) > 0.5 {
+            dist[a] = 0.0;
+            dist[b] = 0.0;
+            along(&mut dir, a, b);
         }
     }
     #[derive(PartialEq)]
@@ -628,4 +709,103 @@ fn openness(pos: &[[f32; 3]], tris: &[[usize; 3]]) -> (Vec<f32>, Vec<Vec3>) {
         id.iter().map(|&i| dist[i].min(10.0)).collect(),
         id.iter().map(|&i| dir[i]).collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A strip of cloth `w` by `h`, thickened by `t` the way the wardrobe
+    /// thickens a panel: a front and a back joined round their rim, so
+    /// every edge has two triangles on it. Normals as smooth shading gives
+    /// them -- the rim's corners turned half out.
+    type Sheet = (Vec<[f32; 3]>, Vec<[f32; 3]>, Vec<[usize; 3]>);
+
+    fn thickened(w: usize, h: usize, cell: f32, t: f32) -> Sheet {
+        let (mut pos, mut nrm, mut tris) = (vec![], vec![], vec![]);
+        let at = |side: usize, i: usize, j: usize| side * (w + 1) * (h + 1) + j * (w + 1) + i;
+        for side in 0..2 {
+            for j in 0..=h {
+                for i in 0..=w {
+                    let z = if side == 0 { t * 0.5 } else { -t * 0.5 };
+                    pos.push([i as f32 * cell, j as f32 * cell, z]);
+                    let edge = i == 0 || j == 0 || i == w || j == h;
+                    let mut n = Vec3::Z * if side == 0 { 1.0 } else { -1.0 };
+                    if edge {
+                        let out = Vec3::new(
+                            if i == 0 {
+                                -1.0
+                            } else if i == w {
+                                1.0
+                            } else {
+                                0.0
+                            },
+                            if j == 0 {
+                                -1.0
+                            } else if j == h {
+                                1.0
+                            } else {
+                                0.0
+                            },
+                            0.0,
+                        );
+                        n = (n + out.normalize()).normalize();
+                    }
+                    nrm.push(n.to_array());
+                }
+            }
+            for j in 0..h {
+                for i in 0..w {
+                    let (a, b, c, d) = (
+                        at(side, i, j),
+                        at(side, i + 1, j),
+                        at(side, i + 1, j + 1),
+                        at(side, i, j + 1),
+                    );
+                    tris.push([a, b, c]);
+                    tris.push([a, c, d]);
+                }
+            }
+        }
+        // The rim: front and back joined all the way round.
+        let mut ring = vec![];
+        ring.extend((0..w).map(|i| (i, 0)));
+        ring.extend((0..h).map(|j| (w, j)));
+        ring.extend((0..w).map(|i| (w - i, h)));
+        ring.extend((0..h).map(|j| (0, h - j)));
+        for k in 0..ring.len() {
+            let (p, q) = (ring[k], ring[(k + 1) % ring.len()]);
+            let (a, b) = (at(0, p.0, p.1), at(0, q.0, q.1));
+            let (c, d) = (at(1, q.0, q.1), at(1, p.0, p.1));
+            tris.push([a, b, c]);
+            tris.push([a, c, d]);
+        }
+        (pos, nrm, tris)
+    }
+
+    #[test]
+    fn a_thickened_panel_has_a_hem() {
+        // A panel: 30 cm by 60 cm in 2 cm cells, 4 mm thick.
+        let (pos, nrm, tris) = thickened(15, 30, 0.02, 0.004);
+        let (open, way) = openness(&pos, &nrm, &tris);
+        let corner = |i: usize, j: usize| j * 16 + i;
+        assert_eq!(open[corner(7, 0)], 0.0, "its bottom edge is a hem");
+        assert!(
+            (open[corner(7, 15)] - 0.14).abs() < 0.01,
+            "its middle is 14 cm from the side"
+        );
+        let along = way[corner(7, 0)].normalize();
+        assert!(
+            along.x.abs() > 0.9,
+            "the hem runs along the bottom: {along}"
+        );
+    }
+
+    #[test]
+    fn a_band_has_no_hem() {
+        // A strap: 40 cm by 2 cm, nearly all rim.
+        let (pos, nrm, tris) = thickened(20, 1, 0.02, 0.004);
+        let (open, _) = openness(&pos, &nrm, &tris);
+        assert!(open.iter().all(|&d| d > 0.0));
+    }
 }

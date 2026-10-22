@@ -225,3 +225,40 @@ where the picture under a pixel is clearly another colour than the one it
 was taken from (`same`, a relative difference past about a third), and the
 points it averages its colour from count only where they are its own stuff,
 so a stroke at a seam is one material's colour, not a mix of two.
+
+## 11. The Blood mage, by the recipe (2026-10-22)
+
+The owner: *write down my corrections and guidance in a way that's going to
+be reproducible, then try to one-shot the blood mage's painted-cast look.*
+The rules went into [`cast-look.md`](../cast-look.md) first, committed, and
+the Blood mage was then painted by following its recipe and nothing else.
+Step 1 needed nothing (her model's pieces are named as the Champion's, her
+skirt's panels on the panel joints), step 2 was one line. Judging (step 4)
+found three things, all general, all fixed in `brushwork` for every painted
+class (step 5):
+
+- **No hem on any class had ever frayed.** Every garment is built
+  thickened (`g.thicken`), so no edge has one triangle on it, and
+  `openness` -- which looked for exactly that -- found no edge on any
+  costume: zero corners of 39,586 on hers, of 28,832 on the Champion's. The
+  wisps of §8 and the edge-hugging of §7 had not been on screen since the
+  thickened models. A thickened sheet's edge is now found where it folds
+  back (an edge no longer than 7 mm whose ends face apart), and only on a
+  shell that is a sheet: a band -- belt, strap, collar trim -- is mostly
+  rim and keeps none. About a sixth of each costume's corners are now on a
+  hem; the fray is soft, about one stroke in a hundred, as P8 asks.
+- **On black cloth the strokes were invisible.** Every variation inside a
+  stroke multiplied the colour under it; a multiple of near-black is
+  near-black. They are now made on the eye's scale with a floor (`shift`,
+  `DARK` in `brushwork.wgsl`): exactly the old multiply at a third of full
+  value and up, a visible step below it. Her coat now reads as brushwork.
+- **A hem wisp ran up the coat.** The bodice's top edge became a hem, and a
+  red tongue off it lay on the black coat -- the Champion's shoulder
+  mistake again (P7). A wisp may run on into the air past the cloth, never
+  onto other cloth of its own body.
+
+Re-filmed after: the Reaver and the Champion (front, shoulder, back hem),
+unchanged but for softer panel hems; the Champion's mantle still keeps
+inside its colour shape. Her turntable shows no popping. Her walk was
+filmed at the side-on distance the gaits are judged at, which is too far to
+judge sliding on her dark coat: that one is for F6 in a running game.

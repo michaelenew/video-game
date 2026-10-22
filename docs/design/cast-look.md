@@ -119,8 +119,9 @@ way from fabric to flame.*
 | P5 | **Clothes only.** No strokes on skin (the `body` piece), none on hair cards; the face left nearly as modelled; what the hands hold left nearly alone. | *"Don't do the skin yet"* (10-22) | `paint()`, `focus()` |
 | P6 | **Inside the lines.** A stroke paints only where its own body is drawn: never past the outline into the air or onto the wall. | *"It's like you're colouring outside the lines. Any spillage needs to be intentional, like at the hem of a shirt or a cape where the object terminates, not just goes out of view"* (10-22) | the depth test in `brushwork.wgsl` |
 | P7 | **Inside its own colour shape.** A stroke does not cross from one material onto another lying beside it at the same depth (a mantle onto a shirt, a bodice onto a coat). | *"The strokes around the champion's shoulder cloth are still messy ... those shouldn't bleed because they're 'inside' the character outline"* (10-22) | `same` in `brushwork.wgsl` |
-| P8 | **The hem frays, softly.** Where the cloth really ends -- a hem, a cuff, a hood's mouth -- about one stroke in eight becomes a short tongue of paint past the edge. A soft fray, never spines. | the fabric-to-flame image (10-22) | `WISPS`, `WISP_REACH` |
+| P8 | **The hem frays, softly.** Where the cloth really ends -- a hem, a cuff, a hood's mouth -- about one stroke in eight near it becomes a short tongue of paint past the edge, into the air and never onto other cloth. A soft fray, never spines. A thickened garment's hem is found where it folds back; a band (belt, strap) has none. | the fabric-to-flame image (10-22) | `WISPS`, `WISP_REACH`, `openness` (`FOLD`, `BAND`) |
 | P9 | **In motion it stays on the body.** On a turntable and a walk, no stroke slides across the cloth, swims, or pops as a part turns away. | *"It needs to work in motion too"* (10-21) | the whole design (0025 §2) |
+| P10 | **Dark cloth shows its brushwork.** A stroke's variation is never smaller than it would be on a colour a third of the way up the eye's scale, so black reads as painted black, not as no paint. | found on the Blood mage's coat (10-22) | `shift`, `DARK` in `brushwork.wgsl` |
 
 ### 4.2 What was tried and refused -- do not do these again
 
@@ -135,6 +136,9 @@ way from fabric to flame.*
 | Strokes on the skin | *"that's worse"* (0025 §9) |
 | A blended (transparent) stroke material | reads a white placeholder unless something else asks for the picture's copy: keep it cut out and blend in the shader (0025 §9) |
 | A stroke's colour averaged across a seam | a mix of two materials; it reads as bleed (0025 §10) |
+| Finding a hem only as an edge with one triangle on it | every garment is built thickened, so it found none: no class frayed (0025 §11) |
+| Every rim of a thickened shell as a hem | a belt, a strap, a collar are nearly all rim (0025 §11) |
+| Variation as a plain multiply of the colour | on black cloth it is nothing (0025 §11) |
 
 ### 4.3 The recipe
 
@@ -152,7 +156,10 @@ way from fabric to flame.*
    its longest hem (P8); a turntable; a walk from the side. Always beside the
    unpainted model at the same moment, so what the strokes did is visible.
 4. **Judge** every row of 4.1 on those pictures, and say per row what was
-   seen. Then F6 in a running game for anything a still did not settle.
+   seen. Two numbers worth printing once from `place` while judging: how
+   many strokes each piece got and how many are wisps, and how many corners
+   `openness` put on a hem -- a hem count of nought is what hid P8 from
+   every class until the Blood mage (0025 §11). Then F6 in a running game for anything a still did not settle.
 5. **Fix in the general system**, not with a per-class branch, unless the
    class is the only one with that case -- a fix to `brushwork` is true of
    every painted class, and the others are re-filmed after it.

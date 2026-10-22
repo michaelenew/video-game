@@ -231,6 +231,22 @@ fn under(centre: vec2<f32>, reach: vec4<f32>, depth: f32) -> vec4<f32> {
     return vec4<f32>(sum / weight, 1.0);
 }
 
+// **A painter's black is never black** (2026-10-22, painting the Blood
+// mage's coat). Every variation a stroke makes -- its streaks, its warmer
+// and cooler lanes, its own value -- multiplies the colour under it, and on
+// near-black cloth a multiple of nothing is nothing: her coat took the
+// strokes and showed none. So a variation is made on the eye's scale (the
+// square root of the light, as the bands are), and no smaller there than it
+// would be on a colour of `DARK`. At `DARK` and brighter this is exactly
+// the multiply it was.
+const DARK: f32 = 0.3;
+
+fn shift(c: vec3<f32>, m: vec3<f32>) -> vec3<f32> {
+    let p = sqrt(max(c, vec3<f32>(0.0)));
+    let q = max(p + (sqrt(max(m, vec3<f32>(0.0))) - 1.0) * max(p, vec3<f32>(DARK)), vec3<f32>(0.0));
+    return q * q;
+}
+
 fn painted(seen: vec3<f32>, own: f32) -> vec4<f32> {
     let l = max(dot(seen, LUMA), 1e-5);
     // Bands on a perceptual scale.
@@ -243,7 +259,7 @@ fn painted(seen: vec3<f32>, own: f32) -> vec4<f32> {
     colour = mix(vec3<f32>(dot(colour, LUMA)), colour, brush.tint.z);
     let warm = smoothstep(0.25, 0.6, v2);
     colour *= mix(brush.shade.rgb, brush.light.rgb, warm);
-    return vec4<f32>(colour * (1.0 + (own - 0.5) * 2.0 * brush.knobs.z), 1.0);
+    return vec4<f32>(shift(colour, vec3<f32>(1.0 + (own - 0.5) * 2.0 * brush.knobs.z)), 1.0);
 }
 
 fn hash2(p: vec2<f32>) -> f32 {
@@ -326,13 +342,13 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
     let streak = noise2(vec2<f32>(lane * 4.5 + s1 * 31.0, along * 0.6 + s2 * 17.0)) - 0.5;
     let hue = noise2(vec2<f32>(lane * 2.5 + s2 * 23.0, along * 0.4 + s1 * 11.0)) - 0.5;
     let load = along * 0.5 + 0.5;
-    var colour = paint.rgb * (1.0 + streak * 0.22);
-    colour *= vec3<f32>(1.0 + hue * 0.12, 1.0, 1.0 - hue * 0.12);
+    var colour = shift(paint.rgb, vec3<f32>(1.0 + streak * 0.22));
+    colour = shift(colour, vec3<f32>(1.0 + hue * 0.12, 1.0, 1.0 - hue * 0.12));
     colour = mix(vec3<f32>(dot(colour, LUMA)), colour, mix(0.85, 1.15, load));
-    colour *= mix(1.08, 0.96, load);
+    colour = shift(colour, vec3<f32>(mix(1.08, 0.96, load)));
     // The stroke's own shift, as the land's: warmer or cooler as a whole.
     let warm = (s2 - 0.5) * 0.08;
-    colour *= vec3<f32>(1.0 + warm, 1.0, 1.0 - warm);
+    colour = shift(colour, vec3<f32>(1.0 + warm, 1.0, 1.0 - warm));
     alpha = clamp(alpha * (1.0 + streak * 0.3), 0.0, 1.0);
     // Below a little paint, no stroke: what it would write is the cloth.
     if (alpha < 0.1) {
@@ -350,6 +366,15 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
         }
         // And only over its own colour shape: where the picture here is
         // another material, the stroke stops at the boundary.
+        alpha *= same(there, base.rgb);
+        if (alpha < 0.1) {
+            discard;
+        }
+    } else if (ours(here, in.depth) > 0.5) {
+        // A wisp runs on into the air past the cloth's end, never onto
+        // other cloth of the same body: a bodice's edge lies on the coat,
+        // and a tongue of red up the black coat is the bleed the owner
+        // ruled out (`docs/design/cast-look.md` P7, 2026-10-22).
         alpha *= same(there, base.rgb);
         if (alpha < 0.1) {
             discard;

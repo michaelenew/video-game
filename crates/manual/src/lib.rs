@@ -118,7 +118,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game --release -- --painted-cast",
-                "The Shadow Reaver and the Champion painted over: brushstrokes riding their clothes, each one a point on the skin carried by the skeleton and drawn square to the eye, so the brushwork moves with the body and never slides or squashes as they turn. Clothes only for now, and at a hem or a cuff a stroke frays past the edge like a cloak turning to flame. The other classes are drawn as without it. The reasoning and what was tried is docs/design/exploration/0025_painted_in_motion.md.",
+                "The Shadow Reaver, the Champion and the Blood mage painted over: brushstrokes riding their clothes, each one a point on the skin carried by the skeleton and drawn square to the eye, so the brushwork moves with the body and never slides or squashes as they turn. Clothes only for now, and at a hem or a cuff a stroke frays past the edge like a cloak turning to flame. The other classes are drawn as without it. The reasoning and what was tried is docs/design/exploration/0025_painted_in_motion.md.",
             ),
             e(
                 "cargo run -p manual",
@@ -938,6 +938,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "./scripts/screenshot.sh [out.png] [seconds]",
                 "Render headlessly with Xvfb. No GPU needed.",
+            ),
+            e(
+                "./scripts/reel.sh <name> <display> <frames> <interval> [VAR=value ...] -- [game args]",
+                "Film the game headlessly: a run of pictures a set interval apart, then a GIF and a contact sheet, in target/reel. How a character's look is judged -- a portrait, a turntable, a walk; docs/design/cast-look.md has the commands. Build the game first.",
             ),
             e(
                 "./scripts/p2p-localhost.sh",
