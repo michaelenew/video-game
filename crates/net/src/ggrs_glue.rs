@@ -84,6 +84,24 @@ pub fn handle_requests_watched(
     });
 }
 
+/// **The region gate, online**: whether the next frame may be asked of
+/// GGRS (`regions::Ledger::may_advance`, `docs/design/regions.md`). The books
+/// are brought up to the session's confirmed frame *before* the gate is asked,
+/// every tick, whether or not a frame was made: the gate opens on what has
+/// been confirmed, and a held frame makes nothing. Kept only after an advance,
+/// one packet late by more than the gate's delay shut it for good -- the
+/// freeze of 2026-10-22, every match with a friend a few seconds in.
+///
+/// `confirmed` is the session's, which counts this machine's own inputs too:
+/// it is never taken past the world in hand.
+pub fn may_advance(ledger: &mut regions::Ledger, confirmed: i32, world: &World) -> bool {
+    ledger.tick();
+    if let Ok(confirmed) = u32::try_from(confirmed) {
+        ledger.confirm_through(confirmed.min(world.frame), world);
+    }
+    ledger.may_advance(world.frame.wrapping_add(1))
+}
+
 /// [`handle_requests_watched`], **kept on the region ledger**: every frame
 /// made goes on its tape, and is fed the crowd field's aggregates due at it
 /// (`sim::crowd`, `regions::Ledger::due`) -- re-recorded and re-fed on a

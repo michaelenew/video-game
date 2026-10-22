@@ -118,6 +118,14 @@ canvas alike, and allocates nothing after it is made. It holds:
   lag past `D` in the Oven and the game holds, then runs `D` frames behind the
   slowest neighbour, paced by its heartbeats. That is what it will do in the
   open world.
+- **Online, the books are kept before the gate is asked** (2026-10-22,
+  `net::may_advance`, `net/tests/meet.rs`). The region you stand in is heard
+  through the frame *confirmed*, so with rollback the gate shuts whenever the
+  friend's inputs are more than `D` frames late -- one slow packet. The online
+  driver used to bring the books up to the confirmed frame only after it made
+  a frame, and a shut gate makes none: it never heard the late inputs arrive,
+  and every match with a friend froze a few seconds in. Now the books follow
+  the session's confirmed frame every tick, frame made or not.
 
 ## The watchdog (dev mode)
 

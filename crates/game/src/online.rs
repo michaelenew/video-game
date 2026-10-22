@@ -557,9 +557,10 @@ pub fn step(
     // **The region gate**, online as locally: the next frame goes ahead only
     // once every stream the world follows has said what it reads
     // (`docs/design/regions.md`; the crowd field's lookahead, 0018 S1).
-    // GGRS is not asked for a frame the ledger would hold.
-    ledger.tick();
-    if !ledger.may_advance(cur.frame + 1) {
+    // GGRS is not asked for a frame the ledger would hold, and the books are
+    // brought up to what is confirmed first, every tick (`net::may_advance`):
+    // a gate that heard only after an advance froze on the first late packet.
+    if !net::may_advance(ledger, session.confirmed_frame(), cur) {
         meter.now.stalls += 1;
         return;
     }
