@@ -691,7 +691,9 @@ pub fn draw_solid(
     let (white, (window, ghost)) = paints;
     let see = !solid.holds_the_camera();
     let paint = if see { window } else { white };
-    let mesh = meshes.add(mesh);
+    // Made for this box and drawn by nothing else, so held once, on the
+    // graphics card.
+    let mesh = meshes.add(crate::stream::drawn_only(mesh));
     let e = put(
         commands,
         under,
@@ -701,7 +703,7 @@ pub fn draw_solid(
             Transform::from_translation(at + offset),
         ),
     );
-    let relief = relief.map(|r| meshes.add(r));
+    let relief = relief.map(|r| meshes.add(crate::stream::drawn_only(r)));
     if see {
         let lo = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z));
         let hi = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));
