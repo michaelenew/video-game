@@ -151,3 +151,31 @@ the model itself simplified in value under the strokes, so the gaps are
 paint too; strokes sized by where the eye goes (broad on the cloak, fine at
 the face); and a few strokes flicked past the silhouette where GW2 lets an
 edge go.
+
+## 8. Smaller, and a quarter of the way to flame (2026-10-22)
+
+The owner's verdict on §7: *much too coarse and random looking; make the
+strokes more like the terrain's, and much smaller; bigger for broad open
+areas like a cape.* And the vision: the moment in animation when a cloak
+wisps and becomes flame at its hem -- with paint for flame, and the whole
+body held about a quarter of the way from fabric to flame.
+
+- **The land's stroke.** The body's strokes are now `splats.wgsl`'s: a
+  flat brush three to four times as long as it is wide, tapered and dry at
+  its ends by how loose it is, its edge broken by bristle noise, its colour
+  only a shift of what is under it (lighter or darker, warmer or cooler).
+  Loose at 0.3, so they lie near-parallel along each part, as the land's
+  built work does, and read as one hand's texture rather than scatter.
+- **A third the size** (3.4 cm wide on most of the body, about five times
+  as many), **twice that on the coat's panels**, a quarter more over the
+  chest, back and thighs, half on the face and hands, and fewer on the face
+  so the modelled face shows. None on the hair: its cards are strands
+  already, and a stroke over them was a block on the head.
+- **Wisps.** At the cloth's open edges -- the hem, a cuff, the hood's mouth
+  -- about one stroke in eight becomes a tongue of paint rooted on the cloth
+  and running out past the edge, down the slope of the distance to it,
+  lifted, curling, swaying and breathing in length on the renderer's clock;
+  full from its root, rounding off, its bristles giving out toward a dry
+  tip. Very rarely one lifts off the silhouette where it faces up. The first
+  try had a third of the outline's strokes lift off as long points and read
+  as a porcupine; a quarter of the way to flame is a soft fray, not spines.

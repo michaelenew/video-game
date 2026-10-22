@@ -14,7 +14,7 @@
     mesh_functions,
     skinning,
     mesh_view_bindings as views,
-    mesh_view_bindings::{view, view_transmission_texture, view_transmission_sampler},
+    mesh_view_bindings::{view, globals, view_transmission_texture, view_transmission_sampler},
     view_transformations::depth_ndc_to_view_z,
 }
 
@@ -53,7 +53,7 @@ struct In {
 struct Out {
     @builtin(position) clip: vec4<f32>,
     @location(0) corner: vec2<f32>,
-    // Its own number; how far it faces the eye; its aspect.
+    // Its own number; how far it faces the eye; whether it is a wisp.
     @location(1) seed: vec3<f32>,
     // Where its centre is on the screen (0 to 1), and how far its long and
     // short sides reach there, for reading the picture under it.
@@ -84,42 +84,74 @@ fn vertex(v: In) -> Out {
     let to_eye = normalize(view.world_position - centre);
     let facing = dot(n, to_eye);
 
+    let own = v.way.w;
+    let kind = v.size.w;
     var d = (view.view_from_world * vec4<f32>(way, 0.0)).xy;
     if (length(d) < 1e-4) {
         d = vec2<f32>(0.0, 1.0);
     }
     d = normalize(d);
-    // The painter's hand: every stroke leans toward one slant on the canvas.
-    // Only the angle -- the stroke stays where it is on the body.
-    let hand = normalize(vec2<f32>(0.55, 1.0));
-    if (dot(d, hand) < 0.0) {
-        d = -d;
-    }
-    // Not a stroke laid along an open edge (`size.z`): it keeps the edge.
-    d = normalize(mix(d, hand, 0.45 * (1.0 - v.size.z)));
-    // At the edge of the form a painter draws along the outline, not out of
-    // it: as the surface turns away the stroke turns to lie along it.
     var nv = (view.view_from_world * vec4<f32>(n, 0.0)).xy;
-    if (length(nv) > 1e-4) {
-        nv = normalize(nv);
-        var along = vec2<f32>(-nv.y, nv.x);
-        if (dot(along, d) < 0.0) {
-            along = -along;
+    let edge = 1.0 - smoothstep(0.1, 0.55, abs(facing));
+    var wisp = kind > 1.5;
+    if (!wisp) {
+        // The painter's hand: every stroke leans a little toward one slant
+        // on the canvas -- only its angle; it stays where it is on the body.
+        // Not one laid along an open edge (`size.z`): it keeps the edge.
+        let hand = normalize(vec2<f32>(0.55, 1.0));
+        if (dot(d, hand) < 0.0) {
+            d = -d;
         }
-        let edge = 1.0 - smoothstep(0.1, 0.55, abs(facing));
-        d = normalize(mix(d, along, edge));
+        d = normalize(mix(d, hand, 0.25 * (1.0 - v.size.z)));
+        if (length(nv) > 1e-4) {
+            let out_v = normalize(nv);
+            // At the outline, a third of the strokes lift off it as wisps;
+            // the rest lie along it, as a painter draws an edge.
+            // Rarely, and only where flame would rise: an edge facing sideways
+            // or up on the screen.
+            if (edge > 0.75 && own < 0.03 && out_v.y > 0.0) {
+                wisp = true;
+                d = out_v;
+            } else {
+                var along = vec2<f32>(-out_v.y, out_v.x);
+                if (dot(along, d) < 0.0) {
+                    along = -along;
+                }
+                d = normalize(mix(d, along, edge));
+            }
+        }
+    }
+    var len = v.size.y;
+    var wide = v.size.x * mix(0.5, 1.0, smoothstep(0.05, 0.5, abs(facing)));
+    if (wisp) {
+        // A wisp of paint, a quarter of the way to flame: it lifts as it
+        // leaves the cloth, sways, and breathes in length. On the renderer's
+        // clock, as `fx::flow` is: decoration on a body whose every place is
+        // the snapshot's.
+        let t = globals.time;
+        d = normalize(d + vec2<f32>(0.0, 0.7));
+        let sway = sin(t * 2.1 + own * 40.0) * 0.25 + sin(t * 3.7 + own * 13.0) * 0.1;
+        let cs = cos(sway);
+        let sn = sin(sway);
+        d = vec2<f32>(d.x * cs - d.y * sn, d.x * sn + d.y * cs);
+        len = len * (0.85 + 0.2 * sin(t * 2.9 + own * 17.0)) * select(1.0, 1.5, kind < 1.5);
+        wide = v.size.x;
     }
     let across = vec2<f32>(-d.y, d.x);
 
     // The card, square to the eye. Pulled toward the eye so the surface it
     // came from does not cut it, detail strokes more, so they lie on the
-    // masses.
-    let pull = brush.knobs.x * (1.0 + v.size.w);
+    // masses. A stroke's card has room round it for its bristles (the
+    // land's: a fifth along, four-fifths across); a wisp's root is on the
+    // body and its length runs out from there.
+    let pull = brush.knobs.x * (1.0 + min(kind, 1.0));
     let c = (view.view_from_world * vec4<f32>(centre + to_eye * pull, 1.0)).xyz;
-    // Narrower where the form turns away: an edge is drawn with the side of
-    // the brush, not by a stroke hanging off it into the air.
-    let wide = v.size.x * mix(0.45, 1.0, smoothstep(0.05, 0.5, abs(facing)));
-    let off = d * v.corner.x * v.size.y * 0.5 + across * v.corner.y * wide * 0.5;
+    var off: vec2<f32>;
+    if (wisp) {
+        off = d * (v.corner.x + 1.0) * 0.5 * len + across * v.corner.y * wide * 0.5;
+    } else {
+        off = d * v.corner.x * 1.2 * len * 0.5 + across * v.corner.y * 1.8 * wide * 0.5;
+    }
     out.clip = view.clip_from_view * vec4<f32>(c.xy + off, c.z, 1.0);
 
     // Where the picture is read: the stroke's own point, and a little way
@@ -131,7 +163,7 @@ fn vertex(v: In) -> Out {
     out.reach = vec4<f32>(to_screen(tip) - out.centre, to_screen(side) - out.centre);
     out.depth = c.z + pull;
     out.corner = v.corner;
-    out.seed = vec3<f32>(v.way.w, smoothstep(-0.15, 0.3, facing), v.size.y / max(v.size.x, 1e-4));
+    out.seed = vec3<f32>(v.way.w, smoothstep(-0.15, 0.3, facing), select(0.0, 1.0, wisp));
     return out;
 }
 
@@ -199,41 +231,75 @@ fn painted(centre: vec2<f32>, reach: vec4<f32>, depth: f32, own: f32) -> vec4<f3
     return vec4<f32>(colour * (1.0 + (own - 0.5) * 2.0 * brush.knobs.z), 1.0);
 }
 
+fn hash2(p: vec2<f32>) -> f32 {
+    var q = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);
+    q = q + dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+}
+
+fn noise2(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(hash2(i), hash2(i + vec2<f32>(1.0, 0.0)), u.x),
+        mix(hash2(i + vec2<f32>(0.0, 1.0)), hash2(i + vec2<f32>(1.0, 1.0)), u.x),
+        u.y,
+    );
+}
+
+// How freely the body's strokes lie (`brushwork::LOOSE`).
+const LOOSE: f32 = 0.3;
+
 @fragment
 fn fragment(in: Out) -> @location(0) vec4<f32> {
-    let seed = in.seed.x * 97.0;
-    let along = in.corner.x;
-    // A stroke is not straight: it bows a little, its own way.
-    let bow = (fract(seed * 0.37) - 0.5) * 0.5;
-    let across = in.corner.y - bow * (1.0 - along * along);
-    // Loaded at the head, thinning to the tail: full width through most of
-    // its length, a rounded head, a tapered tail.
-    let taper = mix(0.35, 1.0, smoothstep(-1.0, -0.2, along));
-    let headed = sqrt(max(1.0 - pow(max(along - 0.55, 0.0) / 0.45, 2.0), 0.0));
-    // Its sides waver, as a brush's do.
-    let waver = 0.9 + 0.08 * sin(along * 6.0 + seed) + 0.05 * sin(along * 13.0 - seed * 1.7);
-    if (abs(across) > taper * headed * waver) {
-        discard;
-    }
-    // Bristles: streaks along the stroke; toward the tail some carry no
-    // paint and the stroke breaks into dry brush.
-    let bristle = hash12(vec2<f32>(floor((in.corner.y * 0.5 + 0.5) * brush.knobs.w), seed));
-    let dry = smoothstep(-0.1, -1.0, along);
-    if (bristle < dry * 0.9 - 0.05) {
-        discard;
-    }
+    let own = in.seed.x;
+    let s1 = fract(own * 7.31);
+    let s2 = fract(own * 13.17);
     // Turning away, a stroke thins out stroke by stroke rather than all at
     // once: a dither fixed to the stroke, not to the screen.
-    if (hash12(vec2<f32>(seed, 3.1)) > in.seed.y) {
+    if (hash12(vec2<f32>(own * 97.0, 3.1)) > in.seed.y && in.seed.z < 0.5) {
         discard;
     }
-    let paint = painted(in.centre, in.reach, in.depth, in.seed.x);
+    var shade = 1.0;
+    if (in.seed.z < 0.5) {
+        // **The land's stroke** (`splats.wgsl`): along it `u`, across it `v`,
+        // bowed by its curve, its ends tapered and dry by how loose, its
+        // edge broken by the bristles.
+        let u = in.corner.x * 1.2;
+        let curve = (s1 - 0.5) * LOOSE * 0.8;
+        let v = in.corner.y * 1.8 - curve * u * u;
+        let taper = mix(1.0, sqrt(max(1.0 - u * u, 0.0)), 0.25 + 0.6 * LOOSE);
+        let bristle = noise2(vec2<f32>(u * 4.0 + s1 * 9.0, v * 5.0 + s2 * 9.0)) - 0.5;
+        let inside = abs(v) < taper * (1.0 + bristle * 0.35 * LOOSE) && abs(u) < 1.0 + bristle * 0.5;
+        if (!inside) {
+            discard;
+        }
+        shade = 0.85 + 0.15 * bristle * 2.0;
+    } else {
+        // **A wisp**: a tongue of paint from its root on the body to a dry
+        // tip, narrowing as it goes, its bristles giving out toward the end.
+        let t = in.corner.x * 0.5 + 0.5;
+        // Curling one way or the other as it rises.
+        let v = in.corner.y - (s1 - 0.5) * 1.4 * t * t;
+        let bristle = noise2(vec2<f32>(t * 6.0 + s1 * 9.0, v * 4.0 + s2 * 9.0)) - 0.5;
+        // Full from the root through half its length, then rounding off.
+        let width = sqrt(max(1.0 - pow(t, 2.2), 0.0)) * 0.9;
+        if (abs(v) > width * (1.0 + bristle * 0.5)) {
+            discard;
+        }
+        if (bristle + 0.5 < t * 1.1 - 0.35) {
+            discard;
+        }
+        shade = mix(0.9 + 0.2 * bristle, 1.18, t * 0.6);
+    }
+    let paint = painted(in.centre, in.reach, in.depth, own);
     if (paint.a < 0.5) {
         discard;
     }
-    // The bristles' streaks and a little more paint at the stroke's edges:
-    // what makes a flat colour read as brushed.
-    let ridge = 1.0 - 0.06 * smoothstep(0.6, 0.95, abs(across) / max(taper * headed, 0.05))
-        + 0.06 * (bristle - 0.5);
-    return vec4<f32>(paint.rgb * ridge, 1.0);
+    // A stroke's own small shift, as the land's: lighter or darker, warmer
+    // or cooler, so a flat colour reads as laid by a brush.
+    let warm = (s2 - 0.5) * 0.08;
+    let colour = paint.rgb * shade * vec3<f32>(1.0 + warm, 1.0, 1.0 - warm);
+    return vec4<f32>(colour, 1.0);
 }

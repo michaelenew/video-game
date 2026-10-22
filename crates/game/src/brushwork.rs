@@ -185,6 +185,11 @@ fn paint(
         }
         for (entity, (mesh, skin, material, name)) in found {
             let name = name.map(|n| n.0.clone()).unwrap_or_default();
+            // Not the hair: its cards are already strands, and a stroke
+            // laid over them is a block on the head.
+            if name.starts_with("hair") {
+                continue;
+            }
             let Some(base) = skins.get(&material.0).map(|s| &s.base) else {
                 continue;
             };
@@ -245,34 +250,63 @@ fn hash(k: u32) -> f32 {
     (x & 0x00FF_FFFF) as f32 / 16_777_215.0
 }
 
-/// How wide a stroke is, in metres, on most of the body: a broad flat
-/// brush, about a forearm's width.
-const BROAD: f32 = 0.10;
+/// How wide a stroke is, in metres, on most of the body: a small flat
+/// brush, the land's brush at the size a figure wants (2026-10-22, the
+/// owner: "much smaller", like the terrain's).
+const BROAD: f32 = 0.034;
 
-/// How much of the surface the strokes cover, counting overlap: about
-/// twice over, so few gaps show the underpainting and every one is small.
-const COVER: f32 = 1.8;
+/// How much of the surface the strokes cover, counting overlap: a little
+/// over once, so the strokes are a texture over the figure rather than
+/// patches on it.
+const COVER: f32 = 1.5;
 
 /// The painter's hand: every stroke is turned this far from its part's
 /// long axis (radians), so a sleeve's strokes run down it at a slant.
-const HAND: f32 = 0.5;
+const HAND: f32 = 0.35;
 
-/// How a stroke's size follows what it is on: the face and the hands are
-/// where the eye goes, and are painted in smaller strokes, fewer of them,
-/// so the model's own detail shows through.
+/// How freely the strokes lie, 0 to 1 (`look::strokes`' *loose*): low, so
+/// they sit near-parallel as the land's built work does, and read as one
+/// hand's brushwork rather than scatter.
+const LOOSE: f32 = 0.3;
+
+/// How a stroke's size follows what it is on: broad open cloth (the coat's
+/// panels, the back and chest) in a bigger brush; the face and the hands,
+/// where the eye goes, in a smaller one and fewer, so the model's own
+/// detail shows through. `(size, how many kept)`.
 fn focus(joint: usize) -> (f32, f32) {
-    if joint == Joint::Head.index() {
-        (0.4, 0.45)
+    if joint >= view::skeleton::JOINT_COUNT {
+        // A coat panel.
+        (1.9, 1.0)
+    } else if joint == Joint::Head.index() {
+        // The face is where the eye goes: left nearly as modelled.
+        (0.5, 0.2)
     } else if joint == Joint::HandL.index() || joint == Joint::HandR.index() {
         // And what they hold: a blade is read by its edge, and a stroke
         // over it smears it.
-        (0.4, 0.12)
+        (0.5, 0.12)
     } else if joint == Joint::Neck.index() {
-        (0.6, 0.8)
+        (0.7, 0.8)
+    } else if [
+        Joint::Chest,
+        Joint::Spine,
+        Joint::Root,
+        Joint::ThighL,
+        Joint::ThighR,
+    ]
+    .iter()
+    .any(|j| j.index() == joint)
+    {
+        (1.25, 1.0)
     } else {
         (1.0, 1.0)
     }
 }
+
+/// How close to an open edge (metres) a stroke may become a wisp, and how
+/// many there do: the cloth's hem going to paint, a quarter of the way
+/// from fabric to flame (the owner, 2026-10-22).
+const WISP_REACH: f32 = 0.03;
+const WISPS: f32 = 0.12;
 
 /// The strokes over one model piece: placed by area, evenly (stratified
 /// over the surface), each at a point of a triangle with that point's
@@ -355,8 +389,8 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         .map(|t| (v3(t[1]) - v3(t[0])).cross(v3(t[2]) - v3(t[0])).length() * 0.5)
         .collect();
     let total: f32 = area.iter().sum();
-    let mean_stroke = BROAD * BROAD * 2.7;
-    let count = ((total * COVER / mean_stroke) as usize).clamp(16, 6000);
+    let mean_stroke = BROAD * BROAD * 3.4;
+    let count = ((total * COVER / mean_stroke) as usize).clamp(16, 30_000);
     let mut running = Vec::with_capacity(area.len());
     let mut acc = 0.0;
     for a in &area {
@@ -405,12 +439,13 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
         if way.length_squared() < 1e-6 {
             way = normal.any_orthonormal_vector();
         }
-        let turn = HAND + (r(5) - 0.5) * 0.3;
+        let turn = HAND + (r(5) - 0.5) * LOOSE * 1.6;
         let way = Quat::from_axis_angle(normal, turn) * way.normalize();
         // Two sizes of brush: the masses, and smaller strokes laid over them.
-        let detail = r(6) < 0.35;
-        let mut width = BROAD * size * (0.75 + 0.5 * r(7)) * if detail { 0.55 } else { 1.0 };
-        let mut length = width * (1.6 + 0.8 * r(8));
+        let detail = r(6) < 0.3;
+        let free = 1.0 + (r(7) - 0.5) * LOOSE * 1.4;
+        let mut width = BROAD * size * free * if detail { 0.7 } else { 1.0 };
+        let mut length = width * (3.0 + 0.8 * r(8));
         // Near an open edge -- a hem, a cuff, the hood's mouth -- the stroke
         // lies along the edge and is no wider than the cloth left beside it,
         // so the edge is found rather than frayed.
@@ -429,6 +464,37 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
                 length = length.max(width * 1.6);
             }
         }
+        // At the cloth's edge, a wisp: a tongue of paint lifting off the
+        // hem, its root on the cloth and its length out past the edge, the
+        // way the cloth would go if it were flame (`brushwork.wgsl` lifts
+        // and sways it). Its direction is out of the cloth: down the slope
+        // of the distance to the edge.
+        let mut kind = if detail { 1.0 } else { 0.0 };
+        // Cloth only: not the hair's cards (every card is all edge), the
+        // face or what the hands hold.
+        let cloth = !name.starts_with("cards")
+            && !name.starts_with("hair")
+            && size >= 0.7
+            && joint != Joint::Neck.index();
+        if cloth && gap < WISP_REACH && r(10) < WISPS {
+            let (pa, pb, pc) = (v3(a), v3(b), v3(c));
+            let n2 = (pb - pa).cross(pc - pa);
+            let area2 = n2.length();
+            if area2 > 1e-10 {
+                let nh = n2 / area2;
+                let grad = (nh.cross(pc - pb) * open[a]
+                    + nh.cross(pa - pc) * open[b]
+                    + nh.cross(pb - pa) * open[c])
+                    / area2;
+                if let Some(out) = (-grad).try_normalize() {
+                    way = out;
+                    kind = 2.0;
+                    hug = 0.0;
+                    width = BROAD * size.min(1.3) * (1.0 + 0.4 * r(11));
+                    length = width * (1.8 + 1.0 * r(12));
+                }
+            }
+        }
         let base = p_out.len() as u32;
         for corner in [[-1.0f32, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]] {
             p_out.push(p.to_array());
@@ -436,7 +502,7 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
             uv_out.push(tex.to_array());
             c_out.push(corner);
             way_out.push([way.x, way.y, way.z, r(9)]);
-            brush_out.push([width, length, hug, if detail { 1.0 } else { 0.0 }]);
+            brush_out.push([width, length, hug, kind]);
             j_out.push(joints[near]);
             w_out.push(weights[near]);
         }
