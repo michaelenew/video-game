@@ -107,12 +107,10 @@ fn vertex(v: In) -> Out {
             let out_v = normalize(nv);
             // At the outline, a third of the strokes lift off it as wisps;
             // the rest lie along it, as a painter draws an edge.
-            // Rarely, and only where flame would rise: an edge facing sideways
-            // or up on the screen.
-            if (edge > 0.75 && own < 0.03 && out_v.y > 0.0) {
-                wisp = true;
-                d = out_v;
-            } else {
+            // The outline is where the form turns out of view, not where it
+            // ends: strokes there lie along it and stay inside it (the
+            // owner, 2026-10-22). Only a real edge of the cloth frays.
+            {
                 var along = vec2<f32>(-out_v.y, out_v.x);
                 if (dot(along, d) < 0.0) {
                     along = -along;
@@ -323,5 +321,12 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
         discard;
     }
     let here = (in.clip.xy - view.viewport.xy) / view.viewport.zw;
+    // **Inside the lines.** A stroke paints only where its own body is
+    // drawn -- not the wall past the outline, not an arm in front -- except
+    // a wisp off the hem, where the cloth really ends and the paint runs
+    // on by intent.
+    if (in.seed.z < 0.5 && ours(here, in.depth) < 0.5) {
+        discard;
+    }
     return vec4<f32>(mix(picture(here), colour, alpha), 1.0);
 }

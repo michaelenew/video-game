@@ -202,3 +202,16 @@ did, the Champion's fight had nothing, and his strokes read a white
 placeholder. So a stroke stays cut out (drawn in the transmissive pass,
 where the copy is always made) and does its own blending: its paint over
 the picture at its own pixel, which it already reads.
+
+## 10. Inside the lines (2026-10-22)
+
+The owner: *it's like you're colouring outside the lines. Any spillage
+needs to be intentional, like at the hem of a shirt or a cape where the
+object terminates, not just goes out of view.*
+
+The outline is where a form turns out of view; the hem is where it ends.
+Only the second may fray. So a stroke now paints a pixel only where its own
+body is drawn there (the depth under it within a few centimetres of its
+own -- not the wall past the outline, and not an arm crossing in front),
+and the wisps that lifted off the outline are gone. The hem's wisps are the
+one exception: they run on past the cloth's real edge by intent.
