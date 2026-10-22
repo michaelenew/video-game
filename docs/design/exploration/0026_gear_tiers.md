@@ -116,3 +116,10 @@ The owner: *"Try the extra brushwork on the high tier sample weapon."*
   staying rooted on the blade, so it reads as a weapon shedding paint, not
   a texture. Busy, and pale: the strokes take the blade's near-white. A
   gold blade would shed gold.
+
+**Verdict** (the owner, the same day): *"that ain't it, but the more subtle
+painting is fine."* The strokes leaving the surface are gone. What stays: a
+marked surface is painted all over, six times as densely, and its strokes
+keep inside its lines like everything else's -- the blade's surface
+brushed, not the air round it. The marker, its export and the denser
+painting are kept, for whatever a legendary turns out to be.

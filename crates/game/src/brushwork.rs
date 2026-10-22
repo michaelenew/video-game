@@ -320,11 +320,12 @@ fn focus(joint: usize) -> (f32, f32) {
 /// from fabric to flame (the owner, 2026-10-22).
 const WISP_REACH: f32 = 0.03;
 
-/// On what dissolves into paint (a legendary, exploration 0026): how many
-/// strokes it gets on top of its share of the cloth's, as a multiple, and
-/// how many of them leave the surface.
+/// On what is marked for paint (a legendary, exploration 0026): how many
+/// strokes it gets on top of its share of the cloth's, as a multiple. They
+/// stay on it: strokes leaving the surface were tried and refused (the
+/// owner, 2026-10-22: "that ain't it, but the more subtle painting is
+/// fine").
 const DISSOLVE_DENSE: f32 = 6.0;
-const DISSOLVE: f32 = 0.65;
 
 /// The rim of a thickened sheet (`openness`): an edge no longer than this
 /// (metres; the panels are 4 mm thick, the cloth's own edges 2 cm and up)
@@ -561,16 +562,6 @@ fn place(mesh: &Mesh, name: &str, model: u32) -> Option<Mesh> {
                     length = width * (1.8 + 1.0 * r(12));
                 }
             }
-        }
-        // **Dissolving into paint** (exploration 0026): a legendary's
-        // strokes leave its surface -- tongues of paint lifting off it the
-        // way the hem's do, but from all of it, and as many as stay on.
-        if dissolving > 0.3 && r(13) < DISSOLVE * dissolving {
-            way = normal;
-            kind = 3.0;
-            hug = 0.0;
-            width = BROAD * (0.7 + 0.6 * r(14));
-            length = width * (2.0 + 2.5 * r(15));
         }
         let base = p_out.len() as u32;
         for corner in [[-1.0f32, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]] {

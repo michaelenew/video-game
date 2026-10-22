@@ -139,6 +139,7 @@ way from fabric to flame.*
 | Finding a hem only as an edge with one triangle on it | every garment is built thickened, so it found none: no class frayed (0025 §11) |
 | Every rim of a thickened shell as a hem | a belt, a strap, a collar are nearly all rim (0025 §11) |
 | Variation as a plain multiply of the colour | on black cloth it is nothing (0025 §11) |
+| Strokes flying off a legendary weapon, all along it | *"that ain't it"*; the denser strokes kept on its surface are fine (0026 §5) |
 
 ### 4.3 The recipe
 

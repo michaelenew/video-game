@@ -161,8 +161,7 @@ fn vertex(v: In) -> Out {
     out.reach = vec4<f32>(to_screen(tip) - out.centre, to_screen(side) - out.centre);
     out.depth = c.z + pull;
     out.corner = v.corner;
-    // 0 a stroke, 1 a wisp off a hem, 2 paint leaving a legendary.
-    out.seed = vec3<f32>(v.way.w, smoothstep(-0.15, 0.3, facing), select(0.0, 1.0, wisp) + select(0.0, 1.0, kind > 2.5));
+    out.seed = vec3<f32>(v.way.w, smoothstep(-0.15, 0.3, facing), select(0.0, 1.0, wisp));
     return out;
 }
 
@@ -371,7 +370,7 @@ fn fragment(in: Out) -> @location(0) vec4<f32> {
         if (alpha < 0.1) {
             discard;
         }
-    } else if (in.seed.z < 1.5 && ours(here, in.depth) > 0.5) {
+    } else if (ours(here, in.depth) > 0.5) {
         // A wisp runs on into the air past the cloth's end, never onto
         // other cloth of the same body: a bodice's edge lies on the coat,
         // and a tongue of red up the black coat is the bleed the owner
