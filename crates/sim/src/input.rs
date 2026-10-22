@@ -182,9 +182,10 @@ impl Travel {
     /// cccc` while there were two seats; [`Travel::from_two_seats`] reads a
     /// byte written that way.
     const CLASS: u16 = 0x20;
-    /// The high byte's mark of an admission rather than a class change: no
-    /// seat reaches it (a class change's high byte holds seat bits past two).
-    const ADMIT: u16 = 0x80;
+    /// The high byte's mark of an admission, on [`Travel::READY`]'s byte.
+    const ADMIT: u16 = 0x40;
+    /// An admission's seat bits in the high byte: seats up to eight.
+    const ADMIT_SEATS: u16 = 0x38;
     const SEAT_SHIFT: u16 = 3;
     const SEATS: u16 = 0x18;
     const CLASS_INDEX: u16 = 0x07;
@@ -230,14 +231,17 @@ impl Travel {
         }
     }
 
-    /// Seat `seat` is taken, mid-fight, by a newcomer playing `class`: a
-    /// class change's byte with [`Travel::ADMIT`] in the high byte.
+    /// Seat `seat` is taken, mid-fight, by a newcomer playing `class`:
+    /// [`Travel::READY`]'s byte with `01ss sccc` in the high byte -- every
+    /// other byte's high byte is spoken for, a class change's by seats up to
+    /// a thousand.
     pub const fn admit(seat: usize, class: crate::Class) -> Travel {
         Travel(
-            Travel::CLASS
-                | ((seat as u16) << Travel::SEAT_SHIFT & Travel::SEATS)
-                | (class as u16 & Travel::CLASS_INDEX)
-                | Travel::ADMIT << 8,
+            Travel::READY_BYTE
+                | (Travel::ADMIT
+                    | ((seat as u16) << Travel::SEAT_SHIFT & Travel::ADMIT_SEATS)
+                    | (class as u16 & Travel::CLASS_INDEX))
+                    << 8,
         )
     }
 
@@ -297,7 +301,7 @@ impl Travel {
         // An item, fed or granted: a credit's byte with the item in the
         // high byte.
         let low = self.0 & Travel::LOW;
-        if self.0 >> 8 != 0 && low >= Travel::CREDIT && low < Travel::CLASS {
+        if self.0 >> 8 != 0 && low >= Travel::CREDIT && low < Travel::READY_BYTE {
             let s = SpeciesId((low - Travel::CREDIT) as u8);
             let high = self.0 >> 8;
             let item = match (high & !Travel::FED) as usize {
@@ -317,8 +321,22 @@ impl Travel {
         if low == Travel::CAIRN {
             return Some(Destination::Cairn((self.0 >> 8) as u8));
         }
-        // A high byte on anything but a class change is no request at all.
+        // An admission, by its high byte on the ready byte.
         let high = self.0 >> 8;
+        if low == Travel::READY_BYTE && high != 0 {
+            let index = (high & Travel::CLASS_INDEX) as usize;
+            if high & !(Travel::ADMIT | Travel::ADMIT_SEATS | Travel::CLASS_INDEX) != 0
+                || high & Travel::ADMIT == 0
+                || index >= crate::class::ALL_CLASSES.len()
+            {
+                return None;
+            }
+            return Some(Destination::Admit {
+                seat: ((high & Travel::ADMIT_SEATS) >> Travel::SEAT_SHIFT) as usize,
+                class: crate::class::ALL_CLASSES[index],
+            });
+        }
+        // A high byte on anything but a class change is no request at all.
         if high != 0 && self.0 & (Travel::HUNT | Travel::ARENA | Travel::CLASS) != Travel::CLASS {
             return None;
         }
@@ -338,12 +356,6 @@ impl Travel {
                 let index = (b & Travel::CLASS_INDEX) as usize;
                 if index >= crate::class::ALL_CLASSES.len() {
                     return None;
-                }
-                if high & Travel::ADMIT != 0 {
-                    return Some(Destination::Admit {
-                        seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT) as usize,
-                        class: crate::class::ALL_CLASSES[index],
-                    });
                 }
                 Some(Destination::Class {
                     seat: ((b & Travel::SEATS) >> Travel::SEAT_SHIFT | high << 2) as usize,
