@@ -128,8 +128,18 @@ pub fn draw(
         .anchor(corner, offset)
         .resizable(false)
         .collapsible(false)
-        .default_width(380.0)
+        // **Two columns** (2026-10-22): one ran down past the bottom of a
+        // page's canvas, and egui pushed it up over the class buttons.
+        // Playing others on the left, the fight on the right -- and never
+        // taller than the room under the class buttons: what does not fit
+        // scrolls, so the window stays where it is anchored on any screen.
+        .default_width(760.0)
         .show(ctx, |ui| {
+            let room = (ctx.screen_rect().height() - offset.y - 48.0).max(160.0);
+            egui::ScrollArea::vertical().max_height(room).show(ui, |ui| {
+            ui.columns(2, |cols| {
+            let [left, right] = cols else { return };
+            let ui = left;
             ui.heading("Play a friend");
             ui.add_space(4.0);
             match sim.driver.room().cloned() {
@@ -209,10 +219,7 @@ pub fn draw(
                 }
             }
             details(ui, &mut menu, &sim, now);
-            stages(ui, &mut sim);
-            dummy(ui, &mut sim);
-            fast_travel(ui, &mut sim, &cairns);
-            volume(ui, &mut settings);
+            input_delay(ui, &mut settings);
             ui.separator();
             ui.heading("Replay");
             ui.add_space(4.0);
@@ -240,7 +247,43 @@ pub fn draw(
             );
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
+            let ui = right;
+            stages(ui, &mut sim);
+            dummy(ui, &mut sim);
+            fast_travel(ui, &mut sim, &cairns);
+            volume(ui, &mut settings);
+            });
+            });
         });
+}
+
+/// **Input delay online**: how many frames your own presses wait, so they
+/// reach the others before they are needed -- fewer stalls and fewer jumps
+/// for that many frames on your own hands. Saved as it moves; a match takes
+/// it as it starts (`online::meet`), so a change waits for the next one.
+fn input_delay(ui: &mut egui::Ui, settings: &mut crate::settings::Settings) {
+    use crate::settings::MAX_INPUT_DELAY;
+    ui.separator();
+    ui.heading("Online");
+    ui.add_space(4.0);
+    let mut delay = settings.input_delay;
+    ui.horizontal(|ui| {
+        ui.label("Input delay");
+        ui.add(
+            egui::Slider::new(&mut delay, 0..=MAX_INPUT_DELAY)
+                .custom_formatter(|v, _| format!("{v:.0} frames ({:.0} ms)", v * 1000.0 / 60.0)),
+        );
+    });
+    ui.label(
+        egui::RichText::new(
+            "Your presses wait this long so they reach your friends in time: fewer freezes and jumps. From the next match.",
+        )
+        .weak(),
+    );
+    if delay != settings.input_delay {
+        settings.input_delay = delay;
+        settings.save();
+    }
 }
 
 /// **Volume**: the master volume as a slider, in the tenths Page Up and Page
