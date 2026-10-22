@@ -65,7 +65,8 @@ Requirements 2 and 3 above are performance claims, so they get numbers and tests
 
 A rendered frame at 60 Hz is **16.7 ms**, and the simulation is the part of it that runs
 more than once. A rollback restores a snapshot and re-simulates every frame since the peer
-and this machine stopped agreeing — up to `net::MAX_ROLLBACK_FRAMES`, eight — taking a
+and this machine stopped agreeing — up to `net::MAX_ROLLBACK_FRAMES`, twelve (eight until
+2026-10-22, when four friends' far inputs ran seven frames late against it) — taking a
 fresh snapshot for each, all inside one frame that still has to draw a picture at the end.
 So a cost that reads as harmless per frame arrives multiplied, and it arrives at the worst
 possible moment: mid-rollback, which is to say while the connection is already struggling.
@@ -74,8 +75,8 @@ The frame is divided accordingly:
 
 | Part | Budget | Why |
 | --- | --- | --- |
-| One rollback burst | ¼ frame | Eight advances, eight saves and a restore, worst case |
-| One `World::advance` | ¹⁄₃₂ frame | The burst budget, shared across the window |
+| One rollback burst | ¼ frame | Twelve advances, twelve saves and a restore, worst case |
+| One `World::advance` | ¹⁄₄₈ frame | The burst budget, shared across the window |
 | One frame of `view` | ⅛ frame | Interpolation, camera and posing run once per picture |
 | The renderer | The rest | It is the part that talks to the GPU |
 
