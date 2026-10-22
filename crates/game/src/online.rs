@@ -241,20 +241,36 @@ fn room_of(opts: &Options) -> Option<Room> {
 /// -- written into the link. The match then starts from the world that link
 /// describes, built the way the friend who opens it will build it, so the two
 /// agree even where the link could not say everything about the practice.
-pub fn create(sim: &mut crate::Sim) {
+///
+/// **For `players`**, two to four, chosen beside the button: a room is for as
+/// many as its link says, and the practice only ever has two, so without the
+/// choice every room made here was for two and a third friend was turned
+/// away (2026-10-22). Seats the practice did not have are the first seat's
+/// class, as `--p3` and `--p4` are when not given.
+pub fn create(sim: &mut crate::Sim, players: u8) {
+    let opts = room_settings(&sim.cur, players);
+    enter(sim, &opts);
+}
+
+/// The settings a room made from the Esc menu carries: a fresh name and
+/// secret, the fight `practice` is, and how many play.
+fn room_settings(practice: &World, players: u8) -> Options {
     let mut opts = Options::default();
     opts.set("room", &net::seal::letters(6));
     opts.set("key", &net::seal::letters(26));
-    for (name, value) in crate::picker::describe(&sim.cur) {
+    for (name, value) in crate::picker::describe(practice) {
         opts.set(name, &value);
     }
+    // Always said, so a room for two made after a match for four is for two.
+    let players = players.clamp(2, sim::state::MAX_PLAYERS as u8);
+    opts.set("players", &players.to_string());
     // How this run meets: the same brokers it was told to use, if any.
     for name in ["board", "broker"] {
         if let Some(value) = platform::value(name) {
             opts.set(name, value);
         }
     }
-    enter(sim, &opts);
+    opts
 }
 
 /// **Join a room** from a link a friend sent, pasted into the Esc menu.
@@ -557,9 +573,10 @@ pub fn step(
     // **The region gate**, online as locally: the next frame goes ahead only
     // once every stream the world follows has said what it reads
     // (`docs/design/regions.md`; the crowd field's lookahead, 0018 S1).
-    // GGRS is not asked for a frame the ledger would hold.
-    ledger.tick();
-    if !ledger.may_advance(cur.frame + 1) {
+    // GGRS is not asked for a frame the ledger would hold, and the books are
+    // brought up to what is confirmed first, every tick (`net::may_advance`):
+    // a gate that heard only after an advance froze on the first late packet.
+    if !net::may_advance(ledger, session.confirmed_frame(), cur) {
         meter.now.stalls += 1;
         return;
     }
@@ -700,5 +717,33 @@ fn relay_the_crowd(
     }
     for a in post.collect(cur.frame, sim::tuning::crowd_epoch()) {
         ledger.offer(a);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **A room made from the menu is for the players chosen**, whatever the
+    /// practice had: the link says so, and the world it starts seats them all.
+    #[test]
+    fn a_room_from_the_menu_is_for_as_many_as_were_chosen() {
+        let practice = crate::start_world(&Options::default(), crate::Dummy::Human);
+        assert_eq!(practice.present(), 2);
+        for players in 2..=4u8 {
+            let opts = room_settings(&practice, players);
+            assert_eq!(crate::chosen_players(&opts), players);
+            assert!(
+                link_of(&opts).contains(&format!("players={players}")),
+                "the link for {players}: {}",
+                link_of(&opts)
+            );
+            let world = crate::start_world(&opts, crate::Dummy::Human);
+            assert_eq!(world.present(), players as usize, "{players} seated");
+        }
+        // And back to two after a match for four.
+        let four = crate::start_world(&room_settings(&practice, 4), crate::Dummy::Human);
+        let opts = room_settings(&four, 2);
+        assert_eq!(crate::start_world(&opts, crate::Dummy::Human).present(), 2);
     }
 }

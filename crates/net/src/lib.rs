@@ -31,6 +31,7 @@ pub mod seal;
 pub use ggrs;
 pub use ggrs_glue::{
     NetInput, SessionConfig, handle_requests, handle_requests_kept, handle_requests_watched,
+    may_advance,
 };
 pub use meet::{Mesh, Progress, Rendezvous, Seat};
 

@@ -669,8 +669,7 @@ fn leaders_post_their_aggregates_over_the_mesh_and_the_rest_collect_them_in_agre
             if session.current_state() != net::ggrs::SessionState::Running || world.frame >= until {
                 continue;
             }
-            ledger.tick();
-            if !ledger.may_advance(world.frame + 1) {
+            if !net::may_advance(ledger, session.confirmed_frame(), world) {
                 continue;
             }
             let input = Input::aimed(Input::W, (*handle as u16) << 14);
@@ -758,4 +757,73 @@ fn leaders_post_their_aggregates_over_the_mesh_and_the_rest_collect_them_in_agre
         let mine: Vec<_> = ledger.followed().iter().map(|f| f.region).collect();
         assert_eq!(mine, first, "player {} follows other streams", handle + 1);
     }
+}
+
+/// **A friend's inputs arrive late, once, and the match goes on.** Two play,
+/// keeping the region books as the game does; a little way in, player two's
+/// machine goes quiet for a fifth of a second -- one slow packet on an
+/// ordinary line -- so player one runs ahead of what is confirmed by more
+/// than the region gate's delay. When the inputs arrive, both carry on.
+///
+/// They did not, once: the books were brought up to the confirmed frame only
+/// after a frame was advanced, so the gate, shut for the late inputs, never
+/// heard they had come and never opened again. Every match with a friend
+/// froze a few seconds in, on the first hiccup (2026-10-22).
+#[test]
+fn a_late_packet_does_not_shut_the_region_gate_for_good() {
+    use std::time::{Duration, Instant};
+    const QUIET_AT: u32 = 100;
+    const QUIET: Duration = Duration::from_millis(200);
+    const UNTIL: u32 = 400;
+    let seats = mesh(2, &[11, 22]);
+    let mut peers: Vec<_> = seats
+        .into_iter()
+        .map(|s| {
+            let h = s.handle;
+            let start = World::with_classes([sim::Class::Champion; 2]);
+            let ledger = regions::Ledger::new(&start, h, false);
+            (p2p::start(s).expect("session"), start, h, ledger)
+        })
+        .collect();
+    let mut quiet_until: Option<Instant> = None;
+    let began = Instant::now();
+    while began.elapsed() < Duration::from_secs(20) {
+        for (session, world, handle, ledger) in peers.iter_mut() {
+            if *handle == 1 {
+                if world.frame == QUIET_AT && quiet_until.is_none() {
+                    quiet_until = Some(Instant::now() + QUIET);
+                }
+                if quiet_until.is_some_and(|t| Instant::now() < t) {
+                    continue;
+                }
+            }
+            session.poll_remote_clients();
+            if session.current_state() != net::ggrs::SessionState::Running || world.frame >= UNTIL {
+                continue;
+            }
+            if !net::may_advance(ledger, session.confirmed_frame(), world) {
+                continue;
+            }
+            let input = Input::aimed(Input::W, (*handle as u16) << 14);
+            if session
+                .add_local_input(*handle, NetInput::from(input))
+                .is_err()
+            {
+                continue;
+            }
+            if let Ok(requests) = session.advance_frame() {
+                handle_requests_kept(world, requests, ledger, |_, _, _| {});
+            }
+        }
+        if peers.iter().all(|p| p.1.frame >= UNTIL) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(quiet_until.is_some(), "player two never went quiet");
+    let frames: Vec<u32> = peers.iter().map(|p| p.1.frame).collect();
+    assert!(
+        frames.iter().all(|&f| f >= UNTIL),
+        "the match froze after a late packet: frames {frames:?}"
+    );
 }
