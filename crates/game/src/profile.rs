@@ -1,8 +1,11 @@
 //! A frame-cost readout, on request: `--profile`.
 //!
 //! Every two seconds, to the log: the frame time, how many entities there
-//! are and how many of the meshes are actually on screen, and -- where the
-//! driver can time its own work -- what each render pass cost the GPU. It is
+//! are and how many of the meshes are actually on screen, what the meshes
+//! weigh (on the graphics card, and how much of it is held a second time in
+//! main memory), what is streamed in, how much memory the process holds,
+//! and -- where the driver can time its own work -- what each render pass
+//! cost the GPU. It is
 //! what turns "the game feels heavy" into a list of passes with numbers
 //! beside them, and it is off unless asked for because the readout itself
 //! is not free.
@@ -28,8 +31,10 @@ impl Plugin for ProfilePlugin {
             EntityCountDiagnosticsPlugin,
             RenderDiagnosticsPlugin,
         ))
+        .init_resource::<Weights>()
         .add_systems(Startup, experiment.after(crate::setup))
-        .add_systems(Update, (census, heaviest, quit_after, casters));
+        .add_systems(Update, (census, heaviest, quit_after, casters))
+        .add_systems(PostUpdate, weigh.after(bevy::asset::AssetEvents));
         if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
             render.add_systems(bevy::render::Render, pipelines);
         }
@@ -77,14 +82,60 @@ fn pipelines(
     *seen = all.len();
 }
 
+/// **What every mesh weighs**: its triangles and its bytes, by mesh, noted
+/// the frame it is made. A mesh made to be drawn and nothing else
+/// (`RenderAssetUsages::RENDER_WORLD`) leaves `Assets<Mesh>` once it is on
+/// the graphics card, so after that frame there is nothing left to count it
+/// by; this is how the census still can.
+#[derive(Resource, Default)]
+struct Weights(HashMap<AssetId<Mesh>, (usize, usize)>);
+
+/// Bytes a mesh holds: its vertices and its indices.
+fn bytes_of(m: &Mesh) -> usize {
+    let indices = match m.indices() {
+        Some(bevy::render::mesh::Indices::U16(i)) => i.len() * 2,
+        Some(bevy::render::mesh::Indices::U32(i)) => i.len() * 4,
+        None => 0,
+    };
+    m.get_vertex_buffer_size() + indices
+}
+
+/// Note each mesh as it is made or changed, and forget it once nothing holds
+/// it. After `AssetEvents`, which is when this frame's are told, and before
+/// the render world takes the drawn-only ones away at the frame's end.
+fn weigh(
+    mut events: EventReader<AssetEvent<Mesh>>,
+    meshes: Res<Assets<Mesh>>,
+    mut weights: ResMut<Weights>,
+) {
+    for event in events.read() {
+        match *event {
+            AssetEvent::Added { id } | AssetEvent::Modified { id } => {
+                if let Some(m) = meshes.get(id) {
+                    let tris = m.indices().map_or(0, |i| i.len() / 3);
+                    weights.0.insert(id, (tris, bytes_of(m)));
+                }
+            }
+            AssetEvent::Unused { id } => {
+                weights.0.remove(&id);
+            }
+            _ => {}
+        }
+    }
+}
+
 /// How many meshes there are, and how many the camera can see, every two
 /// seconds. Pools are fixed and mostly hidden, so the two numbers are far
 /// apart on purpose; what matters is whether the second one is reasonable.
+#[allow(clippy::too_many_arguments)] // A Bevy system: one argument per resource it reads.
 fn census(
     time: Res<Time>,
     mut last: Local<f32>,
     store: Res<DiagnosticsStore>,
     still: Res<crate::still::Maps>,
+    weights: Res<Weights>,
+    assets: Res<Assets<Mesh>>,
+    stream: Res<crate::stream::Stream>,
     meshes: Query<(&ViewVisibility, &Visibility), With<Mesh3d>>,
     casters: Query<&ViewVisibility, (With<Mesh3d>, Without<bevy::pbr::NotShadowCaster>)>,
 ) {
@@ -116,6 +167,41 @@ fn census(
     eprintln!(
         "meshes: {total} pooled, {shown} not hidden, {seen} in view, {cast} of those cast shadows"
     );
+    // **What the meshes cost in memory**: every mesh alive is on the
+    // graphics card; the ones also in `Assets<Mesh>` are held a second time
+    // in main memory.
+    let mb = |b: usize| b as f32 / (1024.0 * 1024.0);
+    let gpu: usize = weights.0.values().map(|w| w.1).sum();
+    let (kept, kept_bytes) = assets
+        .iter()
+        .fold((0, 0), |(n, b), (_, m)| (n + 1, b + bytes_of(m)));
+    eprintln!(
+        "mesh memory: {} meshes, {:.1} MB on the GPU; {kept} of them also in main memory, {:.1} MB",
+        weights.0.len(),
+        mb(gpu),
+        mb(kept_bytes)
+    );
+    let s = stream.census();
+    eprintln!(
+        "streamed: {} places, {} boxes and {} blocks of them in {} meshes, {} land tiles and {} blocks, {} giants drawn, their {} meshes {:.1} MB",
+        s.places,
+        s.boxes,
+        s.merged,
+        s.merged_meshes,
+        s.tiles,
+        s.blocks,
+        s.giants,
+        s.built.len(),
+        mb(s.built
+            .iter()
+            .filter_map(|id| weights.0.get(id))
+            .map(|w| w.1)
+            .sum()),
+    );
+    match crate::platform::memory_bytes() {
+        Some(b) => eprintln!("process memory: {:.0} MB", mb(b as usize)),
+        None => eprintln!("process memory: not read on this platform"),
+    }
 }
 
 /// The render settings, overridable from the command line so one build can
@@ -259,7 +345,7 @@ fn casters(
 fn heaviest(
     time: Res<Time>,
     mut done: Local<usize>,
-    meshes: Res<Assets<Mesh>>,
+    weights: Res<Weights>,
     all: Query<(
         Entity,
         &Mesh3d,
@@ -282,12 +368,7 @@ fn heaviest(
         .single()
         .map(|c| c.translation())
         .unwrap_or_default();
-    let tris = |m: &Mesh3d| {
-        meshes
-            .get(&m.0)
-            .and_then(|m| m.indices())
-            .map_or(0, |i| i.len() / 3)
-    };
+    let tris = |m: &Mesh3d| weights.0.get(&m.0.id()).map_or(0, |w| w.0);
     // What a mesh is, as far as anybody named it: its own name or the
     // nearest named thing it hangs off.
     let named = |mut e: Entity| {

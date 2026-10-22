@@ -357,7 +357,7 @@ pub fn interpolate(prev: &World, cur: &World, alpha: f32) -> Frame {
         sim_frame: cur.frame,
         round_left: match cur.phase {
             sim::state::Phase::RoundOver { left, .. } => Some(left),
-            sim::state::Phase::Fighting => None,
+            sim::state::Phase::Fighting | sim::state::Phase::Picking { .. } => None,
         },
     }
 }

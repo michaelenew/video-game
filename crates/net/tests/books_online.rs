@@ -185,7 +185,7 @@ fn play(n: usize, slow: u64, seed: u64, frames: u32, trip: impl Fn(usize, u32) -
                 }
             }
             for a in p.post.collect(p.world.frame, epoch_frames) {
-                p.ledger.offer(a);
+                p.ledger.offer_heard(a);
             }
         }
         if peers.iter().all(|p| p.done >= frames) {

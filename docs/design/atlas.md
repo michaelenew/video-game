@@ -275,9 +275,27 @@ snow high up a mountain — with the road worn in (`Palette::trodden`), and
 patches across a meadow. Water is a surface over the tiles under it. A tile
 is built, rebuilt finer or coarser, or dropped as the camera moves, nearest
 first, up to 24 a frame and no more than 3 ms of it; the land is drawn out to 300–700 m (the sky's reach, a
-fifth more). Trees are three shared meshes — a trunk, a pine's cone, a
+fifth more). **Past 200 m the land is drawn a block at a time** (`BLOCK`,
+4×4 tiles): one mesh at the fineness its nearest point asks, built in place
+of its tiles -- or back into its tiles, all sixteen in one frame -- so the
+far land is a few hundred pieces rather than four thousand. Each tile of a
+block keeps its water and, where the brush is laid as splats, its strokes.
+Trees are three shared meshes — a trunk, a pine's cone, a
 broadleaf's crown — and a few materials, so a wood of a thousand trees costs
 little.
+
+**The grown giants are drawn at four levels** (`grove::LEVELS`, 100, 250 and
+450 m to the nearest of the tree's box): past each, nothing finer than
+`grove::detail_at` that distance shows is drawn -- a pixel at 1080 lines in
+the plain look, the paint's brush in a painted one. A branch thinner is left
+to its parent, which the pipe model makes as thick as all it bears; a run of
+a limb bent less than that is one tube; rounds and rings get fewer faces;
+leaf clumps closer than four times it are one clump of the same area. The
+switch is hard, a little further out going coarser than coming finer. The
+far levels are kept while the tree is in reach; the full one only while it
+is drawn. The fourteen giants are about 916,000 triangles up close and
+300,000 past 450 m in the plain look, 65,000--180,000 in the painted ones
+(`grove::tests::every_level_is_a_saving`).
 
 
 In the valley, the renderer draws two kinds of piece, each loaded when the
@@ -287,7 +305,12 @@ another 60 m (so the edge never flickers):
 - **A place**: its floor, the patches on it, its props, what is scattered on
   its floor, its seams, under one entity.
 - **A box**: each box of the map on its own, found through the tiles round
-  the camera, so loading reads the tiles near the camera and not the map.
+  the camera, so loading reads the tiles near the camera and not the map --
+  **until its block is 160 m off** (`MERGED_FROM`): then every box of the
+  block is drawn as one of a few meshes, one for each paint, shadow and
+  vertex layout, built in place of the boxes and split back into them in one
+  frame. A box wider than a block, a tree's trunk and a giant's box are never
+  merged.
 
 Building is spread over frames: the nearest place and the 48 nearest boxes
 still wanted, each frame, until everything in reach is drawn -- and boxes and

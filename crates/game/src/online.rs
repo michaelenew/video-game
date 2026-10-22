@@ -15,12 +15,14 @@
 //!
 //!     game --port 47811 --peer 192.168.1.20:47812
 //!
-//! Either way the run starts in [`Driver::Meeting`]: the fight runs as
-//! training while `net::meet` finds the other player, checks that the two of
-//! you are running the same build on the same settings, and agrees who is
-//! player one. Then both clients start the match from the same world and
-//! every tick goes through GGRS, which owns when to save, load and advance --
-//! the simulation only has to do those three things correctly.
+//! **A room** is [`Driver::Room`] for as long as it is open (`net::lobby`,
+//! `net::drop_in`; `docs/design/versus.md` §6): played as training until
+//! somebody else is in it, then online, and people come and go whenever they
+//! like -- each change of who is in it a new GGRS session from the world at
+//! the frame it happened. **Two desktops by address** start in
+//! [`Driver::Meeting`], meet once, and play one session. Either way every
+//! tick goes through GGRS, which owns when to save, load and advance -- the
+//! simulation only has to do those three things correctly.
 //!
 //! **Which way of meeting is the one thing here that differs by platform**,
 //! and it is chosen in [`start`]: a room is `net::browser` in a page and
@@ -81,6 +83,22 @@ pub enum Driver {
         roster: Vec<u64>,
         post: net::crowd::Post,
     },
+    /// **A room** (`net::lobby`): people come into it and leave it whenever
+    /// they like, up to its size, and its session changes with them
+    /// (`net::drop_in`). Played as training until there is a session; the
+    /// first one starts from `start`, the link's world.
+    Room {
+        play: Box<net::drop_in::DropIn>,
+        start: Box<World>,
+        room: Room,
+        desynced: bool,
+        gone: bool,
+        quiet: bool,
+        /// See [`pace`].
+        paced: u32,
+        /// See [`Meter`].
+        meter: Meter,
+    },
 }
 
 /// **The link, counted a second at a time**, onto the tape
@@ -110,6 +128,10 @@ impl Driver {
     pub fn local_player(&self) -> usize {
         match self {
             Driver::Online { handle, .. } => (*handle).min(sim::state::MAX_PLAYERS - 1),
+            // In a room, the world seat the lineup gave this player.
+            Driver::Room { play, .. } if play.session.is_some() => {
+                play.seat().min(sim::state::MAX_PLAYERS - 1)
+            }
             _ => 0,
         }
     }
@@ -118,13 +140,18 @@ impl Driver {
     /// outside a tick -- a restart, a class change, a rewind -- would edit it
     /// on one machine only, so all of those ask this first.
     pub fn online(&self) -> bool {
-        matches!(self, Driver::Online { .. })
+        match self {
+            Driver::Online { .. } => true,
+            Driver::Room { play, .. } => play.session.is_some(),
+            _ => false,
+        }
     }
 
     /// The room this client is in, while it is meeting or playing in one.
     pub fn room(&self) -> Option<&Room> {
         match self {
             Driver::Meeting { room, .. } | Driver::Online { room, .. } => room.as_ref(),
+            Driver::Room { room, .. } => Some(room),
             _ => None,
         }
     }
@@ -135,6 +162,7 @@ impl Driver {
     pub fn report(&self) -> Vec<String> {
         match self {
             Driver::Meeting { rendezvous, .. } => rendezvous.report(),
+            Driver::Room { play, .. } => play.lobby.report(),
             Driver::Alone { report, .. } => report.clone(),
             _ => Vec::new(),
         }
@@ -160,11 +188,29 @@ impl Driver {
             Driver::Online { quiet: true, .. } => {
                 Some("Waiting for your friend's game: it has gone quiet for a moment…")
             }
-            Driver::Online { handle: 0, .. } => Some("Online: you are player one (blue)."),
-            Driver::Online { handle: 1, .. } => Some("Online: you are player two (orange)."),
-            Driver::Online { handle: 2, .. } => Some("Online: you are player three (green)."),
-            Driver::Online { .. } => Some("Online: you are player four (violet)."),
+            Driver::Online { handle, .. } => Some(seat_line(*handle)),
+            Driver::Room { play, .. } if play.session.is_none() => Some(play.lobby.status()),
+            Driver::Room { desynced: true, .. } => {
+                Some("DESYNC: the games disagree about the fight. A bug -- please report it.")
+            }
+            Driver::Room { gone: true, .. } => {
+                Some("A friend left; their seat is free for the next to come.")
+            }
+            Driver::Room { quiet: true, .. } => {
+                Some("Waiting for a friend's game: it has gone quiet for a moment…")
+            }
+            Driver::Room { play, .. } => Some(seat_line(play.seat())),
         }
+    }
+}
+
+/// Which seat you play, as the HUD says it.
+fn seat_line(seat: usize) -> &'static str {
+    match seat {
+        0 => "Online: you are player one (blue).",
+        1 => "Online: you are player two (orange).",
+        2 => "Online: you are player three (green).",
+        _ => "Online: you are player four (violet).",
     }
 }
 
@@ -189,7 +235,34 @@ fn terms(start: &World) -> String {
 /// Start meeting the other player if these settings ask for one, and train
 /// otherwise. `start` is the world the match will begin from: built from the
 /// same settings, which is what makes it the same world on both machines.
-pub fn start(opts: &Options, start: &World) -> Driver {
+///
+/// `class` is what this player comes into a room as: their seat is given to
+/// it when they join a match already going.
+pub fn start(opts: &Options, start: &World, class: sim::Class) -> Driver {
+    if let Some(lobby) = gathering(opts, start, class) {
+        return match lobby {
+            Ok(lobby) => Driver::Room {
+                play: Box::new(net::drop_in::DropIn::new(lobby, net::p2p::INPUT_DELAY)),
+                start: Box::new(start.clone()),
+                room: room_of(opts).expect("a room's settings name it"),
+                desynced: false,
+                gone: false,
+                quiet: false,
+                paced: 0,
+                meter: Meter {
+                    since: start.frame,
+                    ..Meter::default()
+                },
+            },
+            Err(why) => {
+                eprintln!("{why}");
+                Driver::Alone {
+                    why,
+                    report: Vec::new(),
+                }
+            }
+        };
+    }
     match rendezvous(opts, start) {
         None => Driver::Local,
         Some(Ok(rendezvous)) => Driver::Meeting {
@@ -294,8 +367,10 @@ pub fn leave(sim: &mut crate::Sim) {
 /// describe, with player two seated as a person.
 fn enter(sim: &mut crate::Sim, opts: &Options) {
     let world = crate::start_world(opts, crate::Dummy::Human);
+    // Into the room as what you were practising as.
+    let class = sim.cur.players[sim.local_player()].class;
     sim.dummy = crate::Dummy::Human;
-    sim.driver = start(opts, &world);
+    sim.driver = start(opts, &world, class);
     platform::show_room(sim.driver.room().map(|r| r.link.as_str()));
 }
 
@@ -310,39 +385,62 @@ fn room_key(opts: &Options) -> Option<net::seal::RoomKey> {
     ))
 }
 
+/// **The room these settings name**, as a lobby people come and go from: the
+/// page's brokers and WebRTC in a browser, the same over a desktop's own.
 #[cfg(target_arch = "wasm32")]
-fn rendezvous(opts: &Options, start: &World) -> Option<Result<Box<dyn net::Rendezvous>, String>> {
+fn gathering(
+    opts: &Options,
+    start: &World,
+    class: sim::Class,
+) -> Option<Result<Box<dyn net::lobby::Gathering>, String>> {
     let key = room_key(opts)?;
     let me = net::meet::fresh_id();
     let terms = terms(start);
     let n = crate::chosen_players(opts) as usize;
     Some(Ok(match (opts.value("--board"), opts.value("--broker")) {
-        (Some("tabs"), _) => Box::new(net::browser::tabs(&key, me, &terms).with_players(n)),
-        (_, Some(url)) => Box::new(net::browser::brokers(&[url], &key, me, &terms).with_players(n)),
-        _ => Box::new(net::browser::public(&key, me, &terms).with_players(n)),
+        (Some("tabs"), _) => Box::new(net::browser::tabs(&key, me, &terms, n, class)),
+        (_, Some(url)) => Box::new(net::browser::brokers(&[url], &key, me, &terms, n, class)),
+        _ => Box::new(net::browser::public(&key, me, &terms, n, class)),
     }))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+fn gathering(
+    opts: &Options,
+    start: &World,
+    class: sim::Class,
+) -> Option<Result<Box<dyn net::lobby::Gathering>, String>> {
+    let key = room_key(opts)?;
+    let me = net::meet::fresh_id();
+    let terms = terms(start);
+    let n = crate::chosen_players(opts) as usize;
+    Some(match (opts.value("--board"), opts.value("--broker")) {
+        (Some("tabs"), _) => Err(
+            "board=tabs is two tabs of one browser, and this is not a browser. \
+             Drop it from the link to meet through the public brokers."
+                .into(),
+        ),
+        (_, Some(url)) => Ok(Box::new(net::native::brokers(
+            &[url],
+            &key,
+            me,
+            &terms,
+            n,
+            class,
+        ))),
+        _ => Ok(Box::new(net::native::public(&key, me, &terms, n, class))),
+    })
+}
+
+/// Two machines straight to each other's address: a one-off meeting. A page
+/// has no address to give, so it only ever meets in a room.
+#[cfg(target_arch = "wasm32")]
+fn rendezvous(_: &Options, _: &World) -> Option<Result<Box<dyn net::Rendezvous>, String>> {
+    None
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn rendezvous(opts: &Options, start: &World) -> Option<Result<Box<dyn net::Rendezvous>, String>> {
-    if let Some(key) = room_key(opts) {
-        let me = net::meet::fresh_id();
-        let terms = terms(start);
-        let n = crate::chosen_players(opts) as usize;
-        return Some(match (opts.value("--board"), opts.value("--broker")) {
-            (Some("tabs"), _) => Err(
-                "board=tabs is two tabs of one browser, and this is not a browser. \
-                     Drop it from the link to meet through the public brokers."
-                    .into(),
-            ),
-            (_, Some(url)) => Ok(Box::new(
-                net::native::brokers(&[url], &key, me, &terms).with_players(n),
-            )),
-            _ => Ok(Box::new(
-                net::native::public(&key, me, &terms).with_players(n),
-            )),
-        });
-    }
     let peer = opts.value("--peer")?;
     // Straight to an address is two machines: a room is how three or four meet.
     if crate::chosen_players(opts) > 2 {
@@ -375,6 +473,10 @@ fn rendezvous(opts: &Options, start: &World) -> Option<Result<Box<dyn net::Rende
 /// `delay` is the player's input delay (`Settings::input_delay`), for a
 /// match that starts here; `delay=` (`--delay`) outranks it for a run.
 pub fn meet(sim: &mut crate::Sim, now_ms: u64, delay: u8) {
+    if matches!(sim.driver, Driver::Room { .. }) {
+        tend_room(sim, now_ms, delay);
+        return;
+    }
     let Driver::Meeting {
         rendezvous, said, ..
     } = &mut sim.driver
@@ -457,6 +559,58 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64, delay: u8) {
     }
 }
 
+/// **A room, a frame**: its lobby polled, a session started the moment it can
+/// be -- from the link's world for the room's first, from the world the host
+/// sent for somebody let into one going -- a closed line's seat given up,
+/// the host's seat for a newcomer chosen (`net::drop_in::DropIn::tend`).
+fn tend_room(sim: &mut crate::Sim, now_ms: u64, delay: u8) {
+    let delay = platform::value("--delay")
+        .and_then(|d| d.parse().ok())
+        .unwrap_or(delay as usize);
+    let crate::Sim {
+        driver,
+        cur,
+        ledger,
+        ..
+    } = sim;
+    let Driver::Room { play, start, .. } = driver else {
+        return;
+    };
+    if let Some(why) = play.lobby.failed() {
+        let report = play.lobby.report();
+        platform::log(&format!("meeting failed: {why}"));
+        for line in &report {
+            platform::log(line);
+        }
+        sim.driver = Driver::Alone { why, report };
+        return;
+    }
+    play.delay = delay;
+    if play.tend(now_ms, cur, start, ledger) == net::drop_in::Change::Started {
+        let seat = play.seat();
+        eprintln!(
+            "online: you are player {}, input delay {delay} frames",
+            seat + 1
+        );
+        begin_again(sim, seat, delay);
+    }
+}
+
+/// **A session started from the world now in hand**: the replay, the
+/// interpolation and the rewind begin again from it, as for a match.
+fn begin_again(sim: &mut crate::Sim, seat: usize, delay: usize) {
+    let start = sim.cur.clone();
+    sim.prev = start.clone();
+    sim.history = crate::Rewind::new(&start);
+    sim.tape = sim::replay::Tape::begin(&start, crate::build());
+    sim.tape.online = Some((seat as u8, delay as u8));
+    sim.paused = false;
+    sim.rehearsing = None;
+    if let Driver::Room { meter, .. } = &mut sim.driver {
+        meter.since = start.frame;
+    }
+}
+
 /// Tell the page, or the terminal, when the line changes.
 pub fn announce(sim: bevy::prelude::Res<crate::Sim>, mut last: bevy::prelude::Local<String>) {
     let now = sim.driver.status().unwrap_or("");
@@ -477,14 +631,20 @@ pub fn announce(sim: bevy::prelude::Res<crate::Sim>, mut last: bevy::prelude::Lo
 /// [`PACE_EVERY`] frames: about a tenth slower, for as long as it is ahead,
 /// which is too little to see and closes a frame's gap in under a second.
 pub fn pace(sim: &mut crate::Sim, ticks: u32) -> u32 {
-    let Driver::Online {
-        session,
-        paced,
-        meter,
-        ..
-    } = &mut sim.driver
-    else {
-        return ticks;
+    let (session, paced, meter) = match &mut sim.driver {
+        Driver::Online {
+            session,
+            paced,
+            meter,
+            ..
+        } => (&mut **session, paced, meter),
+        Driver::Room {
+            play, paced, meter, ..
+        } => match &mut play.session {
+            Some(session) => (session, paced, meter),
+            None => return ticks,
+        },
+        _ => return ticks,
     };
     if ticks == 0 {
         return 0;
@@ -528,21 +688,167 @@ pub fn step(
         ledger,
         ..
     } = sim;
-    let Driver::Online {
-        session,
-        handle,
+    let mut world = Frame {
+        cur,
+        prev,
+        tape,
+        ledger,
+        scape,
+        keeping,
+    };
+    match driver {
+        Driver::Online {
+            session,
+            handle,
+            desynced,
+            roster,
+            post,
+            gone,
+            quiet,
+            meter,
+            players,
+            ..
+        } => {
+            let seats: Vec<usize> = (0..*players).collect();
+            tick(
+                session,
+                &Seating {
+                    handle: *handle,
+                    seats: &seats,
+                    lineup: false,
+                    base: 0,
+                    roster,
+                    post,
+                },
+                local,
+                &mut world,
+                &mut Line {
+                    desynced,
+                    gone,
+                    quiet,
+                    meter,
+                },
+            );
+        }
+        Driver::Room {
+            play,
+            desynced,
+            gone,
+            quiet,
+            meter,
+            ..
+        } => {
+            // The host's admission of a newcomer rides in its own input, so
+            // every machine seats them on the same frame.
+            let travel = play.travel();
+            let local = travel.map_or(local, |t| local.travelling(t));
+            let seats = play.seats.clone();
+            let roster = play.roster.clone();
+            let (handle, base) = (play.handle, play.base);
+            let (Some(session), Some(post)) = (&mut play.session, play.post.clone()) else {
+                return;
+            };
+            let advanced = tick(
+                session,
+                &Seating {
+                    handle,
+                    seats: &seats,
+                    lineup: true,
+                    base,
+                    roster: &roster,
+                    post: &post,
+                },
+                local,
+                &mut world,
+                &mut Line {
+                    desynced,
+                    gone,
+                    quiet,
+                    meter,
+                },
+            );
+            if advanced && travel.is_some() {
+                play.sent();
+            }
+            // Somebody seated, at a frame now confirmed: the session for the
+            // new lineup, from the world at that frame.
+            if play.after(world.cur, world.ledger) == net::drop_in::Change::Switched {
+                let seat = play.seat();
+                let delay = play.delay;
+                eprintln!("the room changed: you are player {}", seat + 1);
+                begin_again(sim, seat, delay);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// What a networked tick works on besides the session: the world and
+/// everything kept frame by frame off it.
+struct Frame<'a> {
+    cur: &'a mut World,
+    prev: &'a mut World,
+    tape: &'a mut sim::replay::Tape,
+    ledger: &'a mut regions::Ledger,
+    scape: &'a mut crate::sound::Soundscape,
+    keeping: &'a mut crate::bag::Keeping,
+}
+
+/// Who plays where in a session.
+struct Seating<'a> {
+    /// This machine's GGRS player.
+    handle: usize,
+    /// GGRS's players' world seats, in GGRS's order.
+    seats: &'a [usize],
+    /// A room's lineup: a seat nobody in the session plays has left.
+    lineup: bool,
+    /// The world's frame at GGRS's frame nought.
+    base: u32,
+    roster: &'a [u64],
+    post: &'a net::crowd::Post,
+}
+
+/// How the line is doing: said on the HUD, counted on the replay.
+struct Line<'a> {
+    desynced: &'a mut bool,
+    gone: &'a mut bool,
+    quiet: &'a mut bool,
+    meter: &'a mut Meter,
+}
+
+/// **One frame of a session**: its events, the seats of lines that closed,
+/// the region gate, the input, the advance and every frame it replays, the
+/// books, the crowd's relay, the second's count. True if a frame was made.
+fn tick(
+    session: &mut net::ggrs::P2PSession<net::SessionConfig>,
+    seating: &Seating,
+    local: SimInput,
+    world: &mut Frame,
+    line: &mut Line,
+) -> bool {
+    let Frame {
+        cur,
+        prev,
+        tape,
+        ledger,
+        scape,
+        keeping,
+    } = world;
+    let Line {
         desynced,
-        roster,
-        post,
         gone,
         quiet,
         meter,
-        players,
-        ..
-    } = driver
-    else {
-        return;
-    };
+    } = line;
+    let handle = seating.handle;
+    let me = seating
+        .seats
+        .get(handle)
+        .copied()
+        .unwrap_or(handle)
+        .min(sim::state::MAX_PLAYERS - 1);
+    // GGRS counts from nought in each session; the world counts on.
+    let in_world = |c: i32| if c < 0 { c } else { seating.base as i32 + c };
 
     session.poll_remote_clients();
     for event in session.events() {
@@ -551,41 +857,42 @@ pub fn step(
                 // Should be impossible: the simulation is integer-only and
                 // SyncTest covers it. If it happens, say so loudly rather than
                 // letting the two players drift apart in silence.
-                eprintln!("DESYNC at frame {frame}");
-                *desynced = true;
+                eprintln!("DESYNC at frame {}", in_world(frame));
+                **desynced = true;
             }
             net::ggrs::GgrsEvent::Disconnected { .. } => {
                 eprintln!("peer disconnected");
-                *gone = true;
+                **gone = true;
             }
             net::ggrs::GgrsEvent::NetworkInterrupted { .. } => {
                 eprintln!("peer interrupted");
-                *quiet = true;
+                **quiet = true;
             }
             net::ggrs::GgrsEvent::NetworkResumed { .. } => {
                 eprintln!("peer resumed");
-                *quiet = false;
+                **quiet = false;
             }
             _ => {}
         }
     }
-    meter.now.quiet |= *quiet;
+    meter.now.quiet |= **quiet;
 
     // **Somebody's line closed**: they left. Their seat is given up now --
     // GGRS settles the frame with the others -- rather than after the
     // session's fifteen silent seconds, which froze the match for everybody
     // still in it (2026-10-22). Those seconds stay for a friend who is only
     // busy, drawing an arena for the first time.
-    for peer in post.take_closed() {
-        let net::Peer::Line(seat) = peer;
-        if session.disconnect_player(seat as usize).is_ok() {
+    for peer in seating.post.take_closed() {
+        let net::Peer::Line(player) = peer;
+        if session.disconnect_player(player as usize).is_ok() {
+            let seat = seating.seats.get(player as usize).copied().unwrap_or(0);
             eprintln!("player {} left", seat + 1);
-            *gone = true;
+            **gone = true;
         }
     }
 
     if session.current_state() != net::ggrs::SessionState::Running {
-        return;
+        return false;
     }
 
     // **The region gate**, online as locally: the next frame goes ahead only
@@ -594,21 +901,22 @@ pub fn step(
     // GGRS is not asked for a frame the ledger would hold, and the books are
     // brought up to what is confirmed first, every tick (`net::may_advance`):
     // a gate that heard only after an advance froze on the first late packet.
-    if !net::may_advance(ledger, session.confirmed_frame(), cur) {
+    if !net::may_advance(ledger, in_world(session.confirmed_frame()), cur) {
         meter.now.stalls += 1;
-        return;
+        return false;
     }
 
     if session
-        .add_local_input(*handle, net::NetInput::from(local))
+        .add_local_input(handle, net::NetInput::from(local))
         .is_err()
     {
         // Too far ahead of the peer. Waiting is the correct response.
         meter.now.stalls += 1;
-        return;
+        return false;
     }
 
-    let was = cur.clone();
+    let was = (*cur).clone();
+    let mut advanced = false;
     match session.advance_frame() {
         Ok(requests) => {
             // A rollback is a load and then every frame since played again;
@@ -617,11 +925,12 @@ pub fn step(
                 .iter()
                 .filter(|r| matches!(r, net::ggrs::GgrsRequest::LoadGameState { .. }))
                 .count() as u32;
+            let advances = requests
+                .iter()
+                .filter(|r| matches!(r, net::ggrs::GgrsRequest::AdvanceFrame { .. }))
+                .count() as u32;
+            advanced = advances > 0;
             if loads > 0 {
-                let advances = requests
-                    .iter()
-                    .filter(|r| matches!(r, net::ggrs::GgrsRequest::AdvanceFrame { .. }))
-                    .count() as u32;
                 let again = advances.saturating_sub(1);
                 meter.now.rollbacks += loads;
                 meter.now.resimulated += again;
@@ -634,31 +943,29 @@ pub fn step(
             // Kept on the region ledger -- its tape, and the crowd field's
             // due aggregates fed off it -- a re-advance overwriting its
             // prediction the same way the replay's does.
-            let me = (*handle).min(sim::state::MAX_PLAYERS - 1);
-            net::handle_requests_kept(cur, requests, ledger, |before, inputs, after| {
-                tape.record(before.frame, inputs);
-                // And sounded, the first time each frame is simulated.
-                scape.observe(before, after);
-                // And kept: what was picked up and fed, by frame, so a
-                // re-advance corrects what a prediction got wrong.
-                keeping.record(before, &inputs, after, me);
-            });
+            let watch =
+                |before: &World, inputs: [SimInput; sim::state::MAX_PLAYERS], after: &World| {
+                    tape.record(before.frame, inputs);
+                    // And sounded, the first time each frame is simulated.
+                    scape.observe(before, after);
+                    // And kept: what was picked up and fed, by frame, so a
+                    // re-advance corrects what a prediction got wrong.
+                    keeping.record(before, &inputs, after, me);
+                };
+            if seating.lineup {
+                net::handle_requests_seated(cur, requests, ledger, seating.seats, watch);
+            } else {
+                net::handle_requests_kept(cur, requests, ledger, watch);
+            }
             // The books are kept for confirmed frames only: what both
             // machines have agreed on, which is what a region's checksum
             // will one day be sent to a neighbour as.
-            if let Ok(confirmed) = u32::try_from(session.confirmed_frame()) {
+            if let Ok(confirmed) = u32::try_from(in_world(session.confirmed_frame())) {
                 ledger.confirm_through(confirmed, cur);
             }
-            relay_the_crowd(
-                cur,
-                ledger,
-                post,
-                roster,
-                *handle,
-                &meter_peers(*players, *handle),
-            );
+            relay_the_crowd(cur, ledger, seating);
             meter.now.sim_us = meter.now.sim_us.max(began.elapsed().as_micros() as u32);
-            *prev = was;
+            **prev = was;
         }
         Err(net::ggrs::GgrsError::PredictionThreshold) => meter.now.stalls += 1,
         Err(e) => eprintln!("advance failed: {e}"),
@@ -667,7 +974,7 @@ pub fn step(
     // A second is up: what the line looks like now, and the second's counts.
     if cur.frame >= meter.since + SECOND {
         // The worst line of them: what a laggy match is worth knowing.
-        for other in (0..*players).filter(|h| h != handle) {
+        for other in (0..seating.seats.len()).filter(|h| *h != handle) {
             if let Ok(stats) = session.network_stats(other) {
                 meter.now.ping = meter.now.ping.max(stats.ping as u32);
                 meter.now.queue = meter.now.queue.max(stats.send_queue_len as u32);
@@ -679,18 +986,14 @@ pub fn step(
         tape.measure(std::mem::take(&mut meter.now));
         meter.since = cur.frame;
     }
+    advanced
 }
 
 /// A frame was drawn online: how long it took, for the link's record.
 pub fn drawn(sim: &mut crate::Sim, wall: std::time::Duration) {
-    if let Driver::Online { meter, .. } = &mut sim.driver {
+    if let Driver::Online { meter, .. } | Driver::Room { meter, .. } = &mut sim.driver {
         meter.drawn(wall);
     }
-}
-
-/// Every other seat: whom a leader may post to.
-fn meter_peers(players: usize, me: usize) -> Vec<usize> {
-    (0..players).filter(|h| *h != me).collect()
 }
 
 /// **A cell leader's duty, and a listener's** (`docs/design/exploration/0018`
@@ -703,38 +1006,40 @@ fn meter_peers(players: usize, me: usize) -> Vec<usize> {
 /// Whom to post to is read off the predicted world rather than a confirmed
 /// one: a wrong guess is a packet to the wrong peer, never a different
 /// simulation, and the gate holds for a stream that goes unheard.
-fn relay_the_crowd(
-    cur: &sim::World,
-    ledger: &mut regions::Ledger,
-    post: &net::crowd::Post,
-    roster: &[u64],
-    me: usize,
-    others: &[usize],
-) {
+///
+/// Leaders are ranked by world seat; a post goes to the GGRS player playing
+/// that seat, which in a room is not the same number.
+fn relay_the_crowd(cur: &sim::World, ledger: &mut regions::Ledger, seating: &Seating) {
     let grid = sim::region::Grid::tuned();
     let epoch = (cur.frame / sim::tuning::crowd_epoch()) as u16;
-    let members: Vec<net::cells::Member> = roster
+    let members: Vec<net::cells::Member> = seating
+        .roster
         .iter()
-        .enumerate()
-        .map(|(seat, id)| net::cells::Member { seat, id: *id })
+        .zip(seating.seats)
+        .map(|(id, &seat)| net::cells::Member { seat, id: *id })
         .collect();
+    let me = seating.seats.get(seating.handle).copied().unwrap_or(0);
+    let post = seating.post;
     for a in ledger.summed() {
         if !net::cells::leads(cur, &grid, &members, a.region, epoch, me) {
             continue;
         }
-        for &other in others {
+        for (player, &other) in seating.seats.iter().enumerate() {
+            if player == seating.handle {
+                continue;
+            }
             let leads_a_neighbour = a
                 .region
                 .neighbours()
                 .iter()
                 .any(|n| net::cells::leads(cur, &grid, &members, *n, epoch, other));
             if leads_a_neighbour {
-                post.post(net::Peer::Line(other as u8), a);
+                post.post(net::Peer::Line(player as u8), a);
             }
         }
     }
     for a in post.collect(cur.frame, sim::tuning::crowd_epoch()) {
-        ledger.offer(a);
+        ledger.offer_heard(a);
     }
 }
 

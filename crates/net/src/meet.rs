@@ -75,10 +75,10 @@ pub const PROTOCOL: u32 = 2;
 /// How often a hello is repeated while nobody has answered it. Every note can
 /// be lost -- a public broker delivers at most once -- so everything is
 /// repeated until the thing it asks for has happened.
-const HELLO_EVERY_MS: u64 = 1_000;
+pub(crate) const HELLO_EVERY_MS: u64 = 1_000;
 
 /// How often an unanswered offer is repeated.
-const OFFER_EVERY_MS: u64 = 2_000;
+pub(crate) const OFFER_EVERY_MS: u64 = 2_000;
 
 /// A partner who has sent no hello for this long, before the line opened, has
 /// gone: closed the tab, or reloaded and come back as somebody new. The room
@@ -88,11 +88,11 @@ const OFFER_EVERY_MS: u64 = 2_000;
 /// can take seconds: the first one that draws a new fighter compiles its
 /// shaders, and a browser rendering in software (the smoke test's) manages
 /// two frames a second.
-const PARTNER_SILENT_MS: u64 = 15_000;
+pub(crate) const PARTNER_SILENT_MS: u64 = 15_000;
 
 /// From finding a partner to an open line. Past this the line is not going to
 /// open: one of the two networks will not take a direct connection.
-const NEGOTIATE_MS: u64 = 30_000;
+pub(crate) const NEGOTIATE_MS: u64 = 30_000;
 
 // ---------------------------------------------------------------------------
 // The board
@@ -269,7 +269,17 @@ pub struct Mesh<L: Line> {
     polls: u32,
     /// The lines already said to have closed.
     gone: Vec<Peer>,
+    /// **Whose session these packets are**: a room's lineup's epoch, written
+    /// in front of every GGRS message and read off every one that arrives
+    /// (`crate::lobby`). When a lineup changes, one peer's new session and
+    /// another's old one share the lines for a moment, and GGRS takes a
+    /// message from a session of another size for its own and indexes past
+    /// its players. `None` for a one-off room: no tag, as ever.
+    epoch: Option<u32>,
 }
+
+/// The first byte of a GGRS message tagged with its session's epoch.
+const EPOCH_TAG: u8 = 0xE9;
 
 impl<L: Line> Mesh<L> {
     pub fn new(lines: Vec<(Peer, L)>, post: crate::crowd::Post) -> Mesh<L> {
@@ -278,7 +288,14 @@ impl<L: Line> Mesh<L> {
             post,
             polls: 0,
             gone: Vec::new(),
+            epoch: None,
         }
+    }
+
+    /// A mesh for one lineup's session: see [`Mesh::epoch`].
+    pub fn for_epoch(mut self, epoch: u32) -> Mesh<L> {
+        self.epoch = Some(epoch);
+        self
     }
 }
 
@@ -288,7 +305,16 @@ impl<L: Line> NonBlockingSocket<Peer> for Mesh<L> {
             return;
         };
         if let Ok(bytes) = bincode::serialize(msg) {
-            line.send(&bytes);
+            match self.epoch {
+                Some(epoch) => {
+                    let mut tagged = Vec::with_capacity(bytes.len() + 5);
+                    tagged.push(EPOCH_TAG);
+                    tagged.extend_from_slice(&epoch.to_le_bytes());
+                    tagged.extend_from_slice(&bytes);
+                    line.send(&tagged);
+                }
+                None => line.send(&bytes),
+            }
         }
     }
 
@@ -315,9 +341,22 @@ impl<L: Line> NonBlockingSocket<Peer> for Mesh<L> {
                     self.post.heard(*peer, &bytes, self.polls);
                     continue;
                 }
+                // Another lineup's session is not this one's business.
+                let message = match self.epoch {
+                    Some(epoch) => {
+                        if bytes.len() < 5
+                            || bytes[0] != EPOCH_TAG
+                            || bytes[1..5] != epoch.to_le_bytes()
+                        {
+                            continue;
+                        }
+                        &bytes[5..]
+                    }
+                    None => &bytes[..],
+                };
                 // A packet that is not a GGRS message is somebody else's
                 // business: the same rule GGRS's own socket follows.
-                if let Ok(msg) = bincode::deserialize(&bytes) {
+                if let Ok(msg) = bincode::deserialize(message) {
                     out.push((*peer, msg));
                 }
             }
@@ -1061,7 +1100,7 @@ impl<B: Board, L: Line + 'static> Rendezvous for Room<B, L> {
     }
 }
 
-const LINE_FAILED: &str = "Found your friends, but a direct connection between your \
+pub(crate) const LINE_FAILED: &str = "Found your friends, but a direct connection between your \
      networks would not open. Some networks (often mobile data, or a strict office \
      or school network) refuse them; trying from another network usually works.";
 

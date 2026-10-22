@@ -296,6 +296,22 @@ impl Ledger {
         }
     }
 
+    /// **An aggregate a leader sent**, over the lines: kept as
+    /// [`Ledger::offer`] keeps one -- unless it is of a region this ledger
+    /// sums itself, a live one. Every peer of a session sees the whole world,
+    /// so a leader's word on a live region is only what this ledger would
+    /// have summed anyway; but taken, it arrived at a moment that differs from
+    /// machine to machine, and it could stand in for the sum of a region
+    /// followed mid-epoch on one machine and not another -- and the worlds
+    /// fed them parted (four desktops, the frame a match started,
+    /// 2026-10-22). A leader's word is for a region nobody here is in.
+    pub fn offer_heard(&mut self, a: Aggregate) {
+        if self.live[..self.live_len].contains(&a.region) {
+            return;
+        }
+        self.offer(a);
+    }
+
     /// **What is due at `frame`**: every aggregate kept whose due frame is
     /// it, in region order, for `World::advance_with`. A fixed array and a
     /// count, so a frame allocates nothing.

@@ -382,6 +382,12 @@ pub fn round_over_frames() -> u16 {
     oven::scalar(Scalar::RoundOverFrames) as u16
 }
 
+/// How long the pick before a versus round lasts, at most: the classes are
+/// chosen in it and locked for the round (`state::Phase::Picking`).
+pub fn class_pick() -> u16 {
+    oven::scalar(Scalar::ClassPick).clamp(0, u16::MAX as i32) as u16
+}
+
 /// **King of the Hill** (`crate::versus`): how long the point is locked at
 /// a round's start.
 pub fn hill_unlock() -> u16 {
