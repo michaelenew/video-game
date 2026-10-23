@@ -205,12 +205,16 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// grounded dodge is 26 frames, 12 of them invulnerable, at 19.2 m/s -- a fifth
 /// longer and a fifth further, for the dive roll (feel-log.md).
 const PINNED: [(Class, u64); 6] = [
+    // Moved 2026-10-23, deliberately: five clips bent a foreleg backward at
+    // the knee and now bend it the way it walks (`tests/knees.rs`), and a
+    // leg is collision geometry, so where it is in a slam or a stumble moves
+    // what four of these hunts run into.
     (Class::Champion, 0x35a804f43175a4cb),
-    (Class::Bulwark, 0x42cb6898b5200410),
-    (Class::ShadowReaver, 0xd2b1297a5b0ca3e3),
+    (Class::Bulwark, 0xba36d7824bc6d8d0),
+    (Class::ShadowReaver, 0x7d73a2715885ae15),
     (Class::BloodMage, 0x09dc9321005dc822),
-    (Class::DualMage, 0xcc6860c5690be2d0),
-    (Class::Elementalist, 0x826a6453001ad85e),
+    (Class::DualMage, 0x49d7ec7caf6b0b78),
+    (Class::Elementalist, 0x287b5e02d41cf562),
 ];
 
 #[test]

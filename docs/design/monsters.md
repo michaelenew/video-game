@@ -667,6 +667,16 @@ learned the hard way:
   riders on single frames that had nothing to do with how hard the animal was
   moving. Thirty-two is about one sample per frame of the longest phase.
 
+**A knee bends one way** (2026-10-23, the owner: *"the forelegs bend both
+ways at the knee right now"*). The joint halfway down a foreleg is its elbow,
+and the walk, the gallop and every layer the simulation adds fold it with the
+foot swinging forward. The stomp, the slam, the stumble, the topple and the
+corpse keyed it the other way, so between moves the leg hinged forward and
+back like nothing with bones. They fold it the walking way now -- the stomp's
+raised foot reaching forward, the reared forelegs pawing, the kneel onto a
+forearm laid flat in front as a dog lies down -- and `sim/tests/knees.rs`
+fails on any baked frame that bends one backward.
+
 The same lesson in a different place: **two keys at the same instant with
 different poses are a step, not a motion.** The shake had its last startup key
 and its first whip key both at the phase boundary, and the arbitrarily large
