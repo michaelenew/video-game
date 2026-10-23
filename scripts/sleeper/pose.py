@@ -65,9 +65,16 @@ AIMS = [
 
 # Bones scaled: (bone, factor). Scaling a bone scales what hangs from it.
 SCALES = [
-    ("upperarm.L", 0.5),
-    ("upperarm.R", 0.5),
+    ("upperarm.L", 0.65),
+    ("upperarm.R", 0.65),
+    # A T. rex's legs: longer than the dragon's.
+    ("thigh.L", 1.35),
+    ("thigh.R", 1.35),
 ]
+
+# How far forward the forelimbs leave the body, metres of the model: the
+# shoulders moved up the chest, so the arms reach from in front.
+SHOULDERS_FORWARD = 0.2
 
 
 def turn(model, pose, bone, axis, degrees):
@@ -97,13 +104,32 @@ def aim(model, pose, bone, child, direction):
     turn(model, pose, bone, axis, degrees)
 
 
-def posed(model):
-    """The Sleeper's pose: the clip's end, the scales, the aims."""
-    pose = model.clip_end("Die")
+def shift(model, pose, bone, offset):
+    """Move `bone` (and what hangs from it) by a world `offset`, in place."""
+    i = model.index[bone]
+    world = model.world(pose)
+    parent = world[model.parent[i]][:3, :3]
+    t, r, s = pose[i]
+    pose[i] = (t + np.linalg.solve(parent, np.asarray(offset, float)), r, s)
+
+
+def proportioned(model, pose):
+    """The limbs' sizes and where the forelimbs leave the body, in place."""
     for bone, k in SCALES:
         i = model.index[bone]
         t, r, s = pose[i]
         pose[i] = (t, r, s * k)
+    world = model.world(pose)
+    chest = world[model.index["chest"]][:3, :3]
+    forward = chest[:, 1] / np.linalg.norm(chest[:, 1])
+    for side in ("clavicle.L", "clavicle.R"):
+        shift(model, pose, side, forward * SHOULDERS_FORWARD)
+
+
+def posed(model):
+    """The Sleeper's pose: the clip's end, the proportions, the aims."""
+    pose = model.clip_end("Die")
+    proportioned(model, pose)
     for bone, child, direction in AIMS:
         aim(model, pose, bone, child, direction)
     # Its mouth shut: the jaw back to where the skull's own line is.
@@ -114,43 +140,44 @@ def posed(model):
 
 
 # **Standing**, as it is when it wakes (the owner: "make it stand on two
-# legs"): reared up from the model's rest pose -- the body pitched up this
-# many degrees about the hips -- on its hind legs, the tail out behind as a
-# counterweight, the small forelimbs held in front, the neck up and the head
-# level.
-REAR = 68.0
+# legs"; then "the pose and proportions should be like a T rex with bigger
+# arms", "hunch it a little more"): the body pitched up only this many
+# degrees about the hips, near level and balanced over them; the legs bent
+# under the hips; the tail held straight out behind; the neck in a low S
+# and the head forward; the arms folded up at the chest.
+REAR = 22.0
 STAND_AIMS = [
-    ("thigh.L", "shin.L", (0.12, -1.0, 0.3)),
-    ("thigh.R", "shin.R", (-0.12, -1.0, 0.3)),
-    ("shin.L", "foot.L", (0.0, -1.0, -0.4)),
-    ("shin.R", "foot.R", (0.0, -1.0, -0.4)),
-    ("foot.L", "toes.L", (0.05, -0.2, 1.0)),
-    ("foot.R", "toes.R", (-0.05, -0.2, 1.0)),
-    ("tail_01", "tail_02", (0.0, -0.6, -1.0)),
-    ("tail_02", "tail_03", (0.0, -0.45, -1.0)),
-    ("tail_03", "tail_04", (0.0, -0.25, -1.0)),
-    ("tail_04", "tail_05", (0.0, -0.1, -1.0)),
-    ("tail_05", "tail_06", (0.0, 0.05, -1.0)),
-    ("neck_01", "neck_02", (0.0, 0.75, 0.65)),
-    ("neck_02", "neck_03", (0.0, 0.55, 0.85)),
-    ("neck_03", "neck_04", (0.0, 0.35, 0.95)),
-    ("neck_04", "neck_05", (0.0, 0.1, 1.0)),
-    ("neck_05", "head", (0.0, -0.1, 1.0)),
-    ("head", "fire_socket", (0.0, -0.2, 1.0)),
-    ("upperarm.L", "forearm.L", (0.35, -0.6, 0.6)),
-    ("upperarm.R", "forearm.R", (-0.35, -0.6, 0.6)),
-    ("forearm.L", "hand.L", (0.05, -0.2, 1.0)),
-    ("forearm.R", "hand.R", (-0.05, -0.2, 1.0)),
+    # Long, bent legs: the knee forward, the shin back, and up on its toes.
+    ("thigh.L", "shin.L", (0.1, -0.6, 0.8)),
+    ("thigh.R", "shin.R", (-0.1, -0.6, 0.8)),
+    ("shin.L", "foot.L", (0.0, -0.75, -0.65)),
+    ("shin.R", "foot.R", (0.0, -0.75, -0.65)),
+    ("foot.L", "toes.L", (0.05, -0.85, 0.5)),
+    ("foot.R", "toes.R", (-0.05, -0.85, 0.5)),
+    ("tail_01", "tail_02", (0.0, -0.2, -1.0)),
+    ("tail_02", "tail_03", (0.0, -0.08, -1.0)),
+    ("tail_03", "tail_04", (0.0, 0.0, -1.0)),
+    ("tail_04", "tail_05", (0.0, 0.03, -1.0)),
+    ("tail_05", "tail_06", (0.0, 0.06, -1.0)),
+    ("neck_01", "neck_02", (0.0, 0.5, 0.85)),
+    ("neck_02", "neck_03", (0.0, 0.3, 0.95)),
+    ("neck_03", "neck_04", (0.0, 0.1, 1.0)),
+    ("neck_04", "neck_05", (0.0, -0.05, 1.0)),
+    ("neck_05", "head", (0.0, -0.15, 1.0)),
+    ("head", "fire_socket", (0.0, -0.25, 1.0)),
+    # The arms folded up at the chest: the elbow down and back, the forearm
+    # forward and up.
+    ("upperarm.L", "forearm.L", (0.45, -0.85, 0.0)),
+    ("upperarm.R", "forearm.R", (-0.45, -0.85, 0.0)),
+    ("forearm.L", "hand.L", (0.35, 0.0, 1.0)),
+    ("forearm.R", "hand.R", (-0.35, 0.0, 1.0)),
 ]
 
 
 def standing(model):
     """The beast up on its hind legs."""
     pose = [tuple(np.copy(v) for v in r) for r in model.rest]
-    for bone, k in SCALES:
-        i = model.index[bone]
-        t, r, s = pose[i]
-        pose[i] = (t, r, s * k)
+    proportioned(model, pose)
     turn(model, pose, "pelvis", (1, 0, 0), -REAR)
     for bone, child, direction in STAND_AIMS:
         aim(model, pose, bone, child, direction)

@@ -468,9 +468,14 @@ sick dog" -- and judging them was blind to the steps between. Now:
    the skin under it.
 
    **It also stands** (`pose.py`'s `standing`; "make it stand on two
-   legs"): reared up 68 degrees on its hind legs from the model's rest
-   pose, the tail out behind, the small forelimbs in front, the neck up
-   and the head level -- how it will be when it wakes. `python3
+   legs", then "the pose and proportions should be like a T rex with
+   bigger arms"): a T. rex's stance -- the body near level, balanced over
+   the hips, on legs lengthened by a third and bent under it, up on its
+   toes; the tail held straight out behind; the neck in a low S and the
+   head forward; the arms (at 0.65 of the dragon's, larger than the first
+   pass's half) folded up at the chest, leaving the body further forward
+   than the dragon's did. The throat is drawn in rather than thickened, so
+   it hangs no bib down the chest. This is how it will be when it wakes. `python3
    scripts/sleeper/pose.py` draws it standing and asleep on one sheet.
 3. **The pose** (`scripts/sleeper/pose.py`): from the last frame of the
    model's own "Die" clip, every bone *aimed* along a world direction --

@@ -60,7 +60,9 @@ def view(verts, tris, direction, size=(520, 400), colours=None, light=(-0.4, 0.8
     n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
     # Two-sided: a face is lit by whichever side faces the camera.
     n *= np.where((n @ f) > 0, -1, 1)[:, None]
-    shade = 0.35 + 0.65 * np.clip(n @ L, 0, 1)
+    # Half the light from the sky, half from over the viewer's shoulder, so
+    # no side of a body is a black shape whichever way it is seen from.
+    shade = 0.3 + 0.35 * np.clip(n @ L, 0, 1) + 0.35 * np.clip(-(n @ f), 0, 1)
     if colours is None:
         colours = np.tile([0.62, 0.58, 0.52], (len(tris), 1))
     for k, (i, j, l) in enumerate(tris):

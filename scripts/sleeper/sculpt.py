@@ -23,7 +23,8 @@ And on the second pass ("make the neck thicker ... add a row of prominent
 spikes on its back, make the spikes on its back legs smaller"):
 
 - **A thick neck**: pushed out from the line of its bones, thickest at the
-  shoulders.
+  shoulders, at the back and sides only -- its throat is drawn in, so it
+  hangs no bib down the chest.
 - **The hind legs' spikes smaller**: smoothed a few rounds, not held.
 - **A row of spikes down the back**: new cones, standing out of the middle
   of the back from the neck to the tail, tallest over the shoulders and
@@ -49,9 +50,12 @@ BACK_MIDDLE = 0.55
 LEG_ROUNDS = 4
 LEGS = ("thigh", "shin", "foot", "toes")
 
-# The neck: how much thicker, at its root and at the head.
+# The neck: how much thicker, at its root and at the head -- at the back
+# and the sides; its throat is drawn in to this instead, so it hangs no bib
+# down the chest.
 NECK_ROOT = 1.7
 NECK_TOP = 1.3
+THROAT = 0.75
 NECK = ("neck_01", "neck_02", "neck_03", "neck_04", "neck_05")
 
 # The row of spikes: along these bones, from the tail to the head; how far
@@ -174,10 +178,17 @@ def thicker_neck(model, p):
             c = a + t * ab
             d = np.linalg.norm(p[k] - c)
             if best is None or d < best[0]:
-                best = (d, c, (i + t) / (len(line) - 1))
-        _, c, along = best
+                best = (d, c, (i + t) / (len(line) - 1), ab)
+        _, c, along, seg = best
         grow = NECK_ROOT + (NECK_TOP - NECK_ROOT) * along
-        out[k] = p[k] + w[k] * (c + (p[k] - c) * grow - p[k])
+        # How much this point is the throat: its side of the neck facing
+        # forward and down, away from the back.
+        d = seg / np.linalg.norm(seg)
+        front = -np.cross(d, (1.0, 0, 0))
+        r = p[k] - c
+        throat = np.clip(r @ front / (np.linalg.norm(r) + 1e-9), 0, 1)
+        grow = grow + (THROAT - grow) * throat
+        out[k] = p[k] + w[k] * (c + r * grow - p[k])
     return out
 
 
