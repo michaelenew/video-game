@@ -412,6 +412,14 @@ mod host {
 
 #[cfg(target_arch = "wasm32")]
 mod host {
+    /// A text file written for a person to look at (a sheet from a test):
+    /// there is no filesystem in a page, so it says so and writes nothing.
+    /// Only a test writes a sheet, and there are none in a page.
+    #[allow(dead_code)]
+    pub fn write_to(_p: &std::path::Path, _text: &str, what: &str) {
+        web_sys::console::warn_1(&format!("no filesystem in a page: {what} not written").into());
+    }
+
     /// One key, so a second prototype on the same origin does not overwrite
     /// this one's settings.
     const STORAGE_KEY: &str = "arena.settings";
@@ -626,6 +634,10 @@ pub use host::{
     page_url, pointer_lock_lost, report_panics, save_cairns, save_replay, save_settings,
     save_trophies, say, show_room,
 };
+
+/// A sheet a test draws, written where a person can look at it.
+#[cfg(test)]
+pub use host::write_to;
 
 // ---------------------------------------------------------------------------
 
