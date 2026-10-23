@@ -583,7 +583,8 @@ pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
             (0..SIDES)
                 .map(|k| {
                     let a = std::f32::consts::TAU * k as f32 / SIDES as f32;
-                    let lump = 1.0 + LUMPS * (2.0 * crate::shapes::hash01(i as u32, k as u32, 71) - 1.0);
+                    let lump =
+                        1.0 + LUMPS * (2.0 * crate::shapes::hash01(i as u32, k as u32, 71) - 1.0);
                     at + (side * a.cos() * WIDE + up * a.sin() * TALL) * r * lump
                 })
                 .collect()
@@ -599,8 +600,8 @@ pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
             let quad = [rings[i][k], rings[i][k1], rings[i + 1][k1], rings[i + 1][k]];
             let centre = (quad[0] + quad[1] + quad[2] + quad[3]) * 0.25;
             let out = (centre - mid).normalize_or(Vec3::Y);
-            let tone = 0.9 + 0.2 * crate::shapes::hash01(i as u32, k as u32, 72);
-            let c = if out.y > 0.5 { snow } else { rock };
+            let tone = 0.96 + 0.08 * crate::shapes::hash01(i as u32, k as u32, 72);
+            let c = if out.y > 0.75 { snow } else { rock };
             kit.poly(&quad, out, [c[0] * tone, c[1] * tone, c[2] * tone]);
         }
     }
