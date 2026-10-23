@@ -18,7 +18,7 @@ ankylosaur's armour and club):
   drums, a skull with a jaw) -- all blended smoothly where they meet, the
   way muscle meets muscle.
 - **Armour that stays crisp**: blade spikes down the spine, plates either
-  side of it, horns, claws and a spiked club, blended in only a little.
+  side of it, horns, claws and a club of bone, blended in only a little.
 
 The volumes are a signed distance field -- for every point, how far it is
 from the skin, negative inside -- and the skin is where that is zero,
@@ -102,8 +102,8 @@ STANDING = {
     # The thigh forward and a little down, the shin back, the foot up on
     # its toes, the toes flat: the feet under its weight, set wide.
     "leg": [(0.25, -0.5, 1), (0.05, -1, -0.5), (0.0, -1, 0.3), (0.12, -0.12, 1)],
-    # The arms held out from the body, elbows bent, claws forward: ready.
-    "arm": [(0.45, -1, 0.35), (0.1, -0.55, 1), (0.0, -0.7, 0.7)],
+    # The arms hanging, the elbows a little bent, the claws down.
+    "arm": [(0.3, -1, 0.12), (0.08, -1, 0.3), (0.0, -1, 0.35)],
 }
 
 ASLEEP = {
@@ -339,7 +339,7 @@ def body_parts(pose):
         parts += horn(base, [hl * s_ * 0.4 + hu * 0.9 - hf * 0.35, hl * s_ * 0.7 + hu * 0.3 - hf * 0.8,
                              hl * s_ * 0.95 - hu * 0.55 - hf * 0.35, hl * s_ * 0.75 - hu * 0.8 + hf * 0.45,
                              hl * s_ * 0.35 - hu * 0.35 + hf * 1.0, hl * s_ * 0.3 + hu * 0.15 + hf, hl * s_ * 0.2 + hu * 0.35 + hf],
-                      6.4, 0.85, 0.2)
+                      5.2, 0.72, 0.2)
         for k in range(4):
             parts.append(blade(at + hf * (0.15 - 0.28 * k) + hu * (0.55 - 0.18 * k) + hl * s_ * (0.9 + 0.12 * k),
                                -hf + hl * s_ * 0.9 + hu * 0.35, 0.6 - 0.1 * k, 0.18, hu))
@@ -381,14 +381,10 @@ def body_parts(pose):
             c = p + (u * np.cos(a_) + l * s2 * np.sin(a_)) * radius * 0.92
             parts.append(blade(c, u * np.cos(a_) + l * s2 * np.sin(a_), 0.35 + 0.4 * size, 0.28, f, 0.12))
 
-    # The club: a mace of bone at the tail's end, studded.
+    # The club: a heavy knob of bone at the tail's end, smooth.
     end = tail[-1]
     tl, tu, tf = frame(tail[-1] - tail[-2], up)
     parts.append(ellipsoid(end + tf * 0.4, np.c_[tl, tu, tf], (1.5, 1.15, 1.55), 0.35, BONE))
-    for dl, du, df in ((1, 0.25, 0.2), (-1, 0.25, 0.2), (0.5, 1, 0.1), (-0.5, 1, 0.1), (0.85, -0.45, 0),
-                       (-0.85, -0.45, 0), (1, 0.1, -0.6), (-1, 0.1, -0.6), (0, 0.25, 1)):
-        dirn = unit(tl * dl + tu * du + tf * df)
-        parts.append(blade(end + tf * 0.4 + dirn * 1.1, dirn, 1.5, 0.5, tf, 0.08))
     return parts
 
 

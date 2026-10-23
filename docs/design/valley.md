@@ -461,21 +461,21 @@ and club:
    arms -- and a pose is only which way each bone points, so standing and
    asleep are the same animal. On it, flesh as smoothly blended volumes:
    a broad heavy body, a barrel chest, a hump of shoulder, thighs like
-   drums, broad three-toed clawed feet, heavy clawed arms; a head built
-   of wedges, not balls -- a flat-topped skull, a deep jaw on a hinge,
-   brow shelves, cheek bosses, two horns sweeping forward, a fringe of
-   blades, teeth -- and small against the body, as a giant's is. Armour
-   kept crisp: two staggered rows of jagged plates down the spine,
-   tallest over the shoulders, knobs on the flanks, a spiked mace at the
-   tail's end. A rough, rocky hide over all of it. The volumes are a
-   distance field, meshed by marching cubes (`pip install
-   scikit-image`).
+   drums, broad three-toed clawed feet, heavy clawed arms; a big, heavy
+   head built of wedges, not balls -- a flat-topped skull, a deep jaw on a
+   hinge, brow shelves, cheek bosses, teeth, and heavy ram's horns rooted
+   on the crown and curling down round the face, their tips forward by
+   the jaw. Armour kept crisp: two staggered rows of jagged plates down
+   the spine from the hips to the nape, tallest over the shoulders, knobs
+   on the flanks; the tail smooth, ending in a heavy club of bone. A
+   rough, rocky hide over all of it. The volumes are a distance field,
+   meshed by marching cubes (`pip install scikit-image`).
 2. **Its poses** (`beast.py`'s `STANDING` and `ASLEEP`, drawn by
    `python3 scripts/sleeper/pose.py`): standing reared and hunched, the
-   head thrust forward and low with its jaws open; asleep as a heavy
-   animal sleeps -- down on its belly, head laid forward on its folded
-   forearms, the tail swept round its left side, settled a little onto
-   its right.
+   head thrust forward and low with its jaws open, the arms hanging;
+   asleep as a heavy animal sleeps -- down on its belly, head laid forward
+   on its folded forearms, the tail swept round its left side, settled a
+   little onto its right.
 3. **The shape** (`scripts/sleeper/terrain.py`): the sleeping beast sized
    to 300 m, squashed to 60 % of its height, its nose turned to 200
    degrees (a little west of south, at the valley), centred at (790, 400);
