@@ -462,8 +462,11 @@ and club:
    asleep are the same animal. On it, flesh as smoothly blended volumes:
    a broad heavy body, a barrel chest, a hump of shoulder, thighs like
    drums, broad three-toed clawed feet, heavy clawed arms; a big, heavy
-   head built of wedges, not balls -- a flat-topped skull, a deep jaw on a
-   hinge, brow shelves, cheek bosses, teeth, and heavy ram's horns rooted
+   head built of wedges, not balls, with an underbite -- a heavy jaw on a
+   hinge, its rounded chin jutting past a short, set-back upper skull,
+   tusks rising from its corners outside the upper lip, so the profile
+   falls away from the chin to the brow -- brow shelves, cheek bosses,
+   teeth, and heavy ram's horns rooted
    on the crown and curling down round the face, their tips forward by
    the jaw. Armour kept crisp: two staggered rows of jagged plates down
    the spine from the hips to the nape, tallest over the shoulders, knobs

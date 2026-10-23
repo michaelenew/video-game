@@ -94,7 +94,7 @@ STANDING = {
     "spine": [(0, 0.75, 1), (0, 0.65, 1), (0, 0.4, 1)],
     "neck": [(0, 0.05, 1), (0, -0.3, 1), (0, -0.45, 1)],
     "head": (0, -0.12, 1),
-    "jaw": 24.0,
+    "jaw": 14.0,
     # The tail thick and heavy, down to the ground and along it, its club
     # resting there.
     "tail": [(0, -0.75, -1), (0, -0.55, -1), (0, -0.4, -1), (0, -0.25, -1),
@@ -314,20 +314,28 @@ def body_parts(pose):
         for spread in (-0.35, 0.0, 0.35):
             parts.append(blade(arm[3] + hl * spread * 0.8, unit(hand) + hl * spread * 0.35 - hu * 0.3, 1.2, 0.24, hl, 0.08))
 
-    # The head: wedges, not balls -- a flat-topped skull narrowing to a
-    # heavy muzzle, a deep lower jaw on a hinge (open in a snarl when it
-    # stands), a heavy brow shelf over each eye, cheek bosses, two horns
-    # sweeping forward off the back of the skull, a fringe of blades behind
-    # it, teeth along both jaws. Small against the body: a giant's head.
+    # The head: wedges, not balls. An underbite (the owner: "top and
+    # bottom jaws need to be different sizes ... the chin / jaw more
+    # prominent and heavy and the profile receded toward the back"): the
+    # lower jaw the biggest thing in the face -- long, wide, deep at a
+    # squared chin that juts past the snout, tusks rising from its corners
+    # outside the upper lip -- and the upper skull short and set back over
+    # it, so the profile falls away from the chin to the muzzle to the
+    # brow. A heavy brow shelf over each eye, cheek bosses, ram's horns, a
+    # fringe of blades behind, teeth along both jaws.
     at, d = sk["head"]
     hl, hu, hf = frame(d, up)
     head_from = len(parts)
-    parts.append(wedge(at + hf * 1.25 + hu * 0.15, np.c_[hl, hu, hf], (1.2, 0.85, 1.35), 0.4, 0.45, 0.3))
+    parts.append(wedge(at + hf * 0.95 + hu * 0.25, np.c_[hl, hu, hf], (1.05, 0.8, 1.1), 0.5, 0.45, 0.3))
     gape = np.radians(pose.get("jaw", 0.0))
     hinge = at + hf * 0.35 - hu * 0.35
     jf = unit(hf * np.cos(gape) - hu * np.sin(gape))
     ju = unit(np.cross(jf, hl))
-    parts.append(wedge(hinge + jf * 1.05 - ju * 0.35, np.c_[hl, ju, jf], (1.1, 0.55, 1.15), 0.35, 0.3, 0.25))
+    jaw_mid = hinge + jf * 1.2 - ju * 0.45
+    parts.append(wedge(jaw_mid, np.c_[hl, ju, jf], (1.25, 0.72, 1.3), 0.2, 0.5, 0.3))
+    # The chin: a heavy, rounded knob at the jaw's front, low.
+    chin = hinge + jf * 2.2 - ju * 0.55
+    parts.append(ellipsoid(chin, np.c_[hl, ju, jf], (1.0, 0.75, 0.6), 0.35))
     for s_ in (1, -1):
         parts.append(wedge(at + hf * 0.95 + hu * 0.75 + hl * s_ * 0.62, np.c_[hl, hu, hf], (0.42, 0.22, 0.5), 0.2, 0.1, 0.15))
         parts.append(ellipsoid(at + hf * 0.45 - hu * 0.15 + hl * s_ * 0.95, np.c_[hl, hu, hf], (0.4, 0.55, 0.6), 0.25))
@@ -343,11 +351,17 @@ def body_parts(pose):
         for k in range(4):
             parts.append(blade(at + hf * (0.15 - 0.28 * k) + hu * (0.55 - 0.18 * k) + hl * s_ * (0.9 + 0.12 * k),
                                -hf + hl * s_ * 0.9 + hu * 0.35, 0.6 - 0.1 * k, 0.18, hu))
-        for k in range(6):
-            x = 0.95 + 0.27 * k
-            parts.append(blade(at + hf * x - hu * 0.5 + hl * s_ * (0.75 - 0.05 * k), -hu + hf * 0.15, 0.5, 0.12, hf, 0.04))
-            parts.append(blade(hinge + jf * (x - 0.1) + ju * 0.1 + hl * s_ * (0.68 - 0.05 * k), ju + jf * 0.15, 0.42, 0.11, jf, 0.04))
-    parts.append(blade(at + hf * (HEAD - 0.4) + hu * 0.55, hu + hf * 0.6, 0.75, 0.26, hf))
+        # Teeth: the upper row short, under the set-back muzzle; the lower
+        # longer, along the jaw; and a tusk at each front corner of the
+        # chin, rising outside the upper lip.
+        for k in range(5):
+            x = 0.7 + 0.24 * k
+            parts.append(blade(at + hf * x - hu * 0.45 + hl * s_ * (0.7 - 0.06 * k), -hu + hf * 0.1, 0.42, 0.11, hf, 0.04))
+        for k in range(5):
+            x = 0.75 + 0.28 * k
+            parts.append(blade(hinge + jf * x + ju * 0.25 + hl * s_ * (0.95 - 0.03 * k), ju + jf * 0.1, 0.45, 0.12, jf, 0.04))
+        parts.append(blade(hinge + jf * 2.15 + ju * 0.15 + hl * s_ * 0.82, ju + hl * s_ * 0.25 - jf * 0.15, 1.2, 0.28, jf, 0.08))
+    parts.append(blade(at + hf * 1.75 + hu * 0.6, hu + hf * 0.5, 0.6, 0.24, hf))
     parts[head_from:] = [scaled(q, at, HEAD_SCALE) for q in parts[head_from:]]
 
     # The back: a row of tall blades down the spine from the hips to the
