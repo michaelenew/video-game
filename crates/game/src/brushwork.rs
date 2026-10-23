@@ -41,8 +41,9 @@ const SHADER: Handle<Shader> = weak_handle!("7d3b2e91-5c4a-4f08-b6e1-9a2c8d5f3e4
 /// Whether the cast is painted, and which of them: the Shadow Reaver and
 /// the Champion first (the owner, 2026-10-21), the Blood mage by following
 /// `docs/design/cast-look.md` (2026-10-22); the rest as they were.
+/// `--pretty` asks for it too (`crate::pretty`).
 pub fn on() -> bool {
-    crate::platform::flag("--painted-cast")
+    crate::platform::flag("--painted-cast") || crate::pretty::on()
 }
 
 fn painted(class: sim::Class) -> bool {

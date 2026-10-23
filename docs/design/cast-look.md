@@ -35,7 +35,11 @@ The owner's own words are in italics, with the day they were said.
 4. **Keep the originals.** Each new look is opt-in beside what was there
    (*"don't get rid of the existing reaver model, it's very good"*, 10-20;
    *"again, keep the originals"*, 10-21): the painted cast is
-   `--painted-cast`, the plain models are the default.
+   `--painted-cast`, the plain models are the default. **`--pretty`** (the
+   owner, 2026-10-23) is every finished step at once for a player -- the
+   painted cast in the brushed world (`crates/game/src/pretty.rs`); a new
+   look joins it when it is the best the game has looked, and its own
+   switch stays for building it.
 5. **Ask what it costs the world, not just the character.** *"I can't have
    the characters look like this and the world be a very different style"*
    (10-20); *"I'm worried the game will [be] tens of GB"* (10-21). A look is

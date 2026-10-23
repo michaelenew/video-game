@@ -56,6 +56,7 @@ mod paint;
 mod palette;
 mod picker;
 mod platform;
+mod pretty;
 mod profile;
 mod scrape;
 mod settings;
