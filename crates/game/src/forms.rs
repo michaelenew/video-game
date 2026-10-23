@@ -521,6 +521,52 @@ pub fn turn(mesh: &mut Mesh, cos: f32, sin: f32) {
     }
 }
 
+/// **A stone arch, drawn** (`sim::valley::dragon::arches`): one piece of
+/// rock along a curve of points and radii -- the Sleeper's horn -- smoothed
+/// between its points (a Catmull-Rom curve through them), round in section,
+/// its upward faces the mountain's snow and the rest its crag. The rock the
+/// simulation stands bodies on is boxes inside it (`dragon::arch_rock`),
+/// hidden.
+pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
+    let f = |v: sim::Fx| v.to_f32_for_render();
+    let pts: Vec<(Vec3, f32)> = points
+        .iter()
+        .map(|(v, r)| (Vec3::new(f(v.x), f(v.y), f(v.z)), f(*r)))
+        .collect();
+    // Four pieces between each pair of points, through them.
+    let mut curve = Vec::new();
+    for i in 0..pts.len().saturating_sub(1) {
+        let p0 = pts[i.saturating_sub(1)].0;
+        let (p1, r1) = pts[i];
+        let (p2, r2) = pts[i + 1];
+        let p3 = pts[(i + 2).min(pts.len() - 1)].0;
+        for k in 0..4 {
+            let t = k as f32 / 4.0;
+            let (t2, t3) = (t * t, t * t * t);
+            let at = 0.5
+                * ((2.0 * p1)
+                    + (p2 - p0) * t
+                    + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+                    + (3.0 * p1 - p0 - 3.0 * p2 + p3) * t3);
+            curve.push((at, r1 + (r2 - r1) * t));
+        }
+    }
+    if let Some(&last) = pts.last() {
+        curve.push(last);
+    }
+    let rock = p.crag();
+    let snow = p.of(Material::Snow);
+    let mut kit = Kit::new();
+    for (i, pair) in curve.windows(2).enumerate() {
+        let ((a, ra), (b, rb)) = (pair[0], pair[1]);
+        // A little past each end, so the bends close.
+        let d = (b - a).normalize_or(Vec3::Y) * ra.min(rb) * 0.35;
+        let caps = (i == 0 || i == curve.len() - 2).then_some(rock);
+        kit.tube_topped(a - d, b + d, ra, rb, 14, (rock, snow), caps);
+    }
+    kit.build()
+}
+
 pub fn seed_of(centre: Vec3, size: Vec3) -> u32 {
     (centre.x * 7.0 + centre.z * 13.0 + size.y * 3.0) as i32 as u32
 }

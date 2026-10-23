@@ -16,7 +16,7 @@ import numpy as np
 
 from pose import asleep
 from render import sheet, view
-from terrain import CELL, build, placed
+from terrain import ARCH, CELL, build, placed
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -61,6 +61,78 @@ def shape(lo, hi):
     return grid_mesh(xs[kx][0], zs[kz][0], CELL * 2, lift)
 
 
+def land_heights():
+    """The land's own height at a point, from the dump, nearest cell."""
+    lines = (ROOT / "target" / "sleeper-land.txt").read_text().split("\n")
+    west, south, cell, nx, nz = (float(v) for v in lines[0].split())
+    h = np.array([[float(v) for v in line.split()] for line in lines[1 : 1 + int(nz)]])
+
+    def at(x, z):
+        i = int(np.clip(round((z - south) / cell), 0, h.shape[0] - 1))
+        j = int(np.clip(round((x - west) / cell), 0, h.shape[1] - 1))
+        return h[i, j]
+
+    return at
+
+
+def arch_curves():
+    """The horns' stone as `terrain.py` wrote it: a list of points (x, z,
+    height over the mountain, radius), metres, a horn."""
+    out, cur = [], []
+    for line in ARCH.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("#"):
+            continue
+        if not line:
+            if cur:
+                out.append(cur)
+            cur = []
+            continue
+        cur.append([int(n) / 100 for n in line.split()])
+    if cur:
+        out.append(cur)
+    return out
+
+
+def tubes(curves, base, colour=(0.62, 0.63, 0.66)):
+    """The horns' stone as a mesh: rings round each curve, `base(x, z)`
+    added to each horn's heights (one height a horn, as the game sets it)."""
+    verts, tris = [], []
+    for c in curves:
+        b = np.mean([base(x, z) for x, z, _, _ in c])
+        pts = np.array([[x, y + b, z] for x, z, y, _ in c])
+        rad = [r for _, _, _, r in c]
+        for i, (p, r) in enumerate(zip(pts, rad)):
+            d = pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]
+            d /= np.linalg.norm(d)
+            s1 = np.cross(d, [0, 1, 0]) if abs(d[1]) < 0.9 else np.cross(d, [1, 0, 0])
+            s1 /= np.linalg.norm(s1)
+            s2 = np.cross(d, s1)
+            start = len(verts)
+            for k in range(16):
+                a = 2 * np.pi * k / 16
+                verts.append(p + (s1 * np.cos(a) + s2 * np.sin(a)) * r)
+            if i:
+                for k in range(16):
+                    a0, a1 = start - 16 + k, start - 16 + (k + 1) % 16
+                    b0, b1 = start + k, start + (k + 1) % 16
+                    tris += [(a0, a1, b1), (a0, b1, b0)]
+    if not verts:
+        return np.zeros((0, 3)), np.zeros((0, 3), int), np.zeros((0, 3))
+    return np.array(verts), np.array(tris), np.tile(colour, (len(tris), 1))
+
+
+def joined(*meshes):
+    """Meshes as one: vertices, triangles, colours."""
+    vs, ts, cs, n = [], [], [], 0
+    for v, t, c in meshes:
+        vs.append(v)
+        ts.append(t + n)
+        cs.append(c)
+        n += len(v)
+    return np.concatenate(vs), np.concatenate(ts), np.concatenate(cs)
+
+
 def land(lo, hi):
     """The land round the Sleeper as a mesh, cut out as a block from `lo`
     to `hi` (x, z), and a colour a triangle."""
@@ -99,13 +171,26 @@ def main():
     hi = mv[:, [0, 2]].max(0) + MARGIN
     lv, lt, lc = land(lo, hi)
     sv, st, sc = shape(lo, hi)
+    # The horns' stone, on the shape (heights over the mountain) and on the
+    # mountain (on the land's own height there, less the beast's lift).
+    curves = arch_curves()
+    sv, st, sc = joined((sv, st, sc), tubes(curves, lambda x, z: 0.0))
+    (west, south), lift = build()
+    land_h = land_heights()
+
+    def bare(x, z):
+        i, j = int(round((z - south) / CELL)), int(round((x - west) / CELL))
+        under = lift[i, j] if 0 <= i < lift.shape[0] and 0 <= j < lift.shape[1] else 0.0
+        return land_h(x, z) - under
+
+    lv, lt, lc = joined((lv, lt, lc), tubes(curves, bare))
     panels = []
     size = (480, 360)
     for label, d, up, mirror in VIEWS:
         panels.append((f"1 Model: {label}", view(mv, mt, d, size=size, colours=mc, up=up, mirror=mirror)))
         panels.append(("2 Its shape alone, on flat ground", view(sv, st, d, size=size, colours=sc, up=up, mirror=mirror)))
         panels.append(("3 On the mountain, as the game has it", view(lv, lt, d, size=size, colours=lc, up=up, mirror=mirror)))
-    title = "The Sleeper. 1: the beast asleep (pale: bone). 2: the shape made from it. 3: that shape on the mountain."
+    title = "The Sleeper. 1: the beast asleep (pale: bone). 2: the shape made from it, its horns as stone. 3: that on the mountain."
     sheet(panels, columns=3, title=title).save(out)
     print(out)
 

@@ -386,6 +386,18 @@ impl Land {
 
     /// [`Land::sample`], worked out.
     fn work_out(&self, x: Fx, z: Fx) -> Sample {
+        self.work_out_with(x, z, true)
+    }
+
+    /// **The ground's height with no Sleeper on it** (`super::dragon`): the
+    /// mountain its body lies on, for setting its horns' stone on it. Not
+    /// remembered: it is asked a handful of times, as the map is laid out.
+    pub fn bare_height(&self, x: Fx, z: Fx) -> Fx {
+        self.work_out_with(x, z, false).height
+    }
+
+    /// [`Land::sample`], worked out, with the Sleeper or without it.
+    fn work_out_with(&self, x: Fx, z: Fx, sleeper: bool) -> Sample {
         let (px, pz) = (x.raw() as i64, z.raw() as i64);
         let mut best = SKY_HIGH;
         let mut best_rise = SKY_HIGH;
@@ -515,7 +527,11 @@ impl Land {
         }
         // The Sleeper (`super::dragon`): a dragon lying on the mountains,
         // under their noise and crags like the rest of them.
-        let slept = super::dragon::lift(x, z, best_rise);
+        let slept = if sleeper {
+            super::dragon::lift(x, z, best_rise)
+        } else {
+            Fx::ZERO
+        };
         best = best.add(slept);
         best_rise = best_rise.add(slept);
         // A hand's breadth on a floor, metres up a mountainside.

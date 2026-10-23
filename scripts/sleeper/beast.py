@@ -172,6 +172,11 @@ class Part:
 
     def __init__(self, fn, lo, hi, blend, kind):
         self.fn, self.lo, self.hi, self.blend, self.kind = fn, np.asarray(lo), np.asarray(hi), blend, kind
+        # What it belongs to ("horn", or nothing), and, for a capsule, its
+        # ends and radii: so a horn can be left out of the skin and laid on
+        # the map as stone instead (`terrain.py`).
+        self.group = None
+        self.capsule = None
 
 
 def capsule(a, b, ra, rb, blend=FLESH, kind=SKIN):
@@ -185,7 +190,9 @@ def capsule(a, b, ra, rb, blend=FLESH, kind=SKIN):
         return np.linalg.norm(p - a - h[..., None] * ab, axis=-1) - (ra + (rb - ra) * h)
 
     r = max(ra, rb)
-    return Part(fn, np.minimum(a, b) - r, np.maximum(a, b) + r, blend, kind)
+    part = Part(fn, np.minimum(a, b) - r, np.maximum(a, b) + r, blend, kind)
+    part.capsule = (a, b, ra, rb)
+    return part
 
 
 def ellipsoid(c, axes, radii, blend=FLESH, kind=SKIN):
@@ -255,6 +262,7 @@ def horn(base, directions, length, width, blend=ARMOUR, kind=BONE):
     for i, d in enumerate(directions):
         nxt = at + unit(d) * length / n
         parts.append(capsule(at, nxt, girth(i), girth(i + 1), blend, kind))
+        parts[-1].group = "horn"
         at = nxt
     return parts
 
@@ -271,7 +279,12 @@ def scaled(part, centre, k):
     """A part drawn `k` times its size about `centre`."""
     c = np.asarray(centre, float)
     fn = part.fn
-    return Part(lambda p: fn(c + (p - c) / k) * k, c + (part.lo - c) * k, c + (part.hi - c) * k, part.blend * k, part.kind)
+    out = Part(lambda p: fn(c + (p - c) / k) * k, c + (part.lo - c) * k, c + (part.hi - c) * k, part.blend * k, part.kind)
+    out.group = part.group
+    if part.capsule is not None:
+        a, b, ra, rb = part.capsule
+        out.capsule = (c + (a - c) * k, c + (b - c) * k, ra * k, rb * k)
+    return out
 
 
 def body_parts(pose):
@@ -491,12 +504,26 @@ def field(parts, cell):
     return d, kind, lo
 
 
-def build(pose, cell=0.07):
-    """The beast's skin in a pose: vertices, triangles, and a colour a
-    triangle (flesh or bone)."""
+def placing(pose, verts):
+    """How a posed beast is set down: its roll onto its side, and how far
+    it is lifted so it lies on the ground -- worked out once from its skin
+    and kept, so anything else of it (its horns, as stone) goes where the
+    skin does."""
+    a = np.radians(pose.get("roll", 0.0))
+    # Rolled onto its right side about the line it faces along.
+    r = np.array([[np.cos(a), -np.sin(a), 0], [np.sin(a), np.cos(a), 0], [0, 0, 1]])
+    lift = -np.percentile((verts @ r.T)[:, 1], 1)
+    return lambda p: np.asarray(p, float) @ r.T + np.array([0.0, lift, 0.0])
+
+
+def build(pose, cell=0.07, without=()):
+    """The beast's skin in a pose: vertices, triangles, a colour a triangle
+    (flesh or bone), and how it was set down (`placing`). `without` leaves
+    out the parts of those groups ("horn")."""
     from skimage.measure import marching_cubes
 
-    d, kind, lo = field(body_parts(pose), cell)
+    parts = [p for p in body_parts(pose) if p.group not in without]
+    d, kind, lo = field(parts, cell)
     verts, faces, _, _ = marching_cubes(d, 0.0, spacing=(cell, cell, cell))
     verts = verts + lo
     idx = np.clip(np.round((verts - lo) / cell).astype(int), 0, np.array(d.shape) - 1)
@@ -505,12 +532,17 @@ def build(pose, cell=0.07):
     flesh = np.array([0.50, 0.47, 0.42])
     bone = np.array([0.80, 0.76, 0.66])
     colours = np.where(tk[:, None] == BONE, bone, flesh)
-    roll = pose.get("roll", 0.0)
-    if roll:
-        a = np.radians(roll)
-        # Rolled onto its right side about the line it faces along.
-        r = np.array([[np.cos(a), -np.sin(a), 0], [np.sin(a), np.cos(a), 0], [0, 0, 1]])
-        verts = verts @ r.T
-    verts[:, 1] -= np.percentile(verts[:, 1], 1)
+    place = placing(pose, verts)
     # Marching cubes winds faces one way; the renderer is two-sided anyway.
-    return verts, faces[:, [0, 2, 1]], colours
+    return place(verts), faces[:, [0, 2, 1]], colours, place
+
+
+def horns(pose, place):
+    """The horns as chains of capsules -- (from, to, radius there, radius
+    here) -- set down as `place` sets the skin down."""
+    out = []
+    for p in body_parts(pose):
+        if p.group == "horn" and p.capsule is not None:
+            a, b, ra, rb = p.capsule
+            out.append((place(a), place(b), ra, rb))
+    return out

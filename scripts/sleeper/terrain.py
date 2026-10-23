@@ -4,7 +4,13 @@
 
 Writes `crates/sim/src/valley/sleeper.bin`, which `sim::valley::dragon`
 reads: how far the beast raises the land, on a grid of cells over its
-footprint. The steps, each a number below:
+footprint -- its body, without its horns. **The horns are stone laid on
+it** (the owner: "I want the horn to read as a natural arch in the stone
+the way it's resting"): a land is one height a point and cannot arch, so
+each horn standing clear of the body is written to `sleeper_arch.txt`
+instead, a curve of points and radii that the simulation stands as rock
+and the renderer draws as one piece of stone. The steps, each a number
+below:
 
 1. **Pose** it (`pose.py`).
 2. **Size** it: so long, nose to tail, in metres.
@@ -29,10 +35,11 @@ from pathlib import Path
 
 import numpy as np
 
-from pose import mesh
+from pose import asleep_horns, mesh
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "crates" / "sim" / "src" / "valley" / "sleeper.bin"
+ARCH = ROOT / "crates" / "sim" / "src" / "valley" / "sleeper_arch.txt"
 
 # How long it is, nose to tail along its longest side, metres.
 LENGTH = 300.0
@@ -44,6 +51,17 @@ SQUASH = 0.6
 # (+z). 180 is south, at the valley.
 AT = (790.0, 400.0)
 FACING = 200.0
+# How much of their height the horns keep, where the body keeps SQUASH:
+# all of it, so the curl stands as an arch.
+HORN_SQUASH = 1.0
+# How much slimmer the horns are drawn as stone than on the beast.
+HORN_THIN = 0.75
+# Sinking a horn into the mountain: none of the way along it until this
+# share, and by this share of the way it is under the land, this deep, so
+# the rest of it -- its tip -- is buried.
+HORN_HOLDS = 0.25
+HORN_EMERGES = 0.75
+HORN_UNDER = 10.0
 # How deep it is sunk into the mountain, metres.
 SINK = 18.0
 # The steepest any of it stands, rise over run: a flank's wall settles to
@@ -57,13 +75,14 @@ SOFTEN = 1
 HEIGHT_SCALE = 100
 
 
-def placed():
-    """The posed mesh in map metres: x east, y up, z north."""
-    v, tris = mesh()
+def to_map():
+    """How a point of the posed beast goes onto the map, in metres (x east,
+    y up, z north), and how much a length grows: sized, squashed, turned to
+    its bearing, put where it lies. Worked out from the body's skin, and
+    the same for anything else of it -- its horns."""
+    v, _ = mesh()
     span = v[:, [0, 2]].max(0) - v[:, [0, 2]].min(0)
     k = LENGTH / span.max()
-    v = v * k
-    v[:, 1] *= SQUASH
     # The model faces +z with its left at +x. Turned so its nose is on the
     # bearing: a bearing b (clockwise from north) is the direction
     # (sin b, cos b) on the map's (x, z).
@@ -72,11 +91,22 @@ def placed():
     # The map and the model are both x, y up, z, right-handed: facing +z
     # its left is +x, so facing any bearing its left is (fwd.z, -fwd.x).
     left = np.array([fwd[1], -fwd[0]])
-    xz = np.outer(v[:, 0], left) + np.outer(v[:, 2], fwd)
+    xz = np.outer(v[:, 0] * k, left) + np.outer(v[:, 2] * k, fwd)
     mid = (xz.max(0) + xz.min(0)) / 2
-    xz = xz - mid + np.array(AT)
-    out = np.c_[xz[:, 0], v[:, 1], xz[:, 1]]
-    return out, tris
+
+    def place(p, squash=SQUASH):
+        p = np.atleast_2d(np.asarray(p, float))
+        xz = np.outer(p[:, 0] * k, left) + np.outer(p[:, 2] * k, fwd) - mid + np.array(AT)
+        return np.c_[xz[:, 0], p[:, 1] * k * squash, xz[:, 1]]
+
+    return place, k
+
+
+def placed():
+    """The posed body in map metres: x east, y up, z north."""
+    v, tris = mesh()
+    place, _ = to_map()
+    return place(v), tris
 
 
 def heightfield(v, tris):
@@ -144,8 +174,59 @@ def build():
     return lo, soften(settle(lift, SETTLE), SOFTEN)
 
 
+def arches(lo, lift):
+    """Each horn standing clear of the body, as points on the map -- x and z
+    in metres, and its height over the mountain it lies on, as the land's
+    lift is measured -- with its radius at each: what the simulation stands
+    as rock. A horn whose every point is inside the land is left out."""
+    place, k = to_map()
+    out = []
+    chains, chain = [], []
+    for a, b, ra, rb in asleep_horns():
+        if chain and np.linalg.norm(chain[-1][0] - a) > 1e-6:
+            chains.append(chain)
+            chain = []
+        if not chain:
+            chain.append((a, ra))
+        chain.append((b, rb))
+    chains.append(chain)
+    for chain in chains:
+        pts = []
+        # The horn keeps its own height where it leaves the skull, and its
+        # curl stands upright from there, not squashed as the body is: a
+        # squashed curl lies flat on the head, and an arch has to stand.
+        root = np.asarray(chain[0][0], float)
+        for p, r in chain:
+            m = place(root)[0] + place(np.asarray(p) - root, HORN_SQUASH)[0] - place(np.zeros(3), HORN_SQUASH)[0]
+            i = int(round((m[2] - lo[1]) / CELL))
+            j = int(round((m[0] - lo[0]) / CELL))
+            ground = lift[i, j] if 0 <= i < lift.shape[0] and 0 <= j < lift.shape[1] else 0.0
+            pts.append((m[0], m[2], m[1] - SINK, r * k, ground))
+        # Sunk progressively from root to tip (the owner: "bury the tip
+        # quite far up to keep it reading natural"): the horn springs from
+        # the head, crests, and goes back into the mountain well before its
+        # point -- a span of stone with ground under it, both ends in rock.
+        n = len(pts) - 1
+        x, z, y, r, g = pts[int(round(n * HORN_EMERGES))]
+        depth = max(y + r - g, 0.0) + HORN_UNDER
+        pts = [(x, z, y - depth * max(i / n - HORN_HOLDS, 0) / (HORN_EMERGES - HORN_HOLDS), r * HORN_THIN, g)
+               for i, (x, z, y, r, g) in enumerate(pts)]
+        if any(y + r > g for _, _, y, r, g in pts):
+            out.append([(x, z, y, r) for x, z, y, r, _ in pts])
+    return out
+
+
 def main():
     lo, lift = build()
+    horns = arches(lo, lift)
+    lines = ["# The Sleeper's horns, as stone: a horn a block of lines, each point",
+             "# x z (map, cm), its height over the mountain (cm) and its radius (cm).",
+             "# Written by scripts/sleeper/terrain.py."]
+    for h in horns:
+        lines.append("")
+        lines += [f"{round(x * 100)} {round(z * 100)} {round(y * 100)} {round(r * 100)}" for x, z, y, r in h]
+    ARCH.write_text("\n".join(lines) + "\n")
+    print(f"{ARCH.relative_to(ROOT)}: {len(horns)} horn(s) standing clear, {sum(len(h) for h in horns)} points")
     nz, nx = lift.shape
     units = np.clip(np.round(lift * HEIGHT_SCALE), 0, 65535).astype("<u2")
     header = struct.pack(

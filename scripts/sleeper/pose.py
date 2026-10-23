@@ -9,25 +9,37 @@ pipeline asks for them, built once each and kept: `asleep()` is what
 import functools
 import sys
 
-from beast import ASLEEP, STANDING, build
+from beast import ASLEEP, STANDING, build, horns
 
 
 @functools.cache
 def asleep():
     """The beast asleep: vertices, triangles, a colour a triangle."""
-    return build(ASLEEP)
+    return build(ASLEEP)[:3]
 
 
 @functools.cache
 def standing():
     """The beast standing: vertices, triangles, a colour a triangle."""
-    return build(STANDING)
+    return build(STANDING)[:3]
+
+
+@functools.cache
+def _asleep_body():
+    return build(ASLEEP, without=("horn",))
 
 
 def mesh():
-    """The sleeping mesh, for the terrain: vertices and triangles."""
-    v, t, _ = asleep()
+    """The sleeping body without its horns, for the land: vertices and
+    triangles. The horns are stone laid on it (`asleep_horns`)."""
+    v, t, _, _ = _asleep_body()
     return v, t
+
+
+def asleep_horns():
+    """The sleeping beast's horns as chains of capsules, set down where the
+    body (`mesh`) is."""
+    return horns(ASLEEP, _asleep_body()[3])
 
 
 def main():
