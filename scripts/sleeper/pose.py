@@ -113,6 +113,61 @@ def posed(model):
     return pose
 
 
+# **Standing**, as it is when it wakes (the owner: "make it stand on two
+# legs"): reared up from the model's rest pose -- the body pitched up this
+# many degrees about the hips -- on its hind legs, the tail out behind as a
+# counterweight, the small forelimbs held in front, the neck up and the head
+# level.
+REAR = 68.0
+STAND_AIMS = [
+    ("thigh.L", "shin.L", (0.12, -1.0, 0.3)),
+    ("thigh.R", "shin.R", (-0.12, -1.0, 0.3)),
+    ("shin.L", "foot.L", (0.0, -1.0, -0.4)),
+    ("shin.R", "foot.R", (0.0, -1.0, -0.4)),
+    ("foot.L", "toes.L", (0.05, -0.2, 1.0)),
+    ("foot.R", "toes.R", (-0.05, -0.2, 1.0)),
+    ("tail_01", "tail_02", (0.0, -0.6, -1.0)),
+    ("tail_02", "tail_03", (0.0, -0.45, -1.0)),
+    ("tail_03", "tail_04", (0.0, -0.25, -1.0)),
+    ("tail_04", "tail_05", (0.0, -0.1, -1.0)),
+    ("tail_05", "tail_06", (0.0, 0.05, -1.0)),
+    ("neck_01", "neck_02", (0.0, 0.75, 0.65)),
+    ("neck_02", "neck_03", (0.0, 0.55, 0.85)),
+    ("neck_03", "neck_04", (0.0, 0.35, 0.95)),
+    ("neck_04", "neck_05", (0.0, 0.1, 1.0)),
+    ("neck_05", "head", (0.0, -0.1, 1.0)),
+    ("head", "fire_socket", (0.0, -0.2, 1.0)),
+    ("upperarm.L", "forearm.L", (0.35, -0.6, 0.6)),
+    ("upperarm.R", "forearm.R", (-0.35, -0.6, 0.6)),
+    ("forearm.L", "hand.L", (0.05, -0.2, 1.0)),
+    ("forearm.R", "hand.R", (-0.05, -0.2, 1.0)),
+]
+
+
+def standing(model):
+    """The beast up on its hind legs."""
+    pose = [tuple(np.copy(v) for v in r) for r in model.rest]
+    for bone, k in SCALES:
+        i = model.index[bone]
+        t, r, s = pose[i]
+        pose[i] = (t, r, s * k)
+    turn(model, pose, "pelvis", (1, 0, 0), -REAR)
+    for bone, child, direction in STAND_AIMS:
+        aim(model, pose, bone, child, direction)
+    i = model.index["jaw"]
+    t, _, s = pose[i]
+    pose[i] = (t, np.array([0.0, 0.0, 0.0, 1.0]), s)
+    return pose
+
+
+def stood():
+    """The standing mesh, its feet on the ground."""
+    m = sculpt(Model())
+    v = m.skin(standing(m))
+    v[:, 1] -= v[:, 1].min()
+    return v, m.triangles
+
+
 def lie(verts):
     """Roll the body onto its right side and set it on the ground."""
     roll = quat_matrix(axis_angle((0, 0, 1), ROLL))
@@ -158,17 +213,20 @@ def main():
     from render import sheet, view
 
     out = sys.argv[1] if len(sys.argv) > 1 else "target/sleeper-pose.png"
-    v, tris = mesh()
     c = colours(sculpt(Model()))
+    up, ut = stood()
+    v, tris = mesh()
+    size = (440, 400)
     panels = [
-        ("from above (it faces up the page)", view(v, tris, (0.0001, -1, 0), colours=c, up=(0, 0, 1))),
-        ("from its left side", view(v, tris, (-1, -0.2, 0), colours=c)),
-        ("from in front", view(v, tris, (0, -0.2, -1), colours=c)),
-        ("from behind and to its right, above", view(v, tris, (0.6, -0.6, 0.6), colours=c)),
+        ("Standing: from its left", view(up, ut, (-1, -0.1, 0), colours=c, size=size)),
+        ("Standing: from in front, to its left", view(up, ut, (-0.6, -0.15, -0.8), colours=c, size=size)),
+        ("Standing: from behind, to its right", view(up, ut, (0.6, -0.25, 0.75), colours=c, size=size)),
+        ("Asleep: from above (it faces up the page)", view(v, tris, (0.0001, -1, 0), colours=c, up=(0, 0, 1), size=size)),
+        ("Asleep: from its left side", view(v, tris, (-1, -0.2, 0), colours=c, size=size)),
+        ("Asleep: from behind and to its right, above", view(v, tris, (0.6, -0.6, 0.6), colours=c, size=size)),
     ]
-    legend = ", ".join(f"{name}" for name, _, _ in PARTS)
-    print("colours:", legend)
-    sheet(panels, columns=2, title="The Sleeper, posed. Red head, orange neck, blue tail, green forelimbs, purple hind limbs.").save(out)
+    title = "The Sleeper. Red head, orange neck, blue tail, green forelimbs, purple hind limbs, grey body and back spikes."
+    sheet(panels, columns=3, title=title).save(out)
     print(out)
 
 

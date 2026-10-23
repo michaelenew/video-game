@@ -459,7 +459,19 @@ sick dog" -- and judging them was blind to the steps between. Now:
    mesh smoothed everywhere but the row of tall spikes down the back, so
    the rest of its spines melt into the body; the head pressed toward a
    short, broad egg -- a blunt, heavy skull, its horns and crest drawn in
-   -- and its mouth shut.
+   -- and its mouth shut. Then (the owner: "make the neck thicker ... add a
+   row of prominent spikes on its back, make the spikes on its back legs
+   smaller"): the neck pushed out from its bones, thickest at the
+   shoulders; the hind legs' spikes smoothed a little rather than held;
+   and a new row of blade-like spikes down the middle of the back from
+   the neck to the tail, tallest over the shoulders and hips, each riding
+   the skin under it.
+
+   **It also stands** (`pose.py`'s `standing`; "make it stand on two
+   legs"): reared up 68 degrees on its hind legs from the model's rest
+   pose, the tail out behind, the small forelimbs in front, the neck up
+   and the head level -- how it will be when it wakes. `python3
+   scripts/sleeper/pose.py` draws it standing and asleep on one sheet.
 3. **The pose** (`scripts/sleeper/pose.py`): from the last frame of the
    model's own "Die" clip, every bone *aimed* along a world direction --
    the neck round to the left so the head lies back along the left

@@ -18,6 +18,16 @@ pose (`pose.py`) carries it wherever the bones go:
 - **A tarrasque's head**: the skull pressed toward a short, broad egg --
   a blunt, heavy head rather than a long snout -- and its swept horns and
   crest drawn most of the way in.
+
+And on the second pass ("make the neck thicker ... add a row of prominent
+spikes on its back, make the spikes on its back legs smaller"):
+
+- **A thick neck**: pushed out from the line of its bones, thickest at the
+  shoulders.
+- **The hind legs' spikes smaller**: smoothed a few rounds, not held.
+- **A row of spikes down the back**: new cones, standing out of the middle
+  of the back from the neck to the tail, tallest over the shoulders and
+  hips, each carried by the spine bone under it.
 """
 import numpy as np
 
@@ -33,6 +43,26 @@ MU = -0.58
 SPINE = ("tail_03", "tail_02", "tail_01", "pelvis", "chest", "neck_01")
 BACK_ABOVE = 0.22
 BACK_MIDDLE = 0.55
+
+# How many rounds the hind legs' spikes are smoothed: fewer than the rest,
+# so they shrink rather than go.
+LEG_ROUNDS = 4
+LEGS = ("thigh", "shin", "foot", "toes")
+
+# The neck: how much thicker, at its root and at the head.
+NECK_ROOT = 1.7
+NECK_TOP = 1.3
+NECK = ("neck_01", "neck_02", "neck_03", "neck_04", "neck_05")
+
+# The row of spikes: along these bones, from the tail to the head; how far
+# apart, metres of the model; how tall and how wide at the foot, at their
+# tallest; and the share of that each end of the row tapers to.
+ROW = ("tail_04", "tail_03", "tail_02", "tail_01", "pelvis", "chest", "neck_01", "neck_03")
+ROW_EVERY = 0.2
+ROW_TALL = 0.55
+ROW_WIDE = 0.1
+ROW_ENDS = 0.35
+ROW_SIDES = 5
 
 # How many more rounds the head is smoothed, the rest held: its horns are
 # long, and a tarrasque's brow is a ridge, not a crown of blades.
@@ -129,22 +159,102 @@ def tarrasque_head(model, p):
     return p + w[:, None] * (shaped - p)
 
 
+def thicker_neck(model, p):
+    """The neck pushed out from the line of its bones, as far as each vertex
+    is the neck's: thickest at the root, less toward the head."""
+    line = np.array([bind_point(model, b) for b in ("chest",) + NECK + ("head",)])
+    w = weight_of(model, NECK)
+    out = p.copy()
+    for k in np.nonzero(w > 0)[0]:
+        best = None
+        for i in range(len(line) - 1):
+            a, b = line[i], line[i + 1]
+            ab = b - a
+            t = np.clip((p[k] - a) @ ab / (ab @ ab), 0, 1)
+            c = a + t * ab
+            d = np.linalg.norm(p[k] - c)
+            if best is None or d < best[0]:
+                best = (d, c, (i + t) / (len(line) - 1))
+        _, c, along = best
+        grow = NECK_ROOT + (NECK_TOP - NECK_ROOT) * along
+        out[k] = p[k] + w[k] * (c + (p[k] - c) * grow - p[k])
+    return out
+
+
+def add_row(model):
+    """A row of cones down the middle of the back, its foot on the body's
+    surface, each carried by the bones that carry the body where it stands
+    -- so it moves with the skin under it, not apart from it."""
+    line = np.array([bind_point(model, b) for b in ROW])
+    seg = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    total = seg.sum()
+    used = np.unique(model.triangles)
+    body = model.positions[used]
+    verts, tris, joints, weights = [], [], [], []
+    for d in np.arange(ROW_EVERY / 2, total, ROW_EVERY):
+        i = min(np.searchsorted(np.cumsum(seg), d), len(seg) - 1)
+        t = (d - np.cumsum(seg)[i] + seg[i]) / seg[i]
+        at = line[i] + t * (line[i + 1] - line[i])
+        # Headward along the spine; its back is that turned up (and back,
+        # where the neck stands up).
+        along = (line[i + 1] - line[i]) / seg[i]
+        back = np.cross(along, (1.0, 0, 0))
+        back /= np.linalg.norm(back)
+        # The body's surface over the spine here: the furthest of it out
+        # along the back, close to that line.
+        # Only the body round this point of the spine: not the back behind
+        # the neck, which a line out of the neck's back runs into.
+        rel = body - at
+        out = rel @ back
+        off = rel - np.outer(out, back)
+        near = (np.linalg.norm(off, axis=1) < 0.18) & (out < 0.7)
+        top = out[near].max() if near.any() else 0.2
+        # Tallest over the shoulders and hips, tapering at both ends.
+        u = d / total
+        size = ROW_ENDS + (1 - ROW_ENDS) * np.sin(np.pi * u) ** 0.7
+        foot = at + back * (top - 0.04)
+        tip = foot + back * ROW_TALL * size + along * -0.12 * size
+        side = np.cross(back, along)
+        base = len(model.positions) + len(verts)
+        verts.append(tip)
+        for k in range(ROW_SIDES):
+            a = 2 * np.pi * k / ROW_SIDES
+            # Flattened across the body: a blade more than a cone.
+            verts.append(foot + ROW_WIDE * size * (np.cos(a) * along * 1.6 + np.sin(a) * side * 0.7))
+        for k in range(ROW_SIDES):
+            tris.append((base, base + 1 + k, base + 1 + (k + 1) % ROW_SIDES))
+        under = used[np.argmin(np.linalg.norm(body - foot, axis=1))]
+        joints += [model.joints[under]] * (ROW_SIDES + 1)
+        weights += [model.weights[under]] * (ROW_SIDES + 1)
+    model.positions = np.r_[model.positions, np.array(verts)]
+    model.joints = np.r_[model.joints, np.array(joints)]
+    model.weights = np.r_[model.weights, np.array(weights)]
+    model.triangles = np.r_[model.triangles, np.array(tris)]
+
+
 def sculpt(model):
-    """Reshape `model` in place: no wings, spikes down, a tarrasque's head."""
+    """Reshape `model` in place: no wings, spikes down but a row down the
+    back, a thick neck, a tarrasque's head."""
     names = dominant(model)
     # No wings.
     wing = np.char.startswith(names, "wing")
     model.triangles = model.triangles[~wing[model.triangles].any(1)]
     # The head first, so its horns are smoothed in their new place.
     p = tarrasque_head(model, model.positions)
-    # Spikes down, but the back's.
+    # Spikes down, but the back's; the hind legs' only a little.
     unique, which = welded(p)
+    spikes = back_spikes(model, names)
+    on_legs = np.isin(names, [n for n in names if n.startswith(LEGS)])
     keep = np.zeros(len(unique), bool)
-    np.logical_or.at(keep, which, back_spikes(model, names))
+    np.logical_or.at(keep, which, spikes)
+    leg_spike = np.zeros(len(unique), bool)
+    np.logical_or.at(leg_spike, which, spikes & on_legs)
     tris = which[model.triangles]
     unique = smooth(unique, tris, keep)
+    unique = smooth(unique, tris, ~leg_spike, LEG_ROUNDS)
     head = np.zeros(len(unique), bool)
     np.logical_or.at(head, which, weight_of(model, HEAD) > 0.5)
     unique = smooth(unique, tris, ~head, HEAD_ROUNDS)
-    model.positions = unique[which]
+    model.positions = thicker_neck(model, unique[which])
+    add_row(model)
     return model
