@@ -222,6 +222,17 @@ pub fn of(id: ArenaId) -> Sky {
             ..Sky::over([0.82, 0.90, 0.84])
         },
 
+        // --- the tutorial halls --------------------------------------------
+        //
+        // A clear, even midday down a long gorge: nothing in the sky to read
+        // but the lesson. Each hall a turn of its class -- the Elementalist's
+        // warm, the Blood mage's rose, the Reaver's and the Dual mage's cool.
+        ArenaId::HALL_CHAMPION => Sky::over([0.84, 0.88, 0.97]),
+        ArenaId::HALL_REAVER => Sky::over([0.80, 0.84, 0.98]),
+        ArenaId::HALL_ELEMENTALIST => Sky::over([0.95, 0.89, 0.80]),
+        ArenaId::HALL_BLOOD => Sky::over([0.96, 0.86, 0.86]),
+        ArenaId::HALL_DUAL => Sky::over([0.86, 0.85, 0.98]),
+
         _ => Sky::over([0.78, 0.87, 0.95]),
     }
 }

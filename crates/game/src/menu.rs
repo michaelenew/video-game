@@ -89,6 +89,7 @@ pub fn draw(
     time: Res<Time<Real>>,
     cairns: Res<crate::cairns::Cairns>,
     mut settings: ResMut<crate::settings::Settings>,
+    mut coach: ResMut<crate::tutorial::Coach>,
 ) {
     let now = time.elapsed_secs_f64();
     // None as the window closes: the frame the context is gone and the
@@ -249,6 +250,8 @@ pub fn draw(
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
             let ui = right;
+            crate::tutorial::menu(ui, &mut sim, &mut coach);
+            ui.separator();
             stages(ui, &mut sim);
             dummy(ui, &mut sim);
             fast_travel(ui, &mut sim, &cairns);
