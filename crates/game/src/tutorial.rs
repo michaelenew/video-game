@@ -29,25 +29,10 @@ pub fn observe(coach: &mut Coach, before: &World, after: &World) {
     coach.progress.observe(before, after);
 }
 
-/// How often the swinging dummy swings, in frames.
-const SWING_EVERY: u32 = 150;
-
-/// **Fighter two's input in a hall**, or `None` anywhere else: still, or
-/// swinging at fighter zero on a count the panel shows.
+/// **Fighter two's input in a hall**, or `None` anywhere else: the room's
+/// (`sim::tutorial::dummy_input`).
 pub fn dummy_input(w: &World) -> Option<SimInput> {
-    let t = tutorial::of(w.arena)?;
-    let room = &t.rooms[tutorial::room_at(t, w.players[0].pos.x)];
-    if room.dummy != Dummy::Swings {
-        return Some(SimInput::default());
-    }
-    let d = w.players[0].pos.sub(w.players[1].pos);
-    let aim = (sim::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
-    let bits = if w.frame % SWING_EVERY < 2 {
-        SimInput::LEFT
-    } else {
-        0
-    };
-    Some(SimInput::looking_at(bits, aim, 0))
+    tutorial::dummy_input(w)
 }
 
 /// **Keep the hall and the class together**: playing a class in another
@@ -290,13 +275,14 @@ fn panel(ui: &mut egui::Ui, t: &Tutorial, k: usize, w: &World, progress: &Progre
         _ => {}
     }
     if room.dummy == Dummy::Swings {
-        let left = SWING_EVERY - w.frame % SWING_EVERY;
-        let secs = left.div_ceil(sim::TICK_HZ);
-        ui.label(
-            egui::RichText::new(format!("The dummy swings in {secs}…"))
-                .strong()
-                .color(WARN),
+        // In tenths: the clash starts at 0.2 (`sim::tutorial::dummy_input`),
+        // and a count in whole seconds cannot show it.
+        let left = tutorial::SWING_EVERY - w.frame % tutorial::SWING_EVERY;
+        let line = format!(
+            "The dummy thrusts in {:.1} s",
+            left as f32 / sim::TICK_HZ as f32
         );
+        ui.label(egui::RichText::new(line).strong().size(16.0).color(WARN));
     }
     ui.add_space(4.0);
     if progress.room_done(t, k) {

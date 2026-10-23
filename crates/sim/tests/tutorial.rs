@@ -452,3 +452,55 @@ fn every_hall_is_a_trip_away() {
         );
     }
 }
+
+/// The frames before the swinging dummy's thrust that a held middle click
+/// may start on and clash it, from `gap` metres in the Champion's clash
+/// room -- the dummy driven as the hall drives it.
+fn clash_window(gap: i32) -> Vec<u32> {
+    let t = tutorial::for_class(Class::Champion).unwrap();
+    let room = t
+        .rooms
+        .iter()
+        .position(|r| r.dummy == tutorial::Dummy::Swings)
+        .expect("a clash room");
+    let every = tutorial::SWING_EVERY;
+    let mut ok = Vec::new();
+    for early in 0..40 {
+        let mut w = hall(Class::Champion);
+        stand_in(&mut w, room, gap);
+        let mut coach = Progress::default();
+        let mut step = |w: &mut World, bits: u16| {
+            let before = w.clone();
+            let two = tutorial::dummy_input(w).unwrap();
+            w.advance([toward_dummy(w, bits), two]);
+            coach.observe(&before, w);
+        };
+        // Up to `early` frames before the next thrust.
+        while (w.frame + 1 + early) % every != 0 {
+            step(&mut w, 0);
+        }
+        for f in 0..120 {
+            step(&mut w, if f < 40 { Input::MIDDLE } else { 0 });
+        }
+        if coach.times(Class::Champion, room, 0) > 0 {
+            ok.push(early);
+        }
+    }
+    ok
+}
+
+#[test]
+fn the_clash_room_can_be_timed_by_hand() {
+    // Three or four metres off, a hold begun about a fifth of a second
+    // before the thrust -- the panel's count reading 0.2 -- clashes it, on
+    // more than one frame. With a sword up close it was one frame in a
+    // hundred and forty: the hammer reached the dummy first.
+    for gap in [3, 4] {
+        let window = clash_window(gap);
+        assert!(window.len() >= 4, "{gap} m: {window:?}");
+        assert!(
+            window.iter().any(|&f| (9..=15).contains(&f)),
+            "{gap} m: the count's 0.2 is in it: {window:?}"
+        );
+    }
+}

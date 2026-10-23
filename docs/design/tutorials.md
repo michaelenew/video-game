@@ -36,7 +36,8 @@ in, facing the door you came through — or aside by the north wall, in a room
 about getting somewhere — and is stood back up to a full bar every frame. You
 are topped up whenever you run low. Nobody is knocked out of a lesson, and no
 round ends in a hall (`World::step_hall`). One room has a dummy that
-**swings** on a count the panel shows: the Champion's clash.
+**thrusts a spear** on a count the panel shows in tenths: the Champion's
+clash (`tutorial::dummy_input`).
 
 **Tab walks you into the next class's hall**: a hall always teaches the class
 you are playing (`game::tutorial::steer`). What you have done is kept per
@@ -155,6 +156,13 @@ with every mover.
 - **The Dual mage's bars are not seeded** on entering a room: the bars do not
   drain on their own, so the switch-hands room builds what the unlocks room
   spends, and wings take about sixteen alternating taps a hand.
+- **The clash room's dummy thrusts a spear, not a sword** (2026-10-23, from
+  play). A clash is his finisher live as their blow lands; if his finisher
+  reaches them first they are simply hit and their swing is taken back. A
+  quick sword up close left one frame in a hundred and forty where the two
+  met; the spear, from three or four metres, leaves four or five -- a hold
+  begun about a fifth of a second before the thrust
+  (`tests/tutorial.rs`, `the_clash_room_can_be_timed_by_hand`).
 - **Progress is kept for the session**, not saved to disk.
 - **Docs found stale while writing the halls**: the Reaver's kit and
   exploration 0014 say Gallows blinks to the shadow and bursts it (a comment

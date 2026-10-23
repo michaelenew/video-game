@@ -508,12 +508,13 @@ pub const ROOMS: [Room; 11] = [
         title: "Advanced: the clash",
         advanced: true,
         intro: "While a finisher (or Earthbreaker) is live, any blow that meets him is \
-                cancelled: he takes nothing and the attacker is staggered. This dummy swings \
-                every few seconds -- watch the count, and have a finisher out as its swing \
-                arrives.",
+                cancelled: he takes nothing and the attacker is staggered. It is a timing, \
+                not a trade: if your finisher reaches them first they are simply hit. This \
+                dummy thrusts its spear every few seconds -- stand three or four metres off, \
+                outside your hammer's reach, and have the Shockwave out as the spear arrives.",
         tasks: &[Task {
-            what: "Clash its swing",
-            keys: "Hold middle click so the Shockwave meets the dummy's swing",
+            what: "Clash its thrust",
+            keys: "Three or four metres off, start holding middle click as the count reads 0.2",
             check: clash,
             lands: false,
         }],

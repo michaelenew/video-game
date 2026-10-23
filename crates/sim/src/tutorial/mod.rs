@@ -324,6 +324,32 @@ pub fn span(k: usize) -> (Fx, Fx) {
     (lo, lo.add(crate::arena::cm(ROOM_CM)))
 }
 
+/// **How often a swinging dummy swings**, in frames: a count the panel shows.
+pub const SWING_EVERY: u32 = 150;
+
+/// **The dummy's buttons in a hall**, or `None` anywhere else: still, or --
+/// in a room that wants it -- a spear thrust at fighter zero every
+/// [`SWING_EVERY`] frames. A spear rather than a sword because a clash is
+/// her finisher live as the blow arrives, and a quick sword up close is a
+/// blow her finisher reaches first: the dummy is simply hit, its swing taken
+/// back, and the clash a frame wide. The spear reaches her from further than
+/// the hammer reaches back, which opens it to a few frames.
+pub fn dummy_input(w: &World) -> Option<crate::Input> {
+    let t = of(w.arena)?;
+    let room = &t.rooms[room_at(t, w.players[0].pos.x)];
+    if room.dummy != Dummy::Swings {
+        return Some(crate::Input::default());
+    }
+    let d = w.players[0].pos.sub(w.players[1].pos);
+    let aim = (crate::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
+    let bits = if w.frame % SWING_EVERY < 2 {
+        crate::Input::RIGHT
+    } else {
+        0
+    };
+    Some(crate::Input::looking_at(bits, aim, 0))
+}
+
 /// What is worth saying, after a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Word {
