@@ -25,6 +25,8 @@ spikes on its back, make the spikes on its back legs smaller"):
 - **A thick neck**: pushed out from the line of its bones, thickest at the
   shoulders, at the back and sides only -- its throat is drawn in, so it
   hangs no bib down the chest.
+- **Feet** (fourth pass, "it needs real feet"): a broad pad round each
+  toes bone; the dragon's own feet are a few small claws.
 - **Heavy thighs, thin arms, a clubbed tail** (third pass): the thighs
   swollen, the arms slimmed against the length `pose.py` gives them, and
   the tail thickened all along, swelling at its end into a club.
@@ -63,6 +65,13 @@ THROAT = 0.75
 # The thighs: how much thicker (a T. rex's drumsticks).
 THIGH = 1.35
 
+# The feet: how much broader, toes and all -- real feet to stand on.
+FOOT = 1.9
+
+# The body between the hips and the shoulders: how much heavier.
+BODY = 1.2
+TRUNK = ("pelvis", "spine_01", "spine_02", "chest")
+
 # The arms: how much thinner, against their length (`pose.py` makes them
 # long enough to reach the ground, and that scales their girth with it).
 ARM = 0.6
@@ -86,10 +95,14 @@ NECK = ("neck_01", "neck_02", "neck_03", "neck_04", "neck_05")
 # tallest; and the share of that each end of the row tapers to.
 ROW = ("tail_04", "tail_03", "tail_02", "tail_01", "pelvis", "chest", "neck_01", "neck_03")
 ROW_EVERY = 0.2
-ROW_TALL = 0.55
+ROW_TALL = 0.65
 ROW_WIDE = 0.1
 ROW_ENDS = 0.35
 ROW_SIDES = 5
+# How deep a spike's foot is sunk into the skin, so it grows out of it:
+# deeper than the low-poly skin's facets dip between their corners. Its
+# height is measured from the skin, not from its foot.
+ROW_SINK = 0.25
 
 # How many more rounds the head is smoothed, the rest held: its horns are
 # long, and a tarrasque's brow is a ridge, not a crown of blades.
@@ -249,12 +262,17 @@ def bones_line(model, bones, past=0.0):
 
 
 def reshaped(model, p):
-    """The neck, the thighs, the tail and the arms, swollen or slimmed."""
+    """The neck, the thighs, the feet, the body, the tail and the arms,
+    swollen or slimmed."""
     p = swell(model, p, NECK, bones_line(model, ("chest",) + NECK + ("head",)), [(0, NECK_ROOT), (1, NECK_TOP)], THROAT)
     for side in ("L", "R"):
         p = swell(model, p, (f"thigh.{side}",), bones_line(model, (f"thigh.{side}", f"shin.{side}")), [(0, THIGH), (1, THIGH)])
         arm = tuple(f"{b}.{side}" for b in ("upperarm", "forearm", "hand", "fingers"))
         p = swell(model, p, arm, bones_line(model, arm, 1.0), [(0, ARM), (1, ARM)])
+    for side in ("L", "R"):
+        foot = (f"foot.{side}", f"toes.{side}")
+        p = swell(model, p, foot, bones_line(model, foot, 1.5), [(0, FOOT * 0.8), (1, FOOT)])
+    p = swell(model, p, TRUNK, bones_line(model, ("tail_01",) + TRUNK + ("neck_01",)), [(0, BODY), (1, BODY)])
     p = swell(model, p, TAIL, bones_line(model, ("pelvis",) + TAIL, 1.2), TAIL_GROW)
     end = bind_point(model, "tail_06")
     last = end - bind_point(model, "tail_05")
@@ -262,14 +280,61 @@ def reshaped(model, p):
     return p
 
 
-def add_row(model):
-    """A row of cones down the middle of the back, its foot on the body's
-    surface, each carried by the bones that carry the body where it stands
-    -- so it moves with the skin under it, not apart from it."""
+# A real foot: a broad pad round each toes bone, from a little behind it
+# to this far ahead of it, so wide and so deep -- metres of the model,
+# before `pose.py` scales the leg (2.25 times, by the thigh and the foot) --
+# carried wholly by the toes. Round across, so it reads as a foot however
+# the bone is turned about its length.
+PAD_BACK = 0.08
+PAD_AHEAD = 0.36
+PAD_WIDE = 0.13
+PAD_DEEP = 0.09
+
+
+def add_feet(model):
+    """A broad pad under each foot: the dragon's own are a few small claws,
+    and a beast this heavy stands on something."""
+    rings, around = 7, 10
+    for side in ("L", "R"):
+        k = model.skin_joints.index(model.index[f"toes.{side}"])
+        bone = np.linalg.inv(model.inverse_bind[k])
+        rot = bone[:3, :3] / np.linalg.norm(bone[:3, :3], axis=0, keepdims=True)
+        at = bone[:3, 3]
+        verts = []
+        mid = (PAD_AHEAD - PAD_BACK) / 2
+        half = (PAD_AHEAD + PAD_BACK) / 2
+        for i in range(rings + 1):
+            t = -1 + 2 * i / rings
+            r = np.sqrt(max(1 - t * t, 0))
+            for j in range(around):
+                a = 2 * np.pi * j / around
+                local = np.array([PAD_WIDE * r * np.cos(a), mid + half * t, PAD_DEEP * r * np.sin(a)])
+                verts.append(at + rot @ local)
+        base = len(model.positions)
+        tris = []
+        for i in range(rings):
+            for j in range(around):
+                a, b = base + i * around + j, base + i * around + (j + 1) % around
+                c, d = a + around, b + around
+                tris += [(a, b, d), (a, d, c)]
+        n = len(verts)
+        model.positions = np.r_[model.positions, np.array(verts)]
+        model.joints = np.r_[model.joints, np.tile([k, 0, 0, 0], (n, 1))]
+        model.weights = np.r_[model.weights, np.tile([1.0, 0, 0, 0], (n, 1))]
+        model.triangles = np.r_[model.triangles, np.array(tris)]
+
+
+def add_row(model, skip):
+    """A row of cones down the middle of the back, its foot sunk into the
+    body's skin, each carried by the bones that carry the skin where it
+    stands -- so it moves with the skin under it, not apart from it. The
+    skin is found without the spikes the model already has (`skip`): on
+    their tips, a new spike would stand in the air."""
     line = np.array([bind_point(model, b) for b in ROW])
     seg = np.linalg.norm(np.diff(line, axis=0), axis=1)
     total = seg.sum()
     used = np.unique(model.triangles)
+    used = used[~skip[used]]
     body = model.positions[used]
     verts, tris, joints, weights = [], [], [], []
     for d in np.arange(ROW_EVERY / 2, total, ROW_EVERY):
@@ -281,10 +346,10 @@ def add_row(model):
         along = (line[i + 1] - line[i]) / seg[i]
         back = np.cross(along, (1.0, 0, 0))
         back /= np.linalg.norm(back)
-        # The body's surface over the spine here: the furthest of it out
-        # along the back, close to that line.
-        # Only the body round this point of the spine: not the back behind
-        # the neck, which a line out of the neck's back runs into.
+        # The skin over the spine here: the furthest of it out along the
+        # back, close to that line -- and only round this point of the
+        # spine, not the back behind the neck, which a line out of the
+        # neck's back runs into.
         rel = body - at
         out = rel @ back
         off = rel - np.outer(out, back)
@@ -293,15 +358,15 @@ def add_row(model):
         # Tallest over the shoulders and hips, tapering at both ends.
         u = d / total
         size = ROW_ENDS + (1 - ROW_ENDS) * np.sin(np.pi * u) ** 0.7
-        foot = at + back * (top - 0.04)
-        tip = foot + back * ROW_TALL * size + along * -0.12 * size
+        foot = at + back * (top - ROW_SINK)
+        tip = foot + back * (ROW_SINK + ROW_TALL * size) + along * -0.12 * size
         side = np.cross(back, along)
         base = len(model.positions) + len(verts)
         verts.append(tip)
         for k in range(ROW_SIDES):
             a = 2 * np.pi * k / ROW_SIDES
             # Flattened across the body: a blade more than a cone.
-            verts.append(foot + ROW_WIDE * size * (np.cos(a) * along * 1.6 + np.sin(a) * side * 0.7))
+            verts.append(foot + (ROW_WIDE * size + 0.06) * (np.cos(a) * along * 1.6 + np.sin(a) * side * 0.7))
         for k in range(ROW_SIDES):
             tris.append((base, base + 1 + k, base + 1 + (k + 1) % ROW_SIDES))
         under = used[np.argmin(np.linalg.norm(body - foot, axis=1))]
@@ -337,5 +402,6 @@ def sculpt(model):
     np.logical_or.at(head, which, weight_of(model, HEAD) > 0.5)
     unique = smooth(unique, tris, ~head, HEAD_ROUNDS)
     model.positions = reshaped(model, unique[which])
-    add_row(model)
+    add_row(model, np.r_[spikes, np.zeros(len(model.positions) - len(spikes), bool)])
+    add_feet(model)
     return model

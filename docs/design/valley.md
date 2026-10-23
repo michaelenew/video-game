@@ -465,14 +465,16 @@ sick dog" -- and judging them was blind to the steps between. Now:
    shoulders; the hind legs' spikes smoothed a little rather than held;
    and a new row of blade-like spikes down the middle of the back from
    the neck to the tail, tallest over the shoulders and hips, each riding
-   the skin under it.
+   the skin under it, its foot sunk deep enough into that skin that no
+   facet of it leaves the spike in the air.
 
    **It also stands** (`pose.py`'s `standing`; "make it stand on two
    legs", then "the pose and proportions should be like a T rex with
    bigger arms"): a T. rex's stance -- the body near level, balanced over
-   the hips on long, heavy thighs (1.5 times the dragon's, and swollen),
-   swung forward until the feet stand under its centre of mass -- worked
-   out from the mesh, not guessed; up on its toes; a longer, thicker tail
+   the hips on long, heavy thighs (1.5 times the dragon's, and swollen)
+   held forward and a little down, the shins swung back until the feet
+   stand under its centre of mass -- worked out from the mesh, not
+   guessed; on real feet, a broad pad round each toes bone; a longer, thicker tail
    ending in a club; a thicker neck and a head 1.3 times the size; and
    forelimbs thin beside the legs but long enough to reach the ground
    stretched (`pose.py` prints the reach: 1.06 of the shoulder's height),

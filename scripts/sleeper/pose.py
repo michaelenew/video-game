@@ -52,10 +52,12 @@ AIMS = [
     ("hand.R", "fingers.R", (0.6, -0.4, -0.6)),
     # The left hind leg, uppermost, drawn up along the flank: a ridge.
     ("thigh.L", "shin.L", (0.55, -0.25, 0.8)),
-    ("shin.L", "foot.L", (0.35, -0.35, -0.85)),
+    ("shin.L", "foot.L", (0.2, -0.2, -1.0)),
+    ("foot.L", "toes.L", (0.25, -0.35, 0.9)),
     # The right hind leg, under the body.
     ("thigh.R", "shin.R", (-0.3, -0.6, 0.7)),
     ("shin.R", "foot.R", (-0.2, -0.4, -0.9)),
+    ("foot.R", "toes.R", (-0.2, -0.3, 0.9)),
     # The tail: back, round the right side and forward along it, the tip
     # turned in.
     ("tail_01", "tail_02", (-0.3, -0.4, -0.9)),
@@ -74,6 +76,9 @@ SCALES = [
     # A T. rex's legs: longer than the dragon's.
     ("thigh.L", 1.5),
     ("thigh.R", 1.5),
+    # Real feet to stand on: bigger, toes and all.
+    ("foot.L", 1.5),
+    ("foot.R", 1.5),
     # A heavier head, and a longer tail.
     ("head", 1.3),
     ("tail_01", 1.25),
@@ -109,6 +114,18 @@ def aim(model, pose, bone, child, direction):
         return
     degrees = np.degrees(np.arccos(np.clip(now @ want, -1, 1)))
     turn(model, pose, bone, axis, degrees)
+
+
+def point(model, pose, bone, direction):
+    """Turn `bone` so its own length lies along a world `direction`: for a
+    bone with no child to aim at (the toes)."""
+    world = model.world(pose)[model.index[bone]][:3, :3]
+    now = world[:, 1] / np.linalg.norm(world[:, 1])
+    want = np.asarray(direction, float)
+    want /= np.linalg.norm(want)
+    axis = np.cross(now, want)
+    if np.linalg.norm(axis) > 1e-9:
+        turn(model, pose, bone, axis, np.degrees(np.arccos(np.clip(now @ want, -1, 1))))
 
 
 def shift(model, pose, bone, offset):
@@ -151,14 +168,16 @@ def posed(model):
 # arms", "hunch it a little more"): the body pitched up only this many
 # degrees about the hips, near level and balanced over them; the legs bent
 # under the hips; the tail held straight out behind; the neck in a low S
-# and the head forward; the arms hanging. The thighs are swung forward
-# until the feet are under its centre of mass (`balanced`).
+# and the head forward; the arms hanging. The shins are swung back until
+# the feet are under its centre of mass (`balanced`).
 REAR = 22.0
 STAND_AIMS = [
-    # Long, bent legs: the knee forward (how far is `balanced`'s to find),
-    # the shin back, and up on its toes.
-    ("shin.L", "foot.L", (0.0, -0.75, -0.65)),
-    ("shin.R", "foot.R", (0.0, -0.75, -0.65)),
+    # The thighs straight forward and a little down (the owner: "they
+    # should extend forward and a little down when it's standing"); the
+    # shin back down to the ankle (how far is `balanced`'s to find); up on
+    # its toes.
+    ("thigh.L", "shin.L", (0.1, -0.3, 1.0)),
+    ("thigh.R", "shin.R", (-0.1, -0.3, 1.0)),
     ("foot.L", "toes.L", (0.05, -0.85, 0.5)),
     ("foot.R", "toes.R", (-0.05, -0.85, 0.5)),
     ("tail_01", "tail_02", (0.0, -0.2, -1.0)),
@@ -191,19 +210,26 @@ def centre_of_mass(verts, tris):
     return (p.mean(1) * area[:, None]).sum(0) / area.sum()
 
 
+def flat_feet(model, pose):
+    """The toes laid flat on the ground, spread a little: a foot planted."""
+    point(model, pose, "toes.L", (0.15, -0.05, 1.0))
+    point(model, pose, "toes.R", (-0.15, -0.05, 1.0))
+
+
 def balanced(model, pose):
-    """Swing the thighs forward until the feet stand under the centre of
-    mass, front to back: the angle below level, degrees, that puts them
+    """Swing the shins back until the feet stand under the centre of mass,
+    front to back: the angle behind straight down, degrees, that puts them
     nearest, tried every two degrees."""
     best = None
-    for down in range(10, 90, 2):
+    for back in range(0, 80, 2):
         trial = [tuple(np.copy(v) for v in r) for r in pose]
-        a = np.radians(down)
-        for side, x in (("L", 0.1), ("R", -0.1)):
-            aim(model, trial, f"thigh.{side}", f"shin.{side}", (x, -np.sin(a), np.cos(a)))
+        a = np.radians(back)
+        for side in ("L", "R"):
+            aim(model, trial, f"shin.{side}", f"foot.{side}", (0.0, -np.cos(a), -np.sin(a)))
         for bone, child, direction in STAND_AIMS:
-            if bone.startswith(("shin", "foot")):
+            if bone.startswith("foot"):
                 aim(model, trial, bone, child, direction)
+        flat_feet(model, trial)
         at = model.bone_points(trial)
         feet = (at["toes.L"][2] + at["toes.R"][2]) / 2
         off = abs(feet - centre_of_mass(model.skin(trial), model.triangles)[2])
