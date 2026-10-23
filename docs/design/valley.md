@@ -438,27 +438,38 @@ dragon. Make it subtle, mostly art for now. The dragon itself should
 essentially be the mountain, and its dragon-like features should be just
 discernible only from certain angles. Maybe it wakes up eventually."
 
-**The mountain north of the Pinewood, east of the High Plane, is a dragon
+**The mountain north of the Pinewood, east of the High Plane, is a beast
 asleep** (`sim::valley::dragon`). It is the land, not a creature and not a
 box: a height added to the mountain wherever its body lies, before the
 land's noise and crags go over it, so it wears the same rock and snow as
-the range round it, and what is drawn is what a foot would stand on. It
-lies with its chest at (770, 360) on the map, its snout pointing south at
-the valley, about 270 m across and 400 m from snout to haunch, standing up
-to a hundred metres over the mountain it lies on -- under the plane's 300.
+the range round it, and what is drawn is what a foot would stand on. Its
+shoulders are at (770, 360) on the map; it is about 250 m across and 330 m
+long, standing up to seventy metres over the mountain it lies on.
 
-- **From the road** (the Pinewood, the Saddle) it is seen head on: a
-  massif with a serrated ridge. The ridge is its spine, a row of plates
-  eighteen metres apart, and it is the one regular thing on the skyline:
-  the land's crags are damped on the body so nothing random stands as tall
-  beside a plate.
-- **From the High Plane's east edge**, looking down, it is a body curled
-  round on itself: wings folded with their wrists up over the shoulders,
-  forelegs folded with the chin resting between the paws, horns swept back
-  along the neck, haunches, and the tail drawn round the east flank to lie
-  by the snout.
-- **From the side**, a long neck falling from the shoulders to a skull,
-  brow and horns.
+**A tarrasque, not a European dragon** (the owner, on the first pass:
+"that pose is super unnatural"). The first pass was a statue: wings
+folded, chin on both forepaws, a row of plates down a symmetrical back,
+and it read as a dragon from above and nowhere else in particular -- too
+plainly from above, and as cliffs between its limbs. What it is now:
+
+- **wingless and heavy**, a broad bowed back with a row of low spikes;
+- **lying a little over on its right side**, so its high line is its
+  left flank rather than its spine and nothing about it is symmetrical;
+- **its tail curled up** round the low side to the front, the tip turned
+  in on itself;
+- **its head turned back and tucked under the left forelimb**, a broad
+  skull narrowing to a heavy muzzle, a low brow;
+- **forelimbs half the first pass's size**, growing out of the shoulders;
+  the right one under the body, only its elbow and paw showing;
+- **the left hind leg drawn up along the flank as a ridge**, as before;
+  the right one under the body.
+
+Its pieces are blended where they meet, as a limb meets a body, rather
+than one standing out of the other as a wall; and the land's crags are
+damped a little on it, so its shape is there to be found without it being
+the one smooth thing on the skyline. Screenshots:
+`SHOT_EYE=200,120,-130,370,-80,80 SHOT_AT=128,10 GAME_ARGS="--arena
+high_plane --open"` looks down on it from 120 m over the plane's edge.
 
 It is level data (`tests/knobs.rs`): a table of chains of joints, each a
 point, a width and a height, every piece between two a mound rounded across

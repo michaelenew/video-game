@@ -539,9 +539,10 @@ impl Land {
         } else {
             Fx::ZERO
         };
-        // Its body is smoother than the range round it: a plate stands out
-        // of the spine because nothing random stands as tall beside it.
-        let smooth = Fx::ONE.sub(slept.div(Fx::from_int(24)).min(Fx::ratio(3, 4)));
+        // Its body is a little smoother than the range round it -- enough
+        // that its shape is there to be found, not so much that it is the
+        // one smooth thing on the skyline.
+        let smooth = Fx::ONE.sub(slept.div(Fx::from_int(24)).min(Fx::ratio(2, 5)));
         let height = best.add(noise(x, z).mul(amp)).add(crag.mul(smooth));
         Sample {
             height,
