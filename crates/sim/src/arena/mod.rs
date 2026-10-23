@@ -108,6 +108,8 @@ pub mod spire;
 pub mod deep;
 
 pub mod heights;
+/// The creatures of odd ground as the middles of jump sections.
+pub mod stations;
 
 pub mod gully;
 
@@ -211,8 +213,9 @@ impl ArenaId {
 }
 
 /// How many ids there are, registered or not: the valley's ranges are
-/// numbered from forty (`valley::ranges::FIRST`).
-pub const COUNT: usize = 64;
+/// numbered from forty (`valley::ranges::FIRST`), and past the first fourteen
+/// from sixty-four (`valley::ranges::MORE`).
+pub const COUNT: usize = 80;
 
 /// The most solids an arena **fought on alone** may have. Alone, every query
 /// walks all of them, several times a frame per body, so this is what keeps a
@@ -294,13 +297,10 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::DELTA => Some(&hills::DELTA),
         ArenaId::GORGE => Some(&hills::GORGE),
         ArenaId::HENGE => Some(&hills::HENGE),
-        ArenaId(n)
-            if n >= crate::valley::ranges::FIRST
-                && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
-        {
-            Some(&crate::valley::ranges::ARENAS[(n - crate::valley::ranges::FIRST) as usize])
-        }
-        _ => None,
+        id => match crate::valley::ranges::index(id) {
+            Some(k) => Some(&crate::valley::ranges::ARENAS[k]),
+            None => None,
+        },
     }
 }
 

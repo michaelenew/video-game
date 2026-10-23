@@ -75,7 +75,7 @@ const SEAMS: [Seam; 5] = [
     Seam {
         zone: Zone::cm([43200, 3900, -1000], [44000, 5000, 200]),
         to: ArenaId::BANK,
-        at: 2,
+        at: 1,
         marks: [
             Mark::cm(44400, -900, (48000, -2200)),
             Mark::cm(44400, -500, (48000, -2200)),
@@ -84,27 +84,27 @@ const SEAMS: [Seam; 5] = [
         waystone: None,
         says: "the Bank",
     },
-    // The Mire, down a side path to the south.
+    // The Mire: the foot of the stones up to it (`arena::stations`).
     Seam {
-        zone: Zone::cm([51500, 4000, -6100], [52300, 5100, -5200]),
+        zone: Zone::cm([51850, 4200, -5800], [52650, 4900, -5000]),
         to: ArenaId::MIREBACK,
         at: 0,
         marks: [
-            Mark::cm(51750, -5000, (51900, 0)),
-            Mark::cm(52050, -5000, (51900, 0)),
+            Mark::cm(52100, -4700, (52100, -5400)),
+            Mark::cm(52400, -4700, (52400, -5400)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Mire: the Mireback",
     },
-    // The Pan, down another to the south.
+    // The Pan: the foot of the stones down from it, east of the Mire.
     Seam {
-        zone: Zone::cm([56400, 4100, -5900], [57200, 5200, -5000]),
+        zone: Zone::cm([59000, 4650, -4600], [59800, 5350, -3800]),
         to: ArenaId::SANDMAW,
         at: 0,
         marks: [
-            Mark::cm(56650, -4800, (56800, 0)),
-            Mark::cm(56950, -4800, (56800, 0)),
+            Mark::cm(59250, -3500, (59250, -4200)),
+            Mark::cm(59550, -3500, (59550, -4200)),
         ],
         gate: Gate::Open,
         waystone: None,

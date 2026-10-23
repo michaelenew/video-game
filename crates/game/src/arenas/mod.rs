@@ -125,9 +125,19 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::DELTA => &stages::DELTA,
         ArenaId::GORGE => &stages::GORGE,
         ArenaId::HENGE => &stages::HENGE,
+        // A range is a pocket of the land: nothing laid on it but what grows
+        // there. Until 2026-10-22 it fell through to the proving ground's
+        // dressing, and a grey mat lay under every herd in the valley.
+        id if sim::valley::ranges::of(id).is_some() => &BARE,
         _ => &proving_ground::DRESSING,
     }
 }
+
+/// Nothing added to the geometry.
+static BARE: Dressing = Dressing {
+    drop: false,
+    props: &[],
+};
 
 /// A material's colour in an arena, and the one place the game asks.
 ///

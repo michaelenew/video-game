@@ -70,8 +70,24 @@ pub struct Range {
     pub sites: &'static [Site],
 }
 
-/// The first range's id. Ranges are numbered from here.
+/// The first range's id. Ranges are numbered from here...
 pub const FIRST: u8 = 40;
+
+/// ...for [`BLOCK`] of them, and on from here after that: forty-four to
+/// sixty-three are other arenas' (the stages from fifty-four).
+pub const MORE: u8 = 64;
+
+/// How many ranges are numbered from [`FIRST`].
+pub const BLOCK: u8 = 14;
+
+/// The id of range `k`.
+pub const fn id_of(k: u8) -> ArenaId {
+    if k < BLOCK {
+        ArenaId(FIRST + k)
+    } else {
+        ArenaId(MORE + k - BLOCK)
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 const fn range(
@@ -85,7 +101,7 @@ const fn range(
     temper: u8,
 ) -> Range {
     Range {
-        arena: ArenaId(FIRST + k),
+        arena: id_of(k),
         name,
         species,
         bodies,
@@ -123,7 +139,7 @@ const ROOST_SITES: [Site; 2] = [
 
 /// **The ranges**, nearest the town first. Easy by the town and harder the
 /// further in -- by species, the tiers the waystones count, and by temper.
-pub const RANGES: [Range; 14] = [
+pub const RANGES: [Range; 17] = [
     // The Hornback herd, grazing the Great Wood's edge: they run if you
     // start anything.
     range(
@@ -299,6 +315,47 @@ pub const RANGES: [Range; 14] = [
         Temperament::Territorial { ring: 1500 },
         2,
     ),
+    // **By the road** (2026-10-22): the creatures whose rooms were clearings
+    // at the end of side paths -- the herd's low meadow, the Gnawers' den, the
+    // Highlands' Ridgeback -- out on the land beside the road instead, where
+    // they are seen from it. The owner: "remove the very obvious little areas
+    // off the valley".
+    //
+    // The herd in the Mouth's meadow, north of the road: it grazes, and
+    // fights back if hurt.
+    range(
+        14,
+        "Riverside",
+        SpeciesId::HORNBACK,
+        1,
+        (11500, 6600, 50),
+        2200,
+        Temperament::Peaceful,
+        0,
+    ),
+    // The Gnawers on the Bank's upper meadow, north of the road: they let
+    // you pass on the road and come for you nearer.
+    range(
+        15,
+        "Hillside",
+        SpeciesId::GNAWERS,
+        1,
+        (30500, 6100, 2100),
+        2000,
+        Temperament::Territorial { ring: 1400 },
+        0,
+    ),
+    // A Ridgeback on the Pinewood's moor, in a bay north of the road.
+    range(
+        16,
+        "Moor",
+        SpeciesId::RIDGEBACK,
+        1,
+        (73500, 6200, 5750),
+        2000,
+        Temperament::Territorial { ring: 1600 },
+        2,
+    ),
 ];
 
 /// A point of the High Plane on the map, from its middle (centimetres), at
@@ -345,19 +402,60 @@ const fn deep_range(
 /// How many ranges there are.
 pub const COUNT: usize = RANGES.len();
 
+/// **The place each range stands in**, by number: the reach whose land is
+/// its floor -- or the Wood, the Needle, the Deep or the High Plane. What
+/// it looks like is that place's (`look::skies`): a range is a pocket of
+/// its reach, not a place with an air of its own. `tests/ranges.rs` holds
+/// it to the map.
+pub const IN: [ArenaId; COUNT] = [
+    ArenaId::WOOD,
+    ArenaId::MOUTH,
+    ArenaId::BANK,
+    ArenaId::PINEWOOD,
+    ArenaId::SADDLE,
+    ArenaId::SPIRE,
+    ArenaId::DEEP,
+    ArenaId::DEEP,
+    ArenaId::DEEP,
+    ArenaId::DEEP,
+    ArenaId::DEEP,
+    ArenaId::HIGH_PLANE,
+    ArenaId::HIGH_PLANE,
+    ArenaId::HIGH_PLANE,
+    ArenaId::MOUTH,
+    ArenaId::BANK,
+    ArenaId::PINEWOOD,
+];
+
+/// The place a range stands in, if `id` is a range.
+pub const fn in_place(id: ArenaId) -> Option<ArenaId> {
+    match index(id) {
+        Some(k) => Some(IN[k]),
+        None => None,
+    }
+}
+
 /// The range an arena is, if it is one.
 pub const fn of(id: ArenaId) -> Option<&'static Range> {
-    if id.0 < FIRST || (id.0 - FIRST) as usize >= COUNT {
-        return None;
+    match index(id) {
+        Some(k) => Some(&RANGES[k]),
+        None => None,
     }
-    Some(&RANGES[(id.0 - FIRST) as usize])
 }
 
 /// Which range, by number.
 pub const fn index(id: ArenaId) -> Option<usize> {
-    match of(id) {
-        Some(_) => Some((id.0 - FIRST) as usize),
-        None => None,
+    let k = if id.0 >= FIRST && id.0 < FIRST + BLOCK {
+        id.0 - FIRST
+    } else if id.0 >= MORE {
+        id.0 - MORE + BLOCK
+    } else {
+        return None;
+    };
+    if (k as usize) < COUNT {
+        Some(k as usize)
+    } else {
+        None
     }
 }
 
@@ -410,6 +508,9 @@ pub static ARENAS: [Arena; COUNT] = [
     arena_of(&RANGES[11]),
     arena_of(&RANGES[12]),
     arena_of(&RANGES[13]),
+    arena_of(&RANGES[14]),
+    arena_of(&RANGES[15]),
+    arena_of(&RANGES[16]),
 ];
 
 const fn place_of(r: &Range) -> Place {
@@ -437,4 +538,7 @@ pub static PLACES: [Place; COUNT] = [
     place_of(&RANGES[11]),
     place_of(&RANGES[12]),
     place_of(&RANGES[13]),
+    place_of(&RANGES[14]),
+    place_of(&RANGES[15]),
+    place_of(&RANGES[16]),
 ];

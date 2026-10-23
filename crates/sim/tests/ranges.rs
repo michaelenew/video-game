@@ -441,3 +441,146 @@ fn the_needles_top_cairn_counts_while_the_roost_is_awake() {
         "a cairn rested somebody mid-fight"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Sightings (2026-10-22): where a sleeping range's creatures are
+// ---------------------------------------------------------------------------
+
+/// **A sleeping herd is where its frame says**: the same frame stands it in
+/// the same place every time, it moves from frame to frame, and over a long
+/// while every body of it stays inside its range.
+#[test]
+fn a_sleeping_herd_wanders_its_range_by_the_frame_alone() {
+    use sim::valley::sight;
+    let atlas = sim::atlas::valley();
+    for r in RANGES.iter().filter(|r| r.stacked.is_none()) {
+        let base = sight::base(r.arena).expect("a range has creatures");
+        let place = atlas.placed(r.arena).copied().unwrap();
+        let ground = sim::arena::Terrain::placed(atlas, r.arena.get());
+        let at = |frame: u32| {
+            let mut s = base;
+            sight::stand(&mut s, frame, V3::ZERO, &ground);
+            s
+        };
+        let bodies = |s: &sight::Sight| -> Vec<V3> {
+            s.monsters
+                .iter()
+                .flatten()
+                .map(|m| m.pos)
+                .chain(s.critters.iter().filter(|c| c.present()).map(|c| c.pos))
+                .collect()
+        };
+        assert_eq!(
+            bodies(&at(4321)),
+            bodies(&at(4321)),
+            "{}: not a function of the frame",
+            r.name
+        );
+        let mut moved = false;
+        for k in 0..60u32 {
+            let f = k * 397 + 11;
+            let now = bodies(&at(f));
+            moved |= now != bodies(&at(f + sight::LEG / 2));
+            for p in now {
+                let m = p.add(place.at);
+                assert!(
+                    place.holds(m.x, m.z),
+                    "{}: frame {f}, a body at ({}, {}) out of its range",
+                    r.name,
+                    m.x.to_f32_for_render(),
+                    m.z.to_f32_for_render()
+                );
+            }
+        }
+        assert!(moved, "{}: its herd never moved", r.name);
+    }
+}
+
+/// **A range wakes where it was seen**: the creatures a hunt starts with are
+/// exactly where the sighting stood them on that frame -- the animal watched
+/// from the road is the one that turns to face you.
+#[test]
+fn a_range_wakes_its_creatures_where_they_were_seen() {
+    use sim::valley::sight;
+    for r in RANGES.iter().filter(|r| r.stacked.is_none()) {
+        let w = World::arrive(
+            [Class::Champion, Class::Elementalist],
+            journey(),
+            r.arena,
+            None,
+            1,
+        );
+        assert!(w.hunting(), "{}: nothing woke", r.name);
+        let mut seen = sight::base(r.arena).unwrap();
+        sight::stand(&mut seen, w.frame, V3::ZERO, &w.terrain());
+        let flat = |p: V3| (p.x, p.z);
+        let woke: Vec<_> = w.monsters.iter().flatten().map(|m| flat(m.pos)).collect();
+        let was: Vec<_> = seen
+            .monsters
+            .iter()
+            .flatten()
+            .map(|m| flat(m.pos))
+            .collect();
+        assert_eq!(woke, was, "{}: its bodies woke somewhere else", r.name);
+        let woke: Vec<_> = w
+            .critters
+            .iter()
+            .filter(|c| c.present())
+            .map(|c| flat(c.pos))
+            .collect();
+        let was: Vec<_> = seen
+            .critters
+            .iter()
+            .filter(|c| c.present())
+            .map(|c| flat(c.pos))
+            .collect();
+        assert_eq!(woke, was, "{}: its pack woke somewhere else", r.name);
+    }
+}
+
+/// **Each range stands in the place `ranges::IN` says**, which is the one
+/// whose air and colours it takes.
+#[test]
+fn every_range_is_in_the_place_it_says() {
+    for (k, r) in RANGES.iter().enumerate() {
+        let want = match ranges::IN[k] {
+            // Stacked over another place: the roost over the Needle, the
+            // Deep's levels over its own pit.
+            id if r.stacked.is_some() => id,
+            id => {
+                assert_eq!(
+                    reach_of(r),
+                    id,
+                    "{} stands in {}",
+                    r.name,
+                    reach_of(r).get().name
+                );
+                id
+            }
+        };
+        assert_eq!(ranges::in_place(r.arena), Some(want));
+    }
+}
+
+/// **No range shares its id with another arena**: each range's id is its
+/// own arena, by name. Three ranges added on 2026-10-22 were first numbered
+/// on into the versus stages' ids, and the Low Meadow came out the Caldera.
+#[test]
+fn every_range_has_an_id_of_its_own() {
+    let mut seen = std::collections::BTreeSet::new();
+    for r in &RANGES {
+        assert_eq!(
+            r.arena.get().name,
+            r.name,
+            "{}'s id is another arena's",
+            r.name
+        );
+        assert_eq!(ranges::of(r.arena).map(|q| q.name), Some(r.name));
+        assert!(seen.insert(r.arena.0), "{} shares an id", r.name);
+    }
+    for a in sim::arena::all() {
+        if ranges::of(a.id).is_none() {
+            assert!(!seen.contains(&a.id.0), "{} has a range's id", a.name);
+        }
+    }
+}

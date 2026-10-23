@@ -435,16 +435,29 @@ impl World {
     pub(crate) fn begin_hunt(&mut self, species: SpeciesId) {
         let classes = self.players.map(|p| p.class);
         let range = super::ranges::of(self.arena);
-        let mut herd = crate::replay::herd_of(species);
-        if let Some(r) = range.filter(|_| species.get().has_body()) {
-            for (k, slot) in herd.iter_mut().enumerate() {
-                *slot = (k < r.bodies as usize).then_some(species);
-            }
-        }
+        let herd = super::sight::herd(self.arena, species);
         let fresh = World::hunt_in(classes, herd, self.arena);
         self.monsters = fresh.monsters;
         self.pack = fresh.pack;
         self.critters = fresh.critters;
+        // **Where it was seen** (`valley::sight`): a range's herd wakes where
+        // its wander has it this frame, which is where it was drawn from the
+        // road, not on marks of its own.
+        if range.is_some_and(|r| r.stacked.is_none()) {
+            let mut seen = super::sight::Sight {
+                arena: self.arena,
+                monsters: self.monsters,
+                critters: self.critters,
+                pack: self.pack,
+            };
+            super::sight::stand(&mut seen, self.frame, V3::ZERO, &self.terrain());
+            self.monsters = seen.monsters;
+            self.critters = seen.critters;
+            self.pack = seen.pack;
+            for m in self.monsters.iter_mut().flatten() {
+                m.speed = crate::fixed::Fx::ZERO;
+            }
+        }
         self.lore = fresh.lore;
         self.phase = Phase::Fighting;
         for m in self.monsters.iter_mut().flatten() {

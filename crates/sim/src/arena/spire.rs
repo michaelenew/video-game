@@ -102,7 +102,7 @@ const SEAMS: [Seam; 2] = [
     Seam {
         zone: Zone::cm([3900, -300, -5900], [4400, 700, -4900]),
         to: ArenaId::MOUTH,
-        at: 3,
+        at: 2,
         marks: [
             Mark::cm(3500, -5500, (1000, -6000)),
             Mark::cm(3500, -5800, (1000, -6000)),

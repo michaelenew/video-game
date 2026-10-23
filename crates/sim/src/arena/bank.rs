@@ -63,12 +63,12 @@ pub static PLACE: Place = Place {
     vents: &[],
 };
 
-const SEAMS: [Seam; 3] = [
+const SEAMS: [Seam; 2] = [
     // Back down to the Mouth.
     Seam {
         zone: Zone::cm([25000, 1500, -500], [25800, 2600, 700]),
         to: ArenaId::MOUTH,
-        at: 2,
+        at: 1,
         marks: [
             Mark::cm(26300, 300, (30500, 1200)),
             Mark::cm(26300, 700, (30500, 1200)),
@@ -76,19 +76,6 @@ const SEAMS: [Seam; 3] = [
         gate: Gate::Open,
         waystone: None,
         says: "the Mouth",
-    },
-    // The den, up a side path to the north: the Gnawers.
-    Seam {
-        zone: Zone::cm([30100, 1600, 3200], [30900, 2700, 4100]),
-        to: ArenaId::GNAWERS,
-        at: 0,
-        marks: [
-            Mark::cm(30350, 3000, (30500, 0)),
-            Mark::cm(30650, 3000, (30500, 0)),
-        ],
-        gate: Gate::Open,
-        waystone: None,
-        says: "the den: the Gnawers",
     },
     // On to the Shelves, through the pass under the first waystone.
     Seam {

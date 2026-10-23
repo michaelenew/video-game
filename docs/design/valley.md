@@ -11,8 +11,10 @@ loading that make it cheap, is [atlas.md](atlas.md); what changed here is
 marked below.*
 
 * The code is `crates/sim/src/valley.rs` (the
-rules), `crates/sim/src/arena/{hearth,ring,mouth,bank,shelves,pinewood,saddle,highlands}.rs`
-(the places), and `crates/game/src/valley.rs` (what is drawn and said).*
+rules), `crates/sim/src/arena/{hearth,ring,mouth,bank,shelves,pinewood,saddle}.rs`
+(the places), `crates/sim/src/arena/stations.rs` and
+`crates/sim/src/valley/{ranges,sight}.rs` (the creatures on the land), and
+`crates/game/src/{valley,sighted}.rs` (what is drawn and said).*
 
 **The valley is where the game starts.** `cargo run -p game` puts both
 players in Hearth's square. `--versus` is the proving ground as it always
@@ -36,16 +38,36 @@ colours.*
 
 ---
 
-## 1 · The shape: a valley, with rooms off it
+## 1 · The shape: a valley, with its creatures on it
 
 One climb from Hearth's gate to the Saddle, **one map** of land since
 2026-10-09 ([atlas.md](atlas.md)): a road winding up a valley between
 mountains, a river in its first meadow and a tarn under the Shelves' north
 slope, woods thickening into the Pinewood and thinning into the Saddle's
-snow. The creatures' arenas are **rooms** in clearings off the road, each at
-the end of a side path and ringed by its rim's bank, so every fight is the
-arena it was tuned in. Hearth sits at the bottom of the climb, the Ring north
-of it and the Long Valley west, where the Siegeshell walks toward the town.
+snow. Hearth sits at the bottom of the climb, the Ring north of it and the
+Long Valley west, where the Siegeshell walks toward the town.
+
+**Since 2026-10-22 the creatures are out on the land, not in rooms off it.**
+The owner: "It's still very clearly just arenas that spawn in the
+creatures. I want to be able to spot monsters from far off and navigate
+there ... remove the very obvious little areas off the valley. I don't like
+how everything is a semioptional little fight and super spread out. For the
+ones that are odd terrain, make them midpoints in some mobility sections."
+Until then every creature's arena was a clearing at the end of a side path,
+ringed by its rim's bank, and empty until you walked in. Now:
+
+- **The creatures of plain ground are ranges by the road** (§1b): the herd
+  in the Mouth's meadow, the Gnawers on the Bank, a Ridgeback on the
+  Pinewood's moor, beside the ones that were already out there. Nothing
+  rings them; you see them from the road and walk over.
+- **The creatures of odd ground are stations** (§1f): the Mire, the Pan, the
+  Hollows, the Cliffs, the Ashwood and the Shrine, each its own arena as it
+  was tuned, raised over the land beside the road as a table of rock and
+  reached by a jump section -- and left by another.
+- **Every sleeping creature can be seen from across the valley** (§1g),
+  where it is, walking its range: where a creature nobody is near stands is
+  a function of the frame number, so it is drawn without being in the
+  world, and walking up to it wakes that one, there.
 
 **Hearth is a market town** (rebuilt 2026-10-09, `sim::arena::hearth`): a
 paved street gate to gate through a square with a well and two trees,
@@ -255,7 +277,13 @@ land -- a pocket of meadow fifty metres off the road, the Wood's clearing, the
 Needle's dome -- and nothing rings it. Walking into one wakes it, as walking
 into a room does; walking more than `Hunt, held this far outside its room`
 away puts it back to sleep. The road never passes through one
-(`the_road_never_wakes_a_range`): you see them from it and choose.
+(`the_road_never_wakes_a_range`): you see them from it and choose. The
+last three were rooms off side paths until 2026-10-22 (§1): the herd's low
+meadow, the Gnawers' Commons and the Highlands' Ridgeback, now beside the
+road where they are seen from it, as the Riverside, the Hillside and the
+Moor (names of their own: a range's name is its `--arena` name, and the
+rooms' arenas keep theirs for `--hunt`). The Pair's Den went with them; the Glade
+has the Pair.
 
 | Range | Where | What | Temperament | Temper |
 | --- | --- | --- | --- | --- |
@@ -265,6 +293,9 @@ away puts it back to sleep. The road never passes through one
 | **Glade** | the Pinewood, north of the road | the Pair | territorial, 14 m | 2 |
 | **Snowfield** | the Saddle, south of the road | a Ridgeback | hunting | 3 |
 | **Roost** | the Needle's dome, 353 m up | a Galewing, circling the ruins and perching on the tallest stump | territorial, 32 m | 1 |
+| **Riverside** (2026-10-22) | the Mouth's meadow, north of the road | the Hornback herd | peaceful | 0 |
+| **Hillside** (2026-10-22) | the Bank's meadow, north of the road | the Gnawers | territorial, 14 m | 0 |
+| **Moor** (2026-10-22) | the Pinewood, a bay north of the road | a Ridgeback | territorial, 16 m | 2 |
 
 **Temperaments** (VALE-4, "depends per creature"): *hunting* comes for you;
 *territorial* watches until somebody is inside its ring, or hurts it;
@@ -314,6 +345,73 @@ does not wake it; once the chase is over, a range somebody is standing in
 wakes. Beaten far away, a creature's trophies drop where it fell and its home
 range rests; lost far away, everybody stands up on their last cairn and it
 took its egg back.
+
+### 1f · Stations: the odd ground, on the jump sections (2026-10-22)
+
+`sim::arena::stations`, `tests/stations.rs`. **A station is a creature's
+own arena, raised over the land beside the road and reached by jumping**:
+the six whose fights are about the ground they are on -- the Mire's peat
+and braziers, the Pan's sand, the Hollows' cave, the Cliffs' plateau over a
+drop, the Ashwood's snow and ash, the Shrine's court of columns. Each
+stands as a table of rock -- its rim's bank round its walls, and past that a
+cliff to the land below, too steep to climb (`land::Pad::ledge`: no
+embankment off it as a pad has) -- with **a ledge at its door**: the bank
+cut away at its floor's height, far enough out that its edge is a drop and
+not a lip (`land::ledge_reach`). A route of stones climbs to the ledge from
+the road, and another leaves it for somewhere else:
+
+| Station | Over the road | Up to it | On from it |
+| --- | --- | --- | --- |
+| **The Mire** | 12 m, south of the Shelves' road | six hops from the road | ten east along the cliffs' feet, a rest halfway, to **the Pan** |
+| **The Pan** | 18 m, east of the Mire | from the Mire | seven down to the road, or up from it the other way |
+| **The Hollows** | 14 m, in a meadow south of the Pinewood's road | six from the road | seven east and up, fourteen metres, to the top of the Waterfall's south buttress: **a way round the Waterfall** to the road above it |
+| **The Cliffs** | sunk in their ravine, the plateau at the road's height | seven precision stones across the ravine (where the bridge was) | across the ravine east to a rest, **a lift** thirty metres, and three hops to **the Shrine**, forty metres over the plateau |
+| **The Shrine** | 35 m, on the north-east slope | from the Cliffs, past the fourth waystone (its door across the whole ledge while it is dark) | back the way you came |
+| **The Ashwood** | 12 m, south of the Saddle's road | six from the road | five east and down to the road where it bends |
+
+Every hop is a plain one, inside every mover's plain catch on paper and
+jumped by the stand-in player, the lift ridden (`tests/stations.rs`) --
+these are the ways to fights the waystones count, so none asks a class's
+tool. Sized for the movers, not the Bulwark. A cairn stands on the stone
+each route starts from by the road and on every rest. The signpost for each
+station is at the foot of its way up, and a hunt lost there wakes you at
+it. Nobody walks up to one: from the foot, straight at the door, the cliff
+stops you (`a_station_is_jumped_to_not_walked_to`).
+
+Where a station would have been sunk in a mountainside -- its land higher
+than its ledge -- the land is cut away round it to the road's height
+(`stations::MEADOWS`), so it stands up out of a meadow and is seen from the
+road. The Hollows needed it, and moved from north of the Pinewood's road to
+south of it; the Moor's Ridgeback took the bay the Hollows left. The Shrine
+turned its door west, toward the Cliffs, and rose fifteen metres.
+
+**Unplayed.** Every gap and rise is a first guess at the edge of the
+shortest jumpers' catch; whether a station reads as a table of rock from
+the road, and whether the routes are interesting enough, wants a person.
+
+### 1g · Sightings: every creature, seen from afar (2026-10-22)
+
+`sim::valley::sight`, `game::sighted`. The snapshot keeps one live hunt, and
+every other creature of the valley is asleep: nothing about it is in the
+world. **Where a sleeping creature stands is a function of the frame number
+and nothing else**, the way a moving stone's is (`sim::drift`): a range's
+herd walks its pocket on a clock of legs -- turn toward the next point, walk
+there at its own walk, graze out the rest of the leg -- the points drawn
+from a hash of the range and the leg, a third of the way out from its middle
+so its formation stays inside its bounds. So the renderer asks `sim` for
+every range and station near the first fighter, nearest first -- ten bodies
+and three packs at most -- and draws each with the same parts and coats as
+a live hunt's, from across the valley, and nothing about it is simulated.
+
+**Walking up to one wakes that one, there.** A hunt that starts on a range
+stands its creatures where `sight::stand` has them on that frame -- the same
+function, the same frame -- so the animal you were watching from the road
+is the one that turns to face you, not a fresh one on marks of its own
+(`World::begin_hunt`). A station's creature waits on its marks, breathing,
+because its fight was tuned from them; so does a range stacked inside a
+place -- a warren of the Deep, its Caverns, the Needle's dome -- where a
+point drawn at random could be in a wall. A range resting after it was
+beaten shows nothing, and the live hunt is drawn as the world has it.
 
 ### 1c · The Deep (2026-10-15)
 
@@ -412,24 +510,24 @@ and asked whether that should be a table mountain or islands in the sky,
 violet and faceted, a hanging slab of turf as an island of turf on rock
 (`game::forms::form_of`), in the valley as on a course.
 
-| Place | The road | Rooms off it | The way on |
+| Place | The road | Its creatures | The way on |
 | --- | --- | --- | --- |
 | **Hearth** | — | **the Ring** (north), **the Long Valley** (west, under the fifth waystone) | the east gate |
-| **The Mouth** | Out of the gate between low hills into a river meadow fifty metres wide; a crag with a cairn; the road climbs the scree, sixteen metres in two bends, to the Lip | the low meadow (Hornback herd), up a side path north | the Lip |
-| **The Bank** | A broad upper meadow; the old stair as a crag; the road climbs the bank, twenty-one metres | the den (Gnawers), north | **first waystone**, a pass between two shoulders of hill: one of the herd, the den |
-| **The Shelves** | A long open bowl with a tarn under its north slope; a crag by the shore; the road climbs out | the Mire (Mireback) and the Pan (Sandmaw), down side paths south | **second waystone**: one of the Pan, the Mire |
-| **The Pinewood** | Pines thick on both sides and up the slopes; a crag among them; the road ends at a pool under **the Waterfall**, a basalt cliff twenty-two metres tall, and goes on from its top (§3) | the Den (the Pair) south, the Hollows (Broodmother) north, the Highlands (Ridgeback) up a side path south four metres higher | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
-| **The Saddle** | A snowy alpine meadow between peaks; the highest crag; the road ends at a view | the Cliffs (Galewing) over a bridge north, the Ashwood (Veilstalker) south, the Shrine (Mantis) up a switchback north-east behind the **fourth waystone**: one of the Cliffs, the Ashwood | — |
+| **The Mouth** | Out of the gate between low hills into a river meadow fifty metres wide; a crag with a cairn; the road climbs the scree, sixteen metres in two bends, to the Lip | the Riverside's herd (Hornback) north of the road; the South Bank's Gnawers across the river | the Lip |
+| **The Bank** | A broad upper meadow; the old stair as a crag; the road climbs the bank, twenty-one metres | the Hillside's Gnawers north of the road; two Ridgebacks on the Upper Meadow south | **first waystone**, a pass between two shoulders of hill: one of the herd, the Gnawers |
+| **The Shelves** | A long open bowl with a tarn under its north slope; a crag by the shore; the road climbs out | **the Mire** (Mireback) and **the Pan** (Sandmaw), stations south of the road, one route through both | **second waystone**: one of the Pan, the Mire |
+| **The Pinewood** | Pines thick on both sides and up the slopes; a crag among them; the road ends at a pool under **the Waterfall**, a basalt cliff twenty-two metres tall, and goes on from its top (§3) | the Glade's Pair and the Moor's Ridgeback north of the road; **the Hollows** (Broodmother), a station south, whose route on goes round the Waterfall | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
+| **The Saddle** | A snowy alpine meadow between peaks; the highest crag; the road ends at a view | the Snowfield's Ridgeback; **the Cliffs** (Galewing) over the ravine north, and on from them past the **fourth waystone** to **the Shrine** (Mantis); **the Ashwood** (Veilstalker), a station south | **fourth waystone**: one of the Galewing, the Veilstalker |
 
 The tiers are world.md §3's, and the gates are exactly what that table says
-(`valley::tier`). **The Ridgeback has a room of its own**, the Highlands: the
-proving ground's floor plan on a moor, so meeting it in the valley is the
-fight it was tuned in, and `arena::for_species` still sends `--hunt ridgeback`
-to the proving ground.
+(`valley::tier`). A waystone counts a species however it was beaten -- on a
+range, at a station, or a trophy -- so the Ridgeback the third counts is any
+of the four out on the land; the Highlands, its room until 2026-10-22, is
+no longer on the map, and `--hunt ridgeback` is the proving ground as it
+always was.
 
 Not built from world.md §2: the Crossing (the herd's escort mode stays a
-`--hunt hornback-escort` fight). A room is visible from its side path now,
-but its creature is not put on its marks until you walk in.
+`--hunt hornback-escort` fight).
 
 ## 2 · The rules
 
@@ -490,9 +588,10 @@ hashes as it did.
   run, but since 2026-10-19 its creature follows you out of the door (§1e)
   until it gives up and goes home; only then is the hunt over, unwon, and a
   walk back in starts it again.
-- **A room has ground round it.** Most rooms are walled with low walls,
-  which ended the world when a room was all there was. On one map a room has
-  six metres of ground round its walls and a cliff round that.
+- **A station is raised, and jumped to.** A station's arena keeps its own
+  walls and floor; round them, its rim's bank, and past that a cliff to the
+  land below, too steep to climb, but for a ledge at its door (§1f). Lose
+  its hunt and you wake at the foot of the stones up to it, on the road.
 - **Player two, unplayed,** is not in the valley: kept a kilometre under the
   place's floor where nothing reaches it, rather than a body lying at every
   seam. In the Ring and in a room the second seat plays as it always has.
@@ -749,3 +848,11 @@ for a pair who does not.** The five reaches are 974 m end to end with about
    with it.
 7. **One map**: everything [atlas.md](atlas.md) §Open lists -- how the joins
    read, the sky changing at a doorway, the Long Valley's loop.
+8. **Sleeping creatures are drawn, not heard or shadowed by the world**
+   (2026-10-22, §1g). A sighted herd walks through a tree or a boulder in its
+   pocket -- its wander knows only its range's floor -- and the nearest ten
+   bodies and three packs are drawn, so a valley with more on show would
+   want the far ones drawn simpler. A station rests nobody and is never
+   resting: won, it is back the next time you walk in, as rooms always were.
+9. **The Ring and the Long Valley are still rooms off the town**: not
+   creature clearings off the road, so they were left as they were.

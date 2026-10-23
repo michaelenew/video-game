@@ -101,38 +101,40 @@ fn ggrs_synctest_finds_no_desync_walking_from_one_place_into_the_next() {
     );
 }
 
-/// The same for a room: walking in starts the hunt, under rollback.
+/// The same for a range: walking in starts the hunt, its creature woken
+/// where its wander had it (`sim::valley::sight`), under rollback. The
+/// Pinewood's Moor, north of the road; a room until 2026-10-22, when the
+/// Highlands went.
 #[test]
-fn ggrs_synctest_finds_no_desync_walking_into_a_room() {
+fn ggrs_synctest_finds_no_desync_walking_into_a_range() {
+    let moor = sim::valley::ranges::RANGES
+        .iter()
+        .find(|r| r.name == "Moor")
+        .unwrap();
     let mut w = World::arrive(
         [Class::Bulwark, Class::Champion],
         sim::valley::Journey::default(),
         sim::arena::ArenaId::PINEWOOD,
-        Some(3),
+        None,
         2,
     );
-    let zone = sim::valley::place(sim::arena::ArenaId::PINEWOOD)
-        .unwrap()
-        .seams[3]
-        .zone;
-    let mid = zone.middle();
-    let floor = w
-        .terrain()
-        .ground_under(sim::V3::new(mid.x, zone.max.y, mid.z));
+    // On the road, a few metres short of the range's south edge.
+    let (x, z) = (
+        sim::arena::cm(moor.at.0),
+        sim::arena::cm(moor.at.1 - moor.half - 600),
+    );
+    let at = sim::V3::new(x, sim::arena::cm(moor.floor + 1000), z).sub(w.map_origin());
+    let floor = w.terrain().ground_under(at);
     for p in w.players.iter_mut() {
-        p.pos = sim::V3::new(mid.x, floor, mid.z);
+        p.pos = sim::V3::new(at.x, floor, at.z);
     }
-    let south = 3 * Input::QUARTER_TURN;
+    let north = Input::QUARTER_TURN;
     let walking = |_: u32, roll: &mut dyn FnMut() -> u64| {
         let random = roll() as u16 & (Input::LEFT | Input::RIGHT);
-        Input::looking_at(Input::W | random, south, -1500)
+        Input::looking_at(Input::W | random, north, -1500)
     };
-    let w = synctest_with(w, "the Highlands' door", 600, walking);
-    assert_eq!(
-        w.arena,
-        sim::arena::ArenaId::HIGHLANDS,
-        "never got into the room"
-    );
+    let w = synctest_with(w, "the Moor's edge", 600, walking);
+    assert_eq!(w.arena, moor.arena, "never got into the range");
     assert!(w.hunting(), "walked in and nothing to hunt");
 }
 
