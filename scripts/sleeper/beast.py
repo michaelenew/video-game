@@ -331,12 +331,17 @@ def body_parts(pose):
     hinge = at + hf * 0.35 - hu * 0.35
     jf = unit(hf * np.cos(gape) - hu * np.sin(gape))
     ju = unit(np.cross(jf, hl))
-    jaw_mid = hinge + jf * 1.1 - ju * 0.4
-    parts.append(wedge(jaw_mid, np.c_[hl, ju, jf], (1.1, 0.6, 1.15), 0.2, 0.45, 0.3))
-    # The chin: a heavy, rounded knob at the jaw's front, low, and ahead
-    # of the teeth -- the jaw's front slants back from it to the tusks.
-    chin = hinge + jf * 2.2 - ju * 0.62
-    parts.append(ellipsoid(chin, np.c_[hl, ju, jf], (0.85, 0.62, 0.5), 0.3))
+    # The jaw runs on straight past the teeth to its chin, and the chin is
+    # an angle, not a bulb: the jaw's front cut back from a hard corner at
+    # its foot up to the tusks (the owner: "continue the jaw line straight
+    # along its main path, then make the chin more of an angle").
+    jaw_mid = hinge + jf * 1.3 - ju * 0.4
+    parts.append(wedge(jaw_mid, np.c_[hl, ju, jf], (1.1, 0.6, 1.35), 0.15, 0.25, 0.3))
+    slant = np.radians(30)
+    cf = unit(jf * np.cos(slant) + ju * np.sin(slant))
+    cu = unit(np.cross(cf, hl))
+    chin = hinge + jf * 2.35 - ju * 0.55
+    parts.append(wedge(chin, np.c_[hl, cu, cf], (0.95, 0.55, 0.42), 0.05, 0.12, 0.2))
     for s_ in (1, -1):
         parts.append(wedge(at + hf * 0.95 + hu * 0.75 + hl * s_ * 0.62, np.c_[hl, hu, hf], (0.42, 0.22, 0.5), 0.2, 0.1, 0.15))
         parts.append(ellipsoid(at + hf * 0.45 - hu * 0.15 + hl * s_ * 0.95, np.c_[hl, hu, hf], (0.4, 0.55, 0.6), 0.25))
