@@ -59,9 +59,9 @@ HORN_THIN = 0.62
 # Sinking a horn into the mountain: none of the way along it until this
 # share, and by this share of the way it is under the land, this deep, so
 # the rest of it -- its tip -- is buried.
-HORN_HOLDS = 0.25
-HORN_EMERGES = 0.75
-HORN_UNDER = 10.0
+HORN_HOLDS = 0.2
+HORN_EMERGES = 0.6
+HORN_UNDER = 25.0
 # How deep it is sunk into the mountain, metres.
 SINK = 18.0
 # The steepest any of it stands, rise over run: a flank's wall settles to
