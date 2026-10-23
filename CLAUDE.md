@@ -166,6 +166,13 @@ Two more things that follow from it:
   frames in world coordinates has to move when the origin does (the camera's
   focus does: `CameraRig::shift`).
 
+**A box that moves is a drift** (`sim::drift`, 2026-10-22): where it is
+is a function of the frame number and nothing else, so it is never in the
+snapshot and never in `shift`. It is on the map (`Atlas::drifts`), raised
+into `Terrain` near the fighters each frame, and it carries what holds on
+to it (`World::carry_riders`); a lift, a ferry or a moving wall is one of
+these, never a solid moved by hand. `tests/drifts.rs` holds it.
+
 `arena::MAX_SOLIDS` (64) now holds only for an arena fought on alone
 (`tests/arena.rs`); the town and the reaches have no cap.
 
@@ -232,10 +239,10 @@ every time a rollback happens.
 ## A frame costs what it is budgeted, and a frame never allocates
 
 The simulation runs **more than once per picture**: a rollback re-simulates up to
-eight frames and saves a snapshot for each, inside the same 16.7 ms that still
+twelve frames and saves a snapshot for each, inside the same 16.7 ms that still
 has to draw. So per-frame cost arrives multiplied, exactly when the connection
 is already struggling. One rollback burst gets a quarter of the frame, one
-`advance` a thirty-second of it, one frame of `view` an eighth. Enforced by
+`advance` a forty-eighth of it, one frame of `view` an eighth. Enforced by
 `crates/sim/tests/budget.rs`, `view/tests/budget.rs` and `net/tests/budget.rs`.
 
 **Add to the `no floats, no deps, no I/O` list: no allocation.** A simulation

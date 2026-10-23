@@ -4,45 +4,57 @@
 //! sentence have to be on screen, because a player who cannot see where the
 //! invulnerability ended cannot learn when to hold an attack back.
 //!
+//! ## A roll, and every class rolls its own (2026-10-21)
+//!
+//! The grounded dodge is a **roll**, and the body really goes over: a hop off
+//! both feet, chin and knees to the chest, one turn along the floor, and up.
+//! The clips here are only what a body does *inside* it -- the push, the hop,
+//! the tuck, the ball, the legs reaching for the floor, the catch -- and
+//! `view::dodge::turned` turns the whole body over on top of them, about the
+//! middle of the ball. Authoring the turn here as well would be two turns, and
+//! the rig could not do it anyway: the root has fifty degrees of forward
+//! swing, which is a body that folds, not one that inverts.
+//!
+//! Back, it is a backward roll. **To the side it is the forward roll**: the
+//! body is turned to face the travel first and back as it rises, so a side
+//! clip is the forward one with a lean off the shoulder it goes over.
+//!
+//! Each class has its own set of four, built by one recipe from a [`Style`]:
+//! when it goes over and how hard it comes up are `view::dodge::roll`'s, and
+//! what its arms carry and how it lands are here. The table of the six is in
+//! `view::dodge`.
+//!
 //! ## The one thing these clips exist to communicate
 //!
 //! `Action::invulnerable` is true for the first `dodge_iframes()` frames and
-//! false afterwards, and **the silhouette has to change on that frame**. So
-//! every recipe here is built around one boundary: low and tucked and
-//! unchanging while the frames are free, then rising, open and armless the
-//! instant they are not. The frame it happens on is derived from the Oven
-//! rather than typed, so retuning the window moves the break with it.
+//! false afterwards, and **the silhouette must not open while they are free**:
+//! balled and unchanging through the cover, and the legs out for the floor no
+//! earlier than the frame it goes. Since 2026-10-22 it opens a little later
+//! than that -- when the body is most of the way round (`Roll::opens`),
+//! because a roll stretched over the recovery, so that it reads at speed,
+//! is only half way round when the cover goes. The frames are derived from the
+//! Oven rather than typed, so retuning the window moves them with it.
 //!
 //! ## Which clip plays is chosen from the velocity
 //!
-//! `view::play::dodge` picks the direction from the body's actual travel, not
-//! from the key that was pressed -- so a dodge input against a wall, or during
-//! a turn, plays the clip matching where the character really went. That is
-//! also why the four grounded clips have to be four different *movements*
-//! rather than one movement rotated: they are seen from the same camera angle.
+//! `view::dodge::way` picks the direction from the body's actual travel, not
+//! from the key that was pressed, and the turn reads the same answer -- so a
+//! roll goes over toward where the character really went.
 //!
 //! ## Nothing is planted during the burst
 //!
 //! A dodge covers about three metres in twenty-two frames, two thirds of it
-//! while invulnerable. That is a quarter of a metre per frame at the start --
-//! further than a walking stride -- so there is no such thing as a planted foot
-//! through the middle of one of these. The feet leave the ground, and the only
-//! contacts worth arithmetic are the push-off and the catch at the end, which
-//! `planted` below places against the ground the body actually covers.
-//!
-//! ## The rig cannot roll over
-//!
-//! The root joint has fifty degrees of forward swing and thirty-five of tilt,
-//! which is a body that folds, not one that inverts. So the sideways clips are
-//! not literal three-hundred-and-sixty-degree rolls; they sell a roll by
-//! getting very low, curling hard toward the direction of travel and hiding the
-//! head behind the lead shoulder. Trying to fake the rotation with the hips
-//! offset instead reads as a character being dragged sideways through the floor.
+//! while invulnerable, so there is no planted foot through the middle of one of
+//! these. The only contacts worth arithmetic are the push-off and the catch at
+//! the end, which `planted` below places against the ground the body actually
+//! covers.
 
 use crate::bake::{Key, Looseness, Recipe};
 use crate::clips::locomotion::stance;
 use crate::ease::Ease;
+use sim::Class;
 use view::clips::Clip;
+use view::dodge::Way;
 use view::pose::{ANKLE_ON_GROUND as GROUND, Pose};
 
 /// Where the feet sit either side of the centre line, as in `locomotion`.
@@ -50,14 +62,13 @@ const L: f32 = -0.115;
 const R: f32 = 0.115;
 
 pub fn clips() -> Vec<Recipe> {
-    let right = roll(Clip::DodgeRight);
-    vec![
-        back(),
-        forward(),
-        mirrored(&right, Clip::DodgeLeft),
-        right,
-        air(),
-    ]
+    let mut out = vec![air()];
+    for class in sim::class::ALL_CLASSES {
+        for way in view::dodge::WAYS {
+            out.push(dive_roll(class, way));
+        }
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -109,633 +120,683 @@ fn ground_speed() -> f32 {
     sim::tuning::dodge_speed().to_f32_for_render()
 }
 
-/// The same recipe on the other side. The two rolls are one movement, and
-/// `mirrored` makes the second one exactly rather than approximately -- which
-/// is the entire reason poses store named channels instead of Euler triples.
-fn mirrored(from: &Recipe, clip: Clip) -> Recipe {
-    Recipe {
-        clip,
-        looseness: from.looseness,
-        notes: from.notes.clone(),
-        keys: from
-            .keys
-            .iter()
-            .map(|k| Key::eased(k.frame, k.pose.mirrored(), k.ease))
-            .collect(),
+// ---------------------------------------------------------------------------
+// The roll
+// ---------------------------------------------------------------------------
+
+/// The beats of a roll, in order. A [`Style`] dresses each one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Beat {
+    /// Frame zero: already going, the only grounded frame at this end.
+    Push,
+    /// The launch: the back leg driving, the front one lifting, the arms
+    /// swinging through.
+    Off,
+    /// In the air: long, the hands out ahead, the legs trailing.
+    Dive,
+    /// The hands reach the floor: the head tucks, the lead shoulder drops,
+    /// the knees start up.
+    Contact,
+    /// The ball, rolling, held unchanging until the body is most of the way
+    /// round (`view::dodge::Roll::opens`), never before the cover goes.
+    Ball,
+    /// The break: legs out for the floor, arms off the body.
+    Open,
+    /// Upright again, feet on the floor and taking the weight.
+    Catch,
+    /// Coming up out of it.
+    Rise,
+    /// Back on the feet, not back on guard.
+    Settle,
+}
+
+/// How one class rolls: what its arms carry and how it lands, on top of the
+/// shared roll. `view::dodge::roll` owns *when* it goes over.
+struct Style {
+    looseness: Looseness,
+    notes: &'static str,
+    /// Dress a beat. Given the shared pose and the way the roll is going,
+    /// returns the class's.
+    dress: fn(Pose, Beat, Way) -> Pose,
+}
+
+fn style(class: Class) -> Style {
+    match class {
+        Class::Champion => Style {
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll everyone shares, as the Champion does it. \
+                    Off the back foot into the air, long, arms up in front of \
+                    the chest and legs trailing, pitching forward as he flies; \
+                    as the floor arrives the head tucks, the arms fold and the \
+                    knees come up, and he goes over the right shoulder in a \
+                    ball, held unchanging until he is most of the way round \
+                    -- never before the cover runs out. Then the legs open \
+                    for the floor and he comes up in a low crouch with the weapon hand forward. \
+                    The turn, the shoulder and the height of the dive are not \
+                    here: `view::dodge` turns and carries the whole body on \
+                    top of this, and to the side turns him to face the travel \
+                    first, so a roll to the side is this roll.",
+            dress: champion,
+        },
+        Class::Bulwark => Style {
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, heavier: a lower dive, to the floor a frame \
+                    later and up a frame later, the shield arm across him the \
+                    whole way round. He comes up behind the shield, deeper \
+                    than anybody.",
+            dress: bulwark,
+        },
+        Class::ShadowReaver => Style {
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, highest and quickest: she leaves the floor \
+                    highest and is first up, light and less deep, with the \
+                    blades out low.",
+            dress: reaver,
+        },
+        Class::Elementalist => Style {
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, ending somewhere different: out of the \
+                    turn she does not stand straight up, she slides on, low, \
+                    her lead hand dragged flat along the floor, and only rises \
+                    off it at the end.",
+            dress: elementalist,
+        },
+        Class::BloodMage => Style {
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, longest and flattest: she is a frame longer \
+                    in the air and further over when she lands, and unfurls \
+                    low out of it with the scythe arm thrown out wide behind \
+                    her.",
+            dress: blood,
+        },
+        Class::DualMage => Style {
+            looseness: Looseness::MARTIAL,
+            notes: "The dive roll, floating: the highest arc after the \
+                    Reaver's and the slowest up, her arms opening wide like \
+                    the wings she does not have yet.",
+            dress: dual,
+        },
     }
 }
 
-// ---------------------------------------------------------------------------
-// Forward: a dive
-// ---------------------------------------------------------------------------
-
-/// A dive: flat and long, balled up through the invulnerable frames, and
-/// broken on the frame the cover runs out.
-fn forward() -> Recipe {
-    let clip = Clip::DodgeForward;
+/// One class's roll, one way.
+///
+/// **To the side it is the forward roll.** `view::dodge::turned` turns the
+/// body to face the travel before it goes over and back as it rises, so the
+/// clip is the forward one, with only the head and the trunk leaning off the
+/// shoulder it goes over -- the difference between rolling over the right
+/// shoulder and the left.
+fn dive_roll(class: Class, way: Way) -> Recipe {
+    let clip = view::dodge::clip(class, way);
     let len = clip.length();
     let brk = first_vulnerable(len);
+    let roll = view::dodge::roll(class);
+    let up = roll.upright();
+    let last = len - 1;
     let speed = ground_speed();
-    // A planted foot slides the opposite way to the body.
-    let away = [0.0, -1.0];
+    let style = style(class);
+    // The body's own way, once it has turned to face the travel.
+    let body = if way == Way::Back {
+        Way::Back
+    } else {
+        Way::Forward
+    };
+    // The way a planted foot slides: against the travel.
+    let away = if body == Way::Back {
+        [0.0, 1.0]
+    } else {
+        [0.0, -1.0]
+    };
 
-    let (f_off, f_out) = (1, 4);
-    let f_ball = brk - 3;
-    let f_catch = brk + (len - brk) / 3;
-    let f_step = brk + (len - brk) * 2 / 3;
-    let f_last = len - 1;
+    // The beats, placed against the turn. Launched on the second frame and
+    // long in the air from the third, **never still in the air**: the dive
+    // keeps reaching -- legs trailing higher, hands going for the floor --
+    // right up to the contact, where it tucks, balled three frames after.
+    // Down on the feet as the turn finishes, then sinking deeper for two
+    // frames as the knees take the weight before it rises: the follow-through
+    // that says the body has mass (2026-10-22, from play: "made of feathers").
+    let f_contact = roll.contact().clamp(5, brk - 1);
+    let f_dive = 3;
+    let f_reach = f_contact - 1;
+    let f_open = roll.opens().clamp(brk, last - 6);
+    let f_ball = (f_contact + 3).min(f_open - 1);
+    let f_held = f_open - 1;
+    let f_catch = up.clamp(f_open + 1, last - 5);
+    let f_absorb = (f_catch + 2).min(last - 3);
+    let f_rise = f_absorb + (last - f_absorb) / 2;
 
-    // Frame zero is already going -- the simulation hands out the whole
-    // velocity on the first frame of the action, so an anticipation pose here
-    // would be the body winding up for something it has already done. It is the
-    // only grounded frame at this end of the clip: by frame one the body has
-    // covered a quarter of a metre, which is most of what a leg has behind it.
-    //
-    // The next key is one frame away, and gently eased, because the solver
-    // records frame zero *after* a frame's worth of stepping. A snap out of the
-    // first key throws that key away -- the clip opens most of the way to the
-    // second one, and whatever was standing on the floor is not any more.
-    let set = stance()
-        .hips(0.0, -0.12, 0.03)
-        .root(16.0, 0.0, -8.0)
-        .spine(14.0, 0.0, 5.0)
-        .chest(8.0, 0.0, 6.0)
-        .head(-22.0, 0.0, 2.0)
-        .shoulder_l(10.0, 22.0, 0.0)
-        .elbow_l(64.0)
-        .shoulder_r(4.0, 20.0, 0.0)
-        .elbow_r(60.0)
-        .plant_l([L - 0.02, GROUND, 0.12])
-        .plant_r([R + 0.02, GROUND, -0.24])
-        .toe_l(-2.0)
-        .toe_r(10.0);
+    // Off the shoulder it goes over.
+    let lean = |pose: Pose| shoulder(pose, way);
+    let dress = |pose: Pose, beat: Beat| (style.dress)(pose, beat, body);
 
-    // One frame later, and both feet have already left. The back leg has run
-    // out of extension and its toe is the last thing to go; the front foot is
-    // barely clear. Both are placed with `plant` at a raised ankle rather than
-    // by hand, because a foot keyed as angles this close to the floor is a foot
-    // that ends up through it two frames later when the springs undershoot.
-    let off = stance()
-        .hips(0.0, -0.17, 0.07)
-        .root(32.0, 0.0, -5.0)
-        .spine(24.0, 0.0, 4.0)
-        .chest(14.0, 0.0, 5.0)
-        .head(-34.0, 0.0, 1.0)
-        .shoulder_l(48.0, 20.0, 0.0)
-        .elbow_l(48.0)
-        .shoulder_r(40.0, 18.0, 0.0)
-        .elbow_r(44.0)
-        .plant_l([L - 0.02, GROUND + 0.12, 0.04])
-        .plant_r([R + 0.02, GROUND + 0.06, -0.32])
-        .toe_l(-10.0)
-        .toe_r(16.0);
+    // The two feet the catch puts down, and where they have slid to by each
+    // key after.
+    let (lead, trail) = catch_feet(body);
+    let slid = |at: [f32; 3], f: u16| planted(at, f_catch as f32, f as f32, away, speed);
 
-    // Flat and long, arms thrown out in front, heels up behind. This is the
-    // shape that makes it a dive rather than a running step.
-    //
-    // A hip's swing is measured against the root, and the root is leaning
-    // forty-four degrees -- so a trailing leg is a *small positive* number
-    // here, not a negative one. Written as if the angles were against the
-    // world, the legs come out pointing thirty degrees into the floor.
-    let dive = Pose::rest()
-        .hips(0.0, -0.22, 0.14)
-        .root(44.0, 0.0, -4.0)
-        .spine(30.0, 0.0, 3.0)
-        .chest(18.0, 0.0, 4.0)
-        .head(-40.0, 0.0, 0.0)
-        .shoulder_l(96.0, 20.0, 0.0)
-        .elbow_l(28.0)
-        .shoulder_r(104.0, 18.0, 0.0)
-        .elbow_r(22.0)
-        .hip_l(8.0, 8.0, 0.0)
-        .knee_l(80.0)
-        .hip_r(2.0, 6.0, 0.0)
-        .knee_r(92.0)
-        .toe_l(34.0)
-        .toe_r(38.0);
+    let keys = vec![
+        Key::eased(0, dress(push(body), Beat::Push), Ease::LINEAR),
+        Key::eased(1, dress(off(body), Beat::Off), Ease::LINEAR),
+        Key::eased(f_dive, dress(dive(body), Beat::Dive), Ease::LINEAR),
+        Key::eased(f_reach, dress(reach(body), Beat::Dive), Ease::IN),
+        Key::eased(
+            f_contact,
+            lean(dress(contact(body), Beat::Contact)),
+            Ease::LINEAR,
+        ),
+        Key::eased(f_ball, lean(dress(ball(), Beat::Ball)), Ease::HOLD),
+        Key::eased(f_held, lean(dress(ball(), Beat::Ball)), Ease::STRIKE),
+        Key::eased(f_open, dress(open(), Beat::Open), Ease::LINEAR),
+        // The feet go down after the dressing, so a class that sinks lower
+        // into its landing bends its knees for it rather than putting its
+        // feet through the floor.
+        Key::eased(
+            f_catch,
+            feet(dress(catch(), Beat::Catch), lead, trail),
+            Ease::OUT,
+        ),
+        Key::eased(
+            f_absorb,
+            feet(
+                sunk(dress(catch(), Beat::Catch)),
+                slid(lead, f_absorb),
+                slid(trail, f_absorb),
+            ),
+            Ease::SMOOTH,
+        ),
+        Key::eased(
+            f_rise,
+            feet(
+                dress(rise(), Beat::Rise),
+                slid(lead, f_rise),
+                slid(trail, f_rise),
+            ),
+            Ease::OUT,
+        ),
+        Key::eased(
+            last,
+            settle(dress(settle_body(), Beat::Settle), slid(lead, last), body),
+            Ease::SMOOTH,
+        ),
+    ];
+    Recipe {
+        clip,
+        looseness: style.looseness,
+        notes: style.notes.into(),
+        keys: dedupe(keys),
+    }
+}
 
-    // Balled up: knees under the chest, elbows in, chin down. The smallest the
-    // silhouette gets, and it holds from here to the last invulnerable frame,
-    // because a shape that stops changing is the clearest way to say the frames
-    // are free.
-    //
-    // The fold stops at about a hundred degrees on purpose. Past that the head
-    // is lower than the hips, and a body whose head is under its own hips does
-    // not read as tucked -- it reads as having tripped.
-    let ball = Pose::rest()
-        .hips(0.0, -0.30, 0.18)
-        .root(42.0, 0.0, 0.0)
-        .spine(34.0, 0.0, 0.0)
-        .chest(24.0, 0.0, 0.0)
-        .head(22.0, 0.0, 0.0)
-        .shoulder_l(72.0, 34.0, 0.0)
-        .elbow_l(124.0)
-        .shoulder_r(76.0, 32.0, 0.0)
-        .elbow_r(128.0)
-        .hip_l(52.0, 14.0, 0.0)
-        .knee_l(104.0)
-        .hip_r(58.0, 12.0, 0.0)
-        .knee_r(110.0)
-        .toe_l(20.0)
-        .toe_r(22.0);
+/// Keys at the same frame keep the later one: a short window can squeeze two
+/// beats onto one frame, and a recipe may not have two keys there.
+fn dedupe(keys: Vec<Key>) -> Vec<Key> {
+    let mut out: Vec<Key> = Vec::new();
+    for k in keys {
+        if let Some(prev) = out.last_mut() {
+            if prev.frame >= k.frame {
+                *prev = Key {
+                    frame: prev.frame,
+                    ..k
+                };
+                continue;
+            }
+        }
+        out.push(k);
+    }
+    out
+}
 
-    // The last frame that cannot be hit. Still balled and still at the same
-    // height, but the lead leg has swung out under the body, so the break has
-    // somewhere to go and does not have to invent it.
-    let gather = Pose::rest()
-        .hips(0.0, -0.30, 0.12)
-        .root(42.0, 0.0, -6.0)
-        .spine(34.0, 0.0, 4.0)
-        .chest(24.0, 0.0, 6.0)
-        .head(12.0, 0.0, 0.0)
-        .shoulder_l(50.0, 30.0, 0.0)
-        .elbow_l(108.0)
-        .shoulder_r(62.0, 28.0, 0.0)
-        .elbow_r(100.0)
-        .hip_l(34.0, 12.0, 0.0)
-        .knee_l(112.0)
-        .hip_r(68.0, 14.0, 0.0)
-        .knee_r(100.0)
-        .toe_l(16.0)
-        .toe_r(-12.0);
+/// A shoulder roll's lean: going over the right shoulder the head tucks
+/// toward the left one and the trunk tips onto the right, so the round of the
+/// back runs from the right shoulder to the left hip -- the line the turn's
+/// tipped axis rolls it along (`view::dodge::turned`). Over the left shoulder
+/// rolling left; the right one every other way.
+fn shoulder(pose: Pose, way: Way) -> Pose {
+    let s = match way {
+        Way::Left => -1.0,
+        Way::Right | Way::Forward | Way::Back => 1.0,
+    };
+    let tip = |j: view::skeleton::Joint, side: f32, turn: f32| {
+        move |p: Pose| {
+            let mut q = p;
+            q.set_degrees(j, 1, p.degrees(j, 1) + side * s);
+            q.set_degrees(j, 2, p.degrees(j, 2) + turn * s);
+            q
+        }
+    };
+    use view::skeleton::Joint;
+    let pose = tip(Joint::Spine, 10.0, -8.0)(pose);
+    let pose = tip(Joint::Chest, 8.0, -10.0)(pose);
+    tip(Joint::Head, -20.0, 24.0)(pose)
+}
 
-    // Vulnerable. The foot arrives, the body comes up off it, and the arms go
-    // out and back -- nowhere near a guard, which is the point.
-    //
-    // The lead foot is placed under the body rather than out in front of it.
-    // Reaching further forward from hips this low asks the solver for a thigh
-    // that is horizontal, which is exactly where the swing-and-spread
-    // decomposition has its pole: the answer comes back as a hundred and
-    // fifteen degrees of abduction and a leg on backwards.
-    let catch_at = [R + 0.05, GROUND, 0.23];
-    let catch = Pose::rest()
-        .hips(0.0, -0.21, 0.0)
-        .root(21.0, 0.0, -5.0)
-        .spine(16.0, 0.0, 7.0)
-        .chest(8.0, 0.0, 9.0)
-        .head(-26.0, 0.0, -5.0)
-        .shoulder_l(-38.0, 48.0, 0.0)
+// -- The shared beats --------------------------------------------------------
+
+/// Frame zero. The simulation hands out the whole velocity on the first frame
+/// of the action, so this is already going -- an anticipation pose here would
+/// be the body winding up for something it has already done.
+fn push(body: Way) -> Pose {
+    match body {
+        Way::Back => stance()
+            .hips(0.0, -0.22, -0.04)
+            .root(14.0, 0.0, -10.0)
+            .spine(16.0, 0.0, 6.0)
+            .chest(10.0, 0.0, 7.0)
+            .head(-6.0, 0.0, 4.0)
+            .shoulder_l(20.0, 20.0, 0.0)
+            .elbow_l(70.0)
+            .shoulder_r(16.0, 18.0, 0.0)
+            .elbow_r(66.0)
+            .plant_l([L - 0.03, GROUND, 0.10])
+            .plant_r([R + 0.03, GROUND, -0.04])
+            .toe_l(6.0)
+            .toe_r(8.0),
+        _ => stance()
+            .hips(0.0, -0.14, 0.04)
+            .root(18.0, 0.0, -6.0)
+            .spine(14.0, 0.0, 4.0)
+            .chest(8.0, 0.0, 5.0)
+            .head(-16.0, 0.0, 2.0)
+            .shoulder_l(30.0, 20.0, 0.0)
+            .elbow_l(50.0)
+            .shoulder_r(26.0, 18.0, 0.0)
+            .elbow_r(48.0)
+            .plant_l([L - 0.02, GROUND, 0.12])
+            .plant_r([R + 0.02, GROUND, -0.20])
+            .toe_l(-2.0)
+            .toe_r(10.0),
+    }
+}
+
+/// The launch. Forward, the back leg has just driven off and is straight
+/// behind, the front knee coming up, the trunk going out over it and the arms
+/// swinging forward and up. Backward, the hop back, sitting into it. Legs
+/// keyed as angles: nothing is on the floor to plant.
+fn off(body: Way) -> Pose {
+    match body {
+        Way::Back => Pose::rest()
+            .hips(0.0, -0.26, -0.08)
+            .root(24.0, 0.0, -6.0)
+            .spine(26.0, 0.0, 4.0)
+            .chest(18.0, 0.0, 4.0)
+            .head(10.0, 0.0, 2.0)
+            .shoulder_l(40.0, 22.0, 0.0)
+            .elbow_l(84.0)
+            .shoulder_r(36.0, 20.0, 0.0)
+            .elbow_r(80.0)
+            .hip_l(66.0, 10.0, 0.0)
+            .knee_l(88.0)
+            .hip_r(58.0, 8.0, 0.0)
+            .knee_r(96.0)
+            .toe_l(24.0)
+            .toe_r(26.0),
+        _ => Pose::rest()
+            .hips(0.0, -0.12, 0.08)
+            .root(28.0, 0.0, -4.0)
+            .spine(14.0, 0.0, 3.0)
+            .chest(8.0, 0.0, 4.0)
+            .head(-24.0, 0.0, 1.0)
+            .shoulder_l(76.0, 16.0, 0.0)
+            .elbow_l(52.0)
+            .shoulder_r(72.0, 14.0, 0.0)
+            .elbow_r(52.0)
+            .hip_l(64.0, 8.0, 0.0)
+            .knee_l(80.0)
+            .hip_r(-4.0, 6.0, 0.0)
+            .knee_r(20.0)
+            .toe_l(20.0)
+            .toe_r(40.0),
+    }
+}
+
+/// In the air. Long from the head to the toes: the arms up in front of the
+/// chest -- in front of it, not stretched overhead, because it is the
+/// shoulder that meets the floor, not the hands -- the head up looking where
+/// it is going, the legs trailing off the push with the toes pointed. The whole-body turn
+/// pitches this forward as it flies, so by the contact the hands are down and
+/// the feet up behind. Backward, it is the hop back: sat in the air, knees up,
+/// chin down, hands forward, about to land on the back.
+fn dive(body: Way) -> Pose {
+    match body {
+        Way::Back => Pose::rest()
+            .hips(0.0, -0.26, -0.06)
+            .root(26.0, 0.0, 0.0)
+            .spine(30.0, 0.0, 0.0)
+            .chest(22.0, 0.0, 0.0)
+            .head(26.0, 0.0, 0.0)
+            .shoulder_l(62.0, 20.0, 0.0)
+            .elbow_l(96.0)
+            .shoulder_r(58.0, 20.0, 0.0)
+            .elbow_r(100.0)
+            .hip_l(92.0, 12.0, 0.0)
+            .knee_l(112.0)
+            .hip_r(88.0, 10.0, 0.0)
+            .knee_r(118.0)
+            .toe_l(26.0)
+            .toe_r(26.0),
+        _ => Pose::rest()
+            .hips(0.0, -0.08, 0.06)
+            .root(16.0, 0.0, 0.0)
+            .spine(12.0, 0.0, 0.0)
+            .chest(8.0, 0.0, 0.0)
+            .head(-20.0, 0.0, 0.0)
+            .shoulder_l(92.0, 18.0, 0.0)
+            .elbow_l(64.0)
+            .shoulder_r(96.0, 16.0, 0.0)
+            .elbow_r(60.0)
+            .hip_l(4.0, 6.0, 0.0)
+            .knee_l(28.0)
+            .hip_r(-10.0, 4.0, 0.0)
+            .knee_r(46.0)
+            .toe_l(40.0)
+            .toe_r(42.0),
+    }
+}
+
+/// The end of the flight: still long, but the body is falling now -- the
+/// legs trailing higher behind, the hands going down for the floor, the head
+/// still up, the back starting to round. What keeps the dive moving between
+/// leaving the floor and meeting it, rather than hanging in one pose.
+fn reach(body: Way) -> Pose {
+    match body {
+        Way::Back => dive(Way::Back)
+            .hips(0.0, -0.30, -0.08)
+            .head(30.0, 0.0, 0.0)
+            .hip_l(100.0, 12.0, 0.0)
+            .hip_r(96.0, 10.0, 0.0),
+        _ => Pose::rest()
+            .hips(0.0, -0.12, 0.08)
+            .root(20.0, 0.0, 0.0)
+            .spine(18.0, 0.0, 0.0)
+            .chest(12.0, 0.0, 0.0)
+            .head(-12.0, 0.0, 0.0)
+            .shoulder_l(98.0, 20.0, 0.0)
+            .elbow_l(70.0)
+            .shoulder_r(100.0, 18.0, 0.0)
+            .elbow_r(68.0)
+            .hip_l(16.0, 6.0, 0.0)
+            .knee_l(50.0)
+            .hip_r(-16.0, 4.0, 0.0)
+            .knee_r(40.0)
+            .toe_l(40.0)
+            .toe_r(42.0),
+    }
+}
+
+/// The landing taken: the same body as the catch, sunk lower and further
+/// over the front foot, two frames after it -- the weight arriving.
+fn sunk(pose: Pose) -> Pose {
+    let [x, y, z] = pose.root_offset();
+    let mut p = pose.hips(x, y - 0.07, z + 0.02);
+    for (j, more) in [
+        (view::skeleton::Joint::Root, 6.0),
+        (view::skeleton::Joint::Spine, 4.0),
+        (view::skeleton::Joint::Head, -4.0),
+    ] {
+        p.set_degrees(j, 0, p.degrees(j, 0) + more);
+    }
+    p
+}
+
+/// The floor arrives. The arms fold in, the head tucks under; the back starts to round and the
+/// knees come up. Backward, the back meets it, already most of a ball.
+fn contact(body: Way) -> Pose {
+    match body {
+        Way::Back => ball().hips(0.0, -0.32, -0.04).head(34.0, 0.0, 0.0),
+        _ => Pose::rest()
+            .hips(0.0, -0.18, 0.06)
+            .root(22.0, 0.0, 0.0)
+            .spine(26.0, 0.0, 0.0)
+            .chest(20.0, 0.0, 0.0)
+            .head(30.0, 0.0, 0.0)
+            .shoulder_l(82.0, 20.0, 0.0)
+            .elbow_l(92.0)
+            .shoulder_r(80.0, 18.0, 0.0)
+            .elbow_r(96.0)
+            .hip_l(48.0, 10.0, 0.0)
+            .knee_l(76.0)
+            .hip_r(30.0, 8.0, 0.0)
+            .knee_r(80.0)
+            .toe_l(32.0)
+            .toe_r(32.0),
+    }
+}
+
+/// The ball: chin on the chest, the back rounded, knees pulled up to it and the
+/// hands on the shins. **Round**, because it is what the body rolls on: the
+/// trunk curls down over thighs that come up to meet it, rather than both
+/// pointing ahead, so it is about as deep as it is tall. The same whichever way
+/// the roll goes; the turn is what tells forward from back.
+fn ball() -> Pose {
+    Pose::rest()
+        .hips(0.0, -0.36, 0.0)
+        .root(22.0, 0.0, 0.0)
+        .spine(42.0, 0.0, 0.0)
+        .chest(36.0, 0.0, 0.0)
+        .head(42.0, 0.0, 0.0)
+        .shoulder_l(84.0, 22.0, 0.0)
+        .elbow_l(104.0)
+        .shoulder_r(86.0, 20.0, 0.0)
+        .elbow_r(106.0)
+        .hip_l(118.0, 12.0, 0.0)
+        .knee_l(146.0)
+        .hip_r(118.0, 10.0, 0.0)
+        .knee_r(146.0)
+        .toe_l(30.0)
+        .toe_r(30.0)
+}
+
+/// The break. Most of the way round, the legs come out of the ball and reach
+/// along the body for the floor -- which, the body being over, is ahead of it
+/// going forward and behind it going back -- and the arms come off the shins.
+/// Everything that changes on this frame is the cover going.
+fn open() -> Pose {
+    Pose::rest()
+        .hips(0.0, -0.32, 0.02)
+        .root(26.0, 0.0, 0.0)
+        .spine(30.0, 0.0, 0.0)
+        .chest(18.0, 0.0, 0.0)
+        .head(14.0, 0.0, 0.0)
+        .shoulder_l(30.0, 40.0, 0.0)
+        .elbow_l(70.0)
+        .shoulder_r(34.0, 38.0, 0.0)
+        .elbow_r(66.0)
+        .hip_l(62.0, 12.0, 0.0)
+        .knee_l(100.0)
+        .hip_r(78.0, 10.0, 0.0)
+        .knee_r(114.0)
+        .toe_l(4.0)
+        .toe_r(6.0)
+}
+
+/// Where the catch puts the two feet down: the lead under the body, the other
+/// behind it, on the balls of both.
+fn catch_feet(body: Way) -> ([f32; 3], [f32; 3]) {
+    // The ankles a few centimetres up: on the balls of the feet.
+    const UP: f32 = GROUND + 0.07;
+    match body {
+        Way::Back => ([L - 0.04, UP, -0.18], [R + 0.04, UP, 0.10]),
+        _ => ([R + 0.04, UP, 0.20], [L - 0.04, UP, -0.04]),
+    }
+}
+
+/// Upright and down: deep, weight over the lead foot, hands low and out for
+/// balance -- nowhere near a guard, which is the point. The feet are put down
+/// by [`feet`], once the class has had its say.
+fn catch() -> Pose {
+    Pose::rest()
+        .hips(0.0, -0.38, 0.0)
+        .root(26.0, 0.0, -4.0)
+        .spine(18.0, 0.0, 4.0)
+        .chest(8.0, 0.0, 4.0)
+        .head(-24.0, 0.0, -2.0)
+        .shoulder_l(20.0, 40.0, 0.0)
+        .elbow_l(56.0)
+        .shoulder_r(28.0, 40.0, 0.0)
+        .elbow_r(50.0)
+}
+
+/// Coming up. The lead foot still down and sliding back under a body that has
+/// not stopped; the trailing one taking weight.
+fn rise() -> Pose {
+    Pose::rest()
+        .hips(0.0, -0.24, 0.0)
+        .root(16.0, 0.0, -6.0)
+        .spine(10.0, 0.0, 4.0)
+        .chest(4.0, 0.0, 5.0)
+        .head(-14.0, 0.0, 2.0)
+        .shoulder_l(12.0, 36.0, 0.0)
         .elbow_l(54.0)
-        .shoulder_r(-22.0, 56.0, 0.0)
-        .elbow_r(46.0)
-        .hip_l(-20.0, 12.0, 0.0)
-        .knee_l(98.0)
-        .plant_r(catch_at)
-        .toe_l(-14.0)
-        .toe_r(-8.0);
+        .shoulder_r(14.0, 36.0, 0.0)
+        .elbow_r(48.0)
+}
 
-    // The trailing foot passes and takes over while the first one slides back
-    // under the body at the speed the body is still carrying.
-    let step_at = [L - 0.05, GROUND, 0.24];
-    let step = Pose::rest()
-        .hips(0.0, -0.15, 0.0)
-        .root(16.0, 0.0, 5.0)
-        .spine(8.0, 0.0, -5.0)
-        .chest(4.0, 0.0, -7.0)
-        .head(-15.0, 0.0, 3.0)
-        .shoulder_l(-16.0, 42.0, 0.0)
-        .elbow_l(48.0)
-        .shoulder_r(8.0, 46.0, 0.0)
-        .elbow_r(40.0)
-        .plant_r(planted(
-            catch_at,
-            f_catch as f32,
-            f_step as f32,
-            away,
-            speed,
-        ))
-        .plant_l(step_at)
-        .toe_floor_r()
-        .toe_l(-10.0);
-
-    // Back on the feet, not back on guard. The hips and legs are close to the
-    // fighting stance so the hand-off to idle does not pop; the arms are not,
-    // because the recovery frames are the ones you get punished in.
-    let settle = stance()
-        .hips(0.0, -0.09, 0.0)
-        .root(7.0, 0.0, -10.0)
+/// Back on the feet, not back on guard. The hips and legs are close to the
+/// fighting stance so the hand-off to idle does not pop; the arms are not,
+/// because the recovery frames are the ones you get punished in.
+fn settle_body() -> Pose {
+    stance()
+        .hips(0.0, -0.10, 0.0)
+        .root(6.0, 0.0, -10.0)
         .spine(7.0, 0.0, 5.0)
         .chest(3.0, 0.0, 6.0)
         .head(-5.0, 0.0, 3.0)
-        .shoulder_l(0.0, 30.0, 0.0)
-        .elbow_l(42.0)
-        .shoulder_r(-6.0, 32.0, 0.0)
-        .elbow_r(36.0)
-        .plant_l(planted(step_at, f_step as f32, f_last as f32, away, speed))
-        .plant_r([R + 0.05, GROUND, -0.20])
+        .shoulder_l(4.0, 30.0, 0.0)
+        .elbow_l(44.0)
+        .shoulder_r(0.0, 32.0, 0.0)
+        .elbow_r(38.0)
+}
+
+/// The settled feet: the lead where it slid to, the other the stance's.
+fn settle(pose: Pose, lead: [f32; 3], body: Way) -> Pose {
+    let pose = pose
+        .plant_l([L - 0.03, GROUND, 0.16])
         .toe_l(0.0)
-        .toe_r(10.0);
-
-    Recipe {
-        clip,
-        looseness: Looseness::MARTIAL,
-        notes: "A dive, not a running step: the body goes flat and long, the \
-                arms are thrown out in front and the legs trail. It balls up \
-                for the invulnerable frames and stops changing, then breaks on \
-                the exact frame the cover runs out -- the lead foot takes the \
-                ground, the chest comes up and the arms end wide and low, \
-                nowhere near a guard. The catching feet are placed from the \
-                ground the body actually covers, which by then is still eight \
-                centimetres a frame. Both leg swings -- off the floor and back \
-                onto it -- run at a constant rate rather than arriving early: \
-                three and four frames is not enough room for an ease that \
-                spends half of itself in its first one."
-            .into(),
-        keys: vec![
-            Key::eased(0, set, Ease::LINEAR),
-            // Linear out of the take-off and linear out of the catch, which
-            // are the two gaps in this clip where a leg has further to travel
-            // than the frames it has. `OUT` -- the shape a limb arriving and
-            // settling wants -- spends nearly half of a gap in its first
-            // frame, and half of a three-frame leg swing in one frame is a
-            // foot moving at twenty-two metres a second relative to the hips.
-            // The dive is already at full speed on frame zero and the legs are
-            // being dragged rather than thrown, so there is nothing here that
-            // wants to arrive early: constant rate is both what passes and
-            // what it looks like.
-            Key::eased(f_off, off, Ease::LINEAR),
-            Key::eased(f_out, dive, Ease::OUT),
-            Key::eased(f_ball, ball, Ease::IN),
-            Key::eased(brk, gather, Ease::STRIKE),
-            Key::eased(f_catch, catch, Ease::LINEAR),
-            Key::eased(f_step, step, Ease::OUT),
-            Key::eased(f_last, settle, Ease::SMOOTH),
-        ],
+        .plant_r([R + 0.03, GROUND + 0.032, -0.15])
+        .toe_floor_r();
+    match body {
+        Way::Back => pose.plant_l(lead).toe_l(2.0),
+        _ => pose.plant_r(lead).toe_r(2.0),
     }
 }
 
-// ---------------------------------------------------------------------------
-// Back: a hop out of range
-// ---------------------------------------------------------------------------
-
-fn back() -> Recipe {
-    let clip = Clip::DodgeBack;
-    let len = clip.length();
-    let brk = first_vulnerable(len);
-
-    let (f_out, f_air) = (2, (brk * 3) / 5);
-    let f_land = brk + (len - brk) / 3;
-    let f_low = brk + (len - brk) * 2 / 3;
-    let f_last = len - 1;
-
-    // Both feet drive at once -- a hop, not a step. The dip is tiny because the
-    // velocity is already applied; a real compression here would be the
-    // character crouching after it had left.
-    let launch = stance()
-        .hips(0.0, -0.22, -0.04)
-        .root(14.0, 0.0, -10.0)
-        .spine(16.0, 0.0, 6.0)
-        .chest(10.0, 0.0, 7.0)
-        .head(-20.0, 0.0, 4.0)
-        .shoulder_l(-26.0, 20.0, 0.0)
-        .elbow_l(58.0)
-        .shoulder_r(-32.0, 18.0, 0.0)
-        .elbow_r(52.0)
-        .plant_l([L - 0.03, GROUND, 0.10])
-        .plant_r([R + 0.03, GROUND, -0.04])
-        .toe_l(6.0)
-        .toe_r(8.0);
-
-    // Off the floor, but going backwards rather than upwards: the knees come up
-    // in front and the chest folds down over them, so the whole body is under
-    // where a swing at chest height would be.
-    let leave = Pose::rest()
-        .hips(0.0, -0.16, -0.06)
-        .root(26.0, 0.0, -8.0)
-        .spine(24.0, 0.0, 5.0)
-        .chest(16.0, 0.0, 6.0)
-        .head(-24.0, 0.0, 3.0)
-        .shoulder_l(-16.0, 26.0, 0.0)
-        .elbow_l(78.0)
-        .shoulder_r(-20.0, 24.0, 0.0)
-        .elbow_r(72.0)
-        .hip_l(58.0, 10.0, 0.0)
-        .knee_l(78.0)
-        .hip_r(48.0, 8.0, 0.0)
-        .knee_r(88.0)
-        .toe_l(28.0)
-        .toe_r(30.0);
-
-    // The tuck. Knees to the chest, elbows in, head down between them -- a
-    // fighting-game hop, and the smallest a body gets without lying down.
-    let tuck = Pose::rest()
-        .hips(0.0, -0.12, -0.02)
-        .root(38.0, 0.0, -4.0)
-        .spine(38.0, 0.0, 2.0)
-        .chest(28.0, 0.0, 3.0)
-        .head(18.0, 0.0, 0.0)
-        .shoulder_l(28.0, 36.0, 0.0)
-        .elbow_l(132.0)
-        .shoulder_r(24.0, 34.0, 0.0)
-        .elbow_r(136.0)
-        .hip_l(96.0, 14.0, 0.0)
-        .knee_l(122.0)
-        .hip_r(92.0, 12.0, 0.0)
-        .knee_r(126.0)
-        .toe_l(16.0)
-        .toe_r(18.0);
-
-    // Last invulnerable frame: the legs start reaching down for the floor while
-    // everything else is still tucked, so the break has a direction.
-    let reach = Pose::rest()
-        .hips(0.0, -0.18, 0.02)
-        .root(34.0, 0.0, -3.0)
-        .spine(32.0, 0.0, 2.0)
-        .chest(22.0, 0.0, 3.0)
-        .head(6.0, 0.0, 0.0)
-        .shoulder_l(14.0, 40.0, 0.0)
-        .elbow_l(118.0)
-        .shoulder_r(10.0, 38.0, 0.0)
-        .elbow_r(122.0)
-        .hip_l(70.0, 14.0, 0.0)
-        .knee_l(104.0)
-        .hip_r(66.0, 12.0, 0.0)
-        .knee_r(108.0)
-        .toe_l(-4.0)
-        .toe_r(-2.0);
-
-    // Vulnerable, and it should look it: the feet arrive out in front of a body
-    // still travelling backwards, so the landing is a sprawl rather than a
-    // stance. Arms out for balance, guard gone.
-    //
-    // These feet **skid**, and are placed by hand rather than by `planted`.
-    // From here to the end the body covers half a metre, and a foot nailed to
-    // the ground for that would have to end up further in front of the hips
-    // than the leg is long -- the solver answers with a straight leg pointing
-    // at nothing. What a real landing off four metres a second does is put the
-    // heels down and slide, so that is what these do: a few centimetres of
-    // creep, and then the trailing foot picks up and steps back underneath.
-    let land = Pose::rest()
-        .hips(0.0, -0.30, -0.06)
-        .root(-6.0, 0.0, 0.0)
-        .spine(18.0, 0.0, 0.0)
-        .chest(10.0, 0.0, 0.0)
-        .head(-16.0, 0.0, 0.0)
-        .shoulder_l(-34.0, 62.0, 0.0)
-        .elbow_l(38.0)
-        .shoulder_r(-36.0, 64.0, 0.0)
-        .elbow_r(34.0)
-        .plant_l([L - 0.07, GROUND, 0.20])
-        .plant_r([R + 0.07, GROUND, 0.14])
-        .toe_l(-14.0)
-        .toe_r(-12.0);
-
-    // The absorption. Deepest here, and both heels are still creeping forward
-    // under a body that has not stopped.
-    let absorb = Pose::rest()
-        .hips(0.0, -0.36, -0.02)
-        .root(6.0, 0.0, -2.0)
-        .spine(14.0, 0.0, 2.0)
-        .chest(6.0, 0.0, 3.0)
-        .head(-20.0, 0.0, 2.0)
-        .shoulder_l(-20.0, 54.0, 0.0)
-        .elbow_l(50.0)
-        .shoulder_r(-24.0, 56.0, 0.0)
-        .elbow_r(46.0)
-        .plant_l([L - 0.06, GROUND, 0.26])
-        .plant_r([R + 0.06, GROUND, 0.20])
-        .toe_l(-6.0)
-        .toe_r(-4.0);
-
-    // The rear foot picks up and steps back under the hips, which is how a
-    // skid actually ends and how the clip hands a plausible stance to whatever
-    // plays next.
-    let settle = stance()
-        .hips(0.0, -0.11, 0.0)
-        .root(4.0, 0.0, -11.0)
-        .spine(8.0, 0.0, 5.0)
-        .chest(4.0, 0.0, 6.0)
-        .head(-6.0, 0.0, 4.0)
-        .shoulder_l(-4.0, 32.0, 0.0)
-        .elbow_l(44.0)
-        .shoulder_r(-10.0, 34.0, 0.0)
-        .elbow_r(38.0)
-        .plant_l([L - 0.05, GROUND, 0.28])
-        .plant_r([R + 0.05, GROUND, -0.10])
-        .toe_l(-2.0)
-        .toe_r(6.0);
-
-    Recipe {
-        clip,
-        looseness: Looseness::MARTIAL,
-        notes: "Both feet drive at once, which is what separates a hop from a \
-                step. It goes backwards rather than upwards on purpose: the \
-                knees come up in front and the chest folds over them, so the \
-                invulnerable frames are spent underneath where a swing at chest \
-                height would be. The break is the landing -- feet out in front \
-                of a body still travelling, arms wide for balance, and a deep \
-                absorption that reads as sprawled rather than set."
-            .into(),
-        keys: vec![
-            Key::eased(0, launch, Ease::STRIKE),
-            Key::eased(f_out, leave, Ease::OUT),
-            Key::eased(f_air, tuck, Ease::IN),
-            Key::eased(brk, reach, Ease::STRIKE),
-            Key::eased(f_land, land, Ease::OUT),
-            Key::eased(f_low, absorb, Ease::OUT),
-            Key::eased(f_last, settle, Ease::SMOOTH),
-        ],
+/// Both feet onto the floor, whichever side leads.
+///
+/// A planted foot takes whatever angle its shin ended at, which points the
+/// sole into the floor, so each is laid back on it afterwards. Both onto the
+/// ball of the foot, heels a little up: this deep, with the shin pitched this
+/// far over it, an ankle has not got the range to put a heel down, and asked
+/// to it drives the toe through the floor instead.
+fn feet(pose: Pose, lead: [f32; 3], trail: [f32; 3]) -> Pose {
+    if lead[0] > trail[0] {
+        pose.plant_r(lead)
+            .toe_floor_r()
+            .plant_l(trail)
+            .toe_floor_l()
+    } else {
+        pose.plant_l(lead)
+            .toe_floor_l()
+            .plant_r(trail)
+            .toe_floor_r()
     }
 }
 
-// ---------------------------------------------------------------------------
-// Sideways: a roll
-// ---------------------------------------------------------------------------
+// -- The six ------------------------------------------------------------------
 
-/// The roll to the character's right. `dodge_left` is this mirrored.
-fn roll(clip: Clip) -> Recipe {
-    let len = clip.length();
-    let brk = first_vulnerable(len);
-    let speed = ground_speed();
-    let away = [-1.0, 0.0];
+/// The roll as everyone shares it, with the weapon hand coming up forward.
+fn champion(pose: Pose, beat: Beat, _body: Way) -> Pose {
+    match beat {
+        Beat::Catch => pose.shoulder_r(46.0, 20.0, 0.0).elbow_r(40.0),
+        Beat::Rise => pose.shoulder_r(36.0, 18.0, 0.0).elbow_r(44.0),
+        Beat::Settle => pose.shoulder_r(22.0, 18.0, 0.0).elbow_r(46.0),
+        _ => pose,
+    }
+}
 
-    let (f_off, f_out) = (1, 4);
-    let f_curl = brk - 3;
-    let f_catch = brk + (len - brk) / 3;
-    let f_step = brk + (len - brk) * 2 / 3;
-    let f_last = len - 1;
-
-    // You roll right by driving off the left foot, so the left leg is the one
-    // that extends and the right is already folding out of the way. The only
-    // grounded frame at this end: half a metre of ground goes past in the next
-    // two, and the next key is a single frame away because the solver records
-    // frame zero a frame's worth of stepping past the first key.
-    let set = stance()
-        .hips(0.03, -0.12, 0.0)
-        .root(8.0, 12.0, -8.0)
-        .spine(8.0, 10.0, 6.0)
-        .chest(4.0, 8.0, 8.0)
-        .head(-8.0, -6.0, 12.0)
-        .shoulder_l(-14.0, 24.0, 0.0)
-        .elbow_l(60.0)
-        .shoulder_r(18.0, 38.0, 0.0)
-        .elbow_r(52.0)
-        .plant_l([L - 0.07, GROUND, 0.06])
-        .plant_r([R + 0.07, GROUND, -0.06])
-        .toe_l(8.0)
-        .toe_r(2.0);
-
-    // Driving off, one frame later. The left leg has finished extending and is
-    // just clear, the right is already up, and the lead arm is on its way down
-    // and out toward the ground it is about to pass over -- the gesture that
-    // says roll on a body that cannot actually turn over.
-    let off = stance()
-        .hips(0.06, -0.16, 0.0)
-        .root(12.0, 20.0, -7.0)
-        .spine(12.0, 16.0, 5.0)
-        .chest(6.0, 12.0, 7.0)
-        .head(0.0, -10.0, 16.0)
-        .shoulder_l(-18.0, 28.0, 0.0)
-        .elbow_l(62.0)
-        .shoulder_r(32.0, 72.0, 0.0)
-        .elbow_r(40.0)
-        .plant_l([L - 0.11, GROUND + 0.16, 0.04])
-        .plant_r([R + 0.13, GROUND + 0.18, -0.02])
-        .toe_l(2.0)
-        .toe_r(0.0);
-
-    // Off the floor, curled toward the travel, the lead arm reaching for the
-    // ground under it.
-    let throw = Pose::rest()
-        .hips(0.13, -0.26, 0.02)
-        .root(18.0, 32.0, -4.0)
-        .spine(18.0, 22.0, 4.0)
-        .chest(12.0, 18.0, 6.0)
-        .head(14.0, -18.0, 24.0)
-        .shoulder_l(-14.0, 40.0, 0.0)
-        .elbow_l(78.0)
-        .shoulder_r(46.0, 104.0, 0.0)
-        .elbow_r(26.0)
-        .hip_l(54.0, 30.0, 0.0)
-        .knee_l(122.0)
-        .hip_r(62.0, 20.0, 0.0)
-        .knee_r(116.0)
-        .toe_l(-16.0)
-        .toe_r(10.0);
-
-    // Curled hard, head hidden behind the lead shoulder, both knees in. As
-    // small and as sideways as the rig goes, and it stays here until the frames
-    // run out. Thirty-four degrees of root tilt on top of twenty-two of spine
-    // and eighteen of chest is seventy-odd degrees of lateral fold, which is
-    // where the sideways read has to come from: the hips can only be thrown
-    // fifteen centimetres before the legs stop reaching the floor at all.
-    let curl = Pose::rest()
-        .hips(0.15, -0.32, 0.03)
-        .root(20.0, 34.0, 0.0)
-        .spine(22.0, 24.0, 0.0)
-        .chest(14.0, 18.0, 0.0)
-        .head(22.0, -22.0, 30.0)
-        .shoulder_l(44.0, 48.0, 0.0)
-        .elbow_l(122.0)
-        .shoulder_r(34.0, 116.0, 0.0)
-        .elbow_r(94.0)
-        .hip_l(68.0, 26.0, 0.0)
-        .knee_l(132.0)
-        .hip_r(66.0, 18.0, 0.0)
-        .knee_r(122.0)
-        .toe_l(-16.0)
-        .toe_r(14.0);
-
-    // Last invulnerable frame: the lead leg reaches out sideways for the floor
-    // while the curl is still on, at the same height it has held all along.
-    let gather = Pose::rest()
-        .hips(0.13, -0.32, 0.02)
-        .root(18.0, 30.0, -4.0)
-        .spine(20.0, 22.0, 4.0)
-        .chest(14.0, 18.0, 6.0)
-        .head(12.0, -18.0, 26.0)
-        .shoulder_l(32.0, 52.0, 0.0)
+/// The shield arm across the front of whatever the body is doing: the
+/// forearm level across the chest, the shield on it facing out.
+fn shield(pose: Pose) -> Pose {
+    pose.shoulder_l(66.0, -14.0, 0.0)
         .elbow_l(110.0)
-        .shoulder_r(18.0, 106.0, 0.0)
-        .elbow_r(76.0)
-        .hip_l(62.0, 24.0, 0.0)
-        .knee_l(128.0)
-        .hip_r(40.0, 54.0, 0.0)
-        .knee_r(88.0)
-        .toe_l(-14.0)
-        .toe_r(-6.0);
+        .wrist_l(-6.0, 0.0, 0.0)
+}
 
-    // Vulnerable: the lead foot takes the ground out to the side and the body
-    // uncurls up off it. The trailing arm swings wide, which is both what
-    // balance does and what says the guard is not back yet.
-    let catch_at = [R + 0.34, GROUND, 0.0];
-    let catch = Pose::rest()
-        .hips(0.08, -0.28, 0.0)
-        .root(16.0, 16.0, -6.0)
-        .spine(14.0, 10.0, 6.0)
-        .chest(8.0, 8.0, 8.0)
-        .head(-14.0, -6.0, 16.0)
-        .shoulder_l(-28.0, 66.0, 0.0)
-        .elbow_l(46.0)
-        .shoulder_r(-10.0, 52.0, 0.0)
-        .elbow_r(40.0)
-        .hip_l(34.0, 34.0, 0.0)
-        .knee_l(108.0)
-        .plant_r(catch_at)
-        .toe_l(-14.0)
-        .toe_r(-6.0);
+fn bulwark(pose: Pose, beat: Beat, _body: Way) -> Pose {
+    match beat {
+        Beat::Push | Beat::Off => pose.shoulder_l(52.0, -6.0, 0.0).elbow_l(98.0),
+        Beat::Dive | Beat::Contact | Beat::Ball | Beat::Open => shield(pose),
+        // Up behind the shield, deeper than anyone.
+        Beat::Catch => shield(pose.hips(0.0, -0.44, 0.0).root(22.0, 0.0, -6.0)),
+        Beat::Rise => shield(pose.hips(0.0, -0.30, 0.0)),
+        Beat::Settle => pose.shoulder_l(44.0, -4.0, 0.0).elbow_l(96.0),
+    }
+}
 
-    // The trailing foot comes under and the lead one keeps sliding away, which
-    // is what a body that has not finished moving does to the foot holding it.
-    let step_at = [L + 0.16, GROUND, 0.02];
-    let step = Pose::rest()
-        .hips(0.03, -0.16, 0.0)
-        .root(8.0, 6.0, -8.0)
-        .spine(8.0, 4.0, 6.0)
-        .chest(4.0, 3.0, 7.0)
-        .head(-10.0, -2.0, 8.0)
-        .shoulder_l(-12.0, 50.0, 0.0)
-        .elbow_l(44.0)
-        .shoulder_r(-2.0, 44.0, 0.0)
-        .elbow_r(38.0)
-        .plant_r(planted(
-            catch_at,
-            f_catch as f32,
-            f_step as f32,
-            away,
-            speed,
-        ))
-        .plant_l(step_at)
-        .toe_floor_r()
-        .toe_l(-6.0);
+fn reaver(pose: Pose, beat: Beat, _body: Way) -> Pose {
+    match beat {
+        // Up light: not so deep, the blades out low either side.
+        Beat::Catch => pose
+            .hips(0.0, -0.30, 0.0)
+            .shoulder_l(-20.0, 46.0, 0.0)
+            .elbow_l(20.0)
+            .shoulder_r(-20.0, 46.0, 0.0)
+            .elbow_r(20.0),
+        Beat::Rise => pose
+            .shoulder_l(-10.0, 42.0, 0.0)
+            .elbow_l(26.0)
+            .shoulder_r(-10.0, 42.0, 0.0)
+            .elbow_r(26.0),
+        _ => pose,
+    }
+}
 
-    let settle = stance()
-        .hips(0.0, -0.10, 0.0)
-        .root(5.0, 0.0, -11.0)
-        .spine(7.0, 0.0, 5.0)
-        .chest(3.0, 0.0, 6.0)
-        .head(-5.0, 0.0, 4.0)
-        .shoulder_l(-2.0, 32.0, 0.0)
-        .elbow_l(44.0)
-        .shoulder_r(-8.0, 34.0, 0.0)
-        .elbow_r(38.0)
-        .plant_l(planted(step_at, f_step as f32, f_last as f32, away, speed))
-        .plant_r([R + 0.10, GROUND, -0.10])
-        .toe_l(2.0)
-        .toe_r(8.0);
+fn elementalist(pose: Pose, beat: Beat, body: Way) -> Pose {
+    match beat {
+        // Out of the turn sliding on: low, the trunk forward over the knees,
+        // her left hand flat on the floor beside the lead foot.
+        Beat::Catch | Beat::Rise => {
+            let (deep, lean) = if beat == Beat::Catch {
+                (-0.48, 34.0)
+            } else {
+                (-0.40, 28.0)
+            };
+            let z = if body == Way::Back { -0.10 } else { 0.24 };
+            pose.hips(0.0, deep, 0.0)
+                .root(lean, 0.0, -6.0)
+                .spine(22.0, 0.0, 0.0)
+                .reach_l([L - 0.20, 0.06, z])
+                .shoulder_r(10.0, 64.0, 0.0)
+                .elbow_r(30.0)
+        }
+        _ => pose,
+    }
+}
 
-    Recipe {
-        clip,
-        looseness: Looseness::MARTIAL,
-        notes: "A roll sold without rolling. The root has fifty degrees of \
-                swing and thirty-five of tilt, so the body cannot go over -- \
-                instead it curls hard toward the direction of travel, hides the \
-                head behind the lead shoulder and puts that arm down toward the \
-                floor it is passing over. The curl holds unchanged while the \
-                frames are free, then the lead foot takes the ground out to the \
-                side and the body uncurls up off it with both arms wide. \
-                `dodge_left` is this mirrored exactly."
-            .into(),
-        keys: vec![
-            Key::eased(0, set, Ease::LINEAR),
-            Key::eased(f_off, off, Ease::OUT),
-            Key::eased(f_out, throw, Ease::OUT),
-            Key::eased(f_curl, curl, Ease::IN),
-            Key::eased(brk, gather, Ease::STRIKE),
-            Key::eased(f_catch, catch, Ease::OUT),
-            Key::eased(f_step, step, Ease::OUT),
-            Key::eased(f_last, settle, Ease::SMOOTH),
-        ],
+fn blood(pose: Pose, beat: Beat, _body: Way) -> Pose {
+    // The scythe arm out wide and a little back, nearly straight.
+    let out = |p: Pose| p.shoulder_r(-10.0, 88.0, 0.0).elbow_r(12.0);
+    match beat {
+        // Unfurling low.
+        Beat::Catch => out(pose.hips(0.0, -0.44, 0.0)),
+        Beat::Rise => out(pose.hips(0.0, -0.32, 0.0)),
+        Beat::Settle => pose.shoulder_r(-8.0, 50.0, 0.0).elbow_r(30.0),
+        _ => pose,
+    }
+}
+
+fn dual(pose: Pose, beat: Beat, _body: Way) -> Pose {
+    // Both arms opening wide.
+    let wings = |p: Pose, spread: f32| {
+        p.shoulder_l(-4.0, spread, 0.0)
+            .elbow_l(18.0)
+            .shoulder_r(-4.0, spread, 0.0)
+            .elbow_r(18.0)
+    };
+    match beat {
+        Beat::Open => wings(pose, 60.0),
+        Beat::Catch => wings(pose.hips(0.0, -0.28, 0.0), 80.0),
+        Beat::Rise => wings(pose.hips(0.0, -0.16, 0.0), 66.0),
+        _ => pose,
     }
 }
 

@@ -192,13 +192,25 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// for the body, so it stands differently where a top is narrow -- the
 /// platforms' edges, the Elementalist's stones. Re-pinned once more on merging
 /// main's Elementalist pass above.
+/// **Every class again later on 2026-10-21, for the hash**: `state_checksum`
+/// holds `Player::thrown` and `Player::taken`, the knockback rules between
+/// fighters (`docs/design/stun.md`). With those two lines out, every hunt
+/// reproduced the pin above exactly: no rule of them reaches a creature's
+/// fight.
+/// **Every class again later still, deliberately: a heavy blow holds the
+/// creature too** (`Monster::frozen`, `state::freeze_on_the_creature`): a
+/// fighter's blow from a move with an impact freeze of at least
+/// `Impact freeze on a creature, a move's at least` freezes both bodies.
+/// **Every class but the Champion moved 2026-10-22, deliberately**: the
+/// grounded dodge is 26 frames, 12 of them invulnerable, at 19.2 m/s -- a fifth
+/// longer and a fifth further, for the dive roll (feel-log.md).
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0xcadcc6985403c2db),
-    (Class::Bulwark, 0x1ba889494ff2d283),
-    (Class::ShadowReaver, 0x12db9710a976eba7),
-    (Class::BloodMage, 0x272d2d73f00db113),
-    (Class::DualMage, 0xf0f3fac57f4986c3),
-    (Class::Elementalist, 0x15f6448387a6cff9),
+    (Class::Champion, 0x35a804f43175a4cb),
+    (Class::Bulwark, 0x42cb6898b5200410),
+    (Class::ShadowReaver, 0xd2b1297a5b0ca3e3),
+    (Class::BloodMage, 0x09dc9321005dc822),
+    (Class::DualMage, 0xcc6860c5690be2d0),
+    (Class::Elementalist, 0x826a6453001ad85e),
 ];
 
 #[test]

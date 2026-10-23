@@ -539,7 +539,7 @@ pub fn dash_is_asked_for(
     // leash that kept the shadow inside that; the return clock replaced it.
     let reach = t::shadow_dash_speed()
         .mul(DT)
-        .mul(Fx::from_int(t::dodge_frames() as i32));
+        .mul(Fx::from_int(dash_frames() as i32));
     forward
         && shadow.is_out()
         && shadow.pos.sub(p.pos).len().raw() <= reach.raw()
@@ -551,8 +551,13 @@ pub fn dash_is_asked_for(
 /// invulnerability comes from.
 pub fn begin_dash(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
-    shadow.dash = t::dodge_frames();
+    shadow.dash = dash_frames();
     put(p, shadow);
+}
+
+/// How long a dash lasts at most: its own knob, inside the dodge it rides.
+fn dash_frames() -> u16 {
+    t::shadow_dash_frames().min(t::dodge_frames())
 }
 
 /// The velocity her dash is driving this frame, or `None` if she is not on one.

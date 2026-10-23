@@ -43,7 +43,7 @@ struct Wash {
     cam: vec4<f32>,    // camera height; height per unit along right, up, back
     lens: vec4<f32>,   // tan half fov, aspect, near
     sun: vec4<f32>,    // sun ndc x, y, in front
-    i: vec4<f32>,      // edges
+    i: vec4<f32>,      // edges, the smear's scale
     j: vec4<f32>,      // crisp until, painted from (metres), broad strokes, frame
     right: vec4<f32>,  // the camera's axes in the world
     up: vec4<f32>,
@@ -58,6 +58,9 @@ struct Wash {
 @group(0) @binding(4) var paper_sampler: sampler;
 @group(0) @binding(5) var depth_texture: texture_depth_2d;
 @group(0) @binding(6) var depth_sampler: sampler;
+// The brush laid by `smear`, at its own resolution (a 1x1 blank in every
+// pass but `brush`).
+@group(0) @binding(7) var smear_texture: texture_2d<f32>;
 
 fn hash2(p: vec2<f32>) -> f32 {
     var q = fract(vec3<f32>(p.x, p.y, p.x) * 0.1031);
@@ -305,6 +308,90 @@ fn is_sky(depth: f32, size: vec2<f32>, px: vec2<f32>) -> bool {
     return depth <= 1e-7 || along(depth) * length(ray) > wash.lens.w;
 }
 
+// **The wet colour wanders** (on paper only): where everything is read
+// from is pushed a pixel or two by a slow noise.
+fn wandered(px: vec2<f32>, k: f32) -> vec2<f32> {
+    let wander = vec2<f32>(noise2(px / (17.0 * k)), noise2(px / (17.0 * k) + vec2<f32>(31.0, 17.0)));
+    return px + (wander - 0.5) * 2.0 * wash.g.z * k;
+}
+
+// **Crisp near, painted far**: how far the brush reaches at a pixel, by how
+// far into the painted distance it is -- nothing where it is rendered as it
+// is, the whole brush where it is brushwork.
+fn reach_at(px: vec2<f32>, size: vec2<f32>) -> f32 {
+    let depth = depth_at(px, size);
+    var far = 1.0;
+    if (wash.j.y > 0.0 && !is_sky(depth, size, px)) {
+        let ndc = vec2<f32>(px.x / size.x * 2.0 - 1.0, 1.0 - px.y / size.y * 2.0);
+        let ray = vec3<f32>(ndc.x * wash.lens.x * wash.lens.y, ndc.y * wash.lens.x, -1.0);
+        far = smoothstep(wash.j.x, wash.j.y, along(depth) * length(ray));
+    }
+    return wash.a.x * far;
+}
+
+// **The brush, on its own**: the Kuwahara, the costliest thing in the
+// picture by far -- forty-nine taps of eight sectors a pixel -- drawn into a
+// texture of its own at `wash.i.y` of the screen's resolution, which
+// `governor` lowers when a frame runs over and `brush` brings back to the
+// screen edge-aware (`upsampled`).
+// In the screen's own pixels throughout, so only how many places it is
+// worked out at changes, never the brush's size; at a scale of one it is
+// the brush exactly as it was.
+@fragment
+fn smear(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let size = vec2<f32>(textureDimensions(screen_texture));
+    let k = size.y / 760.0;
+    let px = in.uv * size;
+    let at = wandered(px, k);
+    let reach = reach_at(px, size);
+    if (reach >= 0.75) {
+        return vec4<f32>(kuwahara(at, size, k, reach), 1.0);
+    }
+    return vec4<f32>(read(at, size), 1.0);
+}
+
+// How unlike the pixel a texel of the brush may be, in colour (as seen) and
+// in depth (a share of the pixel's own distance), before it stops counting.
+const LIKE_COLOUR: f32 = 0.12;
+const LIKE_DEPTH: f32 = 0.05;
+
+// **The brush brought back to the screen, edge-aware**: the joint bilateral
+// upsample (Kopf, Cohen, Lischinski and Uyttendaele, SIGGRAPH 2007). Of the
+// four texels of `smear` round a pixel, each weighed as a bilinear filter
+// would, and then by how like the pixel it is -- its colour against the
+// pixel's own unbrushed colour, and the depth it was worked out at against
+// the pixel's -- so a pixel on the near side of an edge takes its brush from
+// the near side, and an edge the brush kept stays as sharp as the screen.
+// At a share of one the pixel sits on its texel and this is that texel.
+fn upsampled(px: vec2<f32>, size: vec2<f32>, raw: vec3<f32>, z: f32) -> vec3<f32> {
+    let small = vec2<f32>(textureDimensions(smear_texture));
+    let p = px / size * small - 0.5;
+    let base = floor(p);
+    let f = p - base;
+    var sum = vec3<f32>(0.0);
+    var weight = 0.0;
+    var plain = vec3<f32>(0.0);
+    for (var n = 0; n < 4; n = n + 1) {
+        let o = vec2<f32>(f32(n & 1), f32(n >> 1));
+        let t = clamp(base + o, vec2<f32>(0.0), small - 1.0);
+        let s = textureLoad(smear_texture, vec2<i32>(t), 0).rgb;
+        let bilinear = mix(1.0 - f.x, f.x, o.x) * mix(1.0 - f.y, f.y, o.y);
+        plain += s * bilinear;
+        let zt = along(depth_at((t + 0.5) / small * size, size));
+        let dz = abs(zt - z) / (max(z, 1e-3) * LIKE_DEPTH);
+        let dc = (s - raw) / LIKE_COLOUR;
+        let w = bilinear * exp(-0.5 * dot(dc, dc)) * exp(-dz * dz);
+        sum += s * w;
+        weight += w;
+    }
+    // Nothing round it like it at all (a pixel-thin thing the brush lost):
+    // the plain filter, rather than a guess.
+    if (weight < 1e-4) {
+        return plain;
+    }
+    return sum / weight;
+}
+
 @fragment
 fn brush(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let size = vec2<f32>(textureDimensions(screen_texture));
@@ -313,10 +400,7 @@ fn brush(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let paper = wash.paper.rgb;
     let on_paper = wash.g.x > 0.5;
 
-    // **The wet colour wanders** (on paper only): where everything is read
-    // from is pushed a pixel or two by a slow noise.
-    let wander = vec2<f32>(noise2(px / (17.0 * k)), noise2(px / (17.0 * k) + vec2<f32>(31.0, 17.0)));
-    let at = px + (wander - 0.5) * 2.0 * wash.g.z * k;
+    let at = wandered(px, k);
 
     let depth = depth_at(px, size);
     let z = along(depth);
@@ -327,19 +411,10 @@ fn brush(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let metres = z * length(ray);
     // The sky is a dome a fixed way off (`sky::RADIUS`), not empty depth.
     let sky = is_sky(depth, size, px);
-    // **Crisp near, painted far**: how far into the painted distance this
-    // pixel is, 0 where it is rendered as it is and 1 where it is brushwork.
-    var far = 1.0;
-    if (wash.j.y > 0.0 && !sky) {
-        far = smoothstep(wash.j.x, wash.j.y, metres);
-    }
 
     var c = read(at, size);
-    if (wash.a.x > 0.0) {
-        let reach = wash.a.x * far;
-        if (reach >= 0.75) {
-            c = kuwahara(at, size, k, reach);
-        }
+    if (reach_at(px, size) >= 0.75) {
+        c = upsampled(px, size, c, z);
     }
 
     // **Broad strokes across the sky** (GW2's concept art): wide dry-brush

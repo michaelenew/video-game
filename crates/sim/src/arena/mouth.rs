@@ -82,7 +82,7 @@ pub static PLACE: Place = Place {
     vents: &[],
 };
 
-const SEAMS: [Seam; 4] = [
+const SEAMS: [Seam; 3] = [
     // Back to the town, at its east gate.
     Seam {
         zone: Zone::cm([5200, -300, -500], [6000, 700, 500]),
@@ -95,19 +95,6 @@ const SEAMS: [Seam; 4] = [
         gate: Gate::Open,
         waystone: None,
         says: "Hearth",
-    },
-    // Up the side path to the herd's meadow.
-    Seam {
-        zone: Zone::cm([11100, -300, 3800], [11900, 700, 4600]),
-        to: ArenaId::HORNBACK,
-        at: 0,
-        marks: [
-            Mark::cm(11350, 3500, (11500, 0)),
-            Mark::cm(11650, 3500, (11500, 0)),
-        ],
-        gate: Gate::Open,
-        waystone: None,
-        says: "the low meadow: the Hornback herd",
     },
     // On to the Bank, at the Lip.
     Seam {

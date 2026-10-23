@@ -220,34 +220,49 @@ pub fn draw(
     }
 
     // Updrafts: a faint column of rising air, from the floor to its top.
-    let draft = linear(palette.draft());
     for v in place.vents {
-        let (x, z) = (fx(v.at.0), fx(v.at.1));
-        let floor = fx(ground.floor_below(sim::V3::new(v.at.0, v.top, v.at.1)));
-        let top = fx(v.top);
-        let h = (top - floor).max(1.0);
-        put(
-            commands,
-            under,
-            (
-                Mesh3d(meshes.add(Cylinder::new(fx(v.radius), h).mesh().resolution(24).build())),
-                MeshMaterial3d(materials.standard.add(translucent(draft, 0.10))),
-                Transform::from_xyz(x, floor + h * 0.5, z),
-                bevy::pbr::NotShadowCaster,
-            ),
-        );
-        put(
-            commands,
-            under,
-            (
-                Mesh3d(meshes.add(Annulus::new(fx(v.radius) * 0.8, fx(v.radius)))),
-                MeshMaterial3d(materials.standard.add(translucent(draft, 0.35))),
-                Transform::from_xyz(x, floor + 0.05, z)
-                    .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-                bevy::pbr::NotShadowCaster,
-            ),
-        );
+        let floor = ground.floor_below(sim::V3::new(v.at.0, v.top, v.at.1));
+        draw_vent(commands, meshes, materials, v, floor, palette, under);
     }
+}
+
+/// **An updraft**: a faint column of rising air from `floor` (or its own
+/// foot, if that is higher) to its top, and a ring where it starts.
+pub fn draw_vent(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Materials,
+    v: &sim::valley::Vent,
+    floor: sim::Fx,
+    palette: &look::Palette,
+    under: Under,
+) {
+    let draft = linear(palette.draft());
+    let (x, z) = (fx(v.at.0), fx(v.at.1));
+    let floor = fx(floor.max(v.from));
+    let top = fx(v.top);
+    let h = (top - floor).max(1.0);
+    put(
+        commands,
+        under,
+        (
+            Mesh3d(meshes.add(Cylinder::new(fx(v.radius), h).mesh().resolution(24).build())),
+            MeshMaterial3d(materials.standard.add(translucent(draft, 0.10))),
+            Transform::from_xyz(x, floor + h * 0.5, z),
+            bevy::pbr::NotShadowCaster,
+        ),
+    );
+    put(
+        commands,
+        under,
+        (
+            Mesh3d(meshes.add(Annulus::new(fx(v.radius) * 0.8, fx(v.radius)))),
+            MeshMaterial3d(materials.standard.add(translucent(draft, 0.35))),
+            Transform::from_xyz(x, floor + 0.05, z)
+                .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            bevy::pbr::NotShadowCaster,
+        ),
+    );
 }
 
 /// **Each frame**: a seam's light shows its gate -- lit or dark.

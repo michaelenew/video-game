@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 730] = [
+pub const SCALARS: [i32; 752] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -25,9 +25,9 @@ pub const SCALARS: [i32; 730] = [
            32768, // defence.guard_arc_(cos) = 0.5
                4, // defence.parry_window = 4
               34, // defence.parry_stagger = 34
-              22, // defence.dodge_length = 22
-              10, // defence.dodge_invulnerability = 10
-         1114112, // defence.dodge_speed = 17
+              26, // defence.dodge_length = 26
+              12, // defence.dodge_invulnerability = 12
+         1258291, // defence.dodge_speed = 19.2
               16, // defence.airdodge_length = 16
           851968, // defence.airdodge_speed = 13
            32768, // body.body_radius = 0.5
@@ -343,7 +343,7 @@ pub const SCALARS: [i32; 730] = [
                4, // champion.rising_attack,_still_from_the_floor = 4
                6, // champion.jump_after_a_click_still_rises = 6
             5243, // movement.terrain,_step_down_(m) = 0.08
-          524288, // valley.updraft,_rising_speed_(m/s) = 8
+         1048576, // valley.updraft,_rising_speed_(m/s) = 16
            68813, // valley.terrain,_steepest_walkable_(slope) = 1.05
           524288, // valley.terrain,_slide_speed_(m/s) = 8
            45875, // elementalist.air_ball,_radius_on_a_tap = 0.7
@@ -438,7 +438,7 @@ pub const SCALARS: [i32; 730] = [
              300, // valley.range,_rests_after_it_is_beaten_(s) = 300
          1572864, // regions.reach,_farthest_anything_acts_(m) = 24
          5898240, // regions.speed,_fastest_anything_moves_(m/s) = 90
-               8, // regions.delay,_oldest_outcome_a_region_takes = 8
+              12, // regions.delay,_oldest_outcome_a_region_takes = 12
           262144, // regions.checksum_zone,_reaches_past_its_hexagon_(m) = 4
          6291456, // regions.hexagon_size,_centre_to_corner_(m) = 96
                2, // regions.simulated_neighbour,_heartbeat_lag = 2
@@ -738,6 +738,28 @@ pub const SCALARS: [i32; 730] = [
            45875, // morph.getting_down_(x_getting_up) = 0.7
             7864, // morph.feet_clear_the_lip_by_(x_shoulder) = 0.12
             5243, // morph.settles_before_it_pushes_(x_shoulder) = 0.08
+           88474, // knockback.weight,_bulwark_(x) = 1.35
+           65536, // knockback.weight,_champion_(x) = 1
+           60293, // knockback.weight,_shadow_reaver_(x) = 0.92
+           55706, // knockback.weight,_elementalist_(x) = 0.85
+           68813, // knockback.weight,_blood_mage_(x) = 1.05
+           51118, // knockback.weight,_dual_mage_(x) = 0.78
+          131072, // knockback.swell,_knockback_added_at_death_(x) = 2
+          196608, // knockback.swell,_added_per_share_of_the_bar_a_blow_takes_(x) = 3
+           65536, // knockback.swell,_hitstun_added_at_death_(x) = 1
+           19661, // knockback.swell_kept_per_hit_in_a_string = 0.3
+           98304, // knockback.knockback_at_full_health_(x) = 1.5
+             600, // match.king_of_the_hill,_point_unlocks_after = 600
+             360, // match.king_of_the_hill,_a_capture_takes = 360
+              50, // match.king_of_the_hill,_a_second_capper_adds_(%) = 50
+              25, // match.king_of_the_hill,_an_empty_point_drains_(%) = 25
+            7200, // match.king_of_the_hill,_each_side's_clock = 7200
+             300, // match.king_of_the_hill,_the_dead_are_back_after = 300
+          458752, // match.king_of_the_hill,_the_point_counts_up_to_(m) = 7
+               8, // offence.impact_freeze_on_a_creature,_a_move's_at_least = 8
+             900, // match.versus,_time_to_choose_classes_before_a_round = 900
+              22, // shadow_reaver.dash_to_the_shadow,_lasts_at_most = 22
+              11, // blood_mage.swim,_the_pop_out_lasts = 11
 ];
 
 #[rustfmt::skip]

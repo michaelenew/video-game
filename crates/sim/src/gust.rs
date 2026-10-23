@@ -313,11 +313,13 @@ pub fn throw(flight: &mut Flight, owner: u8, gale: Gale, path: Path) {
 /// Every burst -- an ember arriving, a lit shot landing -- is written into
 /// `bursts` for `state::World::advance` to turn into a cloud: this module has
 /// the shots and not the effects array.
+#[allow(clippy::too_many_arguments)]
 pub fn step(
     flight: &mut Flight,
     players: &mut [Player; MAX_PLAYERS],
     effects: &Effects,
     versus: bool,
+    allies: [u8; MAX_PLAYERS],
     prey: pack::Prey,
     arena: &Terrain,
     bursts: &mut Bursts,
@@ -364,7 +366,11 @@ pub fn step(
             girth,
             shot.owner,
             &scene,
-            Targets::none().fighters(versus).stones().quarry(!versus),
+            Targets::none()
+                .fighters(versus)
+                .spare(allies.get(shot.owner as usize).copied().unwrap_or(0))
+                .stones()
+                .quarry(!versus),
         );
         // What this shot leaves where it lands, if anything: an ember always
         // bursts into its cloud, and a lit shot bursts into the small one.

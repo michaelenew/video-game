@@ -249,9 +249,11 @@ were built beside them and removed on 2026-10-16** (the owner: "awful to get
 stuck in"): the ledge catch and the wall jump do what they did. **A gully**
 (`sim::arena::gully`) is the wall jump's piece of level -- a drop too long to
 jump between two walls close enough to kick between -- measured on the
-bench's gully lanes and used on the Hanging Stones (valley.md §3). Still not built:
-**drifting rocks** on fixed paths (a timing gate the same for every class;
-the sim has no moving solids yet).
+bench's gully lanes and used on the Hanging Stones (valley.md §3). **Drifting rocks are built** (2026-10-22, `sim::drift`): boxes that go back
+and forth on a fixed clock, carry what is on them and give their speed to
+what leaves them -- lifts, a shuttle, ferries and a pair of rising walls,
+in the valley's long climbs ([valley.md](valley.md) §3, "Stones that
+move"). None is on a course yet.
 
 ## 5 · Not done, and next
 

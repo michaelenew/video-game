@@ -35,9 +35,10 @@ fi
 
 rustup target add wasm32-unknown-unknown >/dev/null 2>&1 || true
 
-# `wasm-release` is `release` with `opt-level = "z"`, `panic = "abort"` and the
-# symbols stripped. Download size is the whole cost of a link somebody is not
-# sure they want to click.
+# `wasm-release` is `release` with `opt-level = "s"`, `panic = "abort"` and the
+# symbols stripped: small, because download size is the cost of a link
+# somebody is not sure they want to click, but not at any speed (the root
+# `Cargo.toml` says what `z` cost a frame).
 #
 # `ARENA_BUILD` is baked into the module and sent in the hello two players
 # trade before a match (`crates/game/src/online.rs`, `terms`): two pages from

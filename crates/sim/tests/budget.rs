@@ -3,7 +3,7 @@
 //! The simulation is not the expensive part of this game and it must stay that
 //! way, because it is the part that runs *more than once* per picture. A
 //! rendered frame draws once; a rollback re-simulates a whole prediction window
-//! -- `net::MAX_ROLLBACK_FRAMES`, eight at the time of writing -- inside that
+//! -- `net::MAX_ROLLBACK_FRAMES`, twelve at the time of writing -- inside that
 //! same 16.7 ms, and saves a snapshot for every one of them. So a cost that
 //! looks harmless per frame arrives multiplied, and it arrives exactly when the
 //! player is already having a bad time: mid-rollback, which is to say mid-lag.
@@ -40,13 +40,14 @@ const FRAME_NS: u128 = 1_000_000_000 / TICK_HZ as u128;
 
 /// What one call to `World::advance` may cost.
 ///
-/// A quarter of the frame for the simulation, divided by the eight frames a
+/// A quarter of the frame for the simulation, divided by the twelve frames a
 /// rollback may re-simulate inside one -- see the note on this file. Roughly
-/// half a millisecond, against a measured worst case of around fifty
-/// microseconds for the heaviest class in a hunt, so there is an order of
+/// a third of a millisecond (half of one while the window was eight, until
+/// 2026-10-22), against a measured worst case of around fifty microseconds
+/// for the heaviest class in a hunt, so there is still most of an order of
 /// magnitude in hand. That margin is deliberate and is not slack to be spent:
 /// it is what lets this run on a loaded laptop without crying wolf.
-const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 32;
+const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 48;
 
 /// The most a `World` may weigh.
 ///
@@ -174,7 +175,7 @@ fn a_frame_of_simulation_fits_its_budget() {
     assert!(
         ns <= ADVANCE_BUDGET_NS,
         "a simulation frame costs {ns} ns ({where_}), over the {ADVANCE_BUDGET_NS} ns budget.\n\
-         That budget is a quarter of a {FRAME_NS} ns frame, shared out across the eight frames a \
+         That budget is a quarter of a {FRAME_NS} ns frame, shared out across the twelve frames a \
          rollback re-simulates inside one -- so this is not a frame being slightly slow, it is a \
          rollback no longer fitting in the time it has."
     );
@@ -451,8 +452,9 @@ fn far_from_home(c: Class) -> World {
         MAX_PLAYERS as u8,
     );
     w.valley.keep.carry_egg(0, SpeciesId::RIDGEBACK);
-    // The road through the Bank, a hundred metres and more from the range;
-    // the creatures thirty metres back along it.
+    // The road down through the Mouth, out of their territory on the Bank
+    // (they roam its meadow, road and all, since 2026-10-22); the creatures
+    // thirty metres back along it.
     let o = w.map_origin();
     let ground = w.terrain();
     let at = |x: i32, z: i32| {
@@ -464,10 +466,10 @@ fn far_from_home(c: Class) -> World {
         sim::V3::new(p.x, ground.floor_below(p), p.z)
     };
     for (i, p) in w.players.iter_mut().enumerate() {
-        p.pos = at(25500 - 150 * i as i32, 300);
+        p.pos = at(21000 - 150 * i as i32, -1700);
     }
     for (k, m) in w.monsters.iter_mut().flatten().enumerate() {
-        m.pos = at(28500 + 300 * k as i32, 900);
+        m.pos = at(24000 + 300 * k as i32, -800);
     }
     for _ in 0..3 {
         w.advance([Input::default(); 2]);

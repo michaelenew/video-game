@@ -178,6 +178,9 @@ downloaded before the page drew; they are now files in `assets/` beside the
 page, each fetched the first time somebody plays its class -- about 3 MB
 over a gzipping connection. (The module itself has grown since the table
 above: 42.7 MB, 18.8 MB gzipped, as of the same date.)
+Those were the first numbers, at `opt-level = "z"`. By 2026-10-21 the module
+had grown to 42.0 MB (18.8 MB gzipped), and it is built at `"s"` now, for
+speed: 48.3 MB (19.8 MB). See §"What a browser frame costs".
 
 **`wasm-opt` is not in the build, and the middle row is why.** It shipped once
 and every visitor got `CompileError: WebAssembly.instantiate(): invalid value
@@ -226,6 +229,52 @@ to that. Dropping `bevy_egui` — which would cost the Oven and the animation hu
 megabytes rather than a step change. If the number ever has to come down a lot,
 the thing to attack is Bevy's feature list.
 
+## What a browser frame costs (measured 2026-10-21)
+
+"The browser version is super slow" was the report. A page cannot run
+`--profile`'s readout (it prints to a terminal a page does not have, and
+WebGL cannot time its own passes), so this was measured from outside: the
+page in headless Chromium on SwiftShader, a software GPU, timing frames with
+`requestAnimationFrame` and sampling the page's own thread with the
+DevTools profiler. A software GPU is slow in absolute terms -- the proving
+ground at 0.83 s a frame, Hearth's square at 1.3 s -- so read the ratios.
+
+**The page's thread is nearly idle; the GPU is the frame.** The page's
+thread -- the game and all of Bevy -- was busy under 2% of the time. And
+the GPU's share is paid **by the pixel**: the same fight in a quarter of
+the pixels (640 x 380) was 0.26 s against 0.83 s.
+
+Two things changed for it:
+
+| | Before | After | Why |
+| --- | --- | --- | --- |
+| Pixels drawn on a 2x screen | four a CSS pixel | **one** | winit sizes the canvas's picture by the screen's own pixels, so a laptop with a 2x screen drew four times the pixels a 1x one does. `?scale=2` asks for them back: 2.98 s a frame against 0.83 s at 1x. `platform::fewer_pixels`, the same kind of change to what the browser reports as `one_move_an_event`. |
+| The page's own work a frame | 15.8 ms (`opt-level = "z"`) | **12.9 ms** (`"s"`) | Single-threaded, so all of Bevy's machinery is on the frame, and `z` gives up inlining to save bytes. The module goes from 42.0 MB (18.8 MB gzipped) to 48.3 MB (19.8 MB). `opt-level = 3` was 12.0 ms for about a quarter more download, which a link pays before it plays. |
+
+What the first costs: the picture is stretched to the page by the browser,
+so it is softer on a 2x screen, the HUD's text included; and the mouse,
+whose movement winit hands over in the canvas's pixels, turns the camera
+the same on every screen rather than twice as fast on a 2x one.
+
+Two more were tried and **not** kept:
+
+- **The depth prepass**, which on a desktop is what lets the main pass
+  shade each pixel once. Bevy copies the prepass's depth into a texture
+  after drawing it, and WebGL2 refuses that copy:
+  `GL_INVALID_FRAMEBUFFER_OPERATION` from `glCopyTexSubImage2D`, every frame.
+- **The still world's shadow drawn once** (`game::still`), with WebGL2's
+  `EXT_color_buffer_float` asked for at start. It ran, and drew the same
+  picture, and was no faster in the town or the Great Wood under SwiftShader,
+  so it stayed off rather than ship a change nothing has measured paying.
+  On a real GPU, whose pixels are cheap and whose draw calls are not, it may
+  be different: that is a measurement to make on one.
+
+What is left to reach for, both of them choices about the look rather than
+free: the hard shadow edge (`?profile&shadow_filter=hard`, a seventh of the
+main pass under lavapipe, `architecture.md`) and dropping FXAA
+(`?profile&no_fxaa`). The `?profile` is needed: the render knobs are read
+only with it on.
+
 ## Publishing
 
 `.github/workflows/pages.yml` runs `build-game.sh` on a push to `main` and hands
@@ -272,6 +321,10 @@ In it:
   (`picker::describe`). The match starts from the world *the link* describes,
   built by the same function a friend's client will use (`start_world`), so
   the two agree even where the link cannot say everything about the practice.
+  Beside the button, **for 2 / 3 / 4 players** (2026-10-22): the link carries
+  `players=`, and the match starts when that many have opened it. Without it
+  every room made here was for two -- the practice only ever has two -- and a
+  third friend was quietly paired off into a match of their own.
 - **Join**: paste a friend's link. It is unpacked exactly as `--join` is.
 - **The active room**, while there is one: its name, how meeting is going, the
   link with a **Copy link** button, and **Leave**. In a browser the link also

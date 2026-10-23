@@ -829,20 +829,10 @@ fn dodge(input: PoseInput, left: u16) -> Pose {
         let len = Clip::AirDodge.length();
         return Clip::AirDodge.at(len.saturating_sub(left) as u32);
     }
-    // Which way the body is actually going, not which key was pressed: a dodge
-    // is a burst of velocity and the velocity is the honest source.
-    let [strafe, forward] = input.travel;
-    let clip = if forward.abs() >= strafe.abs() {
-        if forward >= 0.0 {
-            Clip::DodgeForward
-        } else {
-            Clip::DodgeBack
-        }
-    } else if strafe >= 0.0 {
-        Clip::DodgeRight
-    } else {
-        Clip::DodgeLeft
-    };
+    // Which way the body is actually going, and whose roll it is. The turn
+    // that carries this clip over is read off the same two
+    // (`interp::roll_of`), so the two cannot disagree.
+    let clip = crate::dodge::clip(input.class, crate::dodge::way(input.travel));
     let len = clip.length();
     clip.at(len.saturating_sub(left) as u32)
 }

@@ -36,8 +36,9 @@ pub static ARENA: Arena = Arena {
 };
 
 const SOLIDS: [Solid; 1] = [
-    // The fourth waystone, at the foot of the Shrine's path.
-    Solid::cm([101200, 8800, 600], [101300, 9620, 700], Material::Stone),
+    // The fourth waystone, by the foot of the stones to the Cliffs, past
+    // which the way goes on to the Shrine.
+    Solid::cm([91950, 8400, 1850], [92050, 9220, 1950], Material::Stone),
 ];
 
 /// **The road**, centimetres: x, z, floor, half its width.
@@ -48,16 +49,6 @@ pub const WAY: [Point; 6] = [
     at(93500, -600, 8600, 2600),
     at(97000, 0, 8800, 1800),
     at(100000, 400, 9000, 1200),
-];
-
-/// **The Shrine's path**: a switchback up the north-east slope to its
-/// clearing, twenty metres.
-pub const SHRINE_WAY: [Point; 5] = [
-    at(100000, 400, 9000, 500),
-    at(101000, 2500, 9600, 400),
-    at(99500, 3800, 10200, 400),
-    at(99500, 5000, 10700, 400),
-    at(99500, 6000, 11000, 400),
 ];
 
 pub const CRAGS: [Crag; 1] = [Crag {
@@ -80,7 +71,7 @@ const SEAMS: [Seam; 4] = [
     Seam {
         zone: Zone::cm([85200, 7700, 0], [86000, 8800, 1000]),
         to: ArenaId::PINEWOOD,
-        at: 4,
+        at: 2,
         marks: [
             Mark::cm(86500, 200, (90500, 1000)),
             Mark::cm(86500, 600, (90500, 1000)),
@@ -89,40 +80,40 @@ const SEAMS: [Seam; 4] = [
         waystone: None,
         says: "the Pinewood",
     },
-    // The Cliffs, over the bridge to the north: the Galewing.
+    // The Cliffs: the foot of the stones across the ravine to the north.
     Seam {
-        zone: Zone::cm([90100, 7900, 2200], [90900, 9000, 3000]),
+        zone: Zone::cm([90200, 8200, 1500], [91000, 8900, 2300]),
         to: ArenaId::GALEWING,
         at: 0,
         marks: [
-            Mark::cm(90350, 2000, (90500, 0)),
-            Mark::cm(90650, 2000, (90500, 0)),
+            Mark::cm(90450, 1200, (90450, 1900)),
+            Mark::cm(90750, 1200, (90750, 1900)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Cliffs: the Galewing",
     },
-    // The Ashwood, south into the burnt wood: the Veilstalker.
+    // The Ashwood: the foot of the stones up to it, south of the road.
     Seam {
-        zone: Zone::cm([93100, 8100, -3700], [93900, 9200, -2800]),
+        zone: Zone::cm([93350, 8300, -4250], [94150, 9000, -3450]),
         to: ArenaId::VEILSTALKER,
         at: 0,
         marks: [
-            Mark::cm(93350, -2600, (93500, 0)),
-            Mark::cm(93650, -2600, (93500, 0)),
+            Mark::cm(93600, -3150, (93600, -3850)),
+            Mark::cm(93900, -3150, (93900, -3850)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Ashwood: the Veilstalker",
     },
-    // The Shrine, up the switchback past the fourth waystone: the Mantis.
+    // The Shrine, on past the Cliffs and the fourth waystone: the Mantis.
     Seam {
-        zone: Zone::cm([100100, 8500, 800], [100900, 9700, 1600]),
+        zone: Zone::cm([91000, 8200, 1500], [91800, 8900, 2300]),
         to: ArenaId::MANTIS,
         at: 0,
         marks: [
-            Mark::cm(99700, 200, (97000, 0)),
-            Mark::cm(99700, 600, (97000, 0)),
+            Mark::cm(91250, 1200, (91250, 1900)),
+            Mark::cm(91550, 1200, (91550, 1900)),
         ],
         gate: crate::valley::tier::FOUR,
         waystone: Some(0),

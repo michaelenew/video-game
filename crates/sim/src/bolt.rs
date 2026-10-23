@@ -151,6 +151,7 @@ pub fn step(
     players: &mut [Player; MAX_PLAYERS],
     effects: &crate::effects::Effects,
     versus: bool,
+    allies: [u8; MAX_PLAYERS],
     prey: pack::Prey,
     arena: &Terrain,
 ) {
@@ -181,7 +182,11 @@ pub fn step(
                 t::fire_bolt_radius(),
                 shot.owner,
                 &scene,
-                Targets::none().fighters(versus).stones().quarry(!versus),
+                Targets::none()
+                    .fighters(versus)
+                    .spare(allies.get(shot.owner as usize).copied().unwrap_or(0))
+                    .stones()
+                    .quarry(!versus),
             )
         };
 

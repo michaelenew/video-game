@@ -4,7 +4,8 @@
 //! the mouse back and puts it away. While it is up:
 //!
 //! - **Play a friend.** *Create a room* makes one from the fight being
-//!   practised and shows its link with a *Copy link* button; *Join* takes a
+//!   practised, for two, three or four players (chosen beside it), and
+//!   shows its link with a *Copy link* button; *Join* takes a
 //!   link a friend sent. While a room is active it is listed instead -- its
 //!   name, how meeting is going, the link, *Copy link* and *Leave*. Rooms
 //!   are `online.rs`; this only draws them.
@@ -19,9 +20,15 @@
 //!   sparring bot plays, and its class ([`dummy`]). A duel always has it. The
 //!   number keys still pick what it does; this is where somebody who was
 //!   never told finds it.
+//! - **Versus stages**: a button for every floating duel stage and every
+//!   King of the Hill map (`sim::versus`), the one you are on lit. A trip
+//!   on the wire, as `Shift+N` is, so the other player comes too
+//!   ([`stages`]).
 //! - **Fast travel**, in the valley: to any cairn this player has touched
 //!   ([`crate::cairns`]) -- every one in dev mode -- out of a fight. A trip
 //!   on the wire, so the other player comes too.
+//! - **Volume**: a slider for the master volume, the same setting Page Up
+//!   and Page Down step, saved as it is moved ([`volume`]).
 //! - **Progress** -- the creatures, their trophies and tempers -- on the right,
 //!   which is otherwise hidden: it is reference, not something to read
 //!   mid-fight (`hud::update_picker` writes it; [`show_progress`] shows it).
@@ -49,6 +56,9 @@ pub struct Menu {
     /// The last replay saved, and when: shown on the screen for a moment
     /// whether or not the menu is open.
     told: Option<(String, f64)>,
+    /// How many the next room is for, beside *Create a room*; zero until
+    /// chosen, which is two.
+    players: u8,
 }
 
 /// How long "replay saved" stays on the screen (s).
@@ -69,6 +79,7 @@ pub fn notice_cairns(sim: Res<crate::Sim>, mut cairns: ResMut<crate::cairns::Cai
     cairns.notice(&sim.cur, me);
 }
 
+#[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
 pub fn draw(
     mut contexts: EguiContexts,
     mut menu: ResMut<Menu>,
@@ -77,6 +88,8 @@ pub fn draw(
     hub: Res<crate::hub::Hub>,
     time: Res<Time<Real>>,
     cairns: Res<crate::cairns::Cairns>,
+    mut settings: ResMut<crate::settings::Settings>,
+    mut coach: ResMut<crate::tutorial::Coach>,
 ) {
     let now = time.elapsed_secs_f64();
     // None as the window closes: the frame the context is gone and the
@@ -116,8 +129,18 @@ pub fn draw(
         .anchor(corner, offset)
         .resizable(false)
         .collapsible(false)
-        .default_width(380.0)
+        // **Two columns** (2026-10-22): one ran down past the bottom of a
+        // page's canvas, and egui pushed it up over the class buttons.
+        // Playing others on the left, the fight on the right -- and never
+        // taller than the room under the class buttons: what does not fit
+        // scrolls, so the window stays where it is anchored on any screen.
+        .default_width(760.0)
         .show(ctx, |ui| {
+            let room = (ctx.screen_rect().height() - offset.y - 48.0).max(160.0);
+            egui::ScrollArea::vertical().max_height(room).show(ui, |ui| {
+            ui.columns(2, |cols| {
+            let [left, right] = cols else { return };
+            let ui = left;
             ui.heading("Play a friend");
             ui.add_space(4.0);
             match sim.driver.room().cloned() {
@@ -126,6 +149,7 @@ pub fn draw(
                     if let Some(line) = sim.driver.status() {
                         ui.label(line);
                     }
+                    start_match(ui, &mut sim);
                     ui.add_space(4.0);
                     ui.label("Send your friend this link. In a browser it opens the game; on a desktop it goes to game --join.");
                     // A `&str` is a read-only text buffer: selectable, not editable.
@@ -153,13 +177,22 @@ pub fn draw(
                         ui.label(egui::RichText::new(why).weak());
                         ui.add_space(4.0);
                     }
-                    if ui.button("Create a room").clicked() {
-                        crate::online::create(&mut sim);
-                        menu.refused = None;
-                    }
+                    let mut players = menu.players.max(2);
+                    ui.horizontal(|ui| {
+                        if ui.button("Create a room").clicked() {
+                            crate::online::create(&mut sim, players);
+                            menu.refused = None;
+                        }
+                        ui.label("for");
+                        for n in 2..=sim::state::MAX_PLAYERS as u8 {
+                            ui.selectable_value(&mut players, n, n.to_string());
+                        }
+                        ui.label("players");
+                    });
+                    menu.players = players;
                     ui.label(
                         egui::RichText::new(
-                            "Makes a link for the fight you are practising: these two classes, this creature, this arena.",
+                            "Makes a link for the fight you are practising: these classes, this creature, this arena.",
                         )
                         .weak(),
                     );
@@ -188,8 +221,7 @@ pub fn draw(
                 }
             }
             details(ui, &mut menu, &sim, now);
-            dummy(ui, &mut sim);
-            fast_travel(ui, &mut sim, &cairns);
+            input_delay(ui, &mut settings);
             ui.separator();
             ui.heading("Replay");
             ui.add_space(4.0);
@@ -217,7 +249,133 @@ pub fn draw(
             );
             ui.separator();
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
+            let ui = right;
+            crate::tutorial::menu(ui, &mut sim, &mut coach);
+            ui.separator();
+            stages(ui, &mut sim);
+            dummy(ui, &mut sim);
+            fast_travel(ui, &mut sim, &cairns);
+            volume(ui, &mut settings);
+            });
+            });
         });
+}
+
+/// **Start match**, in a room with people in it: everybody in the fight
+/// presses it, and the frame the last of them does the match starts, on every
+/// machine at once (`sim::state::World::ready`). Pressed again, taken back.
+/// On the wire as any trip is.
+fn start_match(ui: &mut egui::Ui, sim: &mut crate::Sim) {
+    if !sim.driver.online() {
+        return;
+    }
+    let seats = 0..sim::state::MAX_PLAYERS;
+    let here = seats.clone().filter(|&i| sim.cur.is_present(i)).count();
+    let ready = seats
+        .filter(|&i| sim.cur.is_present(i) && sim.cur.starting.has(i))
+        .count();
+    let mine = sim.cur.starting.has(sim.local_player());
+    ui.horizontal(|ui| {
+        if ui
+            .button(if mine { "Not ready" } else { "Start match" })
+            .clicked()
+        {
+            sim.travel = sim::input::Travel::START;
+        }
+        ui.label(egui::RichText::new(format!("{ready} of {here} ready")).weak());
+    });
+}
+
+/// **Input delay online**: how many frames your own presses wait, so they
+/// reach the others before they are needed -- fewer stalls and fewer jumps
+/// for that many frames on your own hands. Saved as it moves; a match takes
+/// it as it starts (`online::meet`), so a change waits for the next one.
+fn input_delay(ui: &mut egui::Ui, settings: &mut crate::settings::Settings) {
+    use crate::settings::MAX_INPUT_DELAY;
+    ui.separator();
+    ui.heading("Online");
+    ui.add_space(4.0);
+    let mut delay = settings.input_delay;
+    ui.horizontal(|ui| {
+        ui.label("Input delay");
+        ui.add(
+            egui::Slider::new(&mut delay, 0..=MAX_INPUT_DELAY)
+                .custom_formatter(|v, _| format!("{v:.0} frames ({:.0} ms)", v * 1000.0 / 60.0)),
+        );
+    });
+    ui.label(
+        egui::RichText::new(
+            "Your presses wait this long so they reach your friends in time: fewer freezes and jumps. From the next match.",
+        )
+        .weak(),
+    );
+    if delay != settings.input_delay {
+        settings.input_delay = delay;
+        settings.save();
+    }
+}
+
+/// **Volume**: the master volume as a slider, in the tenths Page Up and Page
+/// Down step it by, so the file keeps the number the keys would have written.
+/// Saved on each change -- a tenth at a time, so a drag is a handful of writes.
+/// What is already sounding plays out at the old level; every cue is short.
+fn volume(ui: &mut egui::Ui, settings: &mut crate::settings::Settings) {
+    ui.separator();
+    ui.heading("Sound");
+    ui.add_space(4.0);
+    let mut level = settings.volume;
+    ui.horizontal(|ui| {
+        ui.label("Volume");
+        ui.add(
+            egui::Slider::new(&mut level, 0.0..=1.0)
+                .step_by(0.1)
+                .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+        );
+    });
+    ui.label(egui::RichText::new("Page Up and Page Down set it too.").weak());
+    if level != settings.volume {
+        settings.volume = level;
+        settings.save();
+    }
+}
+
+/// **Versus stages**: a row of buttons for the floating duel stages and one
+/// for the King of the Hill maps, each with its theme on hover, the one you
+/// are on lit. A trip on the wire (`Travel::arena`), exactly what `Shift+N`
+/// asks for, so a peer goes too and both build the fight on the same frame.
+fn stages(ui: &mut egui::Ui, sim: &mut crate::Sim) {
+    use sim::versus::{Kind, STAGES};
+    ui.separator();
+    ui.heading("Versus stages");
+    ui.add_space(4.0);
+    let mut go = None;
+    for (kind, title) in [
+        (Kind::Duel, "Floating duel"),
+        (Kind::Hill, "King of the Hill"),
+    ] {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new(title).strong());
+            for s in STAGES.iter().filter(|s| s.kind == kind) {
+                let here = sim.cur.arena == s.arena;
+                if ui
+                    .selectable_label(here, s.arena.get().name)
+                    .on_hover_text(s.theme)
+                    .clicked()
+                    && !here
+                {
+                    go = Some(s.arena);
+                }
+            }
+        });
+    }
+    let line = match sim::versus::of(sim.cur.arena) {
+        Some(s) => s.theme,
+        None => "Knock them off the edge, or hold the point. Shift+N steps through them too.",
+    };
+    ui.label(egui::RichText::new(line).weak());
+    if let Some(arena) = go {
+        sim.travel = sim::input::Travel::arena(arena);
+    }
 }
 
 /// What the dummy does, as the menu names it: the number keys' modes, less
@@ -253,7 +411,9 @@ fn dummy(ui: &mut egui::Ui, sim: &mut crate::Sim) {
     ui.add_space(4.0);
     let (mut mode, mut with) = (sim.dummy, sim.with_dummy);
     let mut class = sim.cur.players[1].class;
-    if sim.cur.pvp() {
+    // A duel's pick is still a duel, though nobody can be hurt in it.
+    let duel = sim.cur.pvp() || matches!(sim.cur.phase, sim::state::Phase::Picking { .. });
+    if duel {
         ui.label(egui::RichText::new("A duel always has its opponent.").weak());
     } else {
         let here = sim.cur.is_present(1);

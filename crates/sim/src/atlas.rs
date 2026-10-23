@@ -172,6 +172,11 @@ pub struct Plan {
     pub hidden: Vec<std::ops::Range<usize>>,
     /// **The grown trees** (`crate::valley::trees`), for the renderer.
     pub trees: Vec<crate::valley::trees::Tree>,
+    /// **The boxes that move** (`crate::drift`), in map coordinates.
+    pub drifts: Vec<crate::drift::Drift>,
+    /// **Updrafts on the map** (`crate::valley::Vent`), in map coordinates:
+    /// ones made where a grown thing stands, not a place's table.
+    pub vents: Vec<crate::valley::Vent>,
     /// The floor where no place is: far enough under every place that
     /// anything there has fallen out of the world.
     pub void: Fx,
@@ -228,6 +233,13 @@ pub struct Atlas {
     pub hidden: Vec<bool>,
     /// The grown trees, drawn from their skeletons.
     pub trees: Vec<crate::valley::trees::Tree>,
+    /// **The boxes that move** (`crate::drift`), in map coordinates: not in
+    /// the tiles, because they do not stay in one; the world raises the ones
+    /// near a fighter each frame.
+    pub drifts: Vec<crate::drift::Drift>,
+    /// **Updrafts on the map** (`crate::valley::Vent`), in map coordinates,
+    /// over and above every place's own table.
+    pub vents: Vec<crate::valley::Vent>,
     grid: Grid,
 }
 
@@ -539,6 +551,8 @@ impl Atlas {
             hi,
             hidden,
             trees: plan.trees.clone(),
+            drifts: plan.drifts.clone(),
+            vents: plan.vents.clone(),
             grid: Grid {
                 x0,
                 z0,

@@ -114,7 +114,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game --release -- --look brushed",
-                "Paints the picture in one of the looks built in docs/design/painting.md. They are opt-in: the game is plain by default until a painted look is cheap enough to carry. brushed is Guild Wars 2's broad strokes (crisp near, painted far, strokes that follow paths and slopes, colour that follows the land's contours); the others are painted (soft painted tones, violet shade, coloured haze, cut stones), depths (the same in one blue hue, in layers), wash (watercolour on paper). On the web it is ?look=brushed; there only the surface half of a look is drawn, since the rest reads a depth buffer the browser build cannot. The brush's strokes are placed once per tile of land and drawn as splats, a pass of their own, which is what keeps the brush the same size on the screen for the cost of a particle pass; --exact <m> instead works the brush out at every pixel within so many metres and reads baked sheets beyond, --exact 999 at every pixel everywhere (the reference the splats are measured against), and --exact 0 the sheets everywhere.",
+                "Paints the picture in one of the looks built in docs/design/painting.md. They are opt-in: the game is plain by default until a painted look is cheap enough to carry. brushed is Guild Wars 2's broad strokes (crisp near, painted far, strokes that follow paths and slopes, colour that follows the land's contours); the others are painted (soft painted tones, violet shade, coloured haze, cut stones), depths (the same in one blue hue, in layers), wash (watercolour on paper). On the web it is ?look=brushed; there only the surface half of a look is drawn, since the rest reads a depth buffer the browser build cannot. The brush's strokes are placed once per tile of land and drawn as splats, a pass of their own, which is what keeps the brush the same size on the screen for the cost of a particle pass; --exact <m> instead works the brush out at every pixel within so many metres and reads baked sheets beyond, --exact 999 at every pixel everywhere (the reference the splats are measured against), and --exact 0 the sheets everywhere. The look's brush is worked out at a share of the screen's resolution that the game lowers whenever a frame runs over a sixtieth of a second and raises again when it has room, so a slow machine paints with a coarser brush rather than dropping frames; --smear <share> fixes the share (1 the whole resolution, 0.5 half).",
             ),
             e(
                 "cargo run -p game --release -- --painted-cast",
@@ -178,6 +178,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "?dev",
                 "Hitbox wireframes and the Oven, both open, exactly as --dev does.",
+            ),
+            e(
+                "?scale=<n>",
+                "How many pixels the picture is drawn at for each pixel of the page. 1 by default, even on a screen that has two or three, because a frame in a browser is paid by the pixel: ?scale=2 is sharper on such a screen and about four times the work.",
             ),
             e(
                 "?shot_frame=<n>",
@@ -535,6 +539,21 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "Tutorials",
+        in_browser: true,
+        blurb: "A hall for each class: the first room says what the class is, how it plays and how it wins; then a room for each click and one for its keys, each move to try once; past those, the advanced rooms, one technique each. Walk into a room to open it. docs/design/tutorials.md has every hall.",
+        entries: &[
+            e(
+                "--tutorial <class>, ?tutorial=reaver",
+                "Start in that class's tutorial hall: champion, reaver, elementalist, blood or dual (player one's class with no name). The Esc menu's Tutorials row goes to any of them, and Tab in a hall walks you into the next class's.",
+            ),
+            e(
+                "The checklist",
+                "On the right, the room you are in and what to do there. A box is ticked the first time you do a thing; a count beside it says how many times since, so practising is counted too. A move that should strike the dummy waits to see whether it did, and says Hit or missed.",
+            ),
+        ],
+    },
+    Section {
         title: "The valley",
         in_browser: true,
         blurb: "A run starts in Hearth, the walled town at the valley's mouth: walk out of its gates into a world of places joined together, a climb from the river to the Saddle with every creature in a room off the way, and the Ring in town for fighting each other. docs/design/valley.md has the whole map.",
@@ -644,6 +663,29 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "Versus stages",
+        in_browser: true,
+        blurb: "Places built for fighting each other: four small floating stages where knocking someone off the edge wins the round, and five King of the Hill maps. docs/design/versus.md has the maps and the rules.",
+        entries: &[
+            e(
+                "Shift+N",
+                "The next versus stage: the Anvil, the Ziggurat, the Caldera and the Twin Isles (floating duel stages), then the Quarry, the Glacier, the Delta, the Gorge and the Henge (King of the Hill). The Esc menu lists them too. From anywhere else, the first. Online, both players go together.",
+            ),
+            e(
+                "--arena anvil, ?arena=anvil",
+                "Start on a stage by name: anvil, ziggurat, caldera, twin_isles, quarry, glacier, delta, gorge or henge.",
+            ),
+            e(
+                "Off the edge",
+                "On a floating stage, falling off is a knockout: the round goes to whoever is still on it.",
+            ),
+            e(
+                "King of the Hill",
+                "The point in the middle opens after a few seconds. Stand on it alone to take it -- in the air over it counts, so you can jump and fight on it, but standing on a bridge over it does not -- faster with a team-mate; both sides on it and nothing moves. While your side holds it your clock runs down, and when it runs out your side wins -- unless somebody of the other side is standing on the point, which is overtime: it lasts until the last of them steps off. Both sides on the point moves the capture neither way. The knocked out stand back up at their side's start after a few seconds. Seats one and three are blue, two and four orange, and a side cannot hurt its own. The line under the bars shows both clocks and the point.",
+            ),
+        ],
+    },
+    Section {
         title: "Player two, same keyboard",
         in_browser: true,
         blurb: "For sitting next to someone. Set the training dummy to 4 first.",
@@ -678,7 +720,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Tab",
-                "Cycle your class. Restarts the fight. Works against a person too: both games restart on the same frame, with your new class and whatever they have.",
+                "Cycle your class, where you stand: nobody else's fight is touched, and against a person it changes on both games on the same frame. In a hunt, a course or the valley, any time. In versus, every round opens with fifteen seconds to choose -- move about and try your moves, nobody can be hurt -- and the classes are locked once the round starts.",
+            ),
+            e(
+                "Enter",
+                "In the pick before a versus round: done choosing. The round starts as soon as everybody is ready, or when the fifteen seconds run out. At one keyboard it readies both seats.",
             ),
             e(
                 "F8",

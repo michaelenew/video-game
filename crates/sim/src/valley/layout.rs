@@ -31,7 +31,7 @@ use crate::valley::Crag;
 use crate::valley::land::{Land, Pad, Point, Way, at};
 
 use crate::arena::{
-    bank, deep, hearth, heights, mouth, pinewood, saddle, shelves, spire, waterfall, wood,
+    bank, deep, hearth, heights, mouth, pinewood, saddle, shelves, spire, stations, waterfall, wood,
 };
 
 /// Level ground round a room, past its own footprint, in centimetres.
@@ -68,6 +68,13 @@ pub struct Room {
     pub from: (i32, i32, i32),
     /// The seam of the reach the side path leaves from.
     pub seam: (ArenaId, u8),
+    /// **A station on a jump route** (2026-10-22), not a clearing at the end
+    /// of a side path: raised over the land round it with a ledge at its
+    /// door (`land::Pad::ledge`), and reached and left by the routes of
+    /// `arena::stations`. The owner: "For the ones that are odd terrain,
+    /// make them midpoints in some mobility sections." `from` is the foot
+    /// of the route up to it.
+    pub station: bool,
 }
 
 const fn room(
@@ -87,12 +94,29 @@ const fn room(
         depth,
         from,
         seam,
+        station: false,
+    }
+}
+
+/// A station: a room raised on a jump route ([`Room::station`]).
+const fn station(
+    arena: ArenaId,
+    at: [i32; 3],
+    side: Side,
+    along: i32,
+    depth: i32,
+    from: (i32, i32, i32),
+    seam: (ArenaId, u8),
+) -> Room {
+    Room {
+        station: true,
+        ..room(arena, at, side, along, depth, from, seam)
     }
 }
 
 /// **The rooms**: the Ring and the Long Valley off the town, the creatures'
 /// rooms off the road.
-pub const ROOMS: [Room; 12] = [
+pub const ROOMS: [Room; 8] = [
     room(
         ArenaId::RING,
         [0, 0, 7600],
@@ -111,104 +135,68 @@ pub const ROOMS: [Room; 12] = [
         (-4000, 0, 0),
         (ArenaId::HEARTH, 2),
     ),
-    room(
-        ArenaId::HORNBACK,
-        [11500, 50, 7400],
-        Side::South,
-        0,
-        250,
-        (11500, 1400, 50),
-        (ArenaId::MOUTH, 1),
-    ),
-    room(
-        ArenaId::GNAWERS,
-        [30500, 2100, 6500],
-        Side::South,
-        0,
-        350,
-        (30500, 1200, 2100),
-        (ArenaId::BANK, 1),
-    ),
-    room(
+    // **The stations** (2026-10-22): the creatures whose arenas are odd
+    // ground -- a mire, a pan of sand, a cave, a plateau over a drop, a wood
+    // of snow and ash, a court of columns -- raised on the routes of
+    // `arena::stations`, each the middle of a jump section: reached by one
+    // and left by another. `from` is the foot of the way up.
+    station(
         ArenaId::MIREBACK,
-        [51500, 4500, -8600],
+        stations::MIRE_AT,
         Side::North,
         400,
         150,
-        (51500, -3000, 4500),
+        stations::MIRE_FOOT,
         (ArenaId::SHELVES, 1),
     ),
-    room(
+    station(
         ArenaId::SANDMAW,
-        [56800, 4650, -8400],
+        stations::PAN_AT,
         Side::North,
         0,
         150,
-        (56000, -2800, 4650),
+        stations::PAN_FOOT,
         (ArenaId::SHELVES, 2),
     ),
-    room(
-        ArenaId::PAIR,
-        [70200, 5700, -4400],
+    station(
+        ArenaId::BROODMOTHER,
+        stations::HOLLOWS_AT,
         Side::North,
         0,
         200,
-        (70200, 400, 5700),
+        stations::HOLLOWS_FOOT,
         (ArenaId::PINEWOOD, 1),
     ),
-    room(
-        ArenaId::BROODMOTHER,
-        [73500, 5750, 5800],
-        Side::South,
-        0,
-        200,
-        (73500, 1000, 5750),
-        (ArenaId::PINEWOOD, 2),
-    ),
-    room(
-        ArenaId::HIGHLANDS,
-        [76500, 6400, -4600],
-        Side::North,
-        0,
-        150,
-        (76500, -200, 6000),
-        (ArenaId::PINEWOOD, 3),
-    ),
-    // The Cliffs sit sunk, their plateau at the road's height: the way in is
-    // a bridge over the ravine round them, not a doorway (`CLIFFS_BRIDGE`).
-    room(
+    // The Cliffs sit sunk, their plateau at the road's height, a ravine round
+    // them: the way in is stones across it.
+    station(
         ArenaId::GALEWING,
-        [90500, 7300, 7400],
+        stations::CLIFFS_AT,
         Side::South,
         0,
         0,
-        (90500, 1000, 8500),
+        stations::CLIFFS_FOOT,
         (ArenaId::SADDLE, 1),
     ),
-    room(
+    station(
         ArenaId::VEILSTALKER,
-        [93500, 8600, -6100],
+        stations::ASHWOOD_AT,
         Side::North,
         0,
         200,
-        (93500, -600, 8600),
+        stations::ASHWOOD_FOOT,
         (ArenaId::SADDLE, 2),
     ),
-    // The Shrine is at the top of its own path (`saddle::SHRINE_WAY`).
-    room(
+    station(
         ArenaId::MANTIS,
-        [99500, 11000, 8000],
-        Side::South,
+        stations::SHRINE_AT,
+        Side::West,
         0,
         200,
-        (100000, 400, 9000),
+        stations::SHRINE_FOOT,
         (ArenaId::SADDLE, 3),
     ),
 ];
-
-/// The bridge into the Cliffs: from the road's edge over the ravine to the
-/// plateau's lip, at the road's height.
-const CLIFFS_BRIDGE: Solid = Solid::cm([90200, 8440, 2600], [90800, 8500, 5250], Material::Wood);
 
 /// **The doors between reaches**, and the waystones' among them: the two
 /// seams, and the box across the pass (shut while its stone is dark).
@@ -222,12 +210,12 @@ pub const PASSES: [Pass; 8] = [
         [[4400, 0, -300], [5200, 600, 300]],
     ),
     (
-        (ArenaId::MOUTH, 2),
+        (ArenaId::MOUTH, 1),
         (ArenaId::BANK, 0),
         [[24800, 1900, -1200], [25200, 2600, 1200]],
     ),
     (
-        (ArenaId::BANK, 2),
+        (ArenaId::BANK, 1),
         (ArenaId::SHELVES, 0),
         [[42900, 4300, -1600], [43100, 5400, 800]],
     ),
@@ -237,12 +225,12 @@ pub const PASSES: [Pass; 8] = [
         [[65100, 5500, -1000], [65300, 6600, 1800]],
     ),
     (
-        (ArenaId::PINEWOOD, 4),
+        (ArenaId::PINEWOOD, 2),
         (ArenaId::SADDLE, 0),
         [[85100, 8100, -800], [85300, 9200, 2000]],
     ),
     (
-        (ArenaId::MOUTH, 3),
+        (ArenaId::MOUTH, 2),
         (ArenaId::SPIRE, 0),
         [[4400, 0, -5900], [4600, 600, -4900]],
     ),
@@ -257,9 +245,6 @@ pub const PASSES: [Pass; 8] = [
         [[60000, 4400, -14950], [62000, 5200, -14850]],
     ),
 ];
-
-/// The fourth waystone's door: across the Shrine's path, above the road.
-const SHRINE_GATE: [[i32; 3]; 2] = [[99600, 8900, 1600], [102400, 10200, 1800]];
 
 /// The town's three roads out: east to the climb, north to the Ring, west to
 /// the Long Valley.
@@ -401,6 +386,7 @@ fn pads() -> Vec<Pad> {
         y: Fx::ZERO,
         rim: None,
         door: (Fx::ZERO, Fx::ZERO),
+        ledge: false,
     });
     // The Deep's pit: its floor 140 m under the road, over the pit alone --
     // the lid round it is the Deep's place but the land's crater.
@@ -412,6 +398,7 @@ fn pads() -> Vec<Pad> {
         y: at.y,
         rim: None,
         door: (at.x, at.z),
+        ledge: false,
     });
     // The High Plane: 300 m up, its rim holding the land up to its edge.
     let at = v3(heights::PLANE_AT);
@@ -422,6 +409,7 @@ fn pads() -> Vec<Pad> {
         y: at.y,
         rim: heights::PLANE.rim.map(|rim| (rim, (at.x, at.z))),
         door: (at.x, at.z),
+        ledge: false,
     });
     for r in &ROOMS {
         let (lo, hi) = pad_of(r);
@@ -433,6 +421,7 @@ fn pads() -> Vec<Pad> {
             y: at.y,
             rim: rim_of(r).map(|rim| (rim, (at.x, at.z))),
             door: (edge.x, edge.z),
+            ledge: r.station,
         });
     }
     out
@@ -476,10 +465,13 @@ fn ways() -> Vec<Way> {
     out.push(road(&pinewood::WAY));
     out.push(road(&pinewood::ABOVE));
     out.push(road(&saddle::WAY));
-    out.push(road(&saddle::SHRINE_WAY));
     // The ranges' pockets of meadow beside the road (`ranges`): level
     // ground for a creature to roam, the land rising round it.
-    for r in super::ranges::RANGES.iter().filter(|r| r.stacked.is_none()) {
+    // A herd that roams has no pocket: its ground is the valley's own.
+    for r in super::ranges::RANGES
+        .iter()
+        .filter(|r| r.stacked.is_none() && !r.roams())
+    {
         if r.arena == super::ranges::RANGES[0].arena {
             continue; // the Wood's edge is the clearing's own floor
         }
@@ -489,6 +481,14 @@ fn ways() -> Vec<Way> {
                 at(x - r.half / 2, z, r.floor, half),
                 at(x + r.half / 2, z, r.floor, half),
             ],
+            path: false,
+            water: None,
+        });
+    }
+    // The low ground round a station that stands in the open.
+    for m in &stations::MEADOWS {
+        out.push(Way {
+            points: m.to_vec(),
             path: false,
             water: None,
         });
@@ -509,12 +509,9 @@ fn ways() -> Vec<Way> {
         out.push(road(r));
     }
     for r in &ROOMS {
-        // The Shrine has its own path up, the Ring and the Long Valley the
-        // town's roads, and the Cliffs a bridge at the road's height.
-        if matches!(
-            r.arena,
-            ArenaId::MANTIS | ArenaId::RING | ArenaId::SIEGESHELL | ArenaId::GALEWING
-        ) {
+        // The Ring and the Long Valley have the town's roads, and a station
+        // no path at all: it is jumped to.
+        if r.station || matches!(r.arena, ArenaId::RING | ArenaId::SIEGESHELL) {
             continue;
         }
         out.push(road(&side_path(r)));
@@ -629,12 +626,55 @@ fn clear(land: &Land, x: Fx, z: Fx, crags: &[Crag], keep: Fx) -> bool {
     {
         return false;
     }
+    // Nothing grows up through a station's stones, nor at their feet.
+    let near_a_stone = stations::ROUTES.iter().any(|r| {
+        core::iter::once(&r.from).chain(r.stones.iter()).any(|s| {
+            let reach = cm(s.half + 400);
+            x.sub(cm(s.x)).abs().raw() <= reach.raw() && z.sub(cm(s.z)).abs().raw() <= reach.raw()
+        })
+    });
+    if near_a_stone {
+        return false;
+    }
+    // Nor on a roaming herd's loop: it walks there, and is drawn walking.
+    if on_a_herd_s_way(x, z) {
+        return false;
+    }
     crags.iter().all(|c| {
         let dx = x.sub(cm(c.x)).abs();
         let dz = z.sub(cm(c.z)).abs();
         dx.raw() > cm(Crag::HALF + 500).raw() || dz.raw() > cm(Crag::HALF + 500).raw()
     })
 }
+
+/// **Is a map point on a roaming herd's way** (`ranges::Range::walk`):
+/// within [`HERD_WAY`] of a leg of its loop, as its bodies walk it -- the
+/// loop moved as its formation is, from the middle of its marks.
+fn on_a_herd_s_way(x: Fx, z: Fx) -> bool {
+    let (px, pz) = (
+        ((x.raw() as i64) * 100) >> 16,
+        ((z.raw() as i64) * 100) >> 16,
+    );
+    super::ranges::RANGES.iter().filter(|r| r.roams()).any(|r| {
+        let n = r.walk.len();
+        let lift = r.half as i64 / 3;
+        (0..n).any(|i| {
+            let (a, b) = (r.walk[i], r.walk[(i + 1) % n]);
+            let (ax, az) = (a.0 as i64, a.1 as i64 + lift);
+            let (bx, bz) = (b.0 as i64, b.1 as i64 + lift);
+            let (vx, vz) = (bx - ax, bz - az);
+            let len2 = (vx * vx + vz * vz).max(1);
+            let t = (((px - ax) * vx + (pz - az) * vz) * 1000 / len2).clamp(0, 1000);
+            let (cx, cz) = (ax + vx * t / 1000, az + vz * t / 1000);
+            let (dx, dz) = (px - cx, pz - cz);
+            dx * dx + dz * dz <= HERD_WAY * HERD_WAY
+        })
+    })
+}
+
+/// How far either side of a roaming herd's loop nothing grows, centimetres:
+/// its formation's width and a body's.
+const HERD_WAY: i64 = 900;
 
 /// **The trees and the boulders**: every [`SPACING`] a candidate, jittered,
 /// kept by the reach's density where the ground is clear.
@@ -785,8 +825,8 @@ pub fn plan() -> Plan {
     for r in &ROOMS {
         let (_, cut) = door_of(r);
         let door = match r.arena {
-            ArenaId::GALEWING => CLIFFS_BRIDGE,
-            ArenaId::MANTIS => Solid::cm(SHRINE_GATE[0], SHRINE_GATE[1], Material::Stone),
+            ArenaId::GALEWING => stations::CLIFFS_LIP,
+            ArenaId::MANTIS => stations::shrine_gate(&cut),
             _ => cut,
         };
         plan.doors.push(DoorPlan {
@@ -798,7 +838,6 @@ pub fn plan() -> Plan {
             plan.carves.push(cut);
         }
     }
-    plan.extras.push(CLIFFS_BRIDGE);
 
     // What stands on the land.
     let mut crags: Vec<Crag> = Vec::new();
@@ -834,19 +873,36 @@ pub fn plan() -> Plan {
     let mut wood_boxes = Vec::new();
     let mut wood_cairns = Vec::new();
     wood::build(&grown, &mut wood_boxes, &mut wood_cairns);
-    let ladders = wood::ladders(&mut grown, &wood_boxes, &ground);
-    wood_boxes.extend(ladders);
+    let ways = wood::ways_up(&mut grown, &wood_boxes, &ground);
+    wood_boxes.extend(ways.boxes);
+    wood_cairns.extend(ways.cairns);
+    plan.drifts.extend(ways.drifts);
+    plan.vents.extend(ways.vents);
     let first = plan.extras.len();
     plan.extras.extend(wood_boxes);
     plan.hidden.push(first..plan.extras.len());
     plan.extras.extend(wood_cairns);
     plan.trees = grown;
     // The Spire, on its plaza under the town's south wall.
-    spire::build(&|x, z| land.height(x, z), &mut plan.extras);
+    spire::build(
+        &|x, z| land.height(x, z),
+        &mut plan.extras,
+        &mut plan.drifts,
+    );
     // The Deep: its lid, its warrens and its Caverns.
     deep::build(&mut plan.extras);
+    // The stations' routes.
+    stations::build(
+        &|x, z| land.height(x, z),
+        &mut plan.extras,
+        &mut plan.drifts,
+    );
     // The routes up to the High Plane.
-    heights::build(&|x, z| land.height(x, z), &mut plan.extras);
+    heights::build(
+        &|x, z| land.height(x, z),
+        &mut plan.extras,
+        &mut plan.drifts,
+    );
     growth(&land, &crags, &mut plan.extras);
 
     plan.land = Some(land);
@@ -854,9 +910,10 @@ pub fn plan() -> Plan {
 }
 
 /// **The way into a room, on foot**: points on the map from the road's
-/// junction to a few metres inside the room's ground -- by its side path, the
-/// Shrine's switchback, the Cliffs' bridge, or the town's road. What a walk
-/// through the valley follows (`tests/valley.rs`).
+/// junction to a few metres inside the room's ground, by its side path or
+/// the town's road -- or, for a station, from its ledge, which is jumped to
+/// (`arena::stations`). What a walk through the valley follows
+/// (`tests/valley.rs`).
 pub fn approach(r: &Room) -> Vec<(Fx, Fx)> {
     let p = |x: i32, z: i32| (cm(x), cm(z));
     let (edge, _) = door_of(r);
@@ -867,24 +924,32 @@ pub fn approach(r: &Room) -> Vec<(Fx, Fx)> {
         Side::East => (Fx::from_int(-5), Fx::ZERO),
     };
     let inside = (edge.x.add(inward.0), edge.z.add(inward.1));
+    if r.station {
+        // From its ledge, in through its door: five metres past the door
+        // (on the Cliffs, whose ledge is the plateau's lip, five metres on
+        // from it).
+        let ledge = stations::ledge_of(r.arena);
+        let far = cm(stations::LEDGE_OUT + 500).div(Fx::from_int(5));
+        let to = (
+            cm(ledge.x).add(inward.0.mul(far)),
+            cm(ledge.z).add(inward.1.mul(far)),
+        );
+        return vec![p(ledge.x, ledge.z), to];
+    }
     let mut out = vec![p(r.from.0, r.from.1)];
-    match r.arena {
-        ArenaId::MANTIS => out.extend(saddle::SHRINE_WAY.iter().map(|q| p(q.x, q.z))),
-        ArenaId::GALEWING => {
-            let b = CLIFFS_BRIDGE;
-            let x = crate::math::midpoint(b.min.x, b.max.x);
-            out.push((x, b.min.z.add(Fx::ONE)));
-            out.push((x, b.max.z.add(Fx::from_int(3))));
-            return out;
-        }
-        _ => {
-            for q in side_path(r).iter().skip(1) {
-                out.push(p(q.x, q.z));
-            }
-        }
+    for q in side_path(r).iter().skip(1) {
+        out.push(p(q.x, q.z));
     }
     out.push(inside);
     out
+}
+
+/// Where a room's door meets its ground on the map (centimetres): the
+/// middle of its doorway at its floor, on the edge of its rim.
+pub fn door_point(r: &Room) -> [i32; 3] {
+    let (edge, _) = door_of(r);
+    let to_cm = |v: Fx| (v.raw() as i64 * 100 / Fx::ONE.raw() as i64) as i32;
+    [to_cm(edge.x), to_cm(edge.y), to_cm(edge.z)]
 }
 
 /// **The road, on foot**: from the town's east gate to the end of the

@@ -188,6 +188,15 @@ pub fn creature_freeze() -> u16 {
     oven::scalar(Scalar::FreezeCreature) as u16
 }
 
+/// The other direction: a fighter's blow on a creature freezes both of them
+/// when its move's own impact freeze is at least this many frames -- the
+/// hammer, the finishers, the heavy cuts -- for that move's length. Lighter
+/// blows freeze nothing, so a string of quick cuts keeps its pace. From play:
+/// strong hits on a creature did not land like strong hits.
+pub fn creature_heavy_from() -> u16 {
+    oven::scalar(Scalar::FreezeHeavyOnCreature) as u16
+}
+
 /// What a successful parry costs the attacker. Must be long enough that the
 /// punish is worth the risk of trying to parry at all.
 pub fn parry_stagger() -> u16 {
@@ -371,6 +380,51 @@ pub fn max_health() -> i32 {
 /// Pause after a knockout before the next round starts.
 pub fn round_over_frames() -> u16 {
     oven::scalar(Scalar::RoundOverFrames) as u16
+}
+
+/// How long the pick before a versus round lasts, at most: the classes are
+/// chosen in it and locked for the round (`state::Phase::Picking`).
+pub fn class_pick() -> u16 {
+    oven::scalar(Scalar::ClassPick).clamp(0, u16::MAX as i32) as u16
+}
+
+/// **King of the Hill** (`crate::versus`): how long the point is locked at
+/// a round's start.
+pub fn hill_unlock() -> u16 {
+    oven::scalar(Scalar::HillUnlock).max(0) as u16
+}
+
+/// How long one fighter standing alone on the point takes to capture it.
+pub fn hill_capture() -> u16 {
+    oven::scalar(Scalar::HillCapture).max(1) as u16
+}
+
+/// How much faster a second fighter of the same side makes a capture, in
+/// hundredths of one fighter's rate.
+pub fn hill_second() -> u16 {
+    oven::scalar(Scalar::HillSecond).max(0) as u16
+}
+
+/// How fast a capture drains while nobody stands on the point, in
+/// hundredths of one fighter's rate.
+pub fn hill_decay() -> u16 {
+    oven::scalar(Scalar::HillDecay).max(0) as u16
+}
+
+/// How long each side must hold the point to win.
+pub fn hill_clock() -> u16 {
+    oven::scalar(Scalar::HillClock).clamp(1, u16::MAX as i32) as u16
+}
+
+/// How long a fighter knocked out on the hill waits to stand back up.
+pub fn hill_respawn() -> u16 {
+    oven::scalar(Scalar::HillRespawn).max(0) as u16
+}
+
+/// How high over the point's surface a body's feet still count as on it:
+/// the column of air a hop stays inside (`versus::Hill`).
+pub fn hill_column() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HillColumn)).max(Fx::ZERO)
 }
 
 /// Reaction time at 60 Hz, used by the feel tests to reason about what is and
@@ -1496,6 +1550,66 @@ pub fn dodge_decay() -> Fx {
 /// the one that moves people.
 pub fn stun_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StunDecay))
+}
+
+/// What a class divides a fighter's knockback by. Above one is a heavy.
+///
+/// Knockback only, never hitstun: frame data is authored per move, and a
+/// class-dependent stun would make the frame table's "on hit" column stop
+/// being a property of the move. So a heavy takes the same stun and travels
+/// less far out of it -- heavies are combo food, which is the answer a
+/// platform fighter gives too. It divides blocked pushback as well, which is
+/// where `defense.md`'s "the Bulwark resists pushback" comes from without
+/// being written twice. Between fighters only. See `docs/design/stun.md`.
+pub fn weight_of(class: crate::class::Class) -> Fx {
+    use crate::class::Class;
+    let knob = match class {
+        Class::Bulwark => Scalar::WeightBulwark,
+        Class::Champion => Scalar::WeightChampion,
+        Class::ShadowReaver => Scalar::WeightReaver,
+        Class::Elementalist => Scalar::WeightElementalist,
+        Class::BloodMage => Scalar::WeightBloodMage,
+        Class::DualMage => Scalar::WeightDualMage,
+    };
+    Fx::from_raw(oven::scalar(knob)).max(Fx::ratio(1, 10))
+}
+
+/// **The swell**: how much a fighter's knockback grows by the time their bar
+/// is empty. One plus this, at death; one at full health. Smash's percent, for
+/// a bar that counts down.
+pub fn swell_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellKnockback))
+}
+
+/// What a fighter's shove is worth, against another fighter, at full
+/// health: the start of the swell's line. The line rises from here to the
+/// same multiple at death [`swell_knockback`] sets, so a higher start is a
+/// slower climb, not a higher ceiling. The shove only; a launch starts at one.
+pub fn swell_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellStart))
+}
+
+/// The second term of the knockback swell, per share of the victim's bar the
+/// blow itself took: a committed move grows harder against a hurt opponent
+/// than a poke does, so a jab never turns into a launcher just by being
+/// thrown late.
+pub fn swell_blow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellBlow))
+}
+
+/// How much a fighter's hitstun grows by the time their bar is empty. Far
+/// slower than [`swell_knockback`], and the gap between the two is the combo
+/// design: the stun grows and moves start to link, the knockback grows faster
+/// and throws the victim out of reach again.
+pub fn swell_hitstun() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellHitstun))
+}
+
+/// What each hit in a string keeps of the hitstun swell the hit before it had.
+/// A ranged move re-aims at wherever the victim landed, so distance cannot end
+/// its string; this does. Never below the move table's own hitstun.
+pub fn combo_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ComboDecay))
 }
 
 // ---------------------------------------------------------------------------
@@ -3862,6 +3976,13 @@ pub fn dash_flip() -> u16 {
     oven::scalar(Scalar::DashFlip).max(1) as u16
 }
 
+/// The longest the dash to her shadow lasts, and so, with its speed, how far
+/// it reaches. Its own knob since 2026-10-22: it was the dodge's length, and
+/// the dodge grew.
+pub fn shadow_dash_frames() -> u16 {
+    oven::scalar(Scalar::ShadowDashFrames).max(1) as u16
+}
+
 /// How far apart, in turns, the blades of a fan are: the Tumble's down from the crosshair's line, the Fan's level either side of it.
 pub fn thrown_spread() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrownSpread)).max(Fx::ZERO)
@@ -4695,6 +4816,13 @@ pub fn swim_height() -> Fx {
 /// Swim, pops out at the edge at (m/s): the burst she leaves her ground with when she swims off it.
 pub fn swim_pop() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SwimPop).max(0))
+}
+
+/// How long her pop out of her ground lasts, and so, with its speed, how far
+/// it goes. Its own knob since 2026-10-22: it was half the dodge's length,
+/// and the dodge grew.
+pub fn swim_pop_frames() -> u16 {
+    oven::scalar(Scalar::SwimPopFrames).max(1) as u16
 }
 
 /// Thrall, on her ground bites (x).

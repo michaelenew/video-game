@@ -121,6 +121,10 @@ pub fn of(id: ArenaId) -> Sky {
         // light at the Mouth, noon on the Shelves, the wood's green afternoon,
         // and the thinnest, bluest air of the game on the Saddle. The reach
         // grows with the height, so the higher you are the further you see.
+        // A range is a pocket of the place it stands in, under its air.
+        id if sim::valley::ranges::in_place(id).is_some() => {
+            of(sim::valley::ranges::in_place(id).unwrap_or(ArenaId::HEARTH))
+        }
         ArenaId::HEARTH => Sky {
             reach: 500.0,
             ..Sky::over([0.93, 0.88, 0.80])
@@ -186,6 +190,48 @@ pub fn of(id: ArenaId) -> Sky {
         ArenaId::CLIMB_FORK => aloft(0.09),
         ArenaId::CLIMB_REACH => aloft(0.12),
         ArenaId::CLIMB_WATERFALL => aloft(0.15),
+
+        // --- the versus stages --------------------------------------------
+        //
+        // The four floating duel stages are aloft as the courses are -- a
+        // bright deck under the drop is what says how far down it is -- each
+        // turned to its own hour: the Anvil at a dusk the colour of its
+        // embers, the Ziggurat at a hot desert noon, the Caldera thick with
+        // smoke and close, the Twin Isles at a cold dawn.
+        ArenaId::ANVIL => Sky {
+            glow: Some([0.96, 0.36, 0.12]),
+            ..aloft(-0.02)
+        },
+        ArenaId::ZIGGURAT => aloft(0.05),
+        ArenaId::CALDERA => Sky {
+            reach: 380.0,
+            ..aloft(-0.10)
+        },
+        ArenaId::TWIN_ISLES => aloft(0.40),
+        // The three King of the Hill maps stand on the ground: a quarry under
+        // a high pale haze (a warmer one turned its floor orange), a glacier
+        // under a cold clear sky, a river mouth in humid green haze.
+        ArenaId::QUARRY => Sky::over([0.83, 0.86, 0.90]),
+        ArenaId::GLACIER => Sky::over([0.82, 0.90, 0.98]),
+        // The Gorge in the cool of the morning, and the Henge's down under
+        // a high summer sky.
+        ArenaId::GORGE => Sky::over([0.80, 0.88, 0.92]),
+        ArenaId::HENGE => Sky::over([0.84, 0.88, 0.97]),
+        ArenaId::DELTA => Sky {
+            reach: 700.0,
+            ..Sky::over([0.82, 0.90, 0.84])
+        },
+
+        // --- the tutorial halls --------------------------------------------
+        //
+        // A clear, even midday down a long gorge: nothing in the sky to read
+        // but the lesson. Each hall a turn of its class -- the Elementalist's
+        // warm, the Blood mage's rose, the Reaver's and the Dual mage's cool.
+        ArenaId::HALL_CHAMPION => Sky::over([0.84, 0.88, 0.97]),
+        ArenaId::HALL_REAVER => Sky::over([0.80, 0.84, 0.98]),
+        ArenaId::HALL_ELEMENTALIST => Sky::over([0.95, 0.89, 0.80]),
+        ArenaId::HALL_BLOOD => Sky::over([0.96, 0.86, 0.86]),
+        ArenaId::HALL_DUAL => Sky::over([0.86, 0.85, 0.98]),
 
         _ => Sky::over([0.78, 0.87, 0.95]),
     }
@@ -263,7 +309,8 @@ mod tests {
         // enough colour left in it to read as sky rather than as fog -- the
         // failure that produced an all-brown wash the first time round.
         for arena in sim::arena::all() {
-            if arena.id == ArenaId::BROODMOTHER || arena.id == ArenaId::DEEP {
+            let cave = |id| id == ArenaId::BROODMOTHER || id == ArenaId::DEEP;
+            if cave(arena.id) || sim::valley::ranges::in_place(arena.id).is_some_and(cave) {
                 continue; // A cave. The places dark is the right answer.
             }
             let h = Lch::of(of(arena.id).resolved().horizon);

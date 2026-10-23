@@ -37,6 +37,19 @@ pub const SEAT_COLOURS: [Color; sim::state::MAX_PLAYERS] = {
     all
 };
 
+/// **The colour seat `seat` is shown in** in this fight: its own, or on a
+/// King of the Hill map its side's -- the colour of the seat leading that
+/// side (`sim::versus::side`), so seats one and three are blue and two and
+/// four orange, bodies and bars alike.
+pub fn seat_colour(w: &sim::World, seat: usize) -> Color {
+    let shown = if w.hill.on {
+        sim::versus::side(seat) as usize
+    } else {
+        seat
+    };
+    SEAT_COLOURS[shown % SEAT_COLOURS.len()]
+}
+
 /// The row of the third and fourth fighters' health, under the first two;
 /// hidden while those seats are empty.
 #[derive(Component)]
@@ -138,6 +151,10 @@ pub struct StateText(pub usize);
 /// glance during it.
 #[derive(Component)]
 pub struct OnlineText;
+
+/// King of the Hill's line: the clocks and the point (`sim::versus`).
+#[derive(Component)]
+pub struct HillText;
 
 /// The creature's health, and how close it is to losing its footing.
 ///
@@ -267,6 +284,27 @@ pub fn setup(mut commands: Commands) {
                 ))
                 .with_children(|row| {
                     spawn_meter(row, 10.0, P2, RivalBar);
+                });
+
+                // King of the Hill: both sides' clocks and the point's
+                // state, under the bars, empty on every arena without a
+                // hill.
+                head.spawn(Node {
+                    width: Val::Percent(100.0),
+                    justify_content: JustifyContent::Center,
+                    margin: UiRect::top(Val::Px(6.0)),
+                    ..default()
+                })
+                .with_children(|row| {
+                    row.spawn((
+                        Text::new(""),
+                        TextFont {
+                            font_size: 20.0,
+                            ..default()
+                        },
+                        TextColor(INK),
+                        HillText,
+                    ));
                 });
             });
 
@@ -525,6 +563,14 @@ pub fn update_picker(
         course,
     );
     if shown.as_ref() == Some(&now) {
+        return;
+    }
+    // A tutorial hall has its own panel where the list would be.
+    if sim::tutorial::of(sim.cur.arena).is_some() {
+        if let Ok(mut t) = text.single_mut() {
+            *t = Text::new("");
+        }
+        *shown = Some(now);
         return;
     }
     if let Ok(mut t) = text.single_mut() {
@@ -1379,9 +1425,21 @@ pub fn update(
 
     for (tag, mut text) in states.iter_mut() {
         let p = &sim.cur.players[seat(&sim, tag.0)];
+        // Between fighters, how far the next blow throws this one, where Smash
+        // shows its percent: the number that decides whether a hit is a shove
+        // or a round ender. See `docs/design/stun.md`.
+        let name = if sim.cur.pvp() || matches!(sim.cur.phase, Phase::Picking { .. }) {
+            format!(
+                "{}   launch x{:.1}",
+                p.class.name(),
+                sim::state::launch_scale(p).to_f32_for_render()
+            )
+        } else {
+            p.class.name().to_string()
+        };
         set_text(
             &mut text,
-            format!("{}\n{}\n{}", p.class.name(), describe(p), mechanic(p)),
+            format!("{}\n{}\n{}", name, describe(p), mechanic(p)),
         );
     }
 
@@ -1409,6 +1467,20 @@ pub fn update(
     if let Ok(mut t) = banner.single_mut() {
         let line = match sim.cur.phase {
             Phase::Fighting => String::new(),
+            // The pick before a versus round: the seconds left, and who is
+            // done. Rounded up, so it reads 1 until the round starts.
+            Phase::Picking { left, ready } => {
+                let secs = (left as u32).div_ceil(60);
+                let me = sim.local_player();
+                let present = sim.cur.present();
+                let waiting = (0..present).filter(|&i| ready & (1 << i) == 0).count();
+                let you = if ready & (1 << me) != 0 {
+                    format!("ready -- waiting on {waiting}")
+                } else {
+                    "Tab to change class, Enter when ready".to_string()
+                };
+                format!("choose your class  {secs}\n{you}")
+            }
             Phase::RoundOver { winner, .. } if winner == sim::state::QUARRY => {
                 match sim.cur.hunted().into_iter().flatten().next() {
                     Some(s) => format!("the {} stands", s.get().name),
@@ -1417,6 +1489,9 @@ pub fn update(
             }
             Phase::RoundOver { winner, .. } if winner == u8::MAX => "double KO".into(),
             Phase::RoundOver { .. } if sim.cur.hunting() => "the hunt is over".into(),
+            Phase::RoundOver { winner, .. } if sim.cur.hill.on => {
+                format!("{} side holds the hill", SIDE_NAMES[winner as usize % 2])
+            }
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
         };
         set_text(&mut t, line);
@@ -1467,7 +1542,7 @@ pub fn update_rival(
     let p = &sim.cur.players[who];
     for (mut node, mut colour) in bars.iter_mut() {
         node.width = Val::Percent(100.0 * p.health.max(0) as f32 / p.full_health().max(1) as f32);
-        colour.0 = SEAT_COLOURS[who];
+        colour.0 = seat_colour(&sim.cur, who);
     }
 }
 
@@ -1720,6 +1795,62 @@ type ButtonQuery<'w, 's> = Query<
     Changed<Interaction>,
 >;
 
+/// The line under the bars on a King of the Hill map (`sim::versus`): its own
+/// system for the reason the online line is.
+pub fn update_hill(sim: Res<crate::Sim>, mut text: Query<&mut Text, With<HillText>>) {
+    let line = hill_line(&sim.cur.hill);
+    for mut t in text.iter_mut() {
+        if t.0 != line {
+            *t = Text::new(line.clone());
+        }
+    }
+}
+
+/// **The two sides' names**, after the colours of seats one and two, whose
+/// sides they lead (`sim::versus::side`).
+pub const SIDE_NAMES: [&str; 2] = ["blue", "orange"];
+
+/// A clock in frames as minutes and seconds, rounded up: 0:01 until it is
+/// out.
+fn clock(frames: u16) -> String {
+    let s = (frames as u32).div_ceil(60);
+    format!("{}:{:02}", s / 60, s % 60)
+}
+
+/// **What the hill line says**: each side's clock, who holds the point, and
+/// what is happening on it. Empty without a hill.
+pub fn hill_line(k: &sim::versus::Koth) -> String {
+    use sim::versus::NOBODY;
+    if !k.on {
+        return String::new();
+    }
+    let clocks = format!(
+        "{} {}   {} {}",
+        SIDE_NAMES[0],
+        clock(k.clock[0]),
+        SIDE_NAMES[1],
+        clock(k.clock[1])
+    );
+    let state = if k.locked > 0 {
+        format!("the point opens in {}", clock(k.locked))
+    } else if k.overtime() {
+        "overtime".to_string()
+    } else if k.contested() {
+        "contested".to_string()
+    } else if k.capper != NOBODY && k.progress > 0 {
+        format!(
+            "{} taking it {}%",
+            SIDE_NAMES[k.capper as usize % 2],
+            k.percent()
+        )
+    } else if k.owner != NOBODY {
+        format!("{} holds the point", SIDE_NAMES[k.owner as usize % 2])
+    } else {
+        "the point is open".to_string()
+    };
+    format!("{clocks}   |   {state}")
+}
+
 /// The online line. Its own system because `update`'s queries are already
 /// carefully disjoint, and this text only changes when the line does.
 pub fn update_online(sim: Res<crate::Sim>, mut text: Query<&mut Text, With<OnlineText>>) {
@@ -1733,9 +1864,8 @@ pub fn update_online(sim: Res<crate::Sim>, mut text: Query<&mut Text, With<Onlin
 
 /// Click a picker to cycle that player's class.
 ///
-/// Restarts the match, exactly as Tab does, because a class change mid-round
-/// would leave the mechanic holding somebody else's state — a shield in flight
-/// belonging to a class that no longer has one.
+/// Recasts that fighter where they stand, exactly as Tab does, and like Tab it
+/// is not heard in a versus round once its pick is over.
 pub fn class_buttons(
     mut sim: ResMut<crate::Sim>,
     show: Res<ShowClassButtons>,
@@ -1751,7 +1881,7 @@ pub fn class_buttons(
         {
             continue;
         }
-        // Asked for on the wire, as Tab is, so a peer restarts on the same
+        // Asked for on the wire, as Tab is, so a peer recasts on the same
         // frame.
         let who = seat(&sim, button.0);
         let classes = cycle_class(sim.cur.players.map(|p| p.class), who);

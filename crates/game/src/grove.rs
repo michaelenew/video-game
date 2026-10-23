@@ -63,9 +63,94 @@ pub fn reach(tree: &Tree) -> f32 {
         .fold(0.0, f32::max)
 }
 
+/// **The box a tree fills**, about its foot, in metres: every node with its
+/// thickness, every clump of leaves with its size, every pad with its reach.
+/// What its level is judged by: the distance to the nearest of it.
+pub fn bounds(tree: &Tree) -> (Vec3, Vec3) {
+    let rel = |p: [i32; 3]| {
+        Vec3::new(
+            m(p[0] - tree.base[0]),
+            m(p[1] - tree.base[1]),
+            m(p[2] - tree.base[2]),
+        )
+    };
+    let mut lo = Vec3::ZERO;
+    let mut hi = Vec3::ZERO;
+    let mut grow = |c: Vec3, r: f32| {
+        lo = lo.min(c - r);
+        hi = hi.max(c + r);
+    };
+    for n in &tree.nodes {
+        grow(rel(n.at), m(n.radius));
+    }
+    for l in &tree.leaves {
+        grow(rel([l[0], l[1], l[2]]), m(l[3]) * 1.5);
+    }
+    for pad in &tree.pads {
+        grow(rel(pad.at), m(pad.outer));
+    }
+    (lo, hi)
+}
+
+/// How many faces round a branch of radius `r` drawn where nothing finer
+/// than `detail` metres shows: the fewest whose flats stand no more than half
+/// of it inside the true round, and never more than [`sides`] gives up close.
+fn sides_at(r: f32, detail: f32) -> usize {
+    let full = sides(r);
+    if detail <= 0.0 {
+        return full;
+    }
+    [4, 6, 9, 16]
+        .into_iter()
+        .find(|&n| n >= full || r * (1.0 - (std::f32::consts::PI / n as f32).cos()) <= detail)
+        .unwrap_or(full)
+        .min(full)
+}
+
+/// The same for a ring of `n` segments of radius `r` -- a shelf, a terrace --
+/// never fewer than eight, so a ring stays a ring.
+fn ring_at(n: usize, r: f32, detail: f32) -> usize {
+    if detail <= 0.0 {
+        return n;
+    }
+    let mut k = 8;
+    while k < n && r * (1.0 - (std::f32::consts::PI / k as f32).cos()) > detail {
+        k *= 2;
+    }
+    k.min(n)
+}
+
+/// **How far apart the levels of a giant are**: the distances, from the
+/// nearest part of it, at which it is drawn with less. Up close everything;
+/// past [`LEVELS`]`[0]` what is finer than [`detail_at`] that distance shows;
+/// past `[1]` the same at that one. A hard switch (`docs/design/exploration/
+/// 0028_distant_detail.md`, LOD-1): what goes at a step is finer than the
+/// screen shows there, so the step is not seen.
+pub const LEVELS: [f32; 3] = [100.0, 250.0, 450.0];
+
+/// The vertical field of view the levels are judged at, radians: the
+/// camera's own default (`view::camera`), on a screen 1080 lines tall.
+const FOV: f32 = 58.0 * std::f32::consts::PI / 180.0;
+const LINES: f32 = 1080.0;
+
+/// **The finest thing worth drawing at `distance` metres**, in metres. In the
+/// plain look, a pixel. In a painted one, the paint's own brush (`look::Wash`
+/// `brush`, its radius in pixels at 760 lines): anything thinner is painted
+/// out of the picture by the filter anyway (LOD-2: the owner, 2026-10-21).
+pub fn detail_at(distance: f32, brush_px: f32) -> f32 {
+    let pixel = FOV / LINES;
+    let brush = brush_px * FOV / 760.0;
+    distance * pixel.max(brush)
+}
+
 /// **A tree's two meshes**, about its foot: its wood (with its shelves), and
-/// its leaves (with its roof).
-pub fn meshes(tree: &Tree, palette: &Palette) -> (Mesh, Mesh) {
+/// its leaves (with its roof), with nothing finer than `detail` metres: a
+/// branch thinner is left to its parent -- which is as thick as all it bears,
+/// by the pipe model the skeleton is grown by, so the silhouette keeps its
+/// weight -- rounds are drawn with fewer faces, and leaf clumps closer together
+/// than a few times it are one clump of the same area. Zero is everything, as
+/// close up.
+pub fn meshes(tree: &Tree, palette: &Palette, detail: f32) -> (Mesh, Mesh) {
     let at = |p: [i32; 3]| {
         Vec3::new(
             m(p[0] - tree.base[0]),
@@ -77,20 +162,21 @@ pub fn meshes(tree: &Tree, palette: &Palette) -> (Mesh, Mesh) {
     let footing = palette.grown_footing(tree.kind);
     let moss = palette.moss();
     let mut wood = Kit::new();
+    let runs = runs(tree, detail);
     for (i, n) in tree.nodes.iter().enumerate() {
-        if n.parent == NONE {
+        let Some((from, first)) = runs[i] else {
             continue;
-        }
-        let p = tree.nodes[n.parent as usize];
+        };
+        let p = tree.nodes[from];
         let rb = m(n.radius);
         // A branch leaves the trunk at its own thickness, a little swollen
         // where it joins -- not at the trunk's.
         let ra = if p.part == Part::Trunk && n.part != Part::Trunk {
-            rb * 1.2
+            m(tree.nodes[first].radius) * 1.2
         } else {
             m(p.radius)
         };
-        if ra.max(rb) < 0.03 {
+        if ra.max(rb) < 0.03 || 2.0 * ra.max(rb) < detail {
             continue;
         }
         let k = hash01(i as u32, tree.base[0] as u32, 31);
@@ -109,7 +195,7 @@ pub fn meshes(tree: &Tree, palette: &Palette) -> (Mesh, Mesh) {
         } else {
             rgb
         };
-        let s = sides(ra.max(rb));
+        let s = sides_at(ra.max(rb), detail);
         // Capped where it is thick: a joint that bends opens a sliver,
         // and through an open tube the sky shows.
         let caps = (ra.max(rb) > 0.25).then_some(rgb);
@@ -123,10 +209,18 @@ pub fn meshes(tree: &Tree, palette: &Palette) -> (Mesh, Mesh) {
     for pad in &tree.pads {
         let c = at(pad.at);
         match pad.kind {
-            PadKind::Shelf => shelf(&mut wood, c, pad, palette.shelf(), bark),
-            _ => terrace(&mut leaves, c, pad, palette.canopy(tree.kind), green),
+            PadKind::Shelf => shelf(&mut wood, c, pad, palette.shelf(), bark, detail),
+            _ => terrace(
+                &mut leaves,
+                c,
+                pad,
+                palette.canopy(tree.kind),
+                green,
+                detail,
+            ),
         }
     }
+    let mut clumps = Vec::new();
     for (i, l) in tree.leaves.iter().enumerate() {
         let c = at([l[0], l[1], l[2]]);
         let r = m(l[3]);
@@ -140,7 +234,9 @@ pub fn meshes(tree: &Tree, palette: &Palette) -> (Mesh, Mesh) {
         if hash01(seed, 2, 5) > keep {
             continue;
         }
-        let rgb = vary(green, hash01(seed, 1, 5), 0.14);
+        clumps.push((c, r, seed, vary(green, hash01(seed, 1, 5), 0.14)));
+    }
+    for (c, r, seed, rgb) in gathered(clumps, detail * CLUMPED) {
         match tree.kind {
             // Needles: a tuft hanging from the twig's end, taller than it is
             // wide -- a spray that droops, not a plate to land on.
@@ -171,6 +267,144 @@ pub fn meshes(tree: &Tree, palette: &Palette) -> (Mesh, Mesh) {
     (wood.build(), leaves.build())
 }
 
+/// **Where each node's piece of wood starts**: for a node drawn as the end of
+/// a tube, the node the tube starts at and the first node past it; `None`
+/// for a node a longer tube passes through. With no `detail` every node is
+/// its own piece, from its parent. With some, a run of nodes along one limb
+/// -- one child each, the same part, borne on or not alike -- is drawn as
+/// one tube for as long as every node it passes stands within half of
+/// `detail` of the straight line, thickness and all: a bend too small to see
+/// is one piece, and one piece is a tenth of the triangles of ten.
+fn runs(tree: &Tree, detail: f32) -> Vec<Option<(usize, usize)>> {
+    let nodes = &tree.nodes;
+    let mut out: Vec<Option<(usize, usize)>> = nodes
+        .iter()
+        .map(|n| (n.parent != NONE).then_some((n.parent as usize, 0)))
+        .collect();
+    for (i, slot) in out.iter_mut().enumerate() {
+        if let Some((_, first)) = slot {
+            *first = i;
+        }
+    }
+    if detail <= 0.0 {
+        return out;
+    }
+    let mut children = vec![Vec::new(); nodes.len()];
+    for (i, n) in nodes.iter().enumerate() {
+        if n.parent != NONE {
+            children[n.parent as usize].push(i);
+        }
+    }
+    // A node a tube may pass through: one child, which is the same part and
+    // borne on as it is.
+    let passes = |j: usize| {
+        children[j].len() == 1 && nodes[j].parent != NONE && {
+            let c = children[j][0];
+            nodes[c].part == nodes[j].part && trees::stood_on(tree, c) == trees::stood_on(tree, j)
+        }
+    };
+    let at = |j: usize| Vec3::new(m(nodes[j].at[0]), m(nodes[j].at[1]), m(nodes[j].at[2]));
+    let r = |j: usize| m(nodes[j].radius);
+    // Every node passed between `from` and `to` near enough the line.
+    let straight = |from: usize, path: &[usize], to: usize| {
+        let (a, b) = (at(from), at(to));
+        let (ra, rb) = (r(from), r(to));
+        let len = (b - a).length().max(1e-4);
+        let mut along = 0.0;
+        let mut last = a;
+        path.iter().all(|&j| {
+            let p = at(j);
+            along += (p - last).length();
+            last = p;
+            let t = (along / len).clamp(0.0, 1.0);
+            let off = (p - a) - (b - a) * ((p - a).dot(b - a) / (len * len));
+            off.length() <= detail && (r(j) - (ra + (rb - ra) * t)).abs() <= detail
+        })
+    };
+    for start in 0..nodes.len() {
+        // Runs start where a tube may not pass: at a fork, a root, a change.
+        if passes(start) {
+            continue;
+        }
+        for &first in &children[start] {
+            let mut end = first;
+            let mut path: Vec<usize> = Vec::new();
+            while passes(end) {
+                let next = children[end][0];
+                path.push(end);
+                if !straight(start, &path, next) {
+                    path.pop();
+                    break;
+                }
+                out[end] = None;
+                end = next;
+            }
+            // The run so far, from its start; and on, if it bent, from
+            // where it bent.
+            out[end] = Some((start, first));
+            let mut from = end;
+            while passes(from) {
+                let mut to = children[from][0];
+                let begin = to;
+                let mut path: Vec<usize> = Vec::new();
+                while passes(to) {
+                    let next = children[to][0];
+                    path.push(to);
+                    if !straight(from, &path, next) {
+                        path.pop();
+                        break;
+                    }
+                    out[to] = None;
+                    to = next;
+                }
+                out[to] = Some((from, begin));
+                from = to;
+            }
+        }
+    }
+    out
+}
+
+/// How far apart, in [`meshes`]' `detail`, two clumps of leaves may be and
+/// still be drawn as one: a gap of a few pixels between two clumps is not a
+/// gap anybody sees.
+const CLUMPED: f32 = 4.0;
+
+/// A clump of leaves: where, how big, its seed and its colour.
+type Clump = (Vec3, f32, u32, [f32; 3]);
+
+/// **Clumps closer than `cell` drawn as one**: every clump in one cube of a
+/// grid `cell` metres across gathered into a clump at their middle, of the
+/// same area seen from afar (the radius the root of the sum of the squares),
+/// in their colour. A `cell` of zero gathers nothing.
+fn gathered(clumps: Vec<Clump>, cell: f32) -> Vec<Clump> {
+    if cell <= 0.0 {
+        return clumps;
+    }
+    // In order of the first clump in each cube, so the mesh is the same
+    // every time it is built.
+    let mut cubes: Vec<(IVec3, Vec3, f32, u32, [f32; 3])> = Vec::new();
+    let mut index: std::collections::HashMap<IVec3, usize> = Default::default();
+    for (c, r, seed, rgb) in clumps {
+        let key = (c / cell).floor().as_ivec3();
+        let a = r * r;
+        let k = *index.entry(key).or_insert_with(|| {
+            cubes.push((key, Vec3::ZERO, 0.0, seed, [0.0; 3]));
+            cubes.len() - 1
+        });
+        let cube = &mut cubes[k];
+        cube.1 += c * a;
+        cube.2 += a;
+        for (sum, v) in cube.4.iter_mut().zip(rgb) {
+            *sum += v * a;
+        }
+    }
+    cubes
+        .into_iter()
+        .map(|(_, at, area, seed, rgb)| (at / area, area.sqrt(), seed, rgb.map(|v| v / area)))
+        .collect()
+}
+
 /// Points round a circle of radius `r` at height `y` about `c`.
 fn round(c: Vec3, r: f32, y: f32, k: usize, n: usize) -> Vec3 {
     let a = std::f32::consts::TAU * k as f32 / n as f32;
@@ -180,10 +414,10 @@ fn round(c: Vec3, r: f32, y: f32, k: usize, n: usize) -> Vec3 {
 /// **A shelf fungus**: a bracket, its flat top where feet go, its edge
 /// rounded down and its underside the bark's, banded the way a bracket's
 /// growth rings are.
-fn shelf(kit: &mut Kit, top: Vec3, pad: &Pad, cream: [f32; 3], bark: [f32; 3]) {
+fn shelf(kit: &mut Kit, top: Vec3, pad: &Pad, cream: [f32; 3], bark: [f32; 3], detail: f32) {
     let r = m(pad.outer);
     let deep = m(pad.thick);
-    let n = 24;
+    let n = ring_at(24, r, detail);
     let under = look::tint::mix(cream, bark, 0.55);
     for k in 0..n {
         let band = if k % 2 == 0 { 1.0 } else { 0.93 };
@@ -211,10 +445,10 @@ fn shelf(kit: &mut Kit, top: Vec3, pad: &Pad, cream: [f32; 3], bark: [f32; 3]) {
 /// **A terrace of a roof**: a flat ring of leaves to walk on, its edge a
 /// fringe of leaf hanging to its underside. The lip stands up from it the
 /// same way, a darker green.
-fn terrace(kit: &mut Kit, top: Vec3, pad: &Pad, floor: [f32; 3], green: [f32; 3]) {
+fn terrace(kit: &mut Kit, top: Vec3, pad: &Pad, floor: [f32; 3], green: [f32; 3], detail: f32) {
     let (ri, ro) = (m(pad.inner), m(pad.outer));
     let deep = m(pad.thick);
-    let n = ((ro * 1.2) as usize).clamp(16, 96);
+    let n = ring_at(((ro * 1.2) as usize).clamp(16, 96), ro, detail);
     let face = if pad.kind == PadKind::Rim {
         look::tint::mix(floor, green, 0.5)
     } else {
@@ -260,5 +494,55 @@ fn terrace(kit: &mut Kit, top: Vec3, pad: &Pad, floor: [f32; 3], green: [f32; 3]
             out,
             vary(green, hash01(k as u32, 3, 9), 0.1),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn triangles(m: &Mesh) -> usize {
+        m.indices().map_or(0, |i| i.len() / 3)
+    }
+
+    /// **Every giant at every level**: how much each far level keeps, in the
+    /// plain look and the painted ones' finest and coarsest brushes. Printed
+    /// with `--nocapture`; what is asserted is that each level is a real
+    /// saving and keeps the tree's frame.
+    #[test]
+    fn every_level_is_a_saving() {
+        let atlas = sim::atlas::valley();
+        let palette = look::palette::of(sim::arena::ArenaId::WOOD);
+        for brush in [0.0, 2.0, 7.0] {
+            let mut sum = [0usize; 4];
+            for tree in &atlas.trees {
+                let mut n = [0usize; 4];
+                for (k, d) in [0.0, LEVELS[0], LEVELS[1], LEVELS[2]]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let detail = if k == 0 { 0.0 } else { detail_at(d, brush) };
+                    let (wood, leaves) = meshes(tree, &palette, detail);
+                    n[k] = triangles(&wood) + triangles(&leaves);
+                    // The trunk and the big limbs are always there.
+                    assert!(triangles(&wood) > 100, "a far giant with no wood");
+                }
+                assert!(
+                    n[1] < n[0] && n[2] < n[1] && n[3] < n[2],
+                    "levels {n:?} are not each a saving"
+                );
+                for k in 0..4 {
+                    sum[k] += n[k];
+                }
+            }
+            eprintln!(
+                "brush {brush} px: {} / {} / {} / {} triangles for the {} giants",
+                sum[0],
+                sum[1],
+                sum[2],
+                sum[3],
+                atlas.trees.len()
+            );
+        }
     }
 }

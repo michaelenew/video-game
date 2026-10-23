@@ -112,14 +112,17 @@ pub fn mode(name: &str) -> Option<(&'static species::Species, ArenaId)> {
 
 /// The world a start describes, with two seats played: `sim::replay::Start`
 /// is the one place a world is built from its settings, so a replay of a
-/// fight rebuilds exactly the fight the picker started.
-pub fn world<const N: usize>(start: Start, classes: [Class; N]) -> World {
+/// fight rebuilds exactly the fight the picker started. `draft` is what play
+/// is -- versus rounds open with a pick, and the classes are locked for the
+/// round after it (`World::drafting`) -- and a scripted run is not.
+pub fn world<const N: usize>(start: Start, classes: [Class; N], draft: bool) -> World {
     sim::replay::Start {
         classes: World::seats_of(classes),
         hunt: start.hunt,
         arena: start.arena,
         temper: start.temper,
         seats: 2,
+        draft,
     }
     .world()
 }
@@ -196,6 +199,13 @@ pub fn next(w: &World) -> Travel {
 /// (`sim::input::Travel::arena`). See `docs/design/courses.md`.
 pub fn next_course(w: &World) -> Travel {
     Travel::arena(sim::course::after(w.arena).arena)
+}
+
+/// `Shift+N`: the next versus stage -- the four floating duel stages, then
+/// the three King of the Hill maps -- wrapping, and the first from anywhere
+/// that is not a stage. The same trip as `N`. See `docs/design/versus.md`.
+pub fn next_stage(w: &World) -> Travel {
+    Travel::arena(sim::versus::after(w.arena).arena)
 }
 
 /// The course panel, in a course: every course, which one this is, and how
@@ -383,6 +393,7 @@ mod tests {
                 temper: 0,
             },
             classes,
+            true,
         );
         assert_eq!(range.arena, ArenaId::RANGE);
         assert!(!range.hunting());
@@ -393,11 +404,12 @@ mod tests {
                 temper: 0,
             },
             classes,
+            true,
         );
         assert_eq!(hunt.arena, ArenaId::PROVING_GROUND);
         assert!(hunt.hunting());
         assert_eq!(
-            world(Start::default(), classes).arena,
+            world(Start::default(), classes, true).arena,
             ArenaId::PROVING_GROUND
         );
     }
@@ -426,10 +438,14 @@ mod tests {
         assert_eq!(read(&args).temper, 2);
         assert_eq!(read(&Options::from_query("?hunt")).temper, 0);
         assert_eq!(read(&Options::from_query("?hunt&temper=9")).temper, 3);
-        let w = world(read(&args), [Class::Bulwark; 2]);
+        let w = world(read(&args), [Class::Bulwark; 2], true);
         assert_eq!(w.temper(), 2);
         // A temper asked of a versus match is nothing at all.
-        let v = world(read(&Options::from_query("?temper=3")), [Class::Bulwark; 2]);
+        let v = world(
+            read(&Options::from_query("?temper=3")),
+            [Class::Bulwark; 2],
+            false,
+        );
         assert_eq!(v, World::with_classes([Class::Bulwark; 2]));
     }
 
@@ -511,7 +527,7 @@ mod tests {
             start(true, Some("pair"), None, None),
         ];
         for fight in fights {
-            let w = world(fight, classes);
+            let w = world(fight, classes, true);
             let said = describe(&w);
             let get = |name: &str| {
                 said.iter()
@@ -524,12 +540,49 @@ mod tests {
                 get("arena"),
                 get("temper"),
             );
-            let again = world(back, classes);
+            let again = world(back, classes, true);
             assert_eq!(
                 again.checksum(),
                 w.checksum(),
                 "{fight:?} described as {said:?}"
             );
+        }
+    }
+
+    #[test]
+    fn on_a_hill_fighters_are_their_sides_colour_and_elsewhere_their_own() {
+        use crate::hud::{SEAT_COLOURS, seat_colour};
+        let four = [Class::Champion; 4];
+        let hill = World::versus_in(four, sim::arena::ArenaId::QUARRY);
+        assert_eq!(seat_colour(&hill, 0), SEAT_COLOURS[0]);
+        assert_eq!(seat_colour(&hill, 2), SEAT_COLOURS[0]);
+        assert_eq!(seat_colour(&hill, 1), SEAT_COLOURS[1]);
+        assert_eq!(seat_colour(&hill, 3), SEAT_COLOURS[1]);
+        let duel = World::versus_in(four, sim::arena::ArenaId::ANVIL);
+        for (seat, &own) in SEAT_COLOURS.iter().enumerate() {
+            assert_eq!(seat_colour(&duel, seat), own);
+        }
+    }
+
+    #[test]
+    fn shift_n_steps_through_every_versus_stage() {
+        let mut w = World::with_classes([Class::Champion; 2]);
+        let mut seen = Vec::new();
+        for _ in 0..sim::versus::STAGES.len() {
+            let Some(sim::input::Destination::Arena(a)) = next_stage(&w).destination() else {
+                panic!("Shift+N went nowhere");
+            };
+            assert!(sim::versus::of(a).is_some());
+            seen.push(a);
+            w = World::versus_in([Class::Champion; 2], a);
+            assert_eq!(w.arena, a);
+            // A hill map starts a game on its hill; a duel stage has none.
+            let hill = sim::versus::of(a).unwrap().hill.is_some();
+            assert_eq!(w.hill.on, hill);
+            assert_eq!(crate::hud::hill_line(&w.hill).is_empty(), !hill);
+        }
+        for s in sim::versus::STAGES {
+            assert!(seen.contains(&s.arena));
         }
     }
 

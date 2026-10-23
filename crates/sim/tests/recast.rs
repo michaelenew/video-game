@@ -1,4 +1,4 @@
-//! Changing class is a trip on the wire, so it works against a person.
+//! Changing class is a request on the wire, so it works against a person.
 //!
 //! Tab and the class pickers used to rebuild the world on the machine that
 //! pressed them, which against a person is a desync, so a match refused
@@ -6,11 +6,18 @@
 //! class change is `Travel::class` in the player's input: predicted, confirmed
 //! and rolled back like a button, and acted on by `World::advance` on the same
 //! frame on both machines.
+//!
+//! **And it touches nobody else** (2026-10-22): it used to restart the whole
+//! fight, which against people is everybody's round stopping for one player.
+//! The fighter who asked is recast where they stand. A versus world that
+//! drafts (`World::drafting`, what the game plays) chooses classes in a pick
+//! before each round and locks them for the round itself.
 
 use sim::World;
 use sim::class::{ALL_CLASSES, Class};
 use sim::input::{Destination, Input, Travel};
 use sim::species::SpeciesId;
+use sim::state::Phase;
 
 #[test]
 fn every_class_for_every_seat_survives_the_travel_byte() {
@@ -30,10 +37,15 @@ fn no_two_kinds_of_trip_share_a_byte() {
     // Every byte means at most one thing, and the bytes that already meant
     // something -- a hunt at a temper, an arena -- still mean it.
     for b in 0..=u16::MAX {
-        let Some(Destination::Class { seat, class }) = Travel(b).destination() else {
-            continue;
-        };
-        assert_eq!(Travel::class(seat, class), Travel(b), "word {b:#06x}");
+        match Travel(b).destination() {
+            Some(Destination::Class { seat, class }) => {
+                assert_eq!(Travel::class(seat, class), Travel(b), "word {b:#06x}")
+            }
+            Some(Destination::Ready { seat }) => {
+                assert_eq!(Travel::ready(seat), Travel(b), "word {b:#06x}")
+            }
+            _ => {}
+        }
     }
     // An item, fed or granted: the item in the high byte of a credit's.
     for b in 0..=u16::MAX {
@@ -56,6 +68,14 @@ fn no_two_kinds_of_trip_share_a_byte() {
     for k in 0..=u8::MAX {
         assert_eq!(Travel::cairn(k).destination(), Some(Destination::Cairn(k)));
     }
+    // An arena: its id's high bits in the high byte (2026-10-23, for the
+    // tutorial halls past sixty-three) -- every word that reads as one is
+    // the word that arena writes.
+    for b in 0..=u16::MAX {
+        if let Some(Destination::Arena(id)) = Travel(b).destination() {
+            assert_eq!(Travel::arena(id), Travel(b), "word {b:#06x}");
+        }
+    }
     // A high byte on anything else asks for nothing: a byte that meant a
     // trip still means exactly that trip, and nothing else.
     for b in 0..=255u16 {
@@ -63,9 +83,11 @@ fn no_two_kinds_of_trip_share_a_byte() {
             !matches!(
                 d,
                 Destination::Class { .. }
+                    | Destination::Ready { .. }
                     | Destination::Feed(_)
                     | Destination::Credit(_)
                     | Destination::Cairn(_)
+                    | Destination::Arena(_)
             )
         }) {
             assert_eq!(
@@ -96,13 +118,24 @@ fn ask(travel: Travel) -> Input {
 }
 
 #[test]
-fn a_class_change_restarts_the_fight_with_that_seat_recast() {
+fn every_seat_ready_survives_the_travel_byte() {
+    for seat in [0, 1, 2, 3, 1000] {
+        assert_eq!(
+            Travel::ready(seat).destination(),
+            Some(Destination::Ready { seat })
+        );
+    }
+}
+
+#[test]
+fn a_class_change_recasts_that_seat_where_it_stands() {
     let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
     for _ in 0..30 {
-        w.advance([Input::new(Input::W), Input::default()]);
+        w.advance([Input::new(Input::W), Input::new(Input::W)]);
     }
     let frame = w.frame;
-    w.advance([Input::default(), ask(Travel::class(1, Class::Champion))]);
+    let before = w.clone();
+    w.advance([Input::new(Input::W), ask(Travel::class(1, Class::Champion))]);
     assert_eq!(w.players[0].class, Class::Bulwark);
     assert_eq!(w.players[1].class, Class::Champion);
     assert_eq!(
@@ -111,7 +144,115 @@ fn a_class_change_restarts_the_fight_with_that_seat_recast() {
         "the rollback session owns the frame count"
     );
     let fresh = World::with_classes([Class::Bulwark, Class::Champion]);
-    assert_eq!(w.players[0].pos, fresh.players[0].pos, "a fresh fight");
+    assert_ne!(
+        w.players[0].pos, fresh.players[0].pos,
+        "player one's fight went on: nobody was put back on a mark"
+    );
+    assert_ne!(
+        w.players[0].pos, before.players[0].pos,
+        "and player one walked this frame as on any other"
+    );
+    assert_eq!(
+        w.players[1].pos.x, before.players[1].pos.x,
+        "player two is recast on the spot they stood on"
+    );
+}
+
+#[test]
+fn a_class_change_is_not_a_heal() {
+    let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
+    let full = w.players[1].full_health();
+    w.players[1].health = full / 2;
+    w.advance([Input::default(), ask(Travel::class(1, Class::Champion))]);
+    let now = w.players[1];
+    let share = now.health as i64 * 100 / now.full_health() as i64;
+    assert!(
+        (49..=51).contains(&share),
+        "half a bar stays half a bar: {share}%"
+    );
+}
+
+/// A drafting duel, as the game plays one.
+fn drafted() -> World {
+    World::with_classes([Class::Champion, Class::Champion]).drafting(true)
+}
+
+#[test]
+fn a_drafted_versus_round_opens_with_its_pick() {
+    let w = drafted();
+    assert!(matches!(w.phase, Phase::Picking { .. }));
+    assert!(!w.pvp(), "nobody can hurt anybody while choosing");
+    assert!(!w.classes_locked());
+    // A hunt, a course and a world built bare do not.
+    assert!(matches!(
+        World::hunt([Class::Champion, Class::Champion])
+            .drafting(true)
+            .phase,
+        Phase::Fighting
+    ));
+    assert!(matches!(
+        World::with_classes([Class::Champion, Class::Champion]).phase,
+        Phase::Fighting
+    ));
+}
+
+#[test]
+fn the_pick_ends_on_its_clock_and_locks_the_classes() {
+    let mut w = drafted();
+    w.advance([ask(Travel::class(0, Class::DualMage)), Input::default()]);
+    assert_eq!(w.players[0].class, Class::DualMage, "heard in the pick");
+    for _ in 0..sim::tuning::class_pick() + 1 {
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert_eq!(w.phase, Phase::Fighting, "the round is on");
+    assert!(w.pvp() && w.classes_locked());
+    w.advance([ask(Travel::class(0, Class::Elementalist)), Input::default()]);
+    assert_eq!(
+        w.players[0].class,
+        Class::DualMage,
+        "locked for the round: the request is not heard"
+    );
+}
+
+#[test]
+fn the_pick_ends_early_once_every_seat_is_ready() {
+    let mut w = drafted();
+    w.advance([ask(Travel::ready(0)), Input::default()]);
+    assert!(
+        matches!(w.phase, Phase::Picking { .. }),
+        "one of two is not everybody"
+    );
+    w.advance([Input::default(), ask(Travel::ready(1))]);
+    w.advance([Input::default(), Input::default()]);
+    assert_eq!(w.phase, Phase::Fighting);
+}
+
+#[test]
+fn the_next_round_opens_with_a_pick_again() {
+    let mut w = drafted();
+    w.advance([ask(Travel::ready(0)), ask(Travel::ready(1))]);
+    w.advance([Input::default(), Input::default()]);
+    assert_eq!(w.phase, Phase::Fighting);
+    w.players[1].health = 0;
+    w.advance([Input::default(), Input::default()]);
+    assert!(matches!(w.phase, Phase::RoundOver { winner: 0, .. }));
+    for _ in 0..sim::tuning::round_over_frames() + 2 {
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(matches!(w.phase, Phase::Picking { .. }));
+    assert_eq!(w.players[0].rounds_won, 1, "the score is kept");
+    w.advance([Input::default(), ask(Travel::class(1, Class::ShadowReaver))]);
+    assert_eq!(w.players[1].class, Class::ShadowReaver);
+}
+
+#[test]
+fn a_trip_carries_the_draft() {
+    let mut w = drafted();
+    w.advance([ask(Travel::hunt(SpeciesId::RIDGEBACK)), Input::default()]);
+    assert!(w.draft && w.hunting());
+    assert_eq!(w.phase, Phase::Fighting, "a hunt has no pick");
+    w.advance([ask(Travel::VERSUS), Input::default()]);
+    assert!(matches!(w.phase, Phase::Picking { .. }));
 }
 
 #[test]
@@ -138,11 +279,21 @@ fn a_trip_on_the_same_frame_keeps_the_new_class() {
 
 #[test]
 fn a_class_change_mid_hunt_stays_in_the_hunt() {
-    let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
+    let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]).drafting(true);
     w.advance([ask(Travel::hunt(SpeciesId::RIDGEBACK)), Input::default()]);
+    let start = w.players[0].pos;
+    for _ in 0..30 {
+        w.advance([Input::new(Input::W), Input::default()]);
+    }
+    let walked = w.players[0].pos;
+    assert_ne!(walked, start);
     w.advance([ask(Travel::class(0, Class::ShadowReaver)), Input::default()]);
-    assert!(w.hunting(), "a recast restarts the same fight, not versus");
-    assert_eq!(w.players[0].class, Class::ShadowReaver);
+    assert!(w.hunting(), "a recast is the same fight, not versus");
+    assert_eq!(w.players[0].class, Class::ShadowReaver, "never locked");
+    assert_ne!(
+        w.players[0].pos, start,
+        "nobody was put back at the hunt's start"
+    );
 }
 
 // Pause, step and restart: the rest of what one keyboard does to the fight,

@@ -1506,3 +1506,48 @@ fn a_spreading_eruption_hits_the_creature_once() {
     }
     panic!("fixture: the spike never reached the creature");
 }
+
+/// **A heavy blow on a creature holds both bodies** (2026-10-21, from play:
+/// strong hits on a creature did not land like strong hits). The Champion's
+/// hammer, whose impact freeze is past `creature_heavy_from`, freezes him and
+/// the animal for the same frames; his sword, a quick cut, freezes neither.
+#[test]
+fn a_heavy_blow_freezes_the_creature_with_its_hunter() {
+    // On the frame the blow lands: (the creature's freeze, his).
+    let landed = |button: u16| -> (u8, u8) {
+        for gap in 1..=8 {
+            let mut w = World::hunt([Class::Champion, Class::Champion]);
+            let mut beast = w.monster().copied().expect("a hunt has a creature");
+            // Out on open floor: creatures meet the platforms now, and one
+            // set down astride a platform is moved off it.
+            let open = Fx::from_int(8);
+            beast.pos = V3::new(w.players[0].pos.x.add(Fx::from_int(gap)), Fx::ZERO, open);
+            beast.yaw = Fx::from_raw(1 << 15);
+            beast.doing = Doing::Prowl;
+            beast.brain.think_left = u16::MAX;
+            w.monsters[0] = Some(beast);
+            w.players[0].pos = V3::new(w.players[0].pos.x, Fx::ZERO, open);
+            w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::ZERO);
+            let full = beast_health(&w);
+            for f in 0..60 {
+                let press = if f == 0 { button } else { 0 };
+                w.advance([Input::aimed(press, 0), Input::default()]);
+                if beast_health(&w) < full {
+                    let beast = w.monster().copied().expect("still there");
+                    return (beast.frozen, w.players[0].frozen);
+                }
+            }
+        }
+        panic!("the swing never reached the creature");
+    };
+    let hammer = sim::moves::get(Class::Champion, sim::moves::champion::HAMMER_GROUND).hitstop;
+    let (beast, him) = landed(Input::MIDDLE);
+    assert!(beast > 0, "the hammer did not hold the creature");
+    assert_eq!(beast, him, "the two are not held for the same frames");
+    assert!(
+        beast as u16 <= hammer + 1,
+        "held {beast}, the hammer's is {hammer}"
+    );
+    let (beast, him) = landed(Input::LEFT);
+    assert_eq!((beast, him), (0, 0), "a sword cut froze something");
+}

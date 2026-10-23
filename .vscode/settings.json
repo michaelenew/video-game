@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.cargo.targetDir": true,
+  "rust-analyzer.check.allTargets": false,
+  "rust-analyzer.cachePriming.numThreads": 2,
+  "rust-analyzer.numThreads": 2
+}

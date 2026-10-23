@@ -35,10 +35,12 @@ mod falls;
 mod forms;
 mod fx;
 mod glint;
+mod governor;
 mod ground;
 mod grove;
 mod grown;
 mod heel;
+mod hill;
 mod hub;
 mod hud;
 mod impact;
@@ -58,6 +60,7 @@ mod profile;
 mod scrape;
 mod settings;
 mod shapes;
+mod sighted;
 mod signs;
 mod sky;
 mod slash;
@@ -70,6 +73,7 @@ mod stream;
 mod swing;
 mod town;
 mod trophies;
+mod tutorial;
 mod valley;
 mod veil;
 mod warm;
@@ -122,6 +126,12 @@ fn chosen_start(opts: &platform::Options) -> picker::Start {
         opts.value("--arena"),
         opts.value("--temper"),
     );
+    // `--tutorial [class]`: that class's hall (`tutorial`).
+    if let Some(class) = chosen_tutorial(opts)
+        && let Some(t) = sim::tutorial::for_class(class)
+    {
+        start.arena = Some(t.arena);
+    }
     // **The valley is where a run starts** (`docs/design/valley.md`): Hearth's
     // square, unless a fight was asked for -- `--hunt`, `--arena`, or
     // `--versus` for the proving ground as it always was.
@@ -129,6 +139,19 @@ fn chosen_start(opts: &platform::Options) -> picker::Start {
         start.arena = Some(sim::valley::START);
     }
     start
+}
+
+/// `--tutorial [class]`: the class whose tutorial hall a run starts in --
+/// the one named, or player one's.
+fn chosen_tutorial(opts: &platform::Options) -> Option<sim::Class> {
+    if let Some(name) = opts.value("--tutorial") {
+        return Some(parse_class(name).unwrap_or(sim::class::ROTATION[0]));
+    }
+    opts.flag("--tutorial").then(|| {
+        opts.value("--p1")
+            .and_then(parse_class)
+            .unwrap_or(sim::class::ROTATION[0])
+    })
 }
 
 /// `--open`: every waystone in the valley lit, as if every creature had been
@@ -168,6 +191,7 @@ fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
     std::array::from_fn(|i| {
         opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
+            .or_else(|| (i == 0).then(|| chosen_tutorial(opts)).flatten())
             .unwrap_or(sim::class::ROTATION[0])
     })
 }
@@ -201,10 +225,11 @@ fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
             r.arena,
             Some(0),
             2,
-        );
+        )
+        .drafting(drafts());
         return seated(w, dummy);
     }
-    let w = picker::world(chosen_start(opts), chosen_classes(opts));
+    let w = picker::world(chosen_start(opts), chosen_classes(opts), drafts());
     match chosen_players(opts) {
         n if n > 2 => w.seated(n),
         _ => seated(w, dummy),
@@ -220,6 +245,7 @@ fn main() {
     }
     platform::report_panics();
     platform::one_move_an_event();
+    platform::fewer_pixels();
     App::new()
         .add_plugins(
             DefaultPlugins
@@ -267,6 +293,7 @@ fn main() {
         .init_resource::<heel::Heels>()
         .init_resource::<sound::Soundscape>()
         .init_resource::<Joints>()
+        .init_resource::<tutorial::Coach>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -276,6 +303,7 @@ fn main() {
         .init_resource::<InsideOwnHead>()
         .init_resource::<inspect::Inspect>()
         .init_resource::<beast::Boom>()
+        .init_resource::<sighted::Sighted>()
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
@@ -312,6 +340,7 @@ fn main() {
                 beast::setup_signs,
                 critters::setup,
                 signs::setup,
+                hill::setup,
                 ground::setup,
                 claimed::setup,
                 hud::setup,
@@ -398,9 +427,15 @@ fn main() {
                     claimed::drape,
                     place_auras,
                 ),
-                (beast::place, beast::paint_parts, beast::pose_bodies).chain(),
+                (
+                    sighted::update,
+                    beast::place,
+                    beast::paint_parts,
+                    beast::pose_bodies,
+                )
+                    .chain(),
                 drive_camera,
-                fade_own_body,
+                (colour_by_side, fade_own_body).chain(),
                 hud::toggle_class_buttons,
                 hud::class_buttons,
                 (hud::update, hud::update_heart),
@@ -422,9 +457,9 @@ fn main() {
         .add_systems(
             Update,
             (
-                critters::place,
+                critters::place.after(sighted::update),
                 critters::overlay,
-                signs::place,
+                (signs::place, hill::place),
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
@@ -434,13 +469,13 @@ fn main() {
                 glint::update,
                 veil::place,
                 online::announce,
-                hud::update_online,
+                (hud::update_online, hud::update_hill),
                 hud::update_seats,
                 hud::update_rival,
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
-                (menu::notice_cairns, menu::draw).chain(),
+                (menu::notice_cairns, menu::draw, tutorial::draw).chain(),
                 // What you carry and your morph (`sim::keep`).
                 (
                     heel::follow,
@@ -684,8 +719,8 @@ fn reseat(sim: &mut Sim) {
 /// **The Esc menu's dummy** (`menu::dummy`): bring it in or send it away,
 /// change what it does, or its class. Training only, as the dummy keys are.
 /// In or out restarts the fight, since a fighter is placed as a fight is
-/// built; a class change restarts it anyway, as Tab does; what it does
-/// changes on the spot.
+/// built; a class change recasts it where it stands, as Tab does; what it
+/// does changes on the spot.
 fn change_dummy(sim: &mut Sim, mode: Dummy, with: bool, class: sim::Class) {
     if sim.driver.online() {
         return;
@@ -779,7 +814,7 @@ impl Default for Sim {
             }
         });
         let seed = w.clone();
-        let driver = online::start(opts, &w);
+        let driver = online::start(opts, &w, w.players[0].class);
         Sim {
             prev: w.clone(),
             cur: w,
@@ -2505,6 +2540,11 @@ fn setup(
         // pass it reads -- the cheapest thing a frame can be asked to draw, and
         // the only way to get a depth buffer that can be sampled rather than
         // only written to. WebGL2 has neither, which is why this is a question.
+        //
+        // The browser goes without the prepass even for what it saves the
+        // main pass: Bevy copies its depth into a texture after drawing it,
+        // which WebGL2 refuses (`GL_INVALID_FRAMEBUFFER_OPERATION` from
+        // `glCopyTexSubImage2D`, every frame; tried 2026-10-21).
         commands.entity(eye).insert((
             outline::Outline::from(look::edge::LINE),
             bevy::core_pipeline::prepass::DepthPrepass,
@@ -3532,6 +3572,32 @@ fn swing_coats(
             time.delta_secs(),
             &mut bones,
         );
+    }
+}
+
+/// **Each fighter in its seat's colour, or its side's on a hill**
+/// (`hud::seat_colour`): the skin's hue follows the fight it is in, and its
+/// alpha is left to [`fade_own_body`]. Looked at before it is taken mutably,
+/// for the reason that system gives, so a skin is rebuilt only on the frame
+/// its colour changes -- a trip onto or off a hill map.
+fn colour_by_side(
+    sim: Res<Sim>,
+    parts: Query<(&BodyPart, &MeshMaterial3d<still::SkinMaterial>)>,
+    mut materials: ResMut<Assets<still::SkinMaterial>>,
+) {
+    for (part, material) in parts.iter() {
+        let want = hud::seat_colour(&sim.cur, part.owner).to_srgba();
+        let Some(skin) = materials.get(&material.0) else {
+            continue;
+        };
+        let have = skin.base.base_color.to_srgba();
+        if (have.red, have.green, have.blue) == (want.red, want.green, want.blue) {
+            continue;
+        }
+        let Some(skin) = materials.get_mut(&material.0) else {
+            continue;
+        };
+        skin.base.base_color = Color::Srgba(want.with_alpha(have.alpha));
     }
 }
 
@@ -7059,7 +7125,11 @@ fn tick_sim(
     mut trophies: ResMut<trophies::Trophies>,
     mut scape: ResMut<sound::Soundscape>,
     mut keeping: ResMut<bag::Keeping>,
+    settings: Res<settings::Settings>,
+    mut coach: ResMut<tutorial::Coach>,
 ) {
+    // A hall follows the class you are playing (`tutorial::steer`).
+    tutorial::steer(&mut sim, &mut coach);
     // A won hunt is the player's trophy (world W1), whoever's machine it was
     // won on: each peer writes its own. Read from the world as it stands at
     // the top of the frame, which is the last one drawn.
@@ -7169,13 +7239,20 @@ fn tick_sim(
         sim.bind_pose = !sim.bind_pose;
     }
     if keys.just_pressed(KeyCode::Tab) {
-        // Cycle your own class. Restarts the fight, since a class change
-        // mid-round would leave the mechanic in someone else's state -- and
-        // asked for on the wire rather than done here, like the picker below,
-        // so against a person both machines restart on the same frame.
+        // Cycle your own class, where you stand: nobody else is touched.
+        // Asked for on the wire rather than done here, like the picker below,
+        // so against a person both machines recast you on the same frame --
+        // and in a versus round, where the classes are locked, the world does
+        // not hear it (`World::classes_locked`).
         let me = sim.local_player();
         let next = sim.cur.players[me].class.next_in_rotation();
         sim.travel = sim::input::Travel::class(me, next);
+    }
+    // `Enter`: done choosing, in the pick before a versus round.
+    if keys.just_pressed(KeyCode::Enter)
+        && matches!(sim.cur.phase, sim::state::Phase::Picking { .. })
+    {
+        sim.travel = sim::input::Travel::ready(sim.local_player());
     }
     // A restart goes on the wire in training too, now that the simulation
     // seats the fresh fight itself (`World::seats`): one path, and the one
@@ -7203,8 +7280,16 @@ fn tick_sim(
     }
     // `N`: the next jump course, in order of difficulty. The same trip on the
     // wire as `H`, with the arena in the byte. See `picker::next_course`.
+    // `Shift+N`: the next versus stage instead -- the floating duel stages,
+    // then the King of the Hill maps (`sim::versus`). See
+    // `picker::next_stage`.
     if keys.just_pressed(KeyCode::KeyN) {
-        sim.travel = picker::next_course(&sim.cur);
+        let shifted = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        sim.travel = if shifted {
+            picker::next_stage(&sim.cur)
+        } else {
+            picker::next_course(&sim.cur)
+        };
     }
     // `T`: the same creature at the next temper on offer -- earned by beating
     // the one below it, or any of them with `--temper`. The same trip on the
@@ -7242,7 +7327,11 @@ fn tick_sim(
     // The meeting first: the tick it opens the line on is the tick the match
     // starts.
     let was_online = sim.driver.online();
-    online::meet(&mut sim, real.elapsed().as_millis() as u64);
+    online::meet(
+        &mut sim,
+        real.elapsed().as_millis() as u64,
+        settings.input_delay,
+    );
     if !was_online && sim.driver.online() {
         // The mouse turns whichever fighter is yours, and the match starts
         // with it facing where yours stands facing. Player two spawns facing
@@ -7318,6 +7407,11 @@ fn tick_sim(
                 }
             });
             let two = match sim.dummy {
+                // A tutorial hall's dummy is the room's (`tutorial`), unless
+                // a person has the second keys.
+                mode if mode != Dummy::Human && tutorial::dummy_input(&sim.cur).is_some() => {
+                    tutorial::dummy_input(&sim.cur).unwrap_or_default()
+                }
                 // Not in a hunt: the bot fights a fighter, and in a hunt
                 // player two is out of it (see `seated`).
                 Dummy::Bot(level) if !sim.cur.hunting() => spar(
@@ -7339,6 +7433,12 @@ fn tick_sim(
                 .unwrap_or_else(|| scripted_or(scripted, held))
                 .travelling(travel);
             pair[1] = two;
+            // **One keyboard readies both seats**: player two, or the dummy,
+            // is in this room, and a dummy cannot press Enter.
+            if travel == sim::input::Travel::ready(0) && pair[1].travel == sim::input::Travel::NONE
+            {
+                pair[1].travel = sim::input::Travel::ready(1);
+            }
             // A replay playing back outranks everything: both seats are
             // the tape's, and the camera turns with the look it recorded.
             // It runs out by handing the controls back.
@@ -7390,6 +7490,7 @@ fn tick_sim(
                 ledger.confirm_through(cur.frame, cur);
             }
             scape.observe(&sim.prev, &sim.cur);
+            tutorial::observe(&mut coach, &sim.prev, &sim.cur);
             // What was picked up and fed, for this game's bag and morphs.
             let me = sim.local_player();
             keeping.record(&sim.prev, &pair, &sim.cur, me);
@@ -7569,6 +7670,13 @@ fn looking_at_her_feet(w: &World) -> (u16, i16) {
 /// verify posing and framing without a human at the controls.
 fn demo_mode() -> bool {
     platform::env("DEMO").as_deref() == Some("1")
+}
+
+/// **Does play open versus rounds with a pick** (`World::drafting`)? Yes,
+/// except in a scripted run -- `DEMO=1`, or a screenshot at `SHOT_FRAME` --
+/// which is a fight from its first frame and sets the world up for one.
+fn drafts() -> bool {
+    !demo_mode() && platform::env("SHOT_FRAME").is_none()
 }
 
 /// Quantised angle of a flat direction.
@@ -7877,9 +7985,14 @@ fn apply_poses(
     }
     // Placed after the poses, because posing is what eases the drawn body
     // round side-on to a wall (`Crossfade::turn`).
+    // A rolling body is held to the floor by what it is drawn in this frame
+    // (`view::dodge::lift`), so it is measured off the pose just solved.
+    let lifts: [f32; MAX_PLAYERS] = std::array::from_fn(|owner| {
+        view::dodge::drawn_lift(&frame.players[owner], &skins[owner], &skeletons[owner])
+    });
     for (fighter, mut tf) in roots.iter_mut() {
         let p = frame.players[fighter.0];
-        let (origin, turn) = body_frame(&p, fades.0[fighter.0].turn());
+        let (origin, turn) = body_frame(&p, fades.0[fighter.0].turn(), lifts[fighter.0]);
         tf.translation = origin;
         tf.rotation = turn;
     }
@@ -7888,7 +8001,7 @@ fn apply_poses(
     // so whatever is holding something can be placed against it.
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
-        let (origin, turn) = body_frame(&p, fades.0[owner].turn());
+        let (origin, turn) = body_frame(&p, fades.0[owner].turn(), lifts[owner]);
         // The body's **left** hand, which in a drawn pose is not the slot of
         // that name -- see `view::hand_joint`.
         let (at, rot) = skins[owner].box_of(&skeletons[owner], view::hand_joint(true));
@@ -8322,29 +8435,29 @@ fn shot_portrait() -> Option<[f32; 4]> {
 /// draws the arm on. This is the two-line conversion into Bevy's quaternion,
 /// and it is the only place the renderer is allowed to build that rotation.
 /// Where a fighter's body is drawn from, and how it is turned: the facing,
-/// and over it the whole-body roll of a flip or a spin (`view::PlayerView::
-/// roll`), turned about the hips rather than the feet so a flip goes over
-/// rather than cartwheeling off its own toes. Everything carried on the body
+/// and over it the whole-body roll of a flip or a dive roll
+/// (`view::PlayerView::roll`), turned about `roll_about` -- the hips for a
+/// flip, the middle of the ball for a roll -- rather than the feet, so it goes
+/// over rather than cartwheeling off its own toes. Everything carried on the body
 /// is placed through this, so a blade in hand flips with the hand.
+///
+/// `lift` raises it, for a roll held to the floor (`view::dodge::drawn_lift`).
 ///
 /// `turned` is how far the drawn body is turned off the facing about the
 /// vertical, the posing's own eased answer (`view::play::Crossfade::turn`):
 /// side-on to a wall it is sliding down (2026-10-20), nought otherwise.
-fn body_frame(p: &view::PlayerView, turned: f32) -> (Vec3, Quat) {
+fn body_frame(p: &view::PlayerView, turned: f32, lift: f32) -> (Vec3, Quat) {
     // Swimming, she is drawn sunk into her ground, a hump of her showing.
-    let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY, p.pos[2]);
-    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned);
-    if p.roll == [0.0, 0.0] {
+    let feet = Vec3::new(p.pos[0], p.pos[1] - p.sunk * SUNK_BY + lift, p.pos[2]);
+    let turn = body_turn(p.facing) * Quat::from_rotation_y(turned + p.roll_yaw);
+    if p.roll == view::math::Quat::IDENTITY {
         return (feet, turn);
     }
-    let rot = turn * Quat::from_rotation_y(p.roll[1]) * Quat::from_rotation_x(p.roll[0]);
-    let hips = Vec3::Y * ROLL_PIVOT;
-    (feet + turn * hips - rot * hips, rot)
+    let [x, y, z, w] = p.roll.0;
+    let rot = turn * Quat::from_xyzw(x, y, z, w);
+    let about = Vec3::from_array(p.roll_about);
+    (feet + turn * about - rot * about, rot)
 }
-
-/// How high above the feet a flip turns the body over: about the hips.
-/// Presentation, not a rule.
-const ROLL_PIVOT: f32 = 0.95;
 
 /// How far under her ground a swimming Blood mage is drawn: her shoulders
 /// and head still above it. Presentation, not a rule -- her hurt volume is

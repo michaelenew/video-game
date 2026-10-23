@@ -48,6 +48,8 @@ pub mod siegeshell;
 
 pub mod climb;
 
+pub mod stages;
+
 /// One thing to look at that nothing collides with.
 #[derive(Clone, Copy, Debug)]
 pub struct Prop {
@@ -113,9 +115,29 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::CLIMB_GULF => &climb::GULF,
         ArenaId::CLIMB_WATERFALL => &climb::WATERFALL,
         ArenaId::CLIMB_REACH => &climb::REACH,
+
+        ArenaId::ANVIL => &stages::ANVIL,
+        ArenaId::ZIGGURAT => &stages::ZIGGURAT,
+        ArenaId::CALDERA => &stages::CALDERA,
+        ArenaId::TWIN_ISLES => &stages::TWIN_ISLES,
+        ArenaId::QUARRY => &stages::QUARRY,
+        ArenaId::GLACIER => &stages::GLACIER,
+        ArenaId::DELTA => &stages::DELTA,
+        ArenaId::GORGE => &stages::GORGE,
+        ArenaId::HENGE => &stages::HENGE,
+        // A range is a pocket of the land: nothing laid on it but what grows
+        // there. Until 2026-10-22 it fell through to the proving ground's
+        // dressing, and a grey mat lay under every herd in the valley.
+        id if sim::valley::ranges::of(id).is_some() => &BARE,
         _ => &proving_ground::DRESSING,
     }
 }
+
+/// Nothing added to the geometry.
+static BARE: Dressing = Dressing {
+    drop: false,
+    props: &[],
+};
 
 /// A material's colour in an arena, and the one place the game asks.
 ///
@@ -679,7 +701,9 @@ pub fn draw_solid(
     let (white, (window, ghost)) = paints;
     let see = !solid.holds_the_camera();
     let paint = if see { window } else { white };
-    let mesh = meshes.add(mesh);
+    // Made for this box and drawn by nothing else, so held once, on the
+    // graphics card.
+    let mesh = meshes.add(crate::stream::drawn_only(mesh));
     let e = put(
         commands,
         under,
@@ -689,7 +713,7 @@ pub fn draw_solid(
             Transform::from_translation(at + offset),
         ),
     );
-    let relief = relief.map(|r| meshes.add(r));
+    let relief = relief.map(|r| meshes.add(crate::stream::drawn_only(r)));
     if see {
         let lo = Vec3::new(fx(solid.min.x), fx(solid.min.y), fx(solid.min.z));
         let hi = Vec3::new(fx(solid.max.x), fx(solid.max.y), fx(solid.max.z));

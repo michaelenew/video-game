@@ -210,6 +210,9 @@ The moves, each in a line:
   come down round it (one from empty Light, five from full, `judgement, columns stand apart`
   2.5 m, grown on the majors' curve so they stay five pillars), every one purging; its field
   is the great sigil. 32 frames of startup, telegraphed.
+  Between fighters, since 2026-10-21, its strike shoves somebody out of its own field a little
+  sooner (knockback starts at 1.5x the table, [stun.md](../stun.md)): from an empty bar it
+  takes 76 of 1000 where it took 80, and its floor in `tests/dual_mage.rs` is 7% rather than 8%.
 
 **The majors grow along a steeper curve** (`dual::major_size`: `majors, size at empty` 0.4 to
 `majors, size at full` 1.6, against the depth curve's 0.6 to 1.4), and Judgement's columns

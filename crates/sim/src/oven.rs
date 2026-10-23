@@ -1241,6 +1241,62 @@ scalars! {
     MorphClimbDown,       "Morph",    "Getting down (x getting up)",                          Fixed, fx(1,10), fx(2,1);
     MorphClimbClear,      "Morph",    "Feet clear the lip by (x shoulder)",                   Fixed, 0, fx(1,2);
     MorphClimbDip,        "Morph",    "Settles before it pushes (x shoulder)",                Fixed, 0, fx(1,2);
+    // **Knockback between fighters** (2026-10-21; the stun thread of
+    // 2026-09-13, `docs/design/stun.md`). What a class divides a fighter's
+    // shove by -- above one is a heavy -- and the swell: how much further and
+    // longer a blow holds somebody who has already lost part of their bar.
+    // Fighter against fighter only; a creature's blows read none of these.
+    WeightBulwark,        "Knockback", "Weight, Bulwark (x)",                                 Fixed, fx(1,2), fx(2,1);
+    WeightChampion,       "Knockback", "Weight, Champion (x)",                                Fixed, fx(1,2), fx(2,1);
+    WeightReaver,         "Knockback", "Weight, Shadow Reaver (x)",                           Fixed, fx(1,2), fx(2,1);
+    WeightElementalist,   "Knockback", "Weight, Elementalist (x)",                            Fixed, fx(1,2), fx(2,1);
+    WeightBloodMage,      "Knockback", "Weight, Blood mage (x)",                              Fixed, fx(1,2), fx(2,1);
+    WeightDualMage,       "Knockback", "Weight, Dual mage (x)",                               Fixed, fx(1,2), fx(2,1);
+    SwellKnockback,       "Knockback", "Swell, knockback added at death (x)",                 Fixed, 0, fx(8,1);
+    SwellBlow,            "Knockback", "Swell, added per share of the bar a blow takes (x)",  Fixed, 0, fx(20,1);
+    SwellHitstun,         "Knockback", "Swell, hitstun added at death (x)",                   Fixed, 0, fx(3,1);
+    ComboDecay,           "Knockback", "Swell kept per hit in a string",                      Fixed, 0, fx(1,1);
+    // **Knockback starts higher** (2026-10-21, from play): at full health a
+    // fighter's shove is this times the table, rising in a straight line to
+    // the same multiple at death it reached before. Sideways only.
+    SwellStart,           "Knockback", "Knockback at full health (x)",                        Fixed, fx(1,2), fx(4,1);
+    // **King of the Hill** (2026-10-21, `crate::versus`): the point is
+    // locked for a while at the start, a capture takes this long for one
+    // fighter (a second adds this share again), a point nobody stands on
+    // drains a capture at this share of one capper, each side's clock runs
+    // this long while it holds the point, and the dead stand back up after
+    // this wait. Appended: `tuned::SCALARS` is read by this enum's own
+    // discriminant.
+    HillUnlock,           "Match",    "King of the hill, point unlocks after",               Frames, 0, 3600;
+    HillCapture,          "Match",    "King of the hill, a capture takes",                   Frames, 30, 1800;
+    HillSecond,           "Match",    "King of the hill, a second capper adds (%)",          Percent, 0, 100;
+    HillDecay,            "Match",    "King of the hill, an empty point drains (%)",         Percent, 0, 100;
+    HillClock,            "Match",    "King of the hill, each side's clock",                 Frames, 600, 36000;
+    HillRespawn,          "Match",    "King of the hill, the dead are back after",           Frames, 0, 1200;
+    // **The point is a column** (2026-10-21, from play): feet anywhere over
+    // the disc up to this high count, so a jump on it is still on it --
+    // seven metres, over the Dual mage's six-metre hop. A map's own headroom
+    // caps it (`versus::Hill::room`).
+    HillColumn,           "Match",    "King of the hill, the point counts up to (m)",        Fixed, 0, fx(12,1);
+    // **A heavy blow holds a creature too** (2026-10-21, from play): a
+    // fighter's blow on a creature from a move whose impact freeze is at
+    // least this freezes both of them for it, as between two fighters.
+    // Lighter blows freeze nothing, as before.
+    FreezeHeavyOnCreature, "Offence", "Impact freeze on a creature, a move's at least",     Frames, 0, 30;
+    // **The pick before a versus round** (2026-10-22, from the owner): a
+    // class change used to restart everybody's fight, which against people
+    // is the whole match stopping for one player. Now every versus round
+    // opens with this long to choose, and the classes are locked for the
+    // round itself (`Phase::Picking`).
+    ClassPick,            "Match",    "Versus, time to choose classes before a round",       Frames, 0, 3600;
+    // **The dodge grew, these two did not** (2026-10-22): the grounded dodge
+    // went from 22 frames to 26 and a fifth further, from play, and the
+    // Reaver's dash to her shadow and the Blood mage's pop out of her ground
+    // had borrowed its length. Each keeps the length it had as its own knob,
+    // so the dodge's feel is not also a change to how far either reaches.
+    // Appended: `tuned::SCALARS` is read by this enum's own discriminant.
+    ShadowDashFrames,     "Shadow Reaver", "Dash to the shadow, lasts at most",              Frames, 1, 60;
+    SwimPopFrames,        "Blood mage", "Swim, the pop out lasts",                          Frames, 1, 60;
 }
 
 // ---------------------------------------------------------------------------

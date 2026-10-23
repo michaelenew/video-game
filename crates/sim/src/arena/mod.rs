@@ -108,8 +108,16 @@ pub mod spire;
 pub mod deep;
 
 pub mod heights;
+/// The creatures of odd ground as the middles of jump sections.
+pub mod stations;
 
 pub mod gully;
+
+pub mod stages;
+
+pub mod hills;
+
+pub mod hall;
 
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
@@ -183,6 +191,28 @@ impl ArenaId {
     /// and the stretch of the Sky Road over the mountains to it.
     pub const HIGH_PLANE: ArenaId = ArenaId(36);
     pub const SKY_ROAD: ArenaId = ArenaId(37);
+    /// **Versus stages** (2026-10-21, `crate::versus`): four floating duel
+    /// stages, in the two ids before the valley's ranges and the ones after
+    /// them, and three King of the Hill maps.
+    pub const ANVIL: ArenaId = ArenaId(38);
+    pub const ZIGGURAT: ArenaId = ArenaId(39);
+    pub const CALDERA: ArenaId = ArenaId(54);
+    pub const TWIN_ISLES: ArenaId = ArenaId(55);
+    pub const QUARRY: ArenaId = ArenaId(56);
+    pub const GLACIER: ArenaId = ArenaId(57);
+    pub const DELTA: ArenaId = ArenaId(58);
+    /// Two more King of the Hill maps, with a walkway high over the point.
+    /// Sixty is left unregistered: `tests/courses.rs` travels to it to see a
+    /// trip to nowhere refused.
+    pub const GORGE: ArenaId = ArenaId(59);
+    pub const HENGE: ArenaId = ArenaId(61);
+    /// **The tutorial halls** (`hall`, `crate::tutorial`): one per class on
+    /// offer, after the valley's ranges.
+    pub const HALL_CHAMPION: ArenaId = ArenaId(72);
+    pub const HALL_REAVER: ArenaId = ArenaId(73);
+    pub const HALL_ELEMENTALIST: ArenaId = ArenaId(74);
+    pub const HALL_BLOOD: ArenaId = ArenaId(75);
+    pub const HALL_DUAL: ArenaId = ArenaId(76);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -192,8 +222,9 @@ impl ArenaId {
 }
 
 /// How many ids there are, registered or not: the valley's ranges are
-/// numbered from forty (`valley::ranges::FIRST`).
-pub const COUNT: usize = 64;
+/// numbered from forty (`valley::ranges::FIRST`), and past the first fourteen
+/// from sixty-four (`valley::ranges::MORE`).
+pub const COUNT: usize = 80;
 
 /// The most solids an arena **fought on alone** may have. Alone, every query
 /// walks all of them, several times a frame per body, so this is what keeps a
@@ -264,13 +295,27 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::DEEP => Some(&deep::ARENA),
         ArenaId::HIGH_PLANE => Some(&heights::PLANE),
         ArenaId::SKY_ROAD => Some(&heights::SKY_ROAD),
-        ArenaId(n)
-            if n >= crate::valley::ranges::FIRST
-                && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
-        {
-            Some(&crate::valley::ranges::ARENAS[(n - crate::valley::ranges::FIRST) as usize])
-        }
-        _ => None,
+
+        ArenaId::ANVIL => Some(&stages::ANVIL),
+        ArenaId::ZIGGURAT => Some(&stages::ZIGGURAT),
+        ArenaId::CALDERA => Some(&stages::CALDERA),
+        ArenaId::TWIN_ISLES => Some(&stages::TWIN_ISLES),
+
+        ArenaId::QUARRY => Some(&hills::QUARRY),
+        ArenaId::GLACIER => Some(&hills::GLACIER),
+        ArenaId::DELTA => Some(&hills::DELTA),
+        ArenaId::GORGE => Some(&hills::GORGE),
+        ArenaId::HENGE => Some(&hills::HENGE),
+
+        ArenaId::HALL_CHAMPION => Some(&hall::CHAMPION),
+        ArenaId::HALL_REAVER => Some(&hall::REAVER),
+        ArenaId::HALL_ELEMENTALIST => Some(&hall::ELEMENTALIST),
+        ArenaId::HALL_BLOOD => Some(&hall::BLOOD),
+        ArenaId::HALL_DUAL => Some(&hall::DUAL),
+        id => match crate::valley::ranges::index(id) {
+            Some(k) => Some(&crate::valley::ranges::ARENAS[k]),
+            None => None,
+        },
     }
 }
 
@@ -860,6 +905,17 @@ impl Mark {
         Mark {
             at,
             facing: to.sub(at).normalized(),
+        }
+    }
+
+    /// **A mark up off the floor**: standing on whatever top is at `y`
+    /// centimetres at (x, z) -- a floating stage's island, which a mark on
+    /// the floor would be under (`crate::versus`).
+    pub const fn up_cm(x: i32, y: i32, z: i32, toward: (i32, i32)) -> Mark {
+        let flat = Mark::cm(x, z, toward);
+        Mark {
+            at: V3::new(cm(x), cm(y), cm(z)),
+            facing: flat.facing,
         }
     }
 
@@ -1655,7 +1711,7 @@ fn min_penetration(v: Fx, lo: Fx, hi: Fx) -> Fx {
 /// The most solids a fight can raise at runtime: the Mireback's six slag
 /// mounds and two objectives -- and, in the valley, the waystone doors that
 /// are shut.
-pub const MAX_RAISED: usize = 16;
+pub const MAX_RAISED: usize = 32;
 
 /// **The ground as it stands this frame**: the arena's table -- or, in the
 /// valley, the whole map around it -- the solids a fight has raised on it
@@ -1685,6 +1741,8 @@ pub struct Terrain {
     origin: V3,
     raised: [Solid; MAX_RAISED],
     raised_len: u8,
+    /// Which of the raised solids are drifts (`crate::drift`), a bit each.
+    moving: u32,
     /// The floor hazards, placed: `crate::hazard`.
     pub floor: crate::hazard::Floor,
     /// **The hunt's home**, as seen from here: what a creature reads of its
@@ -1797,6 +1855,7 @@ impl Terrain {
             origin: V3::ZERO,
             raised: [Solid::new(V3::ZERO, V3::ZERO); MAX_RAISED],
             raised_len: 0,
+            moving: 0,
             floor: crate::hazard::Floor::NONE,
             den: Den::of(arena),
         }
@@ -1832,6 +1891,38 @@ impl Terrain {
             self.raised[self.raised_len as usize] = s;
             self.raised_len += 1;
         }
+    }
+
+    /// The same ground with a drift's box raised on it as it stands this
+    /// frame (`crate::drift`), if there is room: a solid like any other, and
+    /// -- if it is on its way between its stops this frame -- one
+    /// [`Terrain::moving_face`] knows moves.
+    pub fn raise_moving(&mut self, s: Solid, on_its_way: bool) {
+        if (self.raised_len as usize) < MAX_RAISED {
+            if on_its_way {
+                self.moving |= 1 << self.raised_len;
+            }
+            self.raise(s);
+        }
+    }
+
+    /// **Is a body at `at` against the side of a drift on its way**, the
+    /// face looking `normal`? What the wall jump asks before its two rules
+    /// against a ladder (`state::may_wall_jump`): a wall that is carrying you
+    /// is a lift, and is climbed for as long as it goes. Waiting at a stop it
+    /// is a wall like any other.
+    pub fn moving_face(&self, at: V3, normal: V3) -> bool {
+        let reach = t::body_radius().add(SKIN).add(SKIN).add(SKIN);
+        self.raised()
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| self.moving & (1 << k) != 0)
+            .any(|(_, s)| {
+                let probe = at.sub(normal.scale(reach));
+                s.over(probe.x, probe.z, Fx::ZERO)
+                    && at.y.raw() < s.max.y.raw()
+                    && at.y.add(t::body_height()).raw() > s.min.y.raw()
+            })
     }
 
     /// The solids raised this fight.

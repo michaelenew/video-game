@@ -11,8 +11,10 @@ loading that make it cheap, is [atlas.md](atlas.md); what changed here is
 marked below.*
 
 * The code is `crates/sim/src/valley.rs` (the
-rules), `crates/sim/src/arena/{hearth,ring,mouth,bank,shelves,pinewood,saddle,highlands}.rs`
-(the places), and `crates/game/src/valley.rs` (what is drawn and said).*
+rules), `crates/sim/src/arena/{hearth,ring,mouth,bank,shelves,pinewood,saddle}.rs`
+(the places), `crates/sim/src/arena/stations.rs` and
+`crates/sim/src/valley/{ranges,sight}.rs` (the creatures on the land), and
+`crates/game/src/{valley,sighted}.rs` (what is drawn and said).*
 
 **The valley is where the game starts.** `cargo run -p game` puts both
 players in Hearth's square. `--versus` is the proving ground as it always
@@ -36,16 +38,37 @@ colours.*
 
 ---
 
-## 1 · The shape: a valley, with rooms off it
+## 1 · The shape: a valley, with its creatures on it
 
 One climb from Hearth's gate to the Saddle, **one map** of land since
 2026-10-09 ([atlas.md](atlas.md)): a road winding up a valley between
 mountains, a river in its first meadow and a tarn under the Shelves' north
 slope, woods thickening into the Pinewood and thinning into the Saddle's
-snow. The creatures' arenas are **rooms** in clearings off the road, each at
-the end of a side path and ringed by its rim's bank, so every fight is the
-arena it was tuned in. Hearth sits at the bottom of the climb, the Ring north
-of it and the Long Valley west, where the Siegeshell walks toward the town.
+snow. Hearth sits at the bottom of the climb, the Ring north of it and the
+Long Valley west, where the Siegeshell walks toward the town.
+
+**Since 2026-10-22 the creatures are out on the land, not in rooms off it.**
+The owner: "It's still very clearly just arenas that spawn in the
+creatures. I want to be able to spot monsters from far off and navigate
+there ... remove the very obvious little areas off the valley. I don't like
+how everything is a semioptional little fight and super spread out. For the
+ones that are odd terrain, make them midpoints in some mobility sections."
+Until then every creature's arena was a clearing at the end of a side path,
+ringed by its rim's bank, and empty until you walked in. Now:
+
+- **The creatures of plain ground roam the valley** (§1b): the herds and
+  packs -- Hornbacks, Gnawers, Ridgebacks, the Pair -- each walk a loop of
+  the valley floor of their reach, across the road and back, and wake when
+  you come near them, wherever they are. Nothing rings them and nothing is
+  carved for them.
+- **The creatures of odd ground are stations** (§1f): the Mire, the Pan, the
+  Hollows, the Cliffs, the Ashwood and the Shrine, each its own arena as it
+  was tuned, raised over the land beside the road as a table of rock and
+  reached by a jump section -- and left by another.
+- **Every sleeping creature can be seen from across the valley** (§1g),
+  where it is, walking its range: where a creature nobody is near stands is
+  a function of the frame number, so it is drawn without being in the
+  world, and walking up to it wakes that one, there.
 
 **Hearth is a market town** (rebuilt 2026-10-09, `sim::arena::hearth`): a
 paved street gate to gate through a square with a well and two trees,
@@ -72,12 +95,35 @@ carrying an **inverted dome 90 m across and 35 m deep**, its rim over the
 town's south roofs; on the dome's top, 353 m up, **ruins**: broken walls,
 column stumps, two arches, a fallen column, a cistern. The way up:
 
-- **The stair** up the shaft's south face, the whole height, for anybody
-  (since 2026-10-16, where a vine hung): blocks four metres apart zig-zagging
-  east and west of the south, so none is over the one under it -- a landing
-  for most classes and a catch at the hands for the Bulwark -- with a wider
-  landing every forty metres and a cairn on every other one. From its top
-  you climb on to the shaft's top inside **the chimney**, and up the
+- **The climb, since 2026-10-22, in short sections with lifts between**
+  (§3, "Stones that move"; the owner: "the user shouldn't traverse but
+  maybe half the current height of the tower manually"):
+  - **the stair** up the shaft's south face to 40 m: blocks four metres
+    apart zig-zagging east and west of the south, so none is over the one
+    under it -- a landing for most classes, a catch for the rest -- to a
+    landing with a cairn. Until 2026-10-22 it went the whole height, 78
+    blocks alike.
+  - **the first lift**, 40 to 120 m: two cars side by side south of the
+    face, one going up while the other comes down, two seconds' wait at
+    either end.
+  - **the round**, 120 to 170 m: fifteen floating stones about ten metres
+    out from the axis, circling the tower counterclockwise nearly twice --
+    gaps of three to six and a half metres, rises of two to five, five
+    pins a metre and a quarter across, a long hop, a drop, a catch of five
+    up, a rest with a cairn halfway.
+  - **the second lift**, 170 to 276 m.
+  - **the crown of the shaft**, 276 to 315 m: two stones east to **the
+    shuttle**, a stone that runs ten metres east and back fast, which you
+    run along and jump off at its fastest across twelve and a half metres
+    to a rest (a cairn) that no plain jump reaches from where it stops;
+    **the stack**, three tunnels stacked 6.5 m apart north of the rest,
+    each turned round by a wall jump -- out of the mouth, off a wall across
+    the way, back over the mouth on to the tunnel's own roof, which is the
+    next tunnel's floor; and **the ferry**, a stone that goes by south of
+    the stack's top at eleven metres a second and carries you sixty metres
+    west and twelve up to the tower's face, to a stone a catch under the
+    shaft's top. About 165 m of the 353 are climbed by hand.
+  From the shaft's top you climb on inside **the chimney**, and up the
   chimney's ledges, north and south wall by turns, to a **lip stone** set in
   its mouth: a ring's edge is not caught from inside its hole, a block's is.
 - **The corkscrew**: stones jutting a quarter turn and eight metres apart --
@@ -158,6 +204,33 @@ themselves went the same day, below):
   turns, four metres apart -- a catch at the hands for the Bulwark -- the top
   one two metres under the lip: climbed, you step in over it.
   `tests/wood.rs` climbs every one with every class.
+- **Quicker ways up** (2026-10-22, the owner: "the forest needs some more
+  entertaining and artificially shortened ways up"). A broadleaf's hanging
+  root no longer goes the whole way: its fungus runs about three and a half
+  metres apart to **a landing** 36 m up (`wood::LANDING_UP`, a cairn on
+  it), where until then thirty-odd shelves went on to the lip. From the
+  landing:
+  - **an Elder's updraft**: a column of rising air over the landing to four
+    metres over the lip, at 16 m/s (`Updraft, rising speed`, 8 until
+    then): step off into it, ride it up, drift in over the lip. Seven
+    seconds up the tallest.
+  - **a Strangler's spring**: a stone beside the landing, out from the roof,
+    that shoots up 21 to 31 m in under three seconds to stop nine metres
+    under the lip -- past every plain catch from there -- so the way on is
+    a jump off it while it is still rising, its speed added to the jump's.
+    Late in its rise is the window: about a fifth of a second for the
+    Champion on the shortest, most of a second for the Dual mage.
+
+  And **a hoist up most Sentinels** (`wood::ways_up`): two cars outside the
+  trunk, where nothing of any tree is in their way, from a fungus landing
+  overlapping a lobe of the first shelf (the stair's top) to one level with
+  the highest, a cairn on it -- 126 m up the Great Tree, 84 m up three
+  more; three Sentinels have no column clear of their limbs and keep the
+  climb. Where each goes is searched out round the grown trees, so it moves
+  if they grow differently. `tests/wood.rs` climbs every broadleaf's fungus
+  to its landing and on to its roof by the updraft or the spring, and rides
+  every hoist, with every mover; on paper no plain jump catches a lip from a
+  landing or from a spring stopped at its top.
 - **The camera passes through a tree** rather than being pulled in by every
   branch (`Terrain::seen_around`) -- as it does everything small in the
   valley since 2026-10-20 (see "What holds the camera off" below) -- and the
@@ -204,17 +277,45 @@ in its own coordinates and is kept inside its own bounds, but its floor is the
 land -- a pocket of meadow fifty metres off the road, the Wood's clearing, the
 Needle's dome -- and nothing rings it. Walking into one wakes it, as walking
 into a room does; walking more than `Hunt, held this far outside its room`
-away puts it back to sleep. The road never passes through one
-(`the_road_never_wakes_a_range`): you see them from it and choose.
+away puts it back to sleep. The road never passes through one that keeps
+to its ground (`the_road_never_wakes_a_range`); one that roams is on the
+road on purpose (below). The
+last three were rooms off side paths until 2026-10-22 (§1): the herd's low
+meadow, the Gnawers' Commons and the Highlands' Ridgeback, now beside the
+road where they are seen from it, as the Riverside, the Hillside and the
+Moor (names of their own: a range's name is its `--arena` name, and the
+rooms' arenas keep theirs for `--hunt`). The Pair's Den went with them; the Glade
+has the Pair.
+
+**Most of them roam the valley** (2026-10-22, the owner: "make the
+creatures that do make sense roam around the valley instead of in
+offshoots"). The herds and the packs -- the Hornback herd, the Gnawers, the
+Ridgebacks, the Pair -- have no pocket any more: each has **a territory**, a
+stretch of its reach's valley floor with the road in it (`Range::span`), and
+walks **a loop** of points round it (`Range::walk`), grazing at each, across
+the road and back. Nothing is carved for them; their ground is the valley's,
+kept clear of trees and boulders along their way (`layout`), and
+`every_roaming_herd_walks_open_ground` walks every loop for water, steepness
+and anything standing in it. A roaming herd **is woken by coming near it**
+-- within `ranges::WAKE` (30 m) of it, wherever on its loop it is -- not by
+its ground, and **goes back to sleep**, back on its loop, once everybody is
+`ranges::RELEASE` (60 m) from it and nothing roused it; roused, or hunting,
+it follows as any creature does (§1e). A territory is only ever the world's
+frame for its own hunt: walking the road through one is walking the reach,
+and a cairn in one counts. The Galewings, the Mantis and the creatures of
+the Deep keep to their places.
 
 | Range | Where | What | Temperament | Temper |
 | --- | --- | --- | --- | --- |
-| **Wood's Edge** | the Great Wood's clearing, by its entrance | the Hornback herd | skittish | 0 |
-| **South Bank** | across the Mouth's river from the road | the Gnawers | hunting | 0 |
-| **Upper Meadow** | the Bank, south of the road | two Ridgebacks | peaceful | 0 |
-| **Glade** | the Pinewood, north of the road | the Pair | territorial, 14 m | 2 |
-| **Snowfield** | the Saddle, south of the road | a Ridgeback | hunting | 3 |
+| **Wood's Edge** | roams the Great Wood's clearing by its entrance | the Hornback herd | skittish | 0 |
+| **South Bank** | roams the strip between the Mouth's river and the mountains | the Gnawers | hunting | 0 |
+| **Upper Meadow** | roams the Bank's meadow, road and all | two Ridgebacks | peaceful | 0 |
+| **Glade** | roams the Pinewood's road among the pines, west | the Pair | territorial, 14 m | 2 |
+| **Snowfield** | roams the Saddle's road | a Ridgeback | hunting | 3 |
 | **Roost** | the Needle's dome, 353 m up | a Galewing, circling the ruins and perching on the tallest stump | territorial, 32 m | 1 |
+| **Riverside** (2026-10-22) | roams the Mouth's meadow north of the river, across the road | the Hornback herd | peaceful | 0 |
+| **Hillside** (2026-10-22) | roams the foot of the Bank's climb | the Gnawers | territorial, 14 m | 0 |
+| **Moor** (2026-10-22) | roams the Pinewood's road up to the Waterfall's pool | a Ridgeback | territorial, 16 m | 2 |
 
 **Temperaments** (VALE-4, "depends per creature"): *hunting* comes for you;
 *territorial* watches until somebody is inside its ring, or hurts it;
@@ -264,6 +365,74 @@ does not wake it; once the chase is over, a range somebody is standing in
 wakes. Beaten far away, a creature's trophies drop where it fell and its home
 range rests; lost far away, everybody stands up on their last cairn and it
 took its egg back.
+
+### 1f · Stations: the odd ground, on the jump sections (2026-10-22)
+
+`sim::arena::stations`, `tests/stations.rs`. **A station is a creature's
+own arena, raised over the land beside the road and reached by jumping**:
+the six whose fights are about the ground they are on -- the Mire's peat
+and braziers, the Pan's sand, the Hollows' cave, the Cliffs' plateau over a
+drop, the Ashwood's snow and ash, the Shrine's court of columns. Each
+stands as a table of rock -- its rim's bank round its walls, and past that a
+cliff to the land below, too steep to climb (`land::Pad::ledge`: no
+embankment off it as a pad has) -- with **a ledge at its door**: the bank
+cut away at its floor's height, far enough out that its edge is a drop and
+not a lip (`land::ledge_reach`). A route of stones climbs to the ledge from
+the road, and another leaves it for somewhere else:
+
+| Station | Over the road | Up to it | On from it |
+| --- | --- | --- | --- |
+| **The Mire** | 12 m, south of the Shelves' road | six hops from the road | ten east along the cliffs' feet, a rest halfway, to **the Pan** |
+| **The Pan** | 18 m, east of the Mire | from the Mire | seven down to the road, or up from it the other way |
+| **The Hollows** | 14 m, in a meadow south of the Pinewood's road | six from the road | seven east and up, fourteen metres, to the top of the Waterfall's south buttress: **a way round the Waterfall** to the road above it |
+| **The Cliffs** | sunk in their ravine, the plateau at the road's height | seven precision stones across the ravine (where the bridge was) | across the ravine east to a rest, **a lift** thirty metres, and three hops to **the Shrine**, forty metres over the plateau |
+| **The Shrine** | 35 m, on the north-east slope | from the Cliffs, past the fourth waystone (its door across the whole ledge while it is dark) | back the way you came |
+| **The Ashwood** | 12 m, south of the Saddle's road | six from the road | five east and down to the road where it bends |
+
+Every hop is a plain one, inside every mover's plain catch on paper and
+jumped by the stand-in player, the lift ridden (`tests/stations.rs`) --
+these are the ways to fights the waystones count, so none asks a class's
+tool. Sized for the movers, not the Bulwark. A cairn stands on the stone
+each route starts from by the road and on every rest. The signpost for each
+station is at the foot of its way up, and a hunt lost there wakes you at
+it. Nobody walks up to one: from the foot, straight at the door, the cliff
+stops you (`a_station_is_jumped_to_not_walked_to`).
+
+Where a station would have been sunk in a mountainside -- its land higher
+than its ledge -- the land is cut away round it to the road's height
+(`stations::MEADOWS`), so it stands up out of a meadow and is seen from the
+road. The Hollows needed it, and moved from north of the Pinewood's road to
+south of it; the Moor's Ridgeback took the bay the Hollows left. The Shrine
+turned its door west, toward the Cliffs, and rose fifteen metres.
+
+**Unplayed.** Every gap and rise is a first guess at the edge of the
+shortest jumpers' catch; whether a station reads as a table of rock from
+the road, and whether the routes are interesting enough, wants a person.
+
+### 1g · Sightings: every creature, seen from afar (2026-10-22)
+
+`sim::valley::sight`, `game::sighted`. The snapshot keeps one live hunt, and
+every other creature of the valley is asleep: nothing about it is in the
+world. **Where a sleeping creature stands is a function of the frame number
+and nothing else**, the way a moving stone's is (`sim::drift`): a range's
+herd walks round its loop of points on a fixed clock -- turn toward the
+next, walk there at its own walk, graze `sight::GRAZE` (15 s) -- the loop's
+whole length one cycle, so the frame alone says where on it the herd is; a
+range that keeps to its pocket walks between points drawn from a hash of
+the range and the leg instead. So the renderer asks `sim` for
+every range and station near the first fighter, nearest first -- ten bodies
+and three packs at most -- and draws each with the same parts and coats as
+a live hunt's, from across the valley, and nothing about it is simulated.
+
+**Walking up to one wakes that one, there.** A hunt that starts on a range
+stands its creatures where `sight::stand` has them on that frame -- the same
+function, the same frame -- so the animal you were watching from the road
+is the one that turns to face you, not a fresh one on marks of its own
+(`World::begin_hunt`). A station's creature waits on its marks, breathing,
+because its fight was tuned from them; so does a range stacked inside a
+place -- a warren of the Deep, its Caverns, the Needle's dome -- where a
+point drawn at random could be in a wall. A range resting after it was
+beaten shows nothing, and the live hunt is drawn as the world has it.
 
 ### 1c · The Deep (2026-10-15)
 
@@ -330,14 +499,22 @@ and asked whether that should be a table mountain or islands in the sky,
   cairn on every big island. Its stretch over the mountains is a place of
   its own, **the Sky Road**, so its cairns belong somewhere.
 - **The Hanging Stones** climb from the Bank's road -- rebuilt 2026-10-16,
-  when their vines went, and again **2026-10-20, to the Sky Road's
-  difficulty** (§3): **a column of forty hops** round a square west of the
-  foot, 41 m to 203 m, and **the span** of twenty-eight north over the
-  mountains to the plane's edge, broken by three gullies. Until then it was
-  fifty identical stones 4.2 m apart and a span of identical steps, sized
-  for the Bulwark's catch. `tests/heights.rs` jumps every plain hop and
-  kicks across every gully with every mover, and holds every tool hop to
-  the envelope.
+  when their vines went, again **2026-10-20, to the Sky Road's
+  difficulty** (§3), and **2026-10-22 into short sections with things that
+  carry you between them**: **the column**, a turn of eleven stones round a
+  square west of the foot (41 to 88 m), a lift to 150 m and straight off
+  it **the riser** -- two walls rising 24 m together, kicked between -- and
+  eight stones to its top at 203 m; and **the span** north over the
+  mountains to the plane's edge: a gully and a stretch of stones and pins,
+  **a ferry** caught going by and ridden ninety-five metres up the
+  mountainside, two **turn-arounds** out of tunnels across the slope, a
+  lift and the last stones on to the lip. Until 2026-10-20 it was fifty
+  identical stones 4.2 m apart and a span of identical steps, sized for
+  the Bulwark's catch; until 2026-10-22, forty hops round the square and a
+  span of twenty-eight broken by three gullies, every metre by hand.
+  `tests/heights.rs` jumps every plain hop, kicks across the gully, rides
+  every lift, the riser and the ferry, and turns round every turn-around
+  with every mover, and holds every tool hop to the envelope.
 - **Harder than the Sky Road**, both optional (2026-10-20, "a few that are
   more difficult still than that"): **the Crown**, a climb off the plane's
   floor to a turf island fifty metres over it, 354 m up -- the highest place
@@ -354,24 +531,24 @@ and asked whether that should be a table mountain or islands in the sky,
 violet and faceted, a hanging slab of turf as an island of turf on rock
 (`game::forms::form_of`), in the valley as on a course.
 
-| Place | The road | Rooms off it | The way on |
+| Place | The road | Its creatures | The way on |
 | --- | --- | --- | --- |
 | **Hearth** | — | **the Ring** (north), **the Long Valley** (west, under the fifth waystone) | the east gate |
-| **The Mouth** | Out of the gate between low hills into a river meadow fifty metres wide; a crag with a cairn; the road climbs the scree, sixteen metres in two bends, to the Lip | the low meadow (Hornback herd), up a side path north | the Lip |
-| **The Bank** | A broad upper meadow; the old stair as a crag; the road climbs the bank, twenty-one metres | the den (Gnawers), north | **first waystone**, a pass between two shoulders of hill: one of the herd, the den |
-| **The Shelves** | A long open bowl with a tarn under its north slope; a crag by the shore; the road climbs out | the Mire (Mireback) and the Pan (Sandmaw), down side paths south | **second waystone**: one of the Pan, the Mire |
-| **The Pinewood** | Pines thick on both sides and up the slopes; a crag among them; the road ends at a pool under **the Waterfall**, a basalt cliff twenty-two metres tall, and goes on from its top (§3) | the Den (the Pair) south, the Hollows (Broodmother) north, the Highlands (Ridgeback) up a side path south four metres higher | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
-| **The Saddle** | A snowy alpine meadow between peaks; the highest crag; the road ends at a view | the Cliffs (Galewing) over a bridge north, the Ashwood (Veilstalker) south, the Shrine (Mantis) up a switchback north-east behind the **fourth waystone**: one of the Cliffs, the Ashwood | — |
+| **The Mouth** | Out of the gate between low hills into a river meadow fifty metres wide; a crag with a cairn; the road climbs the scree, sixteen metres in two bends, to the Lip | the Riverside's herd (Hornback) north of the road; the South Bank's Gnawers across the river | the Lip |
+| **The Bank** | A broad upper meadow; the old stair as a crag; the road climbs the bank, twenty-one metres | the Hillside's Gnawers north of the road; two Ridgebacks on the Upper Meadow south | **first waystone**, a pass between two shoulders of hill: one of the herd, the Gnawers |
+| **The Shelves** | A long open bowl with a tarn under its north slope; a crag by the shore; the road climbs out | **the Mire** (Mireback) and **the Pan** (Sandmaw), stations south of the road, one route through both | **second waystone**: one of the Pan, the Mire |
+| **The Pinewood** | Pines thick on both sides and up the slopes; a crag among them; the road ends at a pool under **the Waterfall**, a basalt cliff twenty-two metres tall, and goes on from its top (§3) | the Glade's Pair and the Moor's Ridgeback north of the road; **the Hollows** (Broodmother), a station south, whose route on goes round the Waterfall | **third waystone**: two of the Pair, the Broodmother, the Ridgeback |
+| **The Saddle** | A snowy alpine meadow between peaks; the highest crag; the road ends at a view | the Snowfield's Ridgeback; **the Cliffs** (Galewing) over the ravine north, and on from them past the **fourth waystone** to **the Shrine** (Mantis); **the Ashwood** (Veilstalker), a station south | **fourth waystone**: one of the Galewing, the Veilstalker |
 
 The tiers are world.md §3's, and the gates are exactly what that table says
-(`valley::tier`). **The Ridgeback has a room of its own**, the Highlands: the
-proving ground's floor plan on a moor, so meeting it in the valley is the
-fight it was tuned in, and `arena::for_species` still sends `--hunt ridgeback`
-to the proving ground.
+(`valley::tier`). A waystone counts a species however it was beaten -- on a
+range, at a station, or a trophy -- so the Ridgeback the third counts is any
+of the four out on the land; the Highlands, its room until 2026-10-22, is
+no longer on the map, and `--hunt ridgeback` is the proving ground as it
+always was.
 
 Not built from world.md §2: the Crossing (the herd's escort mode stays a
-`--hunt hornback-escort` fight). A room is visible from its side path now,
-but its creature is not put on its marks until you walk in.
+`--hunt hornback-escort` fight).
 
 ## 2 · The rules
 
@@ -432,9 +609,10 @@ hashes as it did.
   run, but since 2026-10-19 its creature follows you out of the door (§1e)
   until it gives up and goes home; only then is the hunt over, unwon, and a
   walk back in starts it again.
-- **A room has ground round it.** Most rooms are walled with low walls,
-  which ended the world when a room was all there was. On one map a room has
-  six metres of ground round its walls and a cliff round that.
+- **A station is raised, and jumped to.** A station's arena keeps its own
+  walls and floor; round them, its rim's bank, and past that a cliff to the
+  land below, too steep to climb, but for a ledge at its door (§1f). Lose
+  its hunt and you wake at the foot of the stones up to it, on the road.
 - **Player two, unplayed,** is not in the valley: kept a kilometre under the
   place's floor where nothing reaches it, rather than a body lying at every
   seam. In the Ring and in a room the second seat plays as it always has.
@@ -542,8 +720,8 @@ along the flat.)*
 
 | Section | Where | Hops | Tools it is meant for | Main road? |
 | --- | --- | --- | --- | --- |
-| **The column** | the Bank's road, 41 → 203 m | 40: plain catches 3--5.5 m out at +3 to +5; twelve precision stones a metre across; a drop; five **high** hops of 9 m up and 2.5--3 m out, two of them back to back; two **long** hops, of 13 m level and 12 m at +2; a rest with a cairn before each tool hop | high: the Elementalist's stone, the Champion's vault, the Dual mage's second jump, the Reaver's Gallows, the Blood mage's wings; long: the second jump, the vault, the Reaver's and the Blood mage's | no |
-| **The span** | north over the mountains, 203 → 305 m | 28: three gullies (wall jumps); long hops of 14, 17 and 15 m rising 2 to 5; a zig-zag of precision stones; up the mountainside three high hops of 9 m; rests | the same | no |
+| **The column** | the Bank's road, 41 → 203 m | 22 (since 2026-10-22): a turn of eleven -- plain catches 3--5.5 m out at +3 to +5, precision stones a metre across, one **high** hop of 9 m up -- to a rest; **a lift**, 62 m; **the riser**, 24 m of kicking between two rising walls; then a catch, a pin, a rest, a **long** hop of 13 m, two pins and a catch to the top. A rest with a cairn before each tool hop | high: the Elementalist's stone, the Champion's vault, the Dual mage's second jump, the Reaver's Gallows, the Blood mage's wings; long: the second jump, the vault, the Reaver's and the Blood mage's | no |
+| **The span** | north over the mountains, 203 → 305 m | 20 (since 2026-10-22): a gully; long hops of 14 and 17 m rising 2 and 4; a zig-zag of precision stones; **a ferry** caught going by, 95 m up the mountainside; **two turn-arounds** across the slope; **a lift**, 24 m; six plain stones on to the lip | the same | no |
 | **The Crown** | on the High Plane, 304 → 354 m | 14: long hops of 15--22 m, level to +4, onto stones one and two metres across; two high hops of 10 m, past the Champion's vault; plain hops at the edge of the catch; one rest | the Dual mage's second jump and the Elementalist's stone for the high ones; the second jump and the vault for the long ones; the Reaver's and the Blood mage's, unmeasured | no: a summit, a cairn, a view |
 | **The High Line** | across the Sky Road's middle | 7, every one a tool's: 19--22 m, two of them rising two, onto stones one and two metres across | the Dual mage's second jump, the Champion's vault (by the numbers), and whatever carries the others over the Sky Road's longest | no: a shortcut past seven of the Sky Road's stones |
 | **The Waterfall** | the main road, the Pinewood's head | 14, all plain: smaller tops, gaps of 4.3--6.4 m | none: every mover's plain jump | **yes** |
@@ -560,10 +738,61 @@ mage's, the Elementalist's along the flat -- were taken on the owner's
 word that every class has one; whether each class can actually make each
 tool hop wants a person to try it.
 
-The Needle's stair and the Deep's shafts are left a plain climb: the stair
-is the one way to the Sky Road for anybody who has not learned a tool yet
-(the corkscrew round it is the mechanic band), and a shaft is the way back
-out of a dungeon, which should not trap a class.
+The Needle's climb and the Deep's shafts are left without a tool hop: the
+Needle is the one way to the Sky Road for anybody who has not learned a
+tool yet (the corkscrew round it is the mechanic band), and a shaft is the
+way back out of a dungeon, which should not trap a class. Since 2026-10-22
+the Needle is not a plain climb of identical stones, though (below).
+
+**Stones that move** (2026-10-22, `sim::drift`). The owner: "A lot of the
+sections are super long, as I requested, but they're repetitive and don't
+give enough variety to make them interesting ... Short to medium length,
+interesting sections that give some variety, then a moving platform, then
+another section. The idea with the jump sections continues to be they need
+to look longer, more exacting, and more difficult than they really are."
+And: moving stones in the challenges themselves, and sections where the
+wall jump is the way. So the long climbs are broken up by **drifts** --
+boxes that go back and forth between two stops on a fixed clock, eased in
+and out, where the frame number says and nowhere else (nothing about one is
+in the snapshot, so a rollback puts it exactly where it was). Near a
+fighter a drift is a solid like any other. **It carries what is on it** --
+standing on it, hanging from its edge, against its side -- and **a body
+that leaves it keeps its speed**, so a jump off a rising lift goes higher
+and a jump off a fast stone carries. **A wall that is moving is a lift**:
+neither rule against a ladder asks about it while it moves (waiting at a
+stop it is a wall like any other), so two walls rising together are climbed
+by kicking between them for as long as they rise.
+
+| Kind | Where | What it asks |
+| --- | --- | --- |
+| **A lift**: two cars side by side, half a cycle apart | the Needle (40 → 120, 170 → 276 m), the Hanging Stones' column (88 → 150) and span (24 m up the mountainside) | stepping on; it waits two seconds at either end |
+| **The shuttle**: a stone that runs ten metres and back in a second and a bit | the Needle's crown | run along it as it goes and jump off its front at its fastest: 12.5 m to the rest, past every plain jump from where it stops |
+| **A ferry**: a stone that goes by beside you from out of reach, fast, and carries you a long way | the Needle's crown (62 m west to the face at 11 m/s), the Hanging Stones' span (95 m up the mountainside) | a jump sideways on to a stone going past at eleven or twelve metres a second |
+| **The riser**: two walls across a slot, rising 24 m together | the Hanging Stones' column | into the slot as they set off, and kicked up between them -- a slide is slower than they rise, so stopping leaves you behind -- to a stone off the top |
+| **A turn-around**: a tunnel's mouth, a wall across the way 2.5 m on, and the tunnel's roof 6.5 m up as the landing | the Needle's stack (three, stacked), the Hanging Stones' span (two, across the slope) | out of the mouth, off the wall, back over the mouth: the roof keeps a jump from being the way up |
+| **A hoist**: a lift's pair of cars beside a Sentinel's trunk | four of the Great Wood's Sentinels (126 m up the Great Tree, 84 m up three more) | stepping on at the first shelf |
+| **A spring**: a stone that shoots up beside a landing and stops short | the Great Wood's three Stranglers | ride it and jump off while it is still rising: nine metres short of the lip where it stops |
+| **An updraft** (not a drift: a column of air, `valley::Vent`, now with a foot) | the Great Wood's five Elders, from their landings | step off into it, ride it, drift in over the lip |
+
+**Measured on the bench** (`arena::bench::TURNS`, 2026-10-22): every mover
+turns round 6.5 m off a wall 2.5 m out, and none comes back over the mouth
+without the wall -- running out and steering back, or standing at the very
+edge and jumping straight up for the roof's rim; a metre higher is past the
+Champion and the Blood mage; the Reaver alone steers back unaided, and only
+up to 4.5 m. A flue -- two still walls three metres apart -- takes nobody
+higher than a jump (3.6 m to 5.3): the ladder rules spend the kicks, which
+is why the tall climb between two walls is the riser's, and moves.
+
+`tests/spire.rs` and `tests/heights.rs` ride every lift, jump off the
+shuttle, catch and ride every ferry, kick up the riser and turn round every
+turn-around with every mover, through the stand-in player (`tests/pilot`),
+and check the tricks are tricks: no plain jump makes the shuttle's gap from
+where it stops or reaches a ferry where it waits (on paper, airdodge and
+all), and no turn-around is made without its wall. `tests/drifts.rs` holds
+the mechanism: where a drift is, a rider carried and keeping its speed, a
+ride replayed bit for bit. **Unplayed**: every timing is a guess -- how
+long a lift waits, how fast the shuttle and the ferries go, how fast the
+riser rises against a slide.
 
 **The mountains are the edge**: ground steeper than `terrain_steepest` is a
 wall you slide back down, so the valley needs no boxes to keep you in it
@@ -640,3 +869,21 @@ for a pair who does not.** The five reaches are 974 m end to end with about
    with it.
 7. **One map**: everything [atlas.md](atlas.md) §Open lists -- how the joins
    read, the sky changing at a doorway, the Long Valley's loop.
+8. **Sleeping creatures are drawn, not heard or shadowed by the world**
+   (2026-10-22, §1g). A herd that keeps to a pocket walks through a tree or
+   a boulder in it -- its wander knows only its range's floor; a roaming
+   herd's loop is kept clear and tested -- and the nearest ten
+   bodies and three packs are drawn, so a valley with more on show would
+   want the far ones drawn simpler. A station rests nobody and is never
+   resting: won, it is back the next time you walk in, as rooms always were.
+9. **The Ring and the Long Valley are still rooms off the town**: not
+   creature clearings off the road, so they were left as they were.
+10. **A roaming herd is woken where it is, and the pack's mind was tuned on
+    flat floors.** The Gnawers stood round a fighter on one stretch of the
+    Bank's climb and never bit (2026-10-22); their loop was moved off it, and
+    `a_roused_range_fights` stands in each herd where it is on the first
+    frame, but nothing checks every point of every loop. A herd that wakes
+    on a slope wants playing.
+11. **A herd falls asleep where it stood and is drawn next where its loop
+    says**: one left awake and unroused jumps to its loop's place when
+    everybody walks off, sixty metres away.

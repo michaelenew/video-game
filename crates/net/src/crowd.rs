@@ -85,6 +85,8 @@ pub struct PostBox {
 struct Inner {
     out: Vec<(Peer, [u8; SIZE])>,
     heard: Vec<Word>,
+    /// Lines whose far end has gone, not yet taken by the game.
+    closed: Vec<Peer>,
     /// Aggregates that two leaders disagreed on, for the HUD and the tests.
     pub disputes: u32,
 }
@@ -95,6 +97,19 @@ pub type Post = Arc<PostBox>;
 impl PostBox {
     pub fn new() -> Post {
         Arc::new(PostBox::default())
+    }
+
+    /// **The line to `peer` has closed**: whoever was at the far end has
+    /// left -- closed the page, or quit. The mesh says so once; the game
+    /// takes it ([`PostBox::take_closed`]) and gives the seat up at once,
+    /// rather than waiting out the session's long silence for it.
+    pub fn line_closed(&self, peer: Peer) {
+        self.inner.lock().unwrap().closed.push(peer);
+    }
+
+    /// Every line closed since the last time this was asked, taken.
+    pub fn take_closed(&self) -> Vec<Peer> {
+        std::mem::take(&mut self.inner.lock().unwrap().closed)
     }
 
     /// A leader posts its aggregate to a peer.

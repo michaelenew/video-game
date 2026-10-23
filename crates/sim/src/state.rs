@@ -252,6 +252,18 @@ pub enum Phase {
         winner: u8,
         left: u16,
     },
+    /// **The pick before a versus round** (2026-10-22): `left` frames to
+    /// choose a class in, and a bit for each seat that has said it is done
+    /// ([`crate::input::Destination::Ready`]). Everybody moves and tries
+    /// their moves, nobody can hurt anybody ([`World::pvp`]), and a class
+    /// change recasts only the fighter who asked. It ends when the clock
+    /// runs out or every seat is ready, and the round starts fresh on the
+    /// marks with the classes locked until the next pick. Only in a world
+    /// that drafts ([`World::draft`]).
+    Picking {
+        left: u16,
+        ready: u8,
+    },
 }
 
 /// A jump attack's window and its trip off the ground, for a class whose
@@ -660,6 +672,18 @@ pub struct Player {
     /// worth more than one thrown standing. Zero outside a Slam. See
     /// `crate::bulwark::track_fall`.
     pub slam_fall: Fx,
+    /// Upward speed a grab banked, spent when the hold lets go.
+    ///
+    /// A held fighter has their velocity zeroed every frame by
+    /// `drag_the_held`, so a launch handed to them on contact would be gone
+    /// before it moved them. It waits instead: held, you go where your captor
+    /// goes; let go, and you are thrown. See `docs/design/stun.md`.
+    pub thrown: Fx,
+    /// Blows from a fighter taken without getting a turn back: the length of
+    /// the string this fighter is in. Each one keeps less of the hitstun
+    /// swell (`tuning::combo_decay`), and it is cleared the moment they are
+    /// free to act again.
+    pub taken: u8,
 
     // -- Animation clocks ---------------------------------------------------
     //
@@ -1547,6 +1571,8 @@ impl Default for Player {
             hauled_in: false,
             slam: Fx::ZERO,
             slam_fall: Fx::ZERO,
+            thrown: Fx::ZERO,
+            taken: 0,
             stride: 0,
             air_frames: 0,
             since_landed: 0,
@@ -1691,6 +1717,13 @@ pub struct World {
     /// left it, a target for everybody, turned to face one way because their
     /// look on the wire had become zero.
     pub away: Fighters,
+    /// **Who has pressed "Start match"** ([`Destination::Start`]): a seat's
+    /// flag flips with each press, and the frame every seat in the fight has
+    /// it -- two of them at least -- the world starts the match itself
+    /// ([`World::match_start`]), so every machine starts it on the same frame.
+    /// A seat that leaves loses its flag. Empty in every fresh fight. Hashed
+    /// only while somebody is ready, so every pinned checksum stays pinned.
+    pub starting: Fighters,
     /// **The crowd field** (`crate::crowd`, exploration 0018): what the
     /// world knows of the regions round the fighters' own, fed once an
     /// epoch and read slowly. Which regions it follows is decided here, in
@@ -1704,6 +1737,17 @@ pub struct World {
     /// What each seat picked up this frame, or was given (`crate::keep`):
     /// how a game hears of a trophy for its bag. Emptied every frame.
     pub picked: [Option<crate::keep::Item>; MAX_PLAYERS],
+    /// **King of the Hill** (`crate::versus`): the capture point, both
+    /// sides' clocks, and who is waiting to stand back up. Off, and not
+    /// hashed, on every arena that has no hill.
+    pub hill: crate::versus::Koth,
+    /// **Versus rounds open with a pick** ([`Phase::Picking`]), and the
+    /// classes are locked for the round after it. Set by the game for play
+    /// ([`World::drafting`]) and carried through every trip; off in a world
+    /// built bare, which is every test and harness that starts a duel and
+    /// fights it on the first frame. Only a versus fight drafts: a hunt, a
+    /// course and the valley change class whenever anybody asks.
+    pub draft: bool,
 }
 
 impl World {
@@ -1751,9 +1795,12 @@ impl World {
             seats: MAX_PLAYERS as u8,
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
+            starting: Fighters::EMPTY,
             crowd: crate::crowd::Field::NONE,
             loose: [None; crate::keep::LOOSE],
             picked: [None; MAX_PLAYERS],
+            hill: crate::versus::Koth::NONE,
+            draft: false,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -2007,6 +2054,82 @@ impl World {
         i < self.present() && !self.away.has(i)
     }
 
+    /// **Has everybody in the fight pressed "Start match"?** Two at least:
+    /// one alone is not a match.
+    pub fn all_starting(&self) -> bool {
+        let mut players = 0;
+        for i in 0..MAX_PLAYERS {
+            if self.is_present(i) {
+                if !self.starting.has(i) {
+                    return false;
+                }
+                players += 1;
+            }
+        }
+        players >= 2
+    }
+
+    /// **The match everybody was ready for**: a fresh round of the versus
+    /// stage the fight is on, or the first floating duel stage from anywhere
+    /// else -- the hub, a hunt, a course. Its frame is this one, as a trip's.
+    fn match_start(&self, classes: [Class; MAX_PLAYERS]) -> World {
+        let place = match crate::versus::of(self.arena) {
+            Some(_) => self.arena,
+            None => crate::versus::STAGES[0].arena,
+        };
+        World {
+            frame: self.frame,
+            paused: self.paused,
+            ..World::versus_in(classes, place).seated(self.seats)
+        }
+    }
+
+    /// **Which seat a newcomer takes**: a free one on the smaller side
+    /// ([`crate::versus::side`]), or on the side `coin` says when the two
+    /// are level, or any free seat if that side has none. `None` when every
+    /// seat is somebody's. Asked by whoever seats them (the room's host);
+    /// [`World::seat_join`] is what every machine then does with the answer.
+    pub fn open_seat(&self, coin: bool) -> Option<usize> {
+        let mut on = [0usize; crate::versus::SIDES];
+        for i in 0..MAX_PLAYERS {
+            if self.is_present(i) {
+                on[crate::versus::side(i) as usize] += 1;
+            }
+        }
+        let side = if on[0] == on[1] {
+            coin as u8
+        } else {
+            (on[1] < on[0]) as u8
+        };
+        let free = |i: &usize| !self.is_present(*i);
+        (0..MAX_PLAYERS)
+            .filter(free)
+            .find(|&i| crate::versus::side(i) == side)
+            .or_else(|| (0..MAX_PLAYERS).find(free))
+    }
+
+    /// **Somebody joins the fight in progress**, at seat `seat` as `class`:
+    /// their fighter stands where a fresh start of this same fight would
+    /// stand it -- built, and that one fighter taken from it -- and nobody
+    /// else is touched. Applied to the same world by every machine of a
+    /// match as its seats change (`net`'s lineup), so they agree.
+    pub fn seat_join(&mut self, seat: usize, class: Class) {
+        if seat >= MAX_PLAYERS {
+            return;
+        }
+        let seats = self.seats.max(seat as u8 + 1);
+        let mut classes = self.players.map(|p| p.class);
+        classes[seat] = class;
+        let mut grown = self.clone();
+        grown.seats = seats;
+        grown.away.unset(seat);
+        let fresh = grown.restarted(classes);
+        self.seats = seats;
+        self.away.unset(seat);
+        self.starting.unset(seat);
+        self.players[seat] = fresh.players[seat];
+    }
+
     /// **Put every fighter past [`World::present`] out of the world**: dead,
     /// still, and under the middle of the place's floor, where nothing reaches
     /// it and nothing draws it in view. What the valley has always done with
@@ -2089,6 +2212,7 @@ impl World {
         let mut ground = if self.valley.on {
             let mut g = self.valley_ground();
             g.den = self.den();
+            self.raise_drifts(&mut g);
             g
         } else {
             Terrain::bare(self.arena.get())
@@ -2123,9 +2247,12 @@ impl World {
     fn travelled(&self, to: Travel, classes: [Class; MAX_PLAYERS]) -> Option<World> {
         let world = match to.destination()? {
             Destination::Class { .. }
+            | Destination::Ready { .. }
             | Destination::Pause
             | Destination::Step
             | Destination::Left
+            | Destination::Start
+            | Destination::Admit { .. }
             | Destination::Credit(_)
             | Destination::Feed(_)
             | Destination::Grant(_)
@@ -2146,17 +2273,24 @@ impl World {
                 World::versus_in(classes, place)
             }
         };
-        Some(World {
-            frame: self.frame,
-            paused: self.paused,
-            ..world.seated(self.seats)
-        })
+        Some(
+            World {
+                frame: self.frame,
+                paused: self.paused,
+                ..world.seated(self.seats)
+            }
+            .drafting(self.draft),
+        )
     }
 
     /// This frame's class changes, from both sides: each [`Destination::Class`]
     /// on the wire sets that seat's class, player one's first. `None` if there
-    /// were none.
+    /// were none -- and always while a versus round has the classes locked
+    /// ([`World::classes_locked`]): the request is not heard at all.
     fn recast(&self, wire: &[Input; MAX_PLAYERS]) -> Option<[Class; MAX_PLAYERS]> {
+        if self.classes_locked() {
+            return None;
+        }
         let mut classes = self.players.map(|p| p.class);
         let mut any = false;
         for input in wire {
@@ -2196,6 +2330,41 @@ impl World {
                 if let Mechanic::Shadow(_) = p.mechanic {
                     p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
                 }
+            }
+        }
+    }
+
+    /// **One frame of a tutorial hall** (`crate::tutorial`): the dummy is
+    /// stood back up to a full bar, and into the room fighter zero is in --
+    /// on the room's mark, fresh -- whenever it is anywhere else, so walking
+    /// into a room brings it with you and a blow that throws it out of the
+    /// room puts it back. Fighter zero is topped up whenever she runs low,
+    /// so nobody is knocked out of a lesson. A no-op anywhere else.
+    fn step_hall(&mut self) {
+        let Some(tut) = crate::tutorial::of(self.arena) else {
+            return;
+        };
+        let me = &mut self.players[0];
+        if me.health < me.full_health() / 3 {
+            me.health = me.full_health() - me.grey;
+        }
+        if !self.is_present(1) {
+            return;
+        }
+        let room = crate::tutorial::room_at(tut, self.players[0].pos.x);
+        let (lo, hi) = crate::tutorial::span(room);
+        let d = &mut self.players[1];
+        d.health = d.full_health() - d.grey;
+        if d.pos.x.raw() < lo.raw() || d.pos.x.raw() >= hi.raw() {
+            let mark = crate::arena::hall::dummy_mark(tut.rooms, room);
+            let class = d.class;
+            *d = Player {
+                pos: mark.at,
+                facing: mark.facing,
+                ..Player::new(class)
+            };
+            if let Mechanic::Shadow(_) = d.mechanic {
+                d.mechanic = Mechanic::Shadow(class::Shadow::attending(d.pos, d.facing));
             }
         }
     }
@@ -2262,6 +2431,7 @@ impl World {
             paused: self.paused,
             ..World::arrive_all(classes, self.valley, seam.to, Some(seam.at), self.seats)
         }
+        .drafting(self.draft)
     }
 
     /// **A hunt in the valley, lost**: you wake outside, at the seam you went
@@ -2292,7 +2462,8 @@ impl World {
                     None,
                     self.seats,
                 )
-            },
+            }
+            .drafting(self.draft),
         }
     }
 
@@ -2391,10 +2562,138 @@ impl World {
     }
 
     /// **May the fighters hurt each other?** In versus, yes; in a hunt and in
-    /// the valley's peaceful places, no. The one question every blow between
-    /// fighters asks.
+    /// the valley's peaceful places, no -- nor in the pick before a versus
+    /// round, which is for trying a class rather than fighting with it. The
+    /// one question every blow between fighters asks.
     pub fn pvp(&self) -> bool {
-        !self.hunting() && !self.peaceful()
+        !self.hunting() && !self.peaceful() && !matches!(self.phase, Phase::Picking { .. })
+    }
+
+    /// **The world, drafting or not** ([`World::draft`]): the game's play
+    /// sets it as the world is built, and a versus fight then opens in its
+    /// pick. Part of a fight's initial state, like [`World::seated`].
+    pub fn drafting(mut self, on: bool) -> World {
+        self.draft = on;
+        if self.picks_classes() && matches!(self.phase, Phase::Fighting) {
+            self.open_pick();
+            self.park_absent();
+        }
+        self
+    }
+
+    /// **Does this fight choose its classes in a pick before each round?**
+    /// A drafting world, fighting each other on a stage: not a hunt, not a
+    /// jump course, not the valley.
+    pub fn picks_classes(&self) -> bool {
+        self.draft
+            && !self.hunting()
+            && !self.valley.on
+            && crate::course::of(self.arena).is_none()
+            && crate::tutorial::of(self.arena).is_none()
+    }
+
+    /// **Are the classes locked?** For a versus round, from the moment its
+    /// pick ends until the next one opens. Nowhere else, ever.
+    pub fn classes_locked(&self) -> bool {
+        self.picks_classes() && !matches!(self.phase, Phase::Picking { .. })
+    }
+
+    /// Open the pick: everybody back on their marks, the clock full.
+    fn open_pick(&mut self) {
+        self.reset_positions();
+        self.phase = Phase::Picking {
+            left: t::class_pick(),
+            ready: 0,
+        };
+    }
+
+    /// **A round starts**: fresh on the marks, and in a drafting versus fight
+    /// with the pick before it.
+    fn begin_round(&mut self) {
+        if self.picks_classes() {
+            self.open_pick();
+        } else {
+            self.reset_positions();
+            self.phase = Phase::Fighting;
+        }
+    }
+
+    /// **Seat `i` becomes `class`, where it stands**, and nobody else is
+    /// touched (2026-10-22, from the owner: a class change used to restart
+    /// the whole fight, which against people is everybody's round stopping
+    /// for one player). The fighter is a fresh one of the new class on the
+    /// same spot, facing the same way, with the same wins and the same share
+    /// of its bar -- a change is not a heal -- and whatever the old class
+    /// had out in the world is taken back, because it was the old class's.
+    fn recast_in_place(&mut self, i: usize, class: Class) {
+        let was = self.players[i];
+        if was.class == class {
+            return;
+        }
+        let full = t::health_of(class);
+        let share = if was.health <= 0 {
+            0
+        } else {
+            let old = was.full_health().max(1) as i64;
+            ((was.health as i64 * full as i64 / old) as i32).clamp(1, full)
+        };
+        let p = &mut self.players[i];
+        *p = Player {
+            pos: was.pos,
+            facing: was.facing,
+            rounds_won: was.rounds_won,
+            health: share,
+            ..Player::new(class)
+        };
+        if let Mechanic::Shadow(_) = p.mechanic {
+            p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+        }
+        let who = i as u8;
+        for e in self.effects.iter_mut() {
+            if e.is_some_and(|e| e.owner == who) {
+                *e = None;
+            }
+        }
+        for patch in self.ground.iter_mut() {
+            if patch.live() && patch.owner == who {
+                *patch = crate::ground::Patch::default();
+            }
+        }
+        for b in self.bolts.iter_mut() {
+            if b.is_some_and(|b| b.owner == who) {
+                *b = None;
+            }
+        }
+        for d in self.debris.iter_mut() {
+            if d.is_some_and(|d| d.owner == who) {
+                *d = None;
+            }
+        }
+        for g in self.gusts.iter_mut() {
+            if g.is_some_and(|g| g.owner == who) {
+                *g = None;
+            }
+        }
+    }
+
+    /// **Fighter `i`'s own side**, as seat bits, leaving `i` out: who their
+    /// shots pass through ([`aim::Targets::spare`]). Nobody but on a hill.
+    pub fn allies(&self, i: usize) -> u8 {
+        let mut bits = 0;
+        for j in 0..MAX_PLAYERS {
+            if j != i && self.hill.on && crate::versus::side(i) == crate::versus::side(j) {
+                bits |= 1 << j;
+            }
+        }
+        bits
+    }
+
+    /// **May fighter `a` hurt fighter `b`?** [`World::pvp`], never
+    /// themselves, and on a King of the Hill map never somebody on their
+    /// own side (`crate::versus::side`). A duel stage is everybody against
+    /// everybody, as versus always was.
+    pub fn foes(&self, a: usize, b: usize) -> bool {
+        a != b && self.pvp() && !(self.hill.on && crate::versus::side(a) == crate::versus::side(b))
     }
 
     /// The first creature, for the code and tools that are about one: the
@@ -2406,6 +2705,63 @@ impl World {
     /// The first creature, to change it.
     pub fn monster_mut(&mut self) -> Option<&mut Monster> {
         self.monsters.iter_mut().flatten().next()
+    }
+
+    /// **One frame of King of the Hill** (`crate::versus`): the dead wait
+    /// and stand back up at their side's start, the point counts who is on
+    /// it, and a side whose clock has run out unchallenged wins the round.
+    fn step_the_hill(&mut self) {
+        let Some(hill) = crate::versus::of(self.arena).and_then(|s| s.hill) else {
+            return;
+        };
+        for i in 0..MAX_PLAYERS {
+            if !self.is_present(i) || self.players[i].health > 0 {
+                self.hill.respawn[i] = 0;
+                continue;
+            }
+            if self.hill.respawn[i] == 0 {
+                self.hill.respawn[i] = t::hill_respawn().max(1);
+                continue;
+            }
+            self.hill.respawn[i] -= 1;
+            if self.hill.respawn[i] == 0 {
+                self.stand_on_mark(i);
+            }
+        }
+        let on: [bool; MAX_PLAYERS] = std::array::from_fn(|i| {
+            let p = &self.players[i];
+            self.is_present(i) && p.health > 0 && hill.holds(p.pos)
+        });
+        if let Some(side) = self.hill.step(on) {
+            let present = self.present();
+            for (i, p) in self.players.iter_mut().enumerate().take(present) {
+                if crate::versus::side(i) == side {
+                    p.rounds_won += 1;
+                }
+            }
+            self.phase = Phase::RoundOver {
+                winner: side,
+                left: t::round_over_frames(),
+            };
+        }
+    }
+
+    /// Stand fighter `i` up fresh on their start mark, as a round does:
+    /// what a respawn on the hill is.
+    fn stand_on_mark(&mut self, i: usize) {
+        let here = self.terrain();
+        let mark = Mark::seat(&here.spawns.versus, i);
+        let p = &mut self.players[i];
+        let (wins, class) = (p.rounds_won, p.class);
+        *p = Player {
+            pos: V3::new(mark.at.x, here.ground_under(mark.at), mark.at.z),
+            facing: mark.facing,
+            rounds_won: wins,
+            ..Player::new(class)
+        };
+        if let Mechanic::Shadow(_) = p.mechanic {
+            p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+        }
     }
 
     /// Put both fighters back on their marks. Keeps round wins and classes.
@@ -2420,6 +2776,8 @@ impl World {
         self.gusts = [None; MAX_GUSTS];
         // A course's runs start again with the round, clock and all.
         self.course = [crate::course::Run::default(); MAX_PLAYERS];
+        // So does a game on the hill: locked, nobody's, both clocks full.
+        self.hill = crate::versus::Koth::start(self.arena);
         let here = self.arena();
         // The hunt's lore starts again with the round: nothing on the floor,
         // nothing heard, every defended thing whole and back at its start.
@@ -2576,8 +2934,14 @@ impl World {
         self.park_absent();
         // A fresh fight built inside the step -- a trip, a restart, waking
         // outside -- is built knowing nothing of who has gone: they are
-        // still gone in it.
-        let away = self.away;
+        // still gone in it. A seat admitted this frame has come, not gone:
+        // it had nobody's input until now.
+        let mut away = self.away;
+        for input in &all {
+            if let Some(Destination::Admit { seat, .. }) = input.travel.destination() {
+                away.unset(seat);
+            }
+        }
         self.step(all);
         self.away = away;
         self.park_absent();
@@ -2664,22 +3028,55 @@ impl World {
         // if both send one on the same frame, which both machines agree on
         // because both have both inputs.
         //
-        // A class change is the same kind of thing (Tab, and the pickers): the
-        // same fight restarted with the new classes, on the frame it arrives.
+        // A class change is not (Tab, and the pickers): the seat that asked
+        // is recast where it stands and the frame goes on, for everybody.
         // Both players may ask on one frame and both are honoured, and a trip
-        // on that frame keeps them.
+        // on that frame keeps them. In a versus round the classes are locked
+        // and nobody is heard until the next pick (`World::recast`).
         let recast = self.recast(&wire);
         let classes = recast.unwrap_or_else(|| self.players.map(|p| p.class));
+        // A newcomer seated by the room's host, before anything else this
+        // frame reads who is in the fight.
+        for input in &wire {
+            if let Some(Destination::Admit { seat, class }) = input.travel.destination() {
+                self.seat_join(seat, class);
+            }
+        }
+        // "Start match", from anybody in the fight: their flag flips. A seat
+        // not in the fight has none.
+        for (i, input) in wire.iter().enumerate() {
+            if input.travel.destination() == Some(Destination::Start) && self.is_present(i) {
+                if self.starting.has(i) {
+                    self.starting.unset(i);
+                } else {
+                    self.starting.set(i);
+                }
+            }
+        }
+        for i in 0..MAX_PLAYERS {
+            if !self.is_present(i) {
+                self.starting.unset(i);
+            }
+        }
         let next = wire
             .iter()
             .find_map(|i| self.travelled(i.travel, classes))
-            .or_else(|| {
-                recast.map(|classes| World {
-                    frame: self.frame,
-                    paused: self.paused,
-                    ..self.restarted(classes).seated(self.seats)
-                })
-            });
+            .or_else(|| self.all_starting().then(|| self.match_start(classes)));
+        if next.is_none() && recast.is_some() {
+            for (i, class) in classes.into_iter().enumerate() {
+                self.recast_in_place(i, class);
+            }
+        }
+        // Done choosing, in the pick: the seat's bit, from whoever sent it.
+        if let Phase::Picking { ready, .. } = &mut self.phase {
+            for input in &wire {
+                if let Some(Destination::Ready { seat }) = input.travel.destination()
+                    && seat < MAX_PLAYERS
+                {
+                    *ready |= 1 << seat;
+                }
+            }
+        }
         // Pause and step, from either side: one press is one toggle, and a
         // step pauses as well as playing its frame.
         let asked = |d: Destination| wire.iter().any(|i| i.travel.destination() == Some(d));
@@ -2760,10 +3157,29 @@ impl World {
                 }
                 return;
             }
-            self.reset_positions();
-            self.phase = Phase::Fighting;
+            self.begin_round();
             return;
         }
+        // **The pick runs out**, or every seat in the fight is ready: the
+        // round starts, fresh on the marks, with the classes as they stand.
+        if let Phase::Picking { left, ready } = self.phase {
+            let all = (0..self.present())
+                .filter(|&i| !self.away.has(i))
+                .all(|i| ready & (1 << i) != 0);
+            if left == 0 || all {
+                self.reset_positions();
+                self.phase = Phase::Fighting;
+                return;
+            }
+            self.phase = Phase::Picking {
+                left: left - 1,
+                ready,
+            };
+        }
+
+        // A tutorial hall: the dummy into the room you are in, and nobody
+        // knocked out (`crate::tutorial`).
+        self.step_hall();
 
         // Stones move before the fighters do, so what a fighter walks into --
         // or stands on -- is where the stone is this frame rather than where it
@@ -2934,6 +3350,12 @@ impl World {
         // below reads it (the swim, the strong version), so before it.
         self.mark_the_blood();
 
+        // **The drifts carry whoever holds on to one** (`crate::drift`),
+        // before anybody steps or is seen: every body on a moving stone, or
+        // hanging from or sliding down one, starts the frame where the stone
+        // took it.
+        let carried = self.carry_riders();
+
         // Everything the aiming ray can meet, as it stood at the top of the
         // frame. Copied rather than borrowed because the loop below takes each
         // fighter mutably -- and snapshotting is right anyway: both players
@@ -2970,6 +3392,8 @@ impl World {
             step_aloft(p, &field, here);
             fade_grey(p, frame);
         }
+        // And a body that let go of one keeps its speed.
+        self.let_riders_go(carried);
         self.land_the_thornfall(&seen);
         // **Falls** (bestiary P6), and **noise** (P5): both read what the step
         // just did to each body, against the body as the frame found it.
@@ -3491,7 +3915,7 @@ impl World {
                 continue;
             }
             for defender in 0..present {
-                if defender == attacker || snapshot[defender].health <= 0 {
+                if !self.foes(attacker, defender) || snapshot[defender].health <= 0 {
                     continue;
                 }
                 if let Some(mut hit) =
@@ -3778,11 +4202,13 @@ impl World {
         self.fire_lights_the_stones();
         let standing = self.effects;
         let versus = self.pvp();
+        let allies: [u8; MAX_PLAYERS] = std::array::from_fn(|i| self.allies(i));
         bolt::step(
             &mut self.bolts,
             &mut self.players,
             &standing,
             versus,
+            allies,
             pack::Prey {
                 herd: &mut self.monsters,
                 critters: &mut self.critters,
@@ -3795,6 +4221,7 @@ impl World {
             &mut self.players,
             &standing,
             versus,
+            allies,
             pack::Prey {
                 herd: &mut self.monsters,
                 critters: &mut self.critters,
@@ -3808,6 +4235,7 @@ impl World {
             &mut self.players,
             &standing,
             versus,
+            allies,
             pack::Prey {
                 herd: &mut self.monsters,
                 critters: &mut self.critters,
@@ -3889,6 +4317,35 @@ impl World {
             return;
         }
 
+        // **Versus stages** (`crate::versus`): off a floating stage's edge is
+        // out, and a hill's point, clocks and respawns decide the round
+        // rather than the last one standing.
+        // In the pick, off the edge -- or down, by anything at all -- is back
+        // on your mark: nobody is out yet.
+        if matches!(self.phase, Phase::Picking { .. }) {
+            let pit = crate::versus::of(self.arena).and_then(|s| s.pit());
+            for i in 0..self.present() {
+                let p = &self.players[i];
+                if p.health <= 0 || pit.is_some_and(|pit| p.pos.y.raw() < pit.raw()) {
+                    self.stand_on_mark(i);
+                }
+            }
+            return;
+        }
+        if matches!(self.phase, Phase::Fighting) && self.pvp() && !self.valley.on {
+            if let Some(pit) = crate::versus::of(self.arena).and_then(|s| s.pit()) {
+                for p in self.players.iter_mut() {
+                    if p.health > 0 && p.pos.y.raw() < pit.raw() {
+                        p.health = 0;
+                    }
+                }
+            }
+            if self.hill.on {
+                self.step_the_hill();
+                return;
+            }
+        }
+
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
@@ -3925,7 +4382,10 @@ impl World {
             };
             return;
         }
-        if matches!(self.phase, Phase::Fighting) && !self.peaceful() {
+        if matches!(self.phase, Phase::Fighting)
+            && !self.peaceful()
+            && crate::tutorial::of(self.arena).is_none()
+        {
             // **Last one standing.** Two fighters is the duel it always was;
             // with three or four it is everybody against everybody, and the
             // round ends when one is left -- or none, a double knockout.
@@ -4102,6 +4562,12 @@ impl World {
         if self.paused {
             h.write_u32(0x7061_7573);
         }
+        if self.starting.any() {
+            h.write_u32(0x7265_6479);
+            for w in self.starting.words() {
+                h.write_u32(*w);
+            }
+        }
         for b in &self.bolts {
             match b {
                 Some(b) => hash_bolt(&mut h, b),
@@ -4158,6 +4624,22 @@ impl World {
             hash_monster(&mut h, slot, m);
         }
         hash_phase(&mut h, self.phase);
+        // Drafting, only while set: every world built bare hashes as it did.
+        if self.draft {
+            h.write_u32(0xD4AF);
+        }
+        // The hill, only where there is one: every other fight hashes as it
+        // did before there were hills.
+        if self.hill.on {
+            let k = &self.hill;
+            h.write_u32(0x4111);
+            h.write_u32(k.locked as u32 | (k.owner as u32) << 16 | (k.capper as u32) << 24);
+            h.write_u32(k.progress);
+            h.write_u32(k.clock[0] as u32 | (k.clock[1] as u32) << 16);
+            for w in k.respawn {
+                h.write_u32(w as u32);
+            }
+        }
         // The arena, after everything else and only when it is not the
         // proving ground: so a fight there hashes exactly as it did before
         // arenas were data, and the pinned hunts still mean what they say.
@@ -4367,6 +4849,14 @@ impl Hitbox {
             .add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))
     }
 
+    /// The point of a flat volume nearest `at` along the floor: its one
+    /// point for a disc, and the nearest point of the strip for one stretched
+    /// from her body (the Reave's, see [`hitbox`]). A flat volume is tested
+    /// by the floor distance from here; everything that tests one asks this.
+    pub fn flat_nearest(&self, at: V3) -> V3 {
+        crate::math::flat_segment_nearest(at, self.from, self.to)
+    }
+
     /// Is this volume a line rather than a bubble?
     pub fn is_a_beam(&self) -> bool {
         self.from != self.to
@@ -4499,6 +4989,21 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             moves::Shape::Cylinder if p.stoop.raw() < 0 => {
                 return Some(disc(p.pos.add(p.facing.scale(m.reach))));
             }
+            // **The Reave's cut reaches back to her** (2026-10-21, from
+            // play): its dash is a fixed 2.5 m, so thrown from on top of
+            // somebody it ran her onto them and the disc landed past them --
+            // a whiff, and only the shadow's copy connected, which marks
+            // rather than cashes. 0013 says the cut is plain from there, not
+            // gone: so the disc is stretched into a strip from her body,
+            // and only its far end is the sweet spot (`reave_sweet`).
+            moves::Shape::Cylinder
+                if p.class == Class::ShadowReaver && kind == moves::reaver::REAVE =>
+            {
+                return Some(Hitbox {
+                    from: p.pos,
+                    ..disc(p.pos.add(p.aim_dir().scale(m.reach)))
+                });
+            }
             moves::Shape::Cylinder => return Some(disc(p.pos.add(p.aim_dir().scale(m.reach)))),
             moves::Shape::Swing(plane) => {
                 // The hand stays near the body and the head of the weapon
@@ -4613,7 +5118,8 @@ fn reave_sweet(
     if attacker.class != Class::ShadowReaver || kind != moves::reaver::REAVE {
         return Fx::ONE;
     }
-    if inside(box_out.centre(), t::reave_sweet()) {
+    // The middle of the cut's disc, at the far end of its strip.
+    if inside(box_out.to, t::reave_sweet()) {
         t::reave_sweet_damage()
     } else {
         Fx::ONE
@@ -4842,7 +5348,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         // The original rule, kept for every move that has not been given a
         // shape: flat distance from the middle of the disc, with no top and no
         // bottom. You cannot duck under one of these or jump over it.
-        let delta = defender.pos.sub(box_out.centre());
+        let delta = defender.pos.sub(box_out.flat_nearest(defender.pos));
         delta.flat_len().raw() <= reach.raw()
     } else {
         // A capsule against a standing body. Height genuinely decides this
@@ -5082,6 +5588,22 @@ fn impact_freeze(hitstop: u16, blocked: bool) -> u16 {
     }
 }
 
+/// **A heavy blow on a creature holds both bodies** (2026-10-21, from play:
+/// strong hits on a creature did not land like strong hits). A fighter's
+/// blow from a move whose impact freeze is at least
+/// `tuning::creature_heavy_from` freezes the fighter and the creature for
+/// that length -- the same length, so neither gains a frame -- exactly as a
+/// blow between two fighters does. Lighter blows freeze nothing, so a string
+/// of quick cuts keeps its pace against something this size.
+fn freeze_on_the_creature(p: &mut Player, beast: &mut Monster, attacker: &Player, m: &moves::Move) {
+    if m.hitstop < t::creature_heavy_from() {
+        return;
+    }
+    let hold = m.hitstop + true_link_freeze(attacker);
+    freeze(p, hold);
+    beast.frozen = beast.frozen.max(hold.min(u8::MAX as u16) as u8);
+}
+
 /// Hold a body still for `frames`, or for whatever freeze it is already in if
 /// that is longer. Two blows landing on one frame are one impact, not two in
 /// a row.
@@ -5120,6 +5642,11 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     let Some(hit) = brace_the_rush(defender, hit) else {
         return;
     };
+    // **A blow one fighter landed on another.** The swell, weight and the
+    // string are all about two fighters running along bars of the same size;
+    // a creature's blow, a critter's or a hazard's does exactly what its table
+    // says. See `docs/design/stun.md`.
+    let duel = (hit.by as usize) < MAX_PLAYERS;
     // Taken on the shield, either way: stored as weight. A parry stores more.
     // See `crate::bulwark` -- this is the one place a blocked blow is
     // resolved, which is why the creature's blows load it without asking.
@@ -5141,7 +5668,16 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             };
         }
         // A heavy shield moves less. One at empty, `heavy_pushback` at the cap.
+        //
+        // And a heavy *class* moves less, between fighters: the same weight
+        // that divides a hit divides a blocked one. Blocked pushback never
+        // swells -- the swell is about damage taken, and a block takes none.
         let knockback = hit.knockback.mul(bulwark::pushback(defender));
+        let knockback = if duel {
+            knockback.div(t::weight_of(defender.class))
+        } else {
+            knockback
+        };
         defender.vel.x = hit.dir.x.mul(knockback);
         defender.vel.z = hit.dir.z.mul(knockback);
     } else {
@@ -5149,37 +5685,71 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         if hit.damage > 0 {
             hurt_the_momentum(defender);
         }
-        defender.vel.x = hit.dir.x.mul(hit.knockback);
-        defender.vel.z = hit.dir.z.mul(hit.knockback);
+        // **How far a fighter's blow throws another**: swelled by what the
+        // victim has already lost -- read after this blow's damage, so the
+        // killing blow carries the largest swell there is -- and divided by
+        // what they weigh. One multiplier for the whole launch, sideways and
+        // up alike, so a move keeps the angle it was authored with and only
+        // the distance grows. A creature's blow does what its table says.
+        //
+        // The shove starts above the table at full health and climbs to the
+        // same ceiling (`tuning::swell_start`); the launch starts at the
+        // table, because the follow-ups into the air are tuned to its height.
+        let (carry, lift_carry) = if duel {
+            let weight = t::weight_of(defender.class);
+            (
+                knockback_swell(defender, hit.damage, t::swell_start()).div(weight),
+                knockback_swell(defender, hit.damage, Fx::ONE).div(weight),
+            )
+        } else {
+            (Fx::ONE, Fx::ONE)
+        };
+        let shove = hit.knockback.mul(carry);
+        let lift = hit.launch.mul(lift_carry);
+        defender.vel.x = hit.dir.x.mul(shove);
+        defender.vel.z = hit.dir.z.mul(shove);
         if hit.grabs > 0 {
             defender.seized(hit.by, hit.grabs, 0);
+            // A grab that launches cannot do both at once: the hold zeroes
+            // their velocity every frame. The launch waits for the release.
+            defender.thrown = lift.max(Fx::ZERO);
         } else if hit.interrupts {
             // Writing the action is the interrupt, and it happens even when
             // `hitstun` is zero -- `HitStun { left: 0 }` is one frame of
             // nothing, but the move it replaced is gone. Anything that must
             // land without stopping its victim has to skip this branch rather
             // than tune the number to zero. See `Hit::interrupts`.
-            defender.stun_total = hit.hitstun;
-            defender.action = Action::HitStun { left: hit.hitstun };
+            let stun = if duel {
+                swelled_hitstun(defender, hit.hitstun)
+            } else {
+                hit.hitstun
+            };
+            if duel {
+                defender.taken = defender.taken.saturating_add(1);
+            }
+            defender.stun_total = stun;
+            defender.action = Action::HitStun { left: stun };
         }
         // Anything that is not itself a spike clears one that was banked: being
         // caught on the way down and thrown somewhere else is not the landing
         // the spike was charging for.
         defender.slam = Fx::ZERO;
-        if hit.launch.raw() > 0 {
+        if hit.grabs > 0 {
+            // Banked above; the hold decides where they go until it ends.
+        } else if lift.raw() > 0 {
             // Taken off the ground. Launch *sets* vertical speed rather than
             // adding to it, so being hit on the way down does not cancel out.
-            defender.vel.y = hit.launch;
+            defender.vel.y = lift;
             defender.grounded = false;
-        } else if hit.launch.raw() < 0 {
+        } else if lift.raw() < 0 {
             // Spiked. The same rule pointed the other way, and the speed is
             // banked so that the landing can charge for it -- see
             // `Player::slam`. Terminal velocity is what the ground actually
             // sees, so banking the intent rather than the arrival would
             // overstate it.
-            defender.vel.y = hit.launch;
+            defender.vel.y = lift;
             defender.grounded = false;
-            defender.slam = hit.launch.abs();
+            defender.slam = lift.abs();
         }
     }
     // Whatever else it did, it broke the dash -- the Champion's Rush, and the
@@ -5202,6 +5772,63 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         // it. The arms let go.
         defender.haul = 0;
     }
+}
+
+/// The share of a fighter's own bar already gone: zero untouched, one at
+/// death. Smash's percent, upside down.
+fn hurt(p: &Player) -> Fx {
+    let full = p.full_health().max(1);
+    Fx::ratio((full - p.health).clamp(0, full), full)
+}
+
+/// What a fighter's blow is multiplied by against this victim, before their
+/// weight: `start` at full health, rising in a straight line to the ceiling
+/// at death.
+///
+/// The ceiling has two terms, as Smash has: one for dying at all, the other
+/// for the share of their bar this blow took, so a committed move scales
+/// harder against a hurt opponent than a poke does. A start above one is a
+/// slower climb to the same ceiling, never a higher one.
+fn knockback_swell(victim: &Player, damage: i32, start: Fx) -> Fx {
+    let full = victim.full_health().max(1);
+    let share = Fx::ratio(damage.clamp(0, full), full);
+    let ceiling = Fx::ONE
+        .add(t::swell_knockback())
+        .add(t::swell_blow().mul(share));
+    let rise = ceiling.sub(start).max(Fx::ZERO);
+    start.add(hurt(victim).mul(rise))
+}
+
+/// How much further this fighter would be thrown than an untouched one: the
+/// readable half of the swell, for the HUD, where Smash shows its percent. It
+/// leaves out the blow's own term, which belongs to whichever move lands next,
+/// and folds in the class's weight.
+pub fn launch_scale(p: &Player) -> Fx {
+    let ceiling = Fx::ONE.add(t::swell_knockback());
+    let start = t::swell_start();
+    start
+        .add(hurt(p).mul(ceiling.sub(start).max(Fx::ZERO)))
+        .div(t::weight_of(p.class))
+}
+
+/// A fighter's blow's hitstun, swelled by what the victim has lost.
+///
+/// Grows far more slowly than the knockback does, and the gap between the two
+/// is the combo design: stun grows and moves start to link, knockback grows
+/// faster and throws the victim out of reach again. **And it fades through a
+/// string**: each hit taken without a turn back keeps `combo_decay` of the
+/// last one's swell, so a ranged move that re-aims wherever they landed runs
+/// out of the extra frames too. Never below the move table's own number.
+fn swelled_hitstun(victim: &Player, base: u16) -> u16 {
+    let mut kept = t::swell_hitstun();
+    for _ in 0..victim.taken.min(16) {
+        kept = kept.mul(t::combo_decay());
+    }
+    let swell = Fx::ONE.add(hurt(victim).mul(kept));
+    Fx::from_int(base as i32)
+        .mul(swell)
+        .to_int()
+        .clamp(base as i32, u16::MAX as i32) as u16
 }
 
 impl World {
@@ -5500,7 +6127,7 @@ impl World {
                 && ahead.dot(V3::new(d.x, Fx::ZERO, d.z)).raw() > 0
                 && !q.action.invulnerable()
         });
-        if let Some(other) = met.filter(|_| self.pvp()) {
+        if let Some(other) = met.filter(|&other| self.foes(i, other)) {
             let q = self.players[other];
             {
                 let (guarding, parried) = guard_against(&q, p.pos, false);
@@ -6176,9 +6803,22 @@ fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
         Action::Held { left } if left > 0 => Action::Held { left: left - 1 },
         Action::Held { .. } => {
             p.held_by = NOBODY;
+            p.taken = 0;
+            // Let go, and whatever the grab banked is spent now. See
+            // `Player::thrown`.
+            if p.thrown.raw() > 0 {
+                p.vel.y = p.thrown;
+                p.grounded = false;
+            }
+            p.thrown = Fx::ZERO;
             Action::Free
         }
-        Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => Action::Free,
+        Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => {
+            // Free to act again: the string is over, and the swell is whole
+            // for whatever lands next.
+            p.taken = 0;
+            Action::Free
+        }
         // Already resolved, by `step_channel`, on the frame it happened: a
         // channel is the one action whose next state needs the scene and the
         // buttons, which is more than this function is given. Reaching here
@@ -6806,9 +7446,21 @@ fn step_player(
     } else if p.action.stunned() {
         // Knockback decays rather than stopping dead, in the air as on the
         // ground. Checked before the airborne branch so a hit connecting
-        // mid-jump is not immediately steered out of.
+        // mid-jump is not handed the ordinary air control below.
         p.vel.x = p.vel.x.mul(t::stun_decay());
         p.vel.z = p.vel.z.mul(t::stun_decay());
+        // **Launched, a fighter still steers** -- the game's answer to
+        // Smash's directional influence, and the air control the player
+        // already has rather than a second mechanic beside it. The Quake
+        // projection turns a velocity without adding to it, so a launched
+        // fighter picks *where* they land and never how far. Grounded stun
+        // keeps none of it: skidding is not a moment anyone is flying
+        // through. And like the rest of the stun rules it is between fighters
+        // (`taken` counts only their blows): a creature's throw lands where
+        // the creature threw you. See `docs/design/stun.md`.
+        if steering && !p.grounded && p.taken > 0 && matches!(p.action, Action::HitStun { .. }) {
+            steer_while_stunned(p, move_dir(input.aim_turns(), ax, az), mob.air_speed);
+        }
     } else if let Some(drive) = rising {
         // **Gallows** holds its line, all three axes, with gravity off below
         // and the arena on: a ceiling or a wall stops the rise.
@@ -6951,13 +7603,17 @@ fn step_player(
     // both ways, rather than the frame of it.
     let kept = p.wall_press > 0 && on_wall;
     p.wall_press = p.wall_press.saturating_sub(1);
+    // **A wall on its way is a lift** (`crate::drift`): neither rule
+    // against a ladder asks about it while it moves, and a kick off it is
+    // not counted against the next.
+    let moving = p.wall.is_some() && scene.arena.moving_face(p.pos, p.wall.normal);
     let wall_jump = (pressed_space && near_wall || kept)
         && !p.grounded
         && !carrying
         && p.action.actionable()
-        && may_wall_jump(p);
+        && (moving || may_wall_jump(p));
     if wall_jump {
-        jump_off_the_wall(p, mob.jump, input);
+        jump_off_the_wall(p, mob.jump, input, moving);
         p.wall_press = 0;
     }
     let mut beat = false;
@@ -7613,9 +8269,13 @@ fn may_wall_jump(p: &Player) -> bool {
 /// forward*, where the player is steering, and a run carried on to the wall
 /// faster than that keeps its own speed. The stick straight away from the
 /// wall, into it or let go carries nothing more than the run.
-fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input) {
+///
+/// Off a wall that `moves` (a drift), the jump is worth its whole rise and
+/// leaves no record against the next: the ladder rules are for walls that
+/// stand still.
+fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input, moves: bool) {
     let mut rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
-    for _ in 0..p.wall_jumps {
+    for _ in 0..if moves { 0 } else { p.wall_jumps } {
         rise = rise.mul(t::wall_jump_falloff());
     }
     p.vel.y = p.vel.y.max(rise);
@@ -7648,11 +8308,13 @@ fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input) {
         }
     }
     p.jump_hold = 0;
-    p.wall_jumped = Wall {
-        at: p.pos,
-        normal: p.wall.normal,
-    };
-    p.wall_jumps = p.wall_jumps.saturating_add(1);
+    if !moves {
+        p.wall_jumped = Wall {
+            at: p.pos,
+            normal: p.wall.normal,
+        };
+        p.wall_jumps = p.wall_jumps.saturating_add(1);
+    }
     p.wall_since = u8::MAX;
 }
 
@@ -9184,7 +9846,15 @@ pub fn shield_hitbox(p: &Player) -> Option<Hitbox> {
 /// not of standing next to it and swinging.
 fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<usize> {
     if box_out.flat {
-        return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
+        // A disc is one point; a strip (the Reave's) is asked from its far
+        // end, the sweet spot, back toward her.
+        if box_out.from == box_out.to {
+            return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
+        }
+        return (0..=3).rev().find_map(|i| {
+            let at = crate::math::lerp3(box_out.from, box_out.to, Fx::ratio(i, 3));
+            beast.part_struck(at, box_out.radius, attacker.hurt_height())
+        });
     }
     const SAMPLES: i32 = 5;
     let thick = box_out.radius;
@@ -10492,6 +11162,25 @@ fn clamp_air_speed(p: &mut Player) {
 /// That is why strafing is expressive and holding forward is not: the game is
 /// not rewarding a faster input, it is rewarding an input aimed at the component
 /// of your motion you have not already used up.
+/// Air control at knockback speed: it turns you, it never slows you.
+///
+/// `air_accelerate` ends on the air speed cap, a rule about how fast a fighter
+/// may make *themselves* go. Knockback routinely exceeds it, so left alone,
+/// holding any direction during a launch would cut the hit short. Pressing a
+/// direction must never be worth less knockback than pressing nothing, so the
+/// flat speed is put back along the new heading; below the cap this does
+/// nothing at all.
+fn steer_while_stunned(p: &mut Player, wish: V3, wish_speed: Fx) {
+    let before = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+    air_accelerate(p, wish, wish_speed);
+    let after = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+    if after.raw() > 0 && before.raw() > after.raw() {
+        let restore = before.div(after);
+        p.vel.x = p.vel.x.mul(restore);
+        p.vel.z = p.vel.z.mul(restore);
+    }
+}
+
 fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
     let current = p.vel.x.mul(wish.x).add(p.vel.z.mul(wish.z));
     let head_room = wish_speed.sub(current);
@@ -10893,7 +11582,7 @@ fn swim_or_surface(p: &mut Player, input: Input) {
         p.swim = SWIM_SPENT;
         let flat = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
         if flat.flat_len().raw() > 0 {
-            let frames = (t::dodge_frames() / 2).max(1);
+            let frames = t::swim_pop_frames();
             let reach = t::swim_pop().mul(DT).mul(Fx::from_int(frames as i32));
             let to = p.pos.add(flat.normalized().scale(reach));
             begin_haul(p, to, t::swim_pop(), frames + 1);
@@ -11354,6 +12043,8 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     h.write_u32(p.hauled_in as u32);
     h.write_i32(p.slam.raw());
     h.write_i32(p.slam_fall.raw());
+    h.write_i32(p.thrown.raw());
+    h.write_u32(p.taken as u32);
     h.write_u32(p.held_by as u32);
     h.write_u32(p.jump_hold as u32);
     h.write_u32(p.air_stall as u32);
@@ -11494,6 +12185,7 @@ fn hash_monster(h: &mut Fnv, slot: usize, m: &crate::monster::Monster) {
     h.write_u32(m.doing.frames_left() as u32);
     h.write_u32(m.doing.attacking().unwrap_or(0) as u32);
     h.write_u32(m.hit_used as u32);
+    h.write_u32(m.frozen as u32);
     hash_v3(h, &m.brain.seen);
     hash_v3(h, &m.brain.seen_vel);
     h.write_u32(m.brain.target as u32);
@@ -11538,6 +12230,10 @@ fn hash_phase(h: &mut Fnv, phase: Phase) {
             h.write_u32(1);
             h.write_u32(winner as u32);
             h.write_u32(left as u32);
+        }
+        Phase::Picking { left, ready } => {
+            h.write_u32(2);
+            h.write_u32(left as u32 | (ready as u32) << 16);
         }
     }
 }
@@ -11942,7 +12638,10 @@ impl World {
                         from: p.aim_path.from,
                         to: p.aim_at(),
                     };
-                    let targets = aim::Targets::none().fighters(self.pvp()).quarry(true);
+                    let targets = aim::Targets::none()
+                        .fighters(self.pvp())
+                        .spare(self.allies(who))
+                        .quarry(true);
                     match aim::first_along(path, Fx::ZERO, who as u8, &scene, targets) {
                         Some(met) => path.from.add(path.dir().scale(met.dist())),
                         None => path.to,
@@ -12174,7 +12873,7 @@ impl World {
         let mut landed = false;
         for target in 0..self.present() {
             let defender = self.players[target];
-            if target == owner || defender.health <= 0 {
+            if !self.foes(owner, target) || defender.health <= 0 {
                 continue;
             }
             let Some(mut hit) = resolve_hit(ghost, &defender, owner as u8) else {
@@ -14318,7 +15017,10 @@ impl World {
     /// `advance`. Without this, a Blood mage's field was the one thing in the
     /// game that could kill a team-mate.
     fn effects_reach(&self, victim: usize, owner: u8) -> bool {
-        victim as u8 != owner && self.players[victim].health > 0 && self.pvp()
+        victim as u8 != owner
+            && self.players[victim].health > 0
+            && self.pvp()
+            && (owner as usize >= MAX_PLAYERS || self.foes(owner as usize, victim))
     }
 
     /// Did a blade sweeping from `was` to `at` slice this fighter?
@@ -17231,14 +17933,18 @@ impl World {
         let mut most = 0;
         for j in 0..MAX_PLAYERS {
             let q = &self.players[j];
-            if j as u8 == th.owner || q.health <= 0 || !self.pvp() {
+            if j as u8 == th.owner
+                || q.health <= 0
+                || !self.pvp()
+                || (th.owner as usize) < MAX_PLAYERS && !self.foes(j, th.owner as usize)
+            {
                 continue;
             }
             let Some(hb) = hitbox(q) else { continue };
             let reach = hb.radius.add(radius);
             let top = V3::new(th.pos.x, th.pos.y.add(height), th.pos.z);
             let touched = if hb.flat {
-                th.pos.sub(hb.centre()).flat_len().raw() <= reach.raw()
+                th.pos.sub(hb.flat_nearest(th.pos)).flat_len().raw() <= reach.raw()
             } else {
                 crate::math::segment_gap(hb.from, hb.to, th.pos, top).raw() <= reach.raw()
             };
@@ -18381,7 +19087,10 @@ impl World {
             critters: &self.critters,
             arena: &self.terrain(),
         };
-        let mut targets = aim::Targets::none().fighters(self.pvp()).quarry(true);
+        let mut targets = aim::Targets::none()
+            .fighters(self.pvp())
+            .spare(self.allies(i))
+            .quarry(true);
         if terrain {
             targets = targets.terrain().stones();
         }
@@ -19836,6 +20545,9 @@ impl World {
             let dealt = dealt
                 + beast.take_extra(Fx::from_int(dealt).mul(carried_share(&attacker)).to_int());
             confirm_chain(&mut self.players[i], guarded.turned() || dealt <= 0);
+            if dealt > 0 && !guarded.turned() {
+                freeze_on_the_creature(&mut self.players[i], &mut beast, &attacker, &m);
+            }
             if dealt > 0 {
                 feed_the_momentum(&mut self.players[i], Some(kind));
                 impact(&mut beast, &attacker, kind, dealt);
@@ -20427,5 +21139,204 @@ mod fury_tests {
             matches!(q.mechanic, Mechanic::Forms { recharge: 50, .. }),
             "a second hit does not"
         );
+    }
+}
+
+#[cfg(test)]
+mod knockback_tests {
+    //! The knockback rules between fighters (`docs/design/stun.md`) at the
+    //! level of one blow. What a real fight does with them is
+    //! `tests/knockback.rs`.
+    use super::*;
+
+    /// A shove and a launch to measure by: real speeds from the Oven, so
+    /// nothing here is a number of its own.
+    fn shove() -> Fx {
+        t::move_speed()
+    }
+
+    fn lift() -> Fx {
+        t::move_speed()
+    }
+
+    fn blow(by: u8) -> Hit {
+        Hit {
+            damage: 50,
+            hitstun: 20,
+            blockstun: 10,
+            knockback: shove(),
+            launch: Fx::ZERO,
+            grabs: 0,
+            by,
+            dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            blocked: false,
+            parried: false,
+            interrupts: true,
+        }
+    }
+
+    fn hurt_to(class: Class, share: (i32, i32)) -> Player {
+        let mut p = Player::new(class);
+        p.health = p.full_health() * share.0 / share.1;
+        p
+    }
+
+    #[test]
+    fn a_fighters_blow_swells_with_what_the_victim_has_lost() {
+        let mut fresh = Player::new(Class::Champion);
+        let mut hurt = hurt_to(Class::Champion, (1, 2));
+        apply_hit(&mut fresh, blow(1));
+        apply_hit(&mut hurt, blow(1));
+        assert!(
+            hurt.vel.x.raw() > fresh.vel.x.raw(),
+            "half a bar down is thrown no further: {:?} against {:?}",
+            hurt.vel.x,
+            fresh.vel.x
+        );
+        assert!(
+            hurt.stun_total > fresh.stun_total,
+            "nor held any longer: {} against {}",
+            hurt.stun_total,
+            fresh.stun_total
+        );
+        assert!(
+            fresh.stun_total >= 20,
+            "never less than the table's own stun"
+        );
+    }
+
+    #[test]
+    fn the_shove_starts_above_the_table_and_ends_where_it_did() {
+        // A Champion weighs one, so what is measured is the swell alone.
+        let mut fresh = Player::new(Class::Champion);
+        let mut nothing = blow(1);
+        nothing.damage = 0;
+        apply_hit(&mut fresh, nothing);
+        assert_eq!(
+            fresh.vel.x,
+            shove().mul(t::swell_start()),
+            "untouched, the shove is the start times the table"
+        );
+        assert!(
+            t::swell_start().raw() > Fx::ONE.raw(),
+            "and the start is above one"
+        );
+        // The killing blow: the ceiling, which the start does not move.
+        let mut last = Player::new(Class::Champion);
+        let finishing = blow(1);
+        last.health = finishing.damage;
+        apply_hit(&mut last, finishing);
+        let share = Fx::ratio(finishing.damage, last.full_health());
+        let ceiling = Fx::ONE
+            .add(t::swell_knockback())
+            .add(t::swell_blow().mul(share));
+        assert!(
+            (last.vel.x.raw() - shove().mul(ceiling).raw()).abs() < 64,
+            "at death the ceiling: {:?} against {:?}",
+            last.vel.x,
+            shove().mul(ceiling)
+        );
+    }
+
+    #[test]
+    fn a_launch_starts_at_the_table() {
+        let mut p = Player::new(Class::Champion);
+        let mut up = blow(1);
+        up.damage = 0;
+        up.launch = lift();
+        apply_hit(&mut p, up);
+        assert_eq!(p.vel.y, lift(), "the follow-ups are tuned to it");
+    }
+
+    #[test]
+    fn a_creatures_blow_does_what_its_table_says() {
+        for by in [QUARRY, NOBODY] {
+            let mut p = hurt_to(Class::DualMage, (1, 4));
+            apply_hit(&mut p, blow(by));
+            assert_eq!(p.vel.x, shove(), "no swell and no weight");
+            assert_eq!(p.stun_total, 20, "and the stun as written");
+            assert_eq!(p.taken, 0, "and it starts no string");
+        }
+    }
+
+    #[test]
+    fn a_heavy_travels_less_than_a_light_from_the_same_blow() {
+        let mut heavy = Player::new(Class::Bulwark);
+        let mut light = Player::new(Class::DualMage);
+        apply_hit(&mut heavy, blow(0));
+        apply_hit(&mut light, blow(0));
+        assert!(heavy.vel.x.raw() < light.vel.x.raw());
+        assert_eq!(
+            heavy.stun_total, light.stun_total,
+            "weight divides knockback, never stun"
+        );
+        let (mut heavy, mut light) = (Player::new(Class::Bulwark), Player::new(Class::DualMage));
+        let mut guarded = blow(0);
+        guarded.blocked = true;
+        apply_hit(&mut heavy, guarded);
+        apply_hit(&mut light, guarded);
+        assert!(
+            heavy.vel.x.raw() < light.vel.x.raw(),
+            "and blocked pushback with it"
+        );
+    }
+
+    #[test]
+    fn each_hit_in_a_string_keeps_less_of_the_swell() {
+        let mut p = hurt_to(Class::Champion, (1, 2));
+        let mut stuns = Vec::new();
+        for _ in 0..4 {
+            p.health = p.full_health() / 2;
+            apply_hit(&mut p, blow(0));
+            stuns.push(p.stun_total);
+        }
+        assert!(
+            stuns.windows(2).all(|w| w[1] <= w[0]) && stuns[3] < stuns[0],
+            "a string does not fade: {stuns:?}"
+        );
+        assert!(stuns.iter().all(|s| *s >= 20), "below the table: {stuns:?}");
+        // Free again: the string is over.
+        p.action = Action::HitStun { left: 0 };
+        countdown(&mut p, false, Input::default());
+        assert_eq!(p.taken, 0);
+    }
+
+    #[test]
+    fn a_grab_keeps_its_launch_for_the_release() {
+        let mut p = Player::new(Class::Champion);
+        let mut grab = blow(1);
+        grab.grabs = 10;
+        grab.launch = lift();
+        apply_hit(&mut p, grab);
+        assert!(matches!(p.action, Action::Held { .. }));
+        assert!(p.thrown.raw() > 0, "the launch was dropped");
+        let banked = p.thrown;
+        p.action = Action::Held { left: 0 };
+        countdown(&mut p, false, Input::default());
+        assert_eq!(p.vel.y, banked, "let go, and thrown");
+        assert!(!p.grounded);
+        assert_eq!(p.thrown, Fx::ZERO);
+    }
+
+    #[test]
+    fn steering_a_launch_turns_it_and_never_shortens_it() {
+        let mut p = Player::new(Class::Champion);
+        p.vel = V3::new(shove(), Fx::ZERO, Fx::ZERO);
+        let before = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+        let air = p.class.mobility().air_speed;
+        for _ in 0..10 {
+            steer_while_stunned(&mut p, V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE), air);
+        }
+        let after = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+        assert!(p.vel.z.raw() > 0, "holding sideways did not turn it");
+        assert!(
+            after.raw() >= before.raw() - 64,
+            "steering cut the launch: {before:?} -> {after:?}"
+        );
+        // Holding back against it: it may turn, it may not brake.
+        let mut q = Player::new(Class::Champion);
+        q.vel = V3::new(shove(), Fx::ZERO, Fx::ZERO);
+        steer_while_stunned(&mut q, V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO), air);
+        assert!(V3::new(q.vel.x, Fx::ZERO, q.vel.z).flat_len().raw() >= before.raw() - 64);
     }
 }

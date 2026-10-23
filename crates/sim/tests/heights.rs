@@ -264,6 +264,9 @@ struct Leg {
     from: Stone,
     to: Stone,
     need: Option<Need>,
+    /// What the hop is, where its table says (`None` off a table: the Sky
+    /// Road's and the High Line's are all stones).
+    hop: Option<Hop>,
 }
 
 impl Leg {
@@ -284,6 +287,7 @@ fn legs(from: Stone, hops: &[Hop], stones: &[Stone]) -> Vec<Leg> {
                 from: last,
                 to,
                 need: h.need(),
+                hop: Some(*h),
             };
             last = to;
             leg
@@ -313,6 +317,7 @@ fn high_line() -> Vec<Leg> {
             from: p[0],
             to: p[1],
             need: Some(Need::Tool),
+            hop: None,
         })
         .collect()
 }
@@ -325,6 +330,7 @@ fn sky_road() -> Vec<Leg> {
             from: p[0],
             to: p[1],
             need: None,
+            hop: None,
         })
         .collect()
 }
@@ -586,18 +592,41 @@ fn every_mover_makes_the_plain_hops_and_the_gullies() {
                     pilot::local(&w, top_of(&leg.from)),
                     pilot::local(&w, top_of(&leg.to)),
                 );
-                let done = match leg.need {
-                    Some(Need::Tool) => {
+                let done = match leg.hop.expect("a table's hop") {
+                    Hop::Stone {
+                        need: Need::Tool, ..
+                    } => {
                         skipped += 1;
                         continue;
                     }
-                    Some(Need::Jump) => pilot::jump(&mut w, from, to),
-                    None => {
-                        let d = (
-                            (leg.to.x - leg.from.x).signum(),
-                            (leg.to.z - leg.from.z).signum(),
-                        );
-                        pilot::kick_across(&mut w, from, to, d).map(|n| kicked.push(n))
+                    Hop::Stone { .. } => pilot::jump(&mut w, from, to),
+                    Hop::Gully { way } => {
+                        pilot::kick_across(&mut w, from, to, way.step()).map(|n| kicked.push(n))
+                    }
+                    Hop::Lift { way, rise } => {
+                        pilot::ride(&mut w, &heights::lift_cars(&leg.from, way, rise)[0], to)
+                    }
+                    Hop::Riser { way, rise } => {
+                        let walls = heights::riser_walls(&leg.from, way, rise);
+                        pilot::ride_walls(&mut w, from, &walls, to, way.step())
+                    }
+                    Hop::Turn { way } => {
+                        let parts = heights::turn_parts(&leg.from, way);
+                        let (floor, roof) =
+                            (pilot::local(&w, parts[0]), pilot::local(&w, parts[1]));
+                        // Into the tunnel off the stone before it, then out
+                        // and round.
+                        pilot::jump(&mut w, from, floor)
+                            .and_then(|()| pilot::turn_around(&mut w, floor, roof, way.step()))
+                    }
+                    Hop::Ferry { way, run, rise } => {
+                        let ferry = heights::ferry_of(&leg.from, way, run, rise);
+                        pilot::catch(&mut w, from, &ferry)
+                            .and_then(|_| pilot::carried_over(&mut w, &ferry))
+                            .and_then(|()| {
+                                let deck = pilot::drift_now(&w, &ferry);
+                                pilot::jump(&mut w, deck, to)
+                            })
                     }
                 };
                 if let Err(e) = done {
@@ -633,4 +662,176 @@ fn every_mover_makes_the_plain_hops_and_the_gullies() {
         );
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+// ---------------------------------------------------------------------------
+// What moves, and what turns you (2026-10-22)
+// ---------------------------------------------------------------------------
+
+/// The column's and the span's legs that are not stones: each with its
+/// stone before it.
+fn pieces() -> Vec<Leg> {
+    hanging()
+        .into_iter()
+        .filter(|l| !matches!(l.hop, Some(Hop::Stone { .. })))
+        .collect()
+}
+
+/// **Nothing that moves or turns you is in the land, or in another stone's
+/// way**: every drift's whole sweep and every turn-around's boxes stand six
+/// metres clear of the land under their corners, and none of them is inside
+/// a stone of a route but the ones it joins.
+#[test]
+fn what_moves_is_clear_of_the_land_and_the_stones() {
+    let atlas = sim::atlas::valley();
+    // A drift where it is at each tenth of its way: its sweep's corners are
+    // not all places it goes, when it goes up and along at once.
+    let mut boxes: Vec<(String, Solid)> = Vec::new();
+    for (k, d) in heights::drifts().iter().enumerate() {
+        for t in 0..=10 {
+            let at = d.travel.scale(Fx::ratio(t, 10));
+            let b = Solid {
+                min: d.solid.min.add(at),
+                max: d.solid.max.add(at),
+                ..d.solid
+            };
+            boxes.push((format!("drift {k} at {t}/10 of its way"), b));
+        }
+    }
+    for (k, parts) in heights::turns() {
+        for (j, p) in parts.iter().enumerate() {
+            boxes.push((format!("turn at hop {k}, box {j}"), *p));
+        }
+    }
+    for (what, b) in &boxes {
+        for (x, z) in [
+            (b.min.x, b.min.z),
+            (b.max.x, b.min.z),
+            (b.min.x, b.max.z),
+            (b.max.x, b.max.z),
+        ] {
+            let ground = atlas.relief_at(x, z);
+            assert!(
+                ground.raw() < b.min.y.sub(Fx::from_int(6)).raw(),
+                "{what}: its bottom at {} m is near the land, at {} m",
+                b.min.y.to_f32_for_render(),
+                ground.to_f32_for_render()
+            );
+        }
+    }
+    // A stone's top box is in the way of a moving box if they overlap at
+    // all, but for a lift's or a riser's own stones either end, which they
+    // stop a hand's width from.
+    let all = stones();
+    for (what, b) in &boxes {
+        for s in &all {
+            let t = top_of(s);
+            let meets = t.min.x.raw() < b.max.x.raw()
+                && t.max.x.raw() > b.min.x.raw()
+                && t.min.y.raw() < b.max.y.raw()
+                && t.max.y.raw() > b.min.y.raw()
+                && t.min.z.raw() < b.max.z.raw()
+                && t.max.z.raw() > b.min.z.raw();
+            // A turn-around's landing is its own roof.
+            let own = what.starts_with("turn") && b.max.y.raw() == t.max.y.raw();
+            assert!(
+                !meets || own,
+                "{what} meets a stone at ({}, {}, {} m)",
+                s.x / 100,
+                s.z / 100,
+                s.top / 100
+            );
+        }
+    }
+}
+
+/// **The turn-arounds want their walls, and the ferry is caught going by**:
+/// no mover comes back over a turn-around's mouth on to its roof without
+/// kicking off its wall; and no plain jump (airdodge and all, on paper) from
+/// the stone it is caught from reaches the ferry where it waits out of reach.
+#[test]
+fn the_span_s_tricks_are_tricks() {
+    let mut cheats = Vec::new();
+    for class in sim::class::MOVERS {
+        let j = Journey {
+            beaten: u32::MAX,
+            ..Journey::default()
+        };
+        let mut w = World::arrive([class, class], j, ArenaId::BANK, None, 1);
+        for leg in pieces() {
+            match leg.hop {
+                Some(Hop::Turn { way }) => {
+                    let parts = heights::turn_parts(&leg.from, way);
+                    let (floor, roof) = (pilot::local(&w, parts[0]), pilot::local(&w, parts[1]));
+                    if pilot::turn_without_a_wall(&mut w, floor, roof, way.step()).is_ok() {
+                        cheats.push(format!(
+                            "{}: a turn-around {} m up without its wall",
+                            class.name(),
+                            leg.to.top / 100
+                        ));
+                    }
+                }
+                Some(Hop::Ferry { way, run, rise }) => {
+                    let ferry = heights::ferry_of(&leg.from, way, run, rise);
+                    let waiting = Stone {
+                        x: (ferry.solid.min.x.to_int() + ferry.solid.max.x.to_int()) * 50,
+                        z: (ferry.solid.min.z.to_int() + ferry.solid.max.z.to_int()) * 50,
+                        top: ferry.solid.max.y.to_int() * 100,
+                        half: heights::FERRY_DECK / 2,
+                        grounded: false,
+                    };
+                    let (gap, rise) = (
+                        heights::gap(&leg.from, &waiting),
+                        waiting.top - leg.from.top,
+                    );
+                    let p = plain().iter().find(|p| p.class == class).unwrap();
+                    if makes(&p.dodged, gap, rise) {
+                        cheats.push(format!(
+                            "{}: the ferry waiting {} m from the stone it is caught from",
+                            class.name(),
+                            gap / 100
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    assert!(cheats.is_empty(), "{}", cheats.join("\n"));
+}
+
+/// **The Hanging Stones are short sections between things that carry you**
+/// (2026-10-22): no run of stones climbed by hand -- between lifts, the
+/// riser and the ferry -- rises more than sixty metres, and they carry at
+/// least a third of the way from the foot to the plane.
+#[test]
+fn the_hanging_stones_are_short_sections_between_lifts() {
+    let mut run = 0;
+    let mut carried = 0;
+    let mut longest = 0;
+    for leg in hanging() {
+        let rise = leg.to.top - leg.from.top;
+        match leg.hop {
+            Some(Hop::Lift { .. } | Hop::Riser { .. } | Hop::Ferry { .. }) => {
+                carried += rise;
+                run = 0;
+            }
+            _ => {
+                run += rise.max(0);
+                longest = longest.max(run);
+            }
+        }
+    }
+    let total = SPAN.last().unwrap().top - FOOT.top;
+    assert!(
+        longest <= 6000,
+        "a run of {} m climbed by hand",
+        longest / 100
+    );
+    assert!(
+        carried * 3 >= total,
+        "carried {} m of {}",
+        carried / 100,
+        total / 100
+    );
 }

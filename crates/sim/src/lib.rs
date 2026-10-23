@@ -24,6 +24,7 @@ pub mod critter;
 pub mod crowd;
 pub mod curve;
 pub mod debris;
+pub mod drift;
 pub mod dual;
 pub mod effects;
 pub mod envelope;
@@ -54,7 +55,9 @@ pub mod stones;
 pub mod temper;
 pub mod tuned;
 pub mod tuning;
+pub mod tutorial;
 pub mod valley;
+pub mod versus;
 
 pub use class::{Class, Mechanic};
 pub use fixed::Fx;

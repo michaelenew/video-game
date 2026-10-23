@@ -1427,7 +1427,10 @@ fn every_class_has_a_move_that_carries_the_body() {
                     ]);
                 }
                 let crossed = w.players[0].pos.sub(start).flat_len();
-                let dodge = t::dodge_speed().mul(Fx::ratio(t::dodge_frames() as i32, 60));
+                // What a dodge really covers, decaying as it goes -- not its
+                // speed times its length, a bound a dodge never reaches, which
+                // the 26-frame dodge of 2026-10-22 pushed past the 8 m pool.
+                let dodge = sim::dual::dodge_travel(true);
                 assert!(
                     crossed.raw() > dodge.raw()
                         && crossed.raw() > walks_in(t::dodge_frames()).raw(),

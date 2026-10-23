@@ -190,6 +190,14 @@ Melee, on left click. Decent damage, thrown constantly, and it is the move the s
 copies most. **Since 2026-10-10 it is the Reave**: a short dash and a cut with a sweet spot at
 its tip — see 0013.
 
+**The cut reaches back to her — since 2026-10-21.** From play: "the reaver's lclick doesn't
+seem to be consuming stacks against the sparring bot". The dash is a fixed 2.5 m, so against
+somebody walking in, a Reave from close in ran her on to them and the disc landed past them.
+Her blade whiffed, only the shadow's copy connected, and a copy marks rather than spends. The
+cut is now a strip on the floor from her body to the disc (`state::hitbox`), so from on top
+of somebody it is the plain cut 0013 promised, and the disc's middle is still the only sweet
+spot. The overlay draws the strip as its two ends and its middle.
+
 > The archive's *first auto after reclaiming your shadow deals bonus damage scaled by
 > dexterity* is the cash-in now: the first swing after the dash, proportional to the marks
 > rather than to a stat, and her choice of which swing spends it.

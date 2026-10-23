@@ -111,17 +111,39 @@ fn veil_material(
     })
 }
 
-/// How many bodies are drawn: every creature slot, and one more for a body
-/// that is drawn and not in the world (`World::apparition`, the mimic).
-const BODIES: usize = MAX_MONSTERS + 1;
+/// How many bodies are drawn: every creature slot, one more for a body that
+/// is drawn and not in the world (`World::apparition`, the mimic), and the
+/// valley's sleeping creatures seen from afar (`crate::sighted`).
+const BODIES: usize = MAX_MONSTERS + 1 + crate::sighted::BODIES;
 
-/// The body drawn in pool `slot`, and how strongly: a creature, or -- in the
-/// last pool -- the apparition.
-fn body_in(world: &sim::World, slot: usize) -> Option<(Monster, Option<sim::Fx>)> {
+/// The pool the apparition is drawn in; past it, the sightings.
+const APPARITION: usize = MAX_MONSTERS;
+
+/// The body drawn in pool `slot`, how strongly, and which of its herd it is:
+/// a creature, the apparition, or a sleeping creature far off.
+fn body_in(
+    world: &sim::World,
+    sighted: &crate::sighted::Sighted,
+    slot: usize,
+) -> Option<(Monster, Option<sim::Fx>, usize)> {
     if slot < MAX_MONSTERS {
-        world.monsters[slot].map(|m| (m, None))
+        world.monsters[slot].map(|m| (m, None, slot))
+    } else if slot == APPARITION {
+        world
+            .apparition()
+            .map(|(m, s)| (m, Some(s), MAX_MONSTERS - 1))
     } else {
-        world.apparition().map(|(m, s)| (m, Some(s)))
+        sighted.bodies[slot - APPARITION - 1].map(|(m, n)| (m, None, n.min(MAX_MONSTERS - 1)))
+    }
+}
+
+/// How much of a part of the body in pool `slot` the simulation says is
+/// seen: a sleeping creature's is all of it.
+fn shown_of(world: &sim::World, slot: usize, index: usize) -> sim::Fx {
+    if slot < MAX_MONSTERS {
+        world.shown(slot, index)
+    } else {
+        sim::Fx::ONE
     }
 }
 
@@ -281,6 +303,7 @@ pub fn setup(
 /// floor through it.
 pub fn paint_parts(
     sim: Res<crate::Sim>,
+    sighted: Res<crate::sighted::Sighted>,
     placed: Res<PartStrokes>,
     limbs: Query<(&Limb, &Visibility), Without<Strokes>>,
     mut strokes: Query<
@@ -303,13 +326,13 @@ pub fn paint_parts(
             *visible = hidden();
             continue;
         };
-        let Some((beast, strength)) = body_in(&sim.cur, limb.0) else {
+        let Some((beast, strength, _)) = body_in(&sim.cur, &sighted, limb.0) else {
             *visible = hidden();
             continue;
         };
         let whole = match strength {
             Some(s) => s.raw() >= sim::Fx::ONE.raw(),
-            None => sim.cur.shown(limb.0, of.0).raw() >= sim::Fx::ONE.raw(),
+            None => shown_of(&sim.cur, limb.0, of.0).raw() >= sim::Fx::ONE.raw(),
         };
         let Some(Some((made, size))) = placed
             .0
@@ -433,6 +456,7 @@ type Limbs<'w, 's> = Query<
 
 pub fn place(
     sim: Res<crate::Sim>,
+    sighted: Res<crate::sighted::Sighted>,
     hide: Res<Hide>,
     forms: Res<Forms>,
     boom: Res<Boom>,
@@ -455,8 +479,8 @@ pub fn place(
     };
     for (limb, mut transform, mut visible, mut material, mut mesh) in limbs.iter_mut() {
         let (slot, index) = (limb.0, limb.1);
-        let Some((beast, strength)) =
-            body_in(&sim.cur, slot).filter(|(b, _)| index < b.sp().parts.len())
+        let Some((beast, strength, herd)) =
+            body_in(&sim.cur, &sighted, slot).filter(|(b, _, _)| index < b.sp().parts.len())
         else {
             *visible = Visibility::Hidden;
             continue;
@@ -469,7 +493,7 @@ pub fn place(
         // own strength.
         let shown = match strength {
             Some(s) => s,
-            None => sim.cur.shown(slot, index),
+            None => shown_of(&sim.cur, slot, index),
         };
         if shown.raw() <= 0 {
             *visible = Visibility::Hidden;
@@ -511,12 +535,13 @@ pub fn place(
 
         let skin_of = hide.of(beast.species);
         let tinted = crate::species::tint(beast.species)
+            .filter(|_| slot < MAX_MONSTERS)
             .and_then(|t| (t.stage)(&sim.cur, index))
             .and_then(|i| skin_of.stages.get(i));
         let wanted = if shown.raw() < sim::Fx::ONE.raw() {
             &skin_of.veil[veil_level(shown.to_f32_for_render())]
         } else {
-            tinted.unwrap_or_else(|| skin(skin_of, &beast, slot.min(MAX_MONSTERS - 1), index))
+            tinted.unwrap_or_else(|| skin(skin_of, &beast, herd, index))
         };
         if material.0 != *wanted {
             material.0 = wanted.clone();
@@ -531,7 +556,7 @@ pub fn place(
     // it disappears inside them and only shows in the wedge a bend opens up.
     for (knuckle, mut transform, mut visible, mut material) in knuckles.iter_mut() {
         let (slot, bone) = (knuckle.0, knuckle.1);
-        let Some((beast, strength)) = body_in(&sim.cur, slot) else {
+        let Some((beast, strength, herd)) = body_in(&sim.cur, &sighted, slot) else {
             *visible = Visibility::Hidden;
             continue;
         };
@@ -540,7 +565,9 @@ pub fn place(
         let whole = strength.is_none_or(|s| s.raw() >= sim::Fx::ONE.raw())
             && (0..beast.sp().parts.len())
                 .filter(|p| beast.sp().parts[*p].shape.bone == bone)
-                .all(|p| strength.is_some() || sim.cur.shown(slot, p).raw() >= sim::Fx::ONE.raw());
+                .all(|p| {
+                    strength.is_some() || shown_of(&sim.cur, slot, p).raw() >= sim::Fx::ONE.raw()
+                });
         if !whole {
             *visible = Visibility::Hidden;
             continue;
@@ -561,7 +588,7 @@ pub fn place(
             scale: Vec3::splat(width),
         };
         *visible = Visibility::Inherited;
-        let wanted = hide_of(hide.of(beast.species), slot.min(MAX_MONSTERS - 1));
+        let wanted = hide_of(hide.of(beast.species), herd);
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
@@ -1276,6 +1303,7 @@ fn grown_size(mesh: &Mesh) -> Vec3 {
 #[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are what it reads
 pub fn pose_bodies(
     sim: Res<crate::Sim>,
+    sighted: Res<crate::sighted::Sighted>,
     mut bodies: ResMut<Bodies>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut transforms: Query<&mut Transform>,
@@ -1291,7 +1319,7 @@ pub fn pose_bodies(
                 }
             }
         };
-        let Some((beast, strength)) = body_in(&sim.cur, slot) else {
+        let Some((beast, strength, _)) = body_in(&sim.cur, &sighted, slot) else {
             hide(&mut seen);
             continue;
         };
@@ -1305,7 +1333,9 @@ pub fn pose_bodies(
         let sp = beast.sp();
         let whole = match strength {
             Some(s) => s.raw() >= sim::Fx::ONE.raw(),
-            None => (0..sp.parts.len()).all(|p| sim.cur.shown(slot, p).raw() >= sim::Fx::ONE.raw()),
+            None => {
+                (0..sp.parts.len()).all(|p| shown_of(&sim.cur, slot, p).raw() >= sim::Fx::ONE.raw())
+            }
         };
         if !whole {
             hide(&mut seen);

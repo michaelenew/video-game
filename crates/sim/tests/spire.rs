@@ -2,8 +2,10 @@
 //! a shaft 315 m tall with an inverted dome on it 90 m across. It stands
 //! where the table says, the chimney up the dome's stem is open, the dome's
 //! underside is a thing a shot meets, nothing jutting from the shaft is in
-//! the stair's way -- and every class climbs the stair up its south face, on
-//! up the chimney's ledges, and stands among the ruins 353 m up.
+//! the stair's way -- and every class climbs to the ruins 353 m up: the
+//! stair, two lifts, the round of floating stones, the crown of the shaft
+//! (a shuttle, a stack of turn-arounds, a ferry), and the chimney's ledges
+//! (since 2026-10-22; until then, the stair the whole height).
 
 mod pilot;
 
@@ -152,26 +154,14 @@ fn step_box(b: Fx, s: &spire::Step, inside: bool) -> Solid {
 fn shaft_r(y: i32) -> i32 {
     SHAFT.0 - (SHAFT.0 - SHAFT.1) * y / SHAFT.2
 }
-/// **Every class climbs to the ruins**: from the plaza up the stair on the
-/// shaft's south face, stone by stone -- landed, or caught at the hands and
-/// climbed -- on to the shaft's top, up the chimney's ledges and out of its
-/// mouth on to the dome.
-#[test]
-fn every_class_climbs_to_the_ruins_by_the_stair() {
-    let b = base();
+/// The shaft's top, inside the chimney, and the first ledge's takeoff on
+/// it, then the chimney's ledges and the mouth's rim: the climb from the
+/// shaft's top to the ruins, as boxes on the map.
+fn to_the_ruins(b: Fx) -> Vec<Solid> {
     let mut route = Vec::new();
-    // The plaza beside the stair's foot, under its second stone.
-    let (px, pz) = (cm(AT.0 - 200), cm(AT.1 - SHAFT.0 - 450));
-    route.push(Solid {
-        min: V3::new(px.sub(Fx::ONE), b.sub(Fx::ONE), pz.sub(Fx::ONE)),
-        max: V3::new(px.add(Fx::ONE), b, pz.add(Fx::ONE)),
-        material: Material::Stone,
-        shape: Shape::Box,
-    });
-    route.extend(spire::stair().map(|s| step_box(b, &s, false)));
-    // The shaft's top, inside the chimney: come up on to it anywhere, and
-    // jump for the first ledge (on the south wall) from north of it -- from
-    // under it, a jump goes up under it.
+    // Come up on to the shaft's top anywhere, and jump for the first ledge
+    // (on the south wall) from north of it -- from under it, a jump goes up
+    // under it.
     let r = cm(SHAFT.1);
     route.push(Solid {
         min: V3::new(cm(AT.0).sub(r), b.add(cm(SHAFT.2 - 100)), cm(AT.1).sub(r)),
@@ -205,31 +195,259 @@ fn every_class_climbs_to_the_ruins_by_the_stair() {
         material: Material::Stone,
         shape: Shape::Box,
     });
+    route
+}
+
+/// Jump a route of boxes on the map, hop by hop; the first miss, named.
+fn hops(w: &mut World, b: Fx, route: &[Solid], what: &str) -> Result<(), String> {
+    for (k, pair) in route.windows(2).enumerate() {
+        let (from, to) = (pilot::local(w, pair[0]), pilot::local(w, pair[1]));
+        pilot::jump(w, from, to).map_err(|e| {
+            format!(
+                "{what}, hop {} ({} m up): {e}",
+                k + 1,
+                pair[1].max.y.sub(b).to_int()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+/// The plaza beside the stair's foot, under its second stone.
+fn plaza(b: Fx) -> Solid {
+    let (px, pz) = (cm(AT.0 - 200), cm(AT.1 - SHAFT.0 - 450));
+    Solid {
+        min: V3::new(px.sub(Fx::ONE), b.sub(Fx::ONE), pz.sub(Fx::ONE)),
+        max: V3::new(px.add(Fx::ONE), b, pz.add(Fx::ONE)),
+        material: Material::Stone,
+        shape: Shape::Box,
+    }
+}
+
+/// **The whole climb, for one class**: the stair, the first lift, the
+/// round, the second lift, and the crown of the shaft -- the shuttle jumped
+/// off at its speed, the stack turned round three times, the ferry caught
+/// going by and ridden to the tower -- the last stone, the shaft's top and
+/// the chimney, to the ruins.
+fn climb(class: Class) -> Result<World, String> {
+    let b = base();
+    let moving = spire::drifts(b);
+    let j = valley::Journey {
+        beaten: u32::MAX,
+        ..valley::Journey::default()
+    };
+    let mut w = World::arrive([class, class], j, ArenaId::SPIRE, Some(0), 1);
+    let stair: Vec<Solid> = core::iter::once(plaza(b))
+        .chain(spire::stair().map(|s| step_box(b, &s, false)))
+        .collect();
+    hops(&mut w, b, &stair, "the stair")?;
+    let lift = |w: &World, k: usize| {
+        let to = spire::LIFTS[k].arrival().solid(b, 100);
+        pilot::local(w, to)
+    };
+    let to = lift(&w, 0);
+    pilot::ride(&mut w, &moving[0], to).map_err(|e| format!("the first lift: {e}"))?;
+    let mut round = vec![spire::LIFTS[0].arrival().solid(b, 100)];
+    round.extend(
+        spire::round()
+            .zip(spire::ROUND.iter())
+            .map(|(s, r)| s.solid(b, spire::floating_deep(r.3))),
+    );
+    round.push(spire::LIFTS[1].departure().solid(b, 100));
+    hops(&mut w, b, &round, "the round")?;
+    let to = lift(&w, 1);
+    pilot::ride(&mut w, &moving[2], to).map_err(|e| format!("the second lift: {e}"))?;
+    let mut steps = vec![spire::LIFTS[1].arrival().solid(b, 100)];
+    steps.extend(
+        spire::crown_steps()
+            .zip(spire::CROWN_STEPS.iter())
+            .map(|(s, r)| s.solid(b, spire::floating_deep(r.3))),
+    );
+    hops(&mut w, b, &steps, "the crown's first stones")?;
+    let rest = pilot::local(&w, spire::REST.solid(b, 150));
+    pilot::launch(&mut w, &moving[4], rest).map_err(|e| format!("the shuttle: {e}"))?;
+    let floors: Vec<Solid> = spire::stack_floors().map(|s| s.solid(b, 80)).collect();
+    for k in 0..floors.len() - 1 {
+        let dir = if k % 2 == 0 { (0, 1) } else { (0, -1) };
+        let (from, to) = (pilot::local(&w, floors[k]), pilot::local(&w, floors[k + 1]));
+        pilot::turn_around(&mut w, from, to, dir)
+            .map_err(|e| format!("the stack, turn {}: {e}", k + 1))?;
+    }
+    let top = pilot::local(&w, spire::stack_top().solid(b, 80));
+    pilot::catch(&mut w, top, &moving[5]).map_err(|e| format!("catching the ferry: {e}"))?;
+    pilot::carried_over(&mut w, &moving[5]).map_err(|e| format!("on the ferry: {e}"))?;
+    let deck = pilot::drift_now(&w, &moving[5]);
+    let last = pilot::local(&w, spire::last_stone().solid(b, 200));
+    pilot::jump(&mut w, deck, last).map_err(|e| format!("off the ferry: {e}"))?;
+    let mut ruins = vec![spire::last_stone().solid(b, 200)];
+    ruins.extend(to_the_ruins(b));
+    hops(&mut w, b, &ruins, "the shaft's top and the chimney")?;
+    Ok(w)
+}
+
+/// **Every class climbs to the ruins** (since 2026-10-22, by the stair, two
+/// lifts, the round and the crown of the shaft): from the plaza, every
+/// stone landed or caught and climbed, every lift ridden, the shuttle and
+/// the ferry and the stack made, on to the shaft's top, up the chimney's
+/// ledges and out of its mouth on to the dome.
+#[test]
+fn every_class_climbs_to_the_ruins() {
     let mut failed = Vec::new();
     for class in sim::class::MOVERS {
+        match climb(class) {
+            // And on the dome's top she is on the roost.
+            Ok(w) => assert_eq!(w.arena, sim::valley::ranges::RANGES[5].arena),
+            Err(e) => failed.push(format!("{}: {e}", class.name())),
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// **About half the tower is climbed by hand** (the owner, 2026-10-22: "the
+/// user shouldn't traverse but maybe half the current height of the tower
+/// manually"): the lifts carry at least two-fifths of it, and the climb
+/// by hand is not more than three-fifths.
+#[test]
+fn the_lifts_carry_about_half_the_tower() {
+    let lifted: i32 = spire::LIFTS.iter().map(|l| l.head - l.foot).sum();
+    assert!(
+        lifted * 5 >= TOP * 2 && (TOP - lifted) * 5 <= TOP * 3,
+        "the lifts carry {} m of {}",
+        lifted / 100,
+        TOP / 100
+    );
+    // And no section climbed by hand is taller than sixty metres.
+    let sections = [
+        spire::STAIR_TOP,
+        spire::ROUND_TO - spire::ROUND_FROM,
+        SHAFT.2 - spire::CROWN_FROM,
+        TOP - SHAFT.2,
+    ];
+    for s in sections {
+        assert!(s <= 6000, "a section {} m tall", s / 100);
+    }
+}
+
+/// Edge to edge on the flat between two boxes, and how far the second's
+/// top is over the first's.
+fn gap_rise(a: &Solid, b: &Solid) -> (Fx, Fx) {
+    let apart = |lo: Fx, hi: Fx, p: Fx, q: Fx| p.sub(hi).max(lo.sub(q)).max(Fx::ZERO);
+    let gx = apart(a.min.x, a.max.x, b.min.x, b.max.x);
+    let gz = apart(a.min.z, a.max.z, b.min.z, b.max.z);
+    (
+        sim::math::wide_len(V3::new(gx, Fx::ZERO, gz)),
+        b.max.y.sub(a.max.y),
+    )
+}
+
+/// Does any plain jump of a class's -- run, jump, airdodge -- catch a gap?
+fn plain_catches(class: Class, gap: Fx, rise: Fx) -> bool {
+    use sim::envelope::{self as e, Extra};
+    let mut paths = vec![e::off_the_edge(class, Extra::Nothing)];
+    paths.extend(e::airdodge_paths(class));
+    e::widest_caught(&paths, rise).is_some_and(|w| w.raw() >= gap.raw())
+}
+
+/// **The crown's tricks are tricks**: no plain jump makes the shuttle's gap
+/// from where it stops, or from the stone before it; nobody turns the
+/// stack round without its wall; and the ferry is out of reach wherever it
+/// waits, from where it is caught. A stone that moves is judged on paper
+/// where it stops (against `sim::envelope`, airdodge and all), because a
+/// pilot stood where it stops is carried off by it wherever it really is.
+#[test]
+fn the_crown_is_made_only_the_way_it_is_laid_out() {
+    let b = base();
+    let moving = spire::drifts(b);
+    let rest = spire::REST.solid(b, 150);
+    let shuttle = &moving[4];
+    let stopped = shuttle.at(shuttle.wait as u32 + shuttle.go as u32 + 2);
+    let top = spire::stack_top().solid(b, 80);
+    let ferry = &moving[5];
+    let waits = [
+        ("out east", ferry.at(0)),
+        (
+            "at the tower",
+            ferry.at(ferry.wait as u32 + ferry.go as u32 + 2),
+        ),
+    ];
+    let mut cheats = Vec::new();
+    for class in sim::class::MOVERS {
+        let (g, r) = gap_rise(&stopped, &rest);
+        if plain_catches(class, g, r) {
+            cheats.push(format!(
+                "{}: the rest, {} m from the shuttle stopped",
+                class.name(),
+                g.to_f32_for_render()
+            ));
+        }
+        for (what, deck) in waits {
+            let (g, r) = gap_rise(&top, &deck);
+            if plain_catches(class, g, r) {
+                cheats.push(format!(
+                    "{}: the ferry waiting {what}, {} m from the stack's top",
+                    class.name(),
+                    g.to_f32_for_render()
+                ));
+            }
+        }
         let j = valley::Journey {
             beaten: u32::MAX,
             ..valley::Journey::default()
         };
         let mut w = World::arrive([class, class], j, ArenaId::SPIRE, Some(0), 1);
-        for (k, pair) in route.windows(2).enumerate() {
-            let (from, to) = (pilot::local(&w, pair[0]), pilot::local(&w, pair[1]));
-            if let Err(e) = pilot::jump(&mut w, from, to) {
-                failed.push(format!(
-                    "{}: step {} ({} m up): {e}",
+        let l = |w: &World, s: Solid| pilot::local(w, s);
+        let takeoff = l(&w, spire::crown_steps().last().unwrap().solid(b, 80));
+        let to = l(&w, rest);
+        if pilot::jump(&mut w, takeoff, to).is_ok() {
+            cheats.push(format!(
+                "{}: a plain jump from the takeoff to the rest",
+                class.name()
+            ));
+        }
+        let floors: Vec<Solid> = spire::stack_floors().map(|s| s.solid(b, 80)).collect();
+        for k in 0..floors.len() - 1 {
+            let dir = if k % 2 == 0 { (0, 1) } else { (0, -1) };
+            let (from, to) = (l(&w, floors[k]), l(&w, floors[k + 1]));
+            if pilot::turn_without_a_wall(&mut w, from, to, dir).is_ok() {
+                cheats.push(format!(
+                    "{}: the stack's turn {} without the wall",
                     class.name(),
-                    k + 1,
-                    pair[1].max.y.sub(b).to_int()
+                    k + 1
                 ));
-                break;
             }
         }
-        if failed.is_empty() {
-            // And on the dome's top she is on the roost.
-            assert_eq!(w.arena, sim::valley::ranges::RANGES[5].arena);
+    }
+    assert!(cheats.is_empty(), "{}", cheats.join("\n"));
+}
+
+/// **Nothing stands in a lift's way**: no box of the map is inside the
+/// space either lift's cars sweep, a little in from its sides -- a car rises
+/// through open air from its foot to its head.
+#[test]
+fn nothing_stands_in_a_lift_s_way() {
+    let b = base();
+    let skin = Fx::ratio(1, 10);
+    for (k, car) in spire::drifts(b).iter().take(4).enumerate() {
+        let mut room = car.swept();
+        room.min = room.min.add(V3::new(skin, skin, skin));
+        room.max = room.max.sub(V3::new(skin, skin, skin));
+        // And the room a body stands in on the deck, all the way.
+        room.max.y = room.max.y.add(Fx::from_int(2));
+        for s in near() {
+            let meets = s.min.x.raw() < room.max.x.raw()
+                && s.max.x.raw() > room.min.x.raw()
+                && s.min.y.raw() < room.max.y.raw()
+                && s.max.y.raw() > room.min.y.raw()
+                && s.min.z.raw() < room.max.z.raw()
+                && s.max.z.raw() > room.min.z.raw();
+            assert!(
+                !meets,
+                "car {k}: a box from {} to {} m up is in its way",
+                s.min.y.sub(b).to_f32_for_render(),
+                s.max.y.sub(b).to_f32_for_render()
+            );
         }
     }
-    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
 #[test]
@@ -268,4 +486,44 @@ fn nothing_jutting_from_the_shaft_is_across_the_stair() {
             );
         }
     }
+}
+
+/// **A turn-around of 6.5 m off a wall 2.5 m out** (the bench's lane,
+/// `arena::bench::TURNS`, which the stack and the Hanging Stones' turns are
+/// sized from): every mover makes it, none without the wall -- and a metre
+/// higher is past the shortest jumpers.
+#[test]
+fn a_turn_around_of_six_and_a_half_metres_is_every_mover_s() {
+    use sim::arena::bench;
+    let solids = ArenaId::BENCH.get().solids;
+    let lane = |k: usize| {
+        let at = solids
+            .iter()
+            .position(|s| s.min.z == cm(bench::turn_z(k)))
+            .unwrap();
+        (solids[at], solids[at + 1])
+    };
+    let mut failed = Vec::new();
+    for class in sim::class::MOVERS {
+        let mut w = World::arrive(
+            [class, class],
+            valley::Journey::default(),
+            ArenaId::BENCH,
+            Some(0),
+            1,
+        );
+        let (floor, roof) = lane(0);
+        if pilot::turn_around(&mut w, floor, roof, (1, 0)).is_err() {
+            failed.push(format!("{}: misses the turn-around", class.name()));
+        }
+        if pilot::turn_without_a_wall(&mut w, floor, roof, (1, 0)).is_ok() {
+            failed.push(format!("{}: makes it without the wall", class.name()));
+        }
+        let (floor, roof) = lane(1);
+        let higher = pilot::turn_around(&mut w, floor, roof, (1, 0)).is_ok();
+        if matches!(class, Class::Champion | Class::BloodMage) && higher {
+            failed.push(format!("{}: makes a metre higher", class.name()));
+        }
+    }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
 }

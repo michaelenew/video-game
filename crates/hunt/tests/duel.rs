@@ -110,25 +110,23 @@ fn plan_index(p: Plan) -> usize {
 }
 
 /// **It fights.** Every class, against its own mirror, throws, lands and
-/// finishes a round inside three minutes -- and stays inside the walls, which
-/// are lower than a jump.
+/// finishes a round inside three minutes.
+///
+/// It used to stay inside the walls too, and does not any more (2026-10-21):
+/// the proving ground is small and its walls are lower than a jump, so a bout
+/// that jumps, rushes and is thrown about ends up outside them, on main as
+/// well -- across eight seeds the Champion mirror spent thirteen thousand
+/// fighter-frames out there, and this test's seed was a quiet one. The owner:
+/// "the arena is quite small, it makes sense they'd end up outside of it".
 #[test]
 fn every_class_fights() {
     for class in ALL_CLASSES {
-        let mut outside = 0u32;
         let bout = spar_traced(
             [class, class],
             [Level::Normal; 2],
             3 * MINUTE,
             11,
-            |w, _| {
-                if matches!(w.phase, Phase::Fighting) {
-                    outside += w.players[..w.present()]
-                        .iter()
-                        .filter(|p| !inside(p))
-                        .count() as u32;
-                }
-            },
+            |_, _| {},
         );
         for i in 0..hunt::duel::DUEL {
             assert!(bout.thrown[i] >= 40, "{}: {bout:?}", class.name());
@@ -139,17 +137,7 @@ fn every_class_fights() {
             "{}: nobody won a round in three minutes: {bout:?}",
             class.name()
         );
-        assert!(
-            outside < 10 * 60,
-            "{}: {outside} fighter-frames outside the walls",
-            class.name()
-        );
     }
-}
-
-fn inside(p: &sim::state::Player) -> bool {
-    let half = sim::arena::proving_ground::half();
-    p.pos.x.abs().raw() <= half.raw() && p.pos.z.abs().raw() <= half.raw()
 }
 
 /// **The levels mean something.** Across every pairing, a hard bot takes a
@@ -398,5 +386,67 @@ fn the_elementalist_pushes_stones() {
     assert!(
         blind * 3 < aimed,
         "{blind} pushes with nothing of hers near the line, {aimed} with something"
+    );
+}
+
+/// **The Reave spends the tally on the sparring bot** (2026-10-21, from
+/// play: "the reaver's lclick doesn't seem to be consuming stacks against the
+/// sparring bot"). The bot fights close, and a Reave thrown from close in ran
+/// her on to it and cut past it: the first thing to land was the shadow's
+/// copy, which marks rather than spends. Now the first blow of every Reave
+/// that lands is her own blade, and it takes the marks.
+#[test]
+fn the_reave_spends_the_marks_on_the_bot() {
+    use sim::moves::reaver as r;
+    use sim::state::Action;
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Champion]);
+    let mut bot = Duelist::new(1, Level::Normal, 7);
+    let (mut cashed, mut copied) = (0, 0);
+    let mut watching = false;
+    for f in 0..3000u32 {
+        let it = w.players[1];
+        let press = f % 30 == 0 && matches!(w.players[0].action, Action::Free);
+        if press {
+            // Close in, on its own floor, facing it: where the bot fights.
+            w.players[0].pos = V3::new(it.pos.x.sub(sim::Fx::ratio(6, 5)), it.pos.y, it.pos.z);
+            w.players[1].marks = 3;
+            watching = true;
+        }
+        bot.watch(&w);
+        let two = bot.act(&w);
+        let before = w.players[1].health;
+        w.advance([
+            Input::aimed(if press { r::keys::FINISHER } else { 0 }, 0),
+            two,
+        ]);
+        let reaving = matches!(w.players[0].action.attack_kind(), Some(r::REAVE));
+        if watching && reaving && w.players[1].health < before {
+            watching = false;
+            // A bot that stepped aside and is behind her as she lands got
+            // out of the way: the copy, turned to it, may catch it then.
+            let ahead = w.players[1]
+                .pos
+                .sub(w.players[0].pos)
+                .dot(w.players[0].facing);
+            if w.players[1].marks == 0 {
+                cashed += 1;
+            } else if ahead.raw() >= 0 {
+                copied += 1;
+            }
+        }
+        if !reaving {
+            watching = false;
+        }
+        if w.players[0].health <= 0 || w.players[1].health <= 0 {
+            w = World::with_classes([Class::ShadowReaver, Class::Champion]);
+        }
+    }
+    assert_eq!(
+        copied, 0,
+        "{copied} Reaves landed only the shadow's copy on a bot in front of her ({cashed} cashed)"
+    );
+    assert!(
+        cashed >= 10,
+        "too few Reaves landed to say anything: {cashed}"
     );
 }

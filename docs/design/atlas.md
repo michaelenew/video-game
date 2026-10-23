@@ -123,7 +123,7 @@ woods, rocks, and the fights in clearings off the road.
 - **A way** is a line of points, each with a floor height and a half-width:
   the floor is level across its width and eases from point to point. The
   road is each reach's `WAY` in turn, wide in the meadows (fifty metres) and
-  narrow at the passes; each room has a side path to it. Off a floor's edge
+  narrow at the passes; a room off the town has a road to it. Off a floor's edge
   the land rises: **foothills** first, a third as steep as they are long for
   sixteen metres, and then the **mountainside**, turning to a slope of 1.4.
 - **A pad** is a place that keeps its own floor: the town, the Ring, every
@@ -191,13 +191,21 @@ on ground metres up and is not a ceiling for being there.
 - **The town and the reaches share the map's coordinates**: a reach's origin
   is the map's, so its road, seams and crags are written where they are, and
   walking from one reach to the next moves nothing.
-- **A room** sits in a clearing off the road, at the end of a side path from
-  a junction to the middle of its near side. Its rim's bank rises straight
-  off its walls (a room without one has six metres of level ground round it)
-  and its doorway is cut through its wall where the path arrives
-  (`Plan::carves`). The Cliffs sit sunk with their plateau at the road's
-  height, reached over a bridge across the ravine round them; the Shrine is
-  at the top of a switchback twenty metres up the Saddle's north-east slope.
+- **A room** -- the Ring, the Long Valley -- sits in a clearing off the
+  town, at the end of a road from it to the middle of its near side. Its
+  rim's bank rises straight off its walls (a room without one has six metres
+  of level ground round it) and its doorway is cut through its wall where
+  the road arrives (`Plan::carves`).
+- **A station** (since 2026-10-22, [valley.md](valley.md) §1f) is a
+  creature's room raised over the land beside the road, reached by a route
+  of stones, not a side path: its pad has **a ledge** (`land::Pad::ledge`)
+  -- no embankment off it, so its rim's cliff falls to the land all round,
+  and its rim cut away at its floor's height round its door, out past the
+  crest's fall (`land::ledge_reach`), so the ledge's edge is a drop. Where
+  the land round one would be higher than its ledge, a pocket of meadow is
+  cut round it (`stations::MEADOWS`). The Cliffs sit sunk as they were,
+  their plateau at the road's height, reached across the ravine by stones
+  where the bridge was.
 - **A waystone's door** is a box across a pass, shut while the stone is dark.
 - **Crags, cairns, trees and boulders** are made by the layout, standing on
   the land wherever it is under them: a crag is a pillar of rock with ledges
@@ -275,9 +283,27 @@ snow high up a mountain — with the road worn in (`Palette::trodden`), and
 patches across a meadow. Water is a surface over the tiles under it. A tile
 is built, rebuilt finer or coarser, or dropped as the camera moves, nearest
 first, up to 24 a frame and no more than 3 ms of it; the land is drawn out to 300–700 m (the sky's reach, a
-fifth more). Trees are three shared meshes — a trunk, a pine's cone, a
+fifth more). **Past 200 m the land is drawn a block at a time** (`BLOCK`,
+4×4 tiles): one mesh at the fineness its nearest point asks, built in place
+of its tiles -- or back into its tiles, all sixteen in one frame -- so the
+far land is a few hundred pieces rather than four thousand. Each tile of a
+block keeps its water and, where the brush is laid as splats, its strokes.
+Trees are three shared meshes — a trunk, a pine's cone, a
 broadleaf's crown — and a few materials, so a wood of a thousand trees costs
 little.
+
+**The grown giants are drawn at four levels** (`grove::LEVELS`, 100, 250 and
+450 m to the nearest of the tree's box): past each, nothing finer than
+`grove::detail_at` that distance shows is drawn -- a pixel at 1080 lines in
+the plain look, the paint's brush in a painted one. A branch thinner is left
+to its parent, which the pipe model makes as thick as all it bears; a run of
+a limb bent less than that is one tube; rounds and rings get fewer faces;
+leaf clumps closer than four times it are one clump of the same area. The
+switch is hard, a little further out going coarser than coming finer. The
+far levels are kept while the tree is in reach; the full one only while it
+is drawn. The fourteen giants are about 916,000 triangles up close and
+300,000 past 450 m in the plain look, 65,000--180,000 in the painted ones
+(`grove::tests::every_level_is_a_saving`).
 
 
 In the valley, the renderer draws two kinds of piece, each loaded when the
@@ -287,7 +313,12 @@ another 60 m (so the edge never flickers):
 - **A place**: its floor, the patches on it, its props, what is scattered on
   its floor, its seams, under one entity.
 - **A box**: each box of the map on its own, found through the tiles round
-  the camera, so loading reads the tiles near the camera and not the map.
+  the camera, so loading reads the tiles near the camera and not the map --
+  **until its block is 160 m off** (`MERGED_FROM`): then every box of the
+  block is drawn as one of a few meshes, one for each paint, shadow and
+  vertex layout, built in place of the boxes and split back into them in one
+  frame. A box wider than a block, a tree's trunk and a giant's box are never
+  merged.
 
 Building is spread over frames: the nearest place and the 48 nearest boxes
 still wanted, each frame, until everything in reach is drawn -- and boxes and
