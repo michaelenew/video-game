@@ -224,23 +224,25 @@ def wedge(c, axes, half, taper, round_=0.15, blend=FLESH, kind=SKIN):
     return Part(fn, c - r, c + r, blend, kind)
 
 
-def blade(base, direction, height, width, flat_along, blend=ARMOUR, kind=BONE):
+def blade(base, direction, height, width, flat_along, blend=ARMOUR, kind=BONE, flare=1.2, tip=0.0):
     """A spike: a cone from `base` along `direction`, `width` at its foot,
-    flattened to a blade lying along `flat_along` (thin across it)."""
+    flattened to a blade lying along `flat_along` (thin across it). `flare`
+    is how fast it narrows from its foot (more is a broader foot and a
+    slimmer point); `tip` how round its point is."""
     base = np.asarray(base, float)
     d = unit(direction)
     across = unit(np.cross(d, flat_along))
-    tip = base + d * height
+    end = base + d * height
 
     def fn(p):
         rel = p - base
         # Squash across the blade: a blade is a cone pressed thin.
         squeezed = rel + (rel @ across)[..., None] * across * 1.6
         h = np.clip((squeezed @ d) / height, 0, 1)
-        return np.linalg.norm(squeezed - h[..., None] * d * height, axis=-1) - width * (1 - h) ** 1.2
+        return np.linalg.norm(squeezed - h[..., None] * d * height, axis=-1) - (width - tip) * (1 - h) ** flare - tip
 
-    lo = np.minimum(base, tip) - width * 1.2
-    hi = np.maximum(base, tip) + width * 1.2
+    lo = np.minimum(base, end) - width * 1.2
+    hi = np.maximum(base, end) + width * 1.2
     return Part(fn, lo, hi, blend, kind)
 
 
@@ -408,10 +410,16 @@ def body_parts(pose):
         # Two rows, staggered either side of the spine, leaning back.
         s_ = 1 if n % 2 else -1
         base = p + u * (radius - 0.4) + l * s_ * 0.35
-        parts.append(blade(base, u + f * -0.4 + l * s_ * 0.15, 0.5 + 3.4 * size, 0.85 * size + 0.18, f))
+        # A broad, flared foot growing out of the back, not a slab stood on
+        # it, and a point a little dull (the owner: "thicker at the base so
+        # they don't read like a stone overhanging ... the tips just a
+        # little dull").
+        parts.append(blade(base - u * 0.2, u + f * -0.25 + l * s_ * 0.12, 0.7 + 3.4 * size, 1.25 * size + 0.3, f,
+                           ARMOUR * 2, BONE, 2.0, 0.07 + 0.05 * size))
         if size > 0.55:
             # Over the shoulders and hips, a lower plate outside each.
-            parts.append(blade(p + u * (radius - 0.5) + l * -s_ * 0.95, u * 0.8 + l * -s_ * 0.6 - f * 0.3, 0.4 + 1.6 * size, 0.55 * size, f))
+            parts.append(blade(p + u * (radius - 0.6) + l * -s_ * 0.95, u * 0.8 + l * -s_ * 0.6 - f * 0.2, 0.5 + 1.6 * size, 0.8 * size + 0.15, f,
+                               ARMOUR * 2, BONE, 2.0, 0.06))
         # Armour knobs on the flanks, scattered.
         for s2 in (1, -1):
             a_ = 0.55 + 0.25 * rng.random()
