@@ -18,6 +18,7 @@
 //! true about is moved into the derivation, so the next arena starts closer.
 
 pub mod edge;
+pub mod hide;
 pub mod palette;
 pub mod sheet;
 pub mod skies;

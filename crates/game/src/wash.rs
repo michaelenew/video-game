@@ -50,7 +50,8 @@ use bevy::render::{Render, RenderSet};
 const SHADER: Handle<Shader> = weak_handle!("b4d1c0e7-3a5f-4e92-8c61-0f7e2d9a5b38");
 
 /// The treatment this run is painted in: `plain` -- the picture as it was
-/// before any of this -- unless `--look` names another. The painted looks are
+/// before any of this -- unless `--look` names another, or `--pretty` asks
+/// for the best of them (`crate::pretty`). The painted looks are
 /// opt-in until they are cheap enough to be the default: `brushed` as the
 /// default cost the owner the game (fan, a walk at a crawl, a class change
 /// that froze), 2026-10-16.
@@ -58,6 +59,7 @@ pub fn style() -> look::Wash {
     static STYLE: OnceLock<look::Wash> = OnceLock::new();
     *STYLE.get_or_init(|| {
         crate::platform::value("--look")
+            .or(crate::pretty::on().then_some(crate::pretty::LOOK))
             .and_then(look::wash::named)
             .unwrap_or(look::wash::PLAIN)
     })

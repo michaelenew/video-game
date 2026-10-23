@@ -117,6 +117,11 @@ fn every_channel_survives_the_round_trip_in_principle() {
             Joint::ShinR => "knee_r",
             Joint::FootL => "ankle_l",
             Joint::FootR => "ankle_r",
+            Joint::Neck => "neck",
+            Joint::ClavicleL => "clavicle_l",
+            Joint::ClavicleR => "clavicle_r",
+            Joint::ToeL => "toes_l",
+            Joint::ToeR => "toes_r",
         };
         assert!(
             text.contains(name),

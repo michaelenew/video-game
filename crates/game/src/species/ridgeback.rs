@@ -1,6 +1,7 @@
 //! How the Ridgeback is drawn: mossy armour, and two weak points that glow.
 
-use super::{Look, Paint, Spikes};
+use super::{Build, Look, Paint, Spikes};
+use crate::contour::{Contour, Kind};
 use sim::species::ridgeback::{self, bones};
 
 pub const LOOK: Look = Look {
@@ -44,4 +45,20 @@ pub const LOOK: Look = Look {
     critters: &[],
     horns: None,
     stance: None,
+};
+
+/// **How it is built**: a graviportal animal -- columnar legs with the
+/// muscle showing, a heavy barrel with little rib to see under its armour,
+/// a whip of a tail, a wedge of a head.
+pub const BUILD: Build = Build {
+    fat: 0.65,
+    muscle: 0.8,
+    heavy: 1.0,
+    contours: &[
+        (ridgeback::HEAD, Contour::of(Kind::Wedge).muscle(0.6)),
+        (
+            ridgeback::NECK_PART,
+            Contour::of(Kind::Column).between_const(Kind::Taper, 0.4),
+        ),
+    ],
 };

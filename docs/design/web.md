@@ -172,6 +172,12 @@ so it is worth having the real numbers rather than a feeling about them.
 
 Plus 108 KB of `wasm-bindgen` glue and a 26 KB page.
 
+**The characters are not in the module** (2026-10-21, exploration 0024
+sec. 11). They were compiled into it, 40.6 MB of models every visitor
+downloaded before the page drew; they are now files in `assets/` beside the
+page, each fetched the first time somebody plays its class -- about 3 MB
+over a gzipping connection. (The module itself has grown since the table
+above: 42.7 MB, 18.8 MB gzipped, as of the same date.)
 Those were the first numbers, at `opt-level = "z"`. By 2026-10-21 the module
 had grown to 42.0 MB (18.8 MB gzipped), and it is built at `"s"` now, for
 speed: 48.3 MB (19.8 MB). See §"What a browser frame costs".

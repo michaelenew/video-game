@@ -194,6 +194,42 @@ fn out_for(t: f32, turn: f32) -> f32 {
     wanted.min(allowed).max(0.16)
 }
 
+/// **The cuts thrown to full length** (2026-10-20): the Reaver's finishers.
+/// Every other swing holds its grip a forearm out along the axis from the
+/// hub, which is right for a sword swung round the body and wrong for a
+/// lunge, a dive and a drive, where the whole point is the arm thrown out
+/// to its end -- held a third of a metre out, the Reave's stab read as a
+/// jab from the chest. On these the striking hand goes to the furthest point
+/// of the line its arm can reach from its own shoulder, and on the two-handed
+/// ones the other hand beside it.
+pub fn full_reach(clip: Clip) -> bool {
+    matches!(
+        clip,
+        Clip::ReaverPoke | Clip::ReaverPlunge | Clip::ReaverGallows
+    )
+}
+
+/// How much of the arm's length a hand thrown to full length uses: straight,
+/// short of locking the elbow.
+const STRAIGHT: f32 = 0.97;
+
+/// The furthest point of `line` within `reach` of `shoulder`; the nearest
+/// point of it if none is.
+fn furthest_within(line: &Line, shoulder: V3, reach: f32) -> V3 {
+    let length = line.reach();
+    // Walked back from the tip in centimetres: the line is a metre or two,
+    // and the point is where a sphere round the shoulder leaves it.
+    let mut out = length;
+    while out > 0.0 {
+        let p = line.along(out);
+        if math::length(math::sub(p, shoulder)) <= reach {
+            return p;
+        }
+        out -= 0.01;
+    }
+    line.from
+}
+
 /// Where the body's two hands go on a line. `None` leaves that hand as the
 /// recipe authored it.
 #[derive(Clone, Copy, Debug, Default)]
@@ -225,6 +261,22 @@ pub fn grip_on(clip: Clip, line: &Line, t: f32, turn: f32) -> Grip {
                 _ => true,
             };
             let (lead, rear) = (line.along(out + GRIP), line.along(out - GRIP));
+            // The Reave is one blade driven out ahead of a lunge: the other
+            // hand is the counterweight the recipe throws back, not a second
+            // hand on a hilt.
+            if clip == Clip::ReaverPoke {
+                return if right_leads {
+                    Grip {
+                        left: None,
+                        right: Some(lead),
+                    }
+                } else {
+                    Grip {
+                        left: Some(lead),
+                        right: None,
+                    }
+                };
+            }
             if right_leads {
                 Grip {
                     left: Some(rear),
@@ -317,6 +369,11 @@ pub fn apply(clip: Clip, frames: &mut [Pose]) {
         view::ik::elbow_of(&frames[lo.saturating_sub(1)], skeleton, slot_is_left(true)),
         view::ik::elbow_of(&frames[lo.saturating_sub(1)], skeleton, slot_is_left(false)),
     ];
+    // Where each hand was sent last frame, so a hand thrown to full length
+    // gets there no faster than a hand moves (`HAND_CEILING`, with the
+    // motion test's own margin): the line grows to its full reach in a
+    // frame, and an arm cannot.
+    let mut sent: [Option<V3>; 2] = [None, None];
     for i in lo..=hi {
         let (grip, w) = if i < first {
             (start, weight(first - i))
@@ -334,8 +391,53 @@ pub fn apply(clip: Clip, frames: &mut [Pose]) {
         };
         let (was_l, was_r) = hands_of(&frames[i]);
         let mut pose = frames[i];
+        let at = if i < first {
+            first
+        } else if i > last {
+            last
+        } else {
+            i
+        };
         for (body_left, want, was) in [(true, grip.left, was_l), (false, grip.right, was_r)] {
             let Some(want) = want else { continue };
+            // Thrown to full length: as far along the line as this arm goes.
+            let want = match lines
+                .get(at)
+                .copied()
+                .flatten()
+                .filter(|_| full_reach(clip))
+            {
+                Some(line) => {
+                    let skin = view::skeleton::solve(skeleton, &frames[i]);
+                    let arm = if slot_is_left(body_left) {
+                        view::skeleton::Joint::ArmL
+                    } else {
+                        view::skeleton::Joint::ArmR
+                    };
+                    let shoulder = skin.origin[arm.index()];
+                    let tip = furthest_within(&line, shoulder, skeleton.arm_reach() * STRAIGHT);
+                    // Two hands on one hilt sit a grip apart along it.
+                    if grip.left.is_some() && grip.right.is_some() {
+                        math::add(tip, math::scale(math::sub(want, line.along(OUT)), 0.5))
+                    } else {
+                        tip
+                    }
+                }
+                None => want,
+            };
+            let want = match sent[body_left as usize] {
+                Some(prev) if full_reach(clip) => {
+                    let step = math::sub(want, prev);
+                    let far = math::length(step);
+                    if far > HAND_CEILING {
+                        math::add(prev, math::scale(step, HAND_CEILING / far))
+                    } else {
+                        want
+                    }
+                }
+                _ => want,
+            };
+            sent[body_left as usize] = Some(want);
             let target = math::add(was, math::scale(math::sub(want, was), w));
             let slot = slot_is_left(body_left);
             // The elbow to prefer: the frame before's while on the line, and

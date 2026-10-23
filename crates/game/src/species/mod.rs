@@ -168,6 +168,41 @@ pub fn look(id: SpeciesId) -> &'static Look {
     }
 }
 
+/// **How a species' body is built** (`crate::contour`, exploration 0027):
+/// the contours its parts are grown in, where its own say differs from what
+/// `crate::grown` infers from the part's shape and bone, and the dials every
+/// part shares. Found beside the look, as a tint is, so a species that says
+/// nothing is grown by inference.
+#[derive(Clone, Copy, Debug)]
+pub struct Build {
+    /// How much flesh over the structure (0 ribs and bellies show, 1 hidden).
+    pub fat: f32,
+    /// How pronounced the muscle is where a contour has any.
+    pub muscle: f32,
+    /// How much of a limb is a column rather than a taper: 1 a graviportal
+    /// animal (an elephant), 0 a cursorial one (a horse).
+    pub heavy: f32,
+    /// Parts contoured by the species' own word, by index.
+    pub contours: &'static [(usize, crate::contour::Contour)],
+}
+
+impl Build {
+    pub const DEFAULT: Build = Build {
+        fat: 0.5,
+        muscle: 0.5,
+        heavy: 0.5,
+        contours: &[],
+    };
+}
+
+/// A species' [`Build`]: its own, or the default.
+pub fn build(id: SpeciesId) -> &'static Build {
+    match id {
+        SpeciesId::RIDGEBACK => &ridgeback::BUILD,
+        _ => &Build::DEFAULT,
+    }
+}
+
 /// A species' [`Tint`], if it has one.
 pub fn tint(id: SpeciesId) -> Option<&'static Tint> {
     match id {

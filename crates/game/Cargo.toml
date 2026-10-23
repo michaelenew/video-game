@@ -23,6 +23,9 @@ net = { path = "../net" }
 regions = { path = "../regions" }
 sim = { path = "../sim" }
 view = { path = "../view" }
+# Squeezes the characters' textures into the GPU's own compressed formats as
+# they load (`src/squeeze.rs`): pure Rust, so the browser build has it too.
+texpresso = "2.0"
 
 # Default features minus the ones a 3D arena prototype does not need. Keeps
 # compile times down without giving up rendering, glTF or PBR.
@@ -38,6 +41,8 @@ bevy_egui = { version = "0.34", default-features = false, features = ["render", 
 # On a desktop: an X11 window, and threads to schedule systems across.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bevy = { version = "0.16", default-features = false, features = ["x11", "multi_threaded"] }
+# On a desktop the squeeze runs on every core.
+texpresso = { version = "2.0", features = ["rayon"] }
 
 # In a browser: WebGL 2 rather than WebGPU, because WebGL 2 is everywhere and
 # WebGPU is not yet -- a link that only works in one browser is not a link you

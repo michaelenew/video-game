@@ -127,7 +127,7 @@ pub struct Stream {
     /// are small and kept while the giant is in reach. A giant up close is a
     /// hundred thousand triangles; kept for the session once seen, the
     /// Wood's fourteen were a couple of hundred megabytes nobody was looking
-    /// at (`docs/design/exploration/0024_distant_detail.md`).
+    /// at (`docs/design/exploration/0028_distant_detail.md`).
     grown: HashMap<(usize, usize), Grown>,
     /// How far each giant reaches from its foot, flat, and the box it fills
     /// about its foot, worked out the first time it is asked: what it is
@@ -809,7 +809,7 @@ const LAND_REACH: (f32, f32) = (300.0, 700.0);
 /// them, one mesh at the same fineness the tiles would each have had. Far
 /// off, a tile is nine vertices, and what it cost was being one of six
 /// thousand things to cull and draw, not its triangles (`docs/design/
-/// exploration/0024_distant_detail.md`, step 3).
+/// exploration/0028_distant_detail.md`, step 3).
 const BLOCK: i32 = 4;
 
 /// How far a block's nearest point is before it is drawn as one mesh -- past
@@ -1094,7 +1094,7 @@ fn pond(
 /// **How far boxes are drawn a block at a time**: from this far, by the
 /// nearest of their block (`BLOCK` tiles a side), every box in it is one of a
 /// handful of meshes rather than an entity each (`docs/design/exploration/
-/// 0024_distant_detail.md`, step 4). Far enough that none of them is drawn
+/// 0028_distant_detail.md`, step 4). Far enough that none of them is drawn
 /// in its near relief (a box is at most half a block from its block, so
 /// further than [`NEAR`] and its slack), and far enough that the window to
 /// the fighter (`crate::window`), which is round the camera, never meets one.

@@ -123,6 +123,7 @@ pub fn update(
     cam: CamQuery,
     mut cross: Query<(&mut Node, &mut Visibility), With<Crosshair>>,
     mut ink: Query<&mut BackgroundColor, With<CrosshairInk>>,
+    inspect: Res<crate::inspect::Inspect>,
 ) {
     let Ok((camera, _)) = cam.single() else {
         return;
@@ -133,6 +134,11 @@ pub fn update(
 
     // Dead centre of the viewport, whatever its size. The camera has already
     // been pointed at the aim point, so this *is* the aim point.
+    // On a close look (F6) the screen's middle is not where anything aims.
+    if inspect.seat.is_some() {
+        *visible = Visibility::Hidden;
+        return;
+    }
     let Some(viewport) = camera.logical_viewport_size() else {
         *visible = Visibility::Hidden;
         return;

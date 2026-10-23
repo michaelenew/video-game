@@ -1622,9 +1622,8 @@ pub fn combo_decay() -> Fx {
 // clips at that phase, and the clips themselves are authored by placing every
 // planted foot with the same arithmetic. One copy, here, or the feet slide.
 //
-// They are not free choices. A leg is 0.87 m long and a hip is 0.86 m off the
-// floor at contact, so a foot can be at most about 0.34 m ahead of the hip
-// before the leg runs out -- and stride length follows from that.
+// They are not free choices: a stride has to be one the leg can reach, and
+// a cadence a person would take.
 
 /// Speed at which the walk cycle is at full weight. The guarding walk speed is
 /// two, and that is the speed a fighter spends a tense exchange at.
@@ -1633,8 +1632,15 @@ pub const WALK_AT: Fx = Fx::ratio(22, 10);
 /// measure, whatever the movement knob is called.
 pub const RUN_AT: Fx = Fx::ratio(7, 1);
 
-pub const WALK_STRIDE: Fx = Fx::ratio(110, 100);
-pub const RUN_STRIDE: Fx = Fx::ratio(270, 100);
+// A cycle is two steps. A person's stride runs to about one and a half to
+// two times their leg's length walking and four to five running at speed,
+// at about two and a half steps a second walking briskly and three running
+// (2026-10-22: these were 1.1 and 2.7 m, four and five steps a second -- the
+// frantic shuffle that made every gait look wrong). The hips ride on the
+// standing leg (`anim::clips::locomotion`, `Step::hip_height`), so a longer
+// stride no longer runs the leg out.
+pub const WALK_STRIDE: Fx = Fx::ratio(150, 100);
+pub const RUN_STRIDE: Fx = Fx::ratio(390, 100);
 pub const CROUCH_STRIDE: Fx = Fx::ratio(80, 100);
 /// A sidestep covers less ground per cycle than a stride forward, because a leg
 /// swung sideways runs out of hip long before one swung forward runs out of leg.

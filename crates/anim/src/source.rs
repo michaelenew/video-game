@@ -159,5 +159,10 @@ fn call(j: Joint, a: [f32; 3]) -> String {
         Joint::ForearmR => format!(".forearm_r({:.1}, {:.1})", a[0], a[2]),
         Joint::ShinL => format!(".knee_l({:.1})", a[0]),
         Joint::ShinR => format!(".knee_r({:.1})", a[0]),
+        Joint::Neck => three("neck"),
+        Joint::ClavicleL => format!(".clavicle_l({:.1}, {:.1})", a[0], a[1]),
+        Joint::ClavicleR => format!(".clavicle_r({:.1}, {:.1})", a[0], a[1]),
+        Joint::ToeL => format!(".toes_l({:.1})", a[0]),
+        Joint::ToeR => format!(".toes_r({:.1})", a[0]),
     }
 }

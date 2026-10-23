@@ -1,4 +1,4 @@
-# 0024 — Distant detail: what is drawn far away, and how other games make it cheap
+# 0028 — Distant detail: what is drawn far away, and how other games make it cheap
 
 The owner's question (2026-10-21): another thread implied that a very distant
 tree is drawn — and held in memory — as the whole tree, and that this may be
