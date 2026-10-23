@@ -1021,3 +1021,504 @@ def box_distance(p, lo, hi):
 def srgb_to_linear(c):
     c = np.asarray(c, float)
     return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+
+# ---------------------------------------------------------------------------
+# Noise for a sculpt: vectorised over millions of points
+# ---------------------------------------------------------------------------
+
+
+def _hash(ix, iy, iz, seed=0):
+    """A float in [0, 1) per integer lattice point: an integer hash
+    (Wang-style mixing) so the same point always gives the same number."""
+    h = (ix.astype(np.int64) * 73856093) ^ (iy.astype(np.int64) * 19349663) ^ (iz.astype(np.int64) * 83492791) \
+        ^ (seed * 2654435761)
+    h = h & 0xFFFFFFFF
+    h = (h ^ (h >> 16)) * 0x45D9F3B & 0xFFFFFFFF
+    h = (h ^ (h >> 16)) * 0x45D9F3B & 0xFFFFFFFF
+    h = h ^ (h >> 16)
+    return (h & 0xFFFFFF) / float(0x1000000)
+
+
+def value_noise(p, freq, seed=0):
+    """Smooth value noise, 0 to 1."""
+    q = np.asarray(p, float) * freq
+    i = np.floor(q).astype(np.int64)
+    f = q - i
+    u = f * f * (3 - 2 * f)
+    out = np.zeros(len(q))
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                w = (u[:, 0] if dx else 1 - u[:, 0]) * (u[:, 1] if dy else 1 - u[:, 1]) * \
+                    (u[:, 2] if dz else 1 - u[:, 2])
+                out += w * _hash(i[:, 0] + dx, i[:, 1] + dy, i[:, 2] + dz, seed)
+    return out
+
+
+def fbm(p, freq, octaves=4, seed=0, gain=0.5):
+    """Fractal noise: octaves of value noise, each twice as fine and
+    ``gain`` as strong; about 0 to 1."""
+    out = np.zeros(len(p))
+    amp, total = 1.0, 0.0
+    for o in range(octaves):
+        out += amp * value_noise(p, freq * 2 ** o, seed + 17 * o)
+        total += amp
+        amp *= gain
+    return out / total
+
+
+def cellular(p, freq, seed=0, jitter=0.85, chunk=400000, centres=False):
+    """Worley noise: for each point, the distance to the nearest and the
+    second-nearest jittered lattice point (in cell units) and the nearest's
+    cell id -- plates, scales and cracked hide are all this. With
+    ``centres``, also where the nearest point is (in the input's units)."""
+    q = np.asarray(p, float) * freq
+    n = len(q)
+    f1 = np.full(n, 9.0)
+    f2 = np.full(n, 9.0)
+    cid = np.zeros(n, np.int64)
+    ctr = np.zeros((n, 3))
+    for s in range(0, n, chunk):
+        qq = q[s:s + chunk]
+        base = np.floor(qq).astype(np.int64)
+        a = np.full(len(qq), 9.0)
+        b_ = np.full(len(qq), 9.0)
+        c = np.zeros(len(qq), np.int64)
+        cc = np.zeros((len(qq), 3))
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    cx, cy, cz = base[:, 0] + dx, base[:, 1] + dy, base[:, 2] + dz
+                    jx = _hash(cx, cy, cz, seed) * jitter + (1 - jitter) / 2
+                    jy = _hash(cx, cy, cz, seed + 1) * jitter + (1 - jitter) / 2
+                    jz = _hash(cx, cy, cz, seed + 2) * jitter + (1 - jitter) / 2
+                    d = np.sqrt((cx + jx - qq[:, 0]) ** 2 + (cy + jy - qq[:, 1]) ** 2 + (cz + jz - qq[:, 2]) ** 2)
+                    closer = d < a
+                    b_ = np.where(closer, a, np.minimum(b_, d))
+                    c = np.where(closer, (cx * 92821 + cy * 68917 + cz * 31337) & 0xFFFFFF, c)
+                    if centres:
+                        cc = np.where(closer[:, None], np.stack([cx + jx, cy + jy, cz + jz], 1), cc)
+                    a = np.where(closer, d, a)
+        f1[s:s + chunk], f2[s:s + chunk], cid[s:s + chunk] = a, b_, c
+        ctr[s:s + chunk] = cc / freq
+    if centres:
+        return f1, f2, cid, ctr
+    return f1, f2, cid
+
+
+def cell_rand(cid, seed=0):
+    """A float in [0, 1) per cell id."""
+    return _hash(cid, cid * 7 + 3, cid * 13 + 5, seed)
+
+
+# ---------------------------------------------------------------------------
+# Baking a sculpt onto a game mesh
+# ---------------------------------------------------------------------------
+
+
+def _unwrap(ob, margin=0.003, angle=80.0):
+    bpy.context.view_layer.objects.active = ob
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    ob.select_set(True)
+    with bpy.context.temp_override(active_object=ob, object=ob, selected_objects=[ob]):
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.smart_project(angle_limit=np.radians(angle), island_margin=margin,
+                                 area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
+        bpy.ops.uv.pack_islands(margin=margin, rotate=True)
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def _bake(low, high, kind, size, attribute=None, samples=1, extrude=0.06, reach=0.14, cage=None):
+    """One pass read off ``high`` onto ``low``'s texture (or, with no
+    ``high``, off ``low`` itself): ``NORMAL``, ``AO``, or ``EMIT`` of a
+    colour attribute. Returns ``(size, size, 3)``, row 0 at the top."""
+    s = bpy.context.scene
+    s.render.engine = "CYCLES"
+    s.cycles.device = "CPU"
+    s.cycles.samples = samples
+    s.cycles.use_denoising = False
+    img = bpy.data.images.new(f"bake_{kind}_{attribute}", size, size, alpha=False, float_buffer=True)
+    img.colorspace_settings.name = "Non-Color"
+    temps = []
+
+    def material_on(ob, emit_attr):
+        ob.data.materials.clear()
+        m = bpy.data.materials.new(f"m_{ob.name}")
+        m.use_nodes = True
+        nt = m.node_tree
+        if emit_attr is not None:
+            for nd in list(nt.nodes):
+                nt.nodes.remove(nd)
+            out = nt.nodes.new("ShaderNodeOutputMaterial")
+            em = nt.nodes.new("ShaderNodeEmission")
+            at = nt.nodes.new("ShaderNodeVertexColor")
+            at.layer_name = emit_attr
+            nt.links.new(at.outputs["Color"], em.inputs["Color"])
+            nt.links.new(em.outputs[0], out.inputs["Surface"])
+        ob.data.materials.append(m)
+        temps.append(m)
+        return m
+
+    src = high if high is not None else low
+    material_on(src, attribute if kind == "EMIT" else None)
+    if high is not None:
+        lm = material_on(low, None)
+    else:
+        lm = src.data.materials[0]
+    tex = lm.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = img
+    lm.node_tree.nodes.active = tex
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    if high is not None:
+        high.select_set(True)
+    low.select_set(True)
+    bpy.context.view_layer.objects.active = low
+    s.render.bake.margin = 16
+    s.render.bake.use_selected_to_active = high is not None
+    s.render.bake.cage_extrusion = extrude
+    s.render.bake.max_ray_distance = reach
+    s.render.bake.use_cage = cage is not None and high is not None
+    if cage is not None and high is not None:
+        s.render.bake.cage_object = cage
+    if kind == "NORMAL":
+        s.render.bake.normal_space = "TANGENT"
+    if kind == "AO":
+        s.world.light_settings.distance = 1.2
+    with bpy.context.temp_override(active_object=low, object=low,
+                                   selected_objects=[o for o in (high, low) if o is not None]):
+        bpy.ops.object.bake(type=kind)
+    px = np.array(img.pixels[:]).reshape(size, size, 4)[::-1, :, :3].copy()
+    bpy.data.images.remove(img)
+    for m in temps:
+        bpy.data.materials.remove(m)
+    return px
+
+
+def bake_textures(low, high, size, work, fast=False, extrude=None):
+    """Unwrap ``low`` and read off ``high`` (which carries colour attributes
+    ``albedo``, ``glow`` and ``rough``) its colour, normals, glow and
+    roughness, its own occlusion multiplied into the colour; written as
+    files under ``work``. Returns ``{name: (array, path, bytes)}``."""
+    import paint
+
+    if bpy.context.scene.world is None:
+        w = bpy.data.worlds.new("w")
+        bpy.context.scene.world = w
+    _unwrap(low)
+    out = {}
+    cage = None
+    # Which texels the creature covers, for filling the rest.
+    ca = high.data.color_attributes.new("one", "FLOAT_COLOR", "POINT")
+    ca.data.foreach_set("color", np.ones(len(high.data.vertices) * 4, np.float32))
+    if extrude is not None:
+        # The cage: the game mesh pushed out by how far its sculpt can stand
+        # off it -- centimetres for the body, millimetres for a thin spike,
+        # whose far side a body's reach would find instead of its near.
+        me = low.data.copy()
+        co = np.zeros(len(me.vertices) * 3)
+        me.vertices.foreach_get("co", co)
+        nr = np.zeros(len(me.vertices) * 3)
+        me.vertices.foreach_get("normal", nr)
+        co = co.reshape(-1, 3) + nr.reshape(-1, 3) * np.asarray(extrude)[:, None]
+        me.vertices.foreach_set("co", co.ravel())
+        me.update()
+        cage = bpy.data.objects.new("cage", me)
+        bpy.context.scene.collection.objects.link(cage)
+    nrm = _bake(low, high, "NORMAL", size, cage=cage, reach=0.2)
+    alb = _bake(low, high, "EMIT", size, "albedo", cage=cage, reach=0.2)
+    glo = _bake(low, high, "EMIT", size, "glow", cage=cage, reach=0.2)
+    rgh = _bake(low, high, "EMIT", size, "rough", cage=cage, reach=0.2)
+    covered = _bake(low, high, "EMIT", size, "one", cage=cage, reach=0.2)[:, :, 0] > 0.5
+    if cage is not None:
+        bpy.data.objects.remove(cage)
+    ao = _bake(low, None, "AO", size, samples=12 if fast else 32)
+    occl = 0.55 + 0.45 * np.clip(ao[:, :, :1], 0, 1) ** 1.2
+    colour = np.clip(alb * occl, 0, 1)
+    mr = np.zeros_like(rgh)
+    mr[:, :, 0] = np.clip(ao[:, :, 0], 0, 1)
+    mr[:, :, 1] = np.clip(rgh[:, :, 0], 0.05, 1)
+    for name, arr, srgb, q in (("albedo", colour, True, 90), ("normal", nrm, False, 95),
+                               ("glow", np.clip(glo, 0, 1), True, 90), ("mr", mr, False, 90)):
+        # Every texel the creature does not cover takes the colour of the
+        # nearest that it does: a texture's smaller copies (what a far
+        # creature is drawn with) average neighbours, and black between the
+        # islands would darken the whole animal with distance.
+        arr = fill(arr, covered)
+        path = os.path.join(work, f"{name}.jpg")
+        data = paint.to_png(arr, path, srgb=srgb, quality=q)
+        out[name] = (arr, path, data)
+    return out
+
+
+def gather_low(ob):
+    """The game mesh's corners, split where a corner's texture coordinates
+    or normal differ: positions, normals, uvs, tangents (xyz and handedness)
+    in the game's frame, triangles, and each vertex's source vertex."""
+    me = ob.data
+    me.calc_tangents(uvmap=me.uv_layers.active.name)
+    nl = len(me.loops)
+    vi = np.zeros(nl, np.int64)
+    me.loops.foreach_get("vertex_index", vi)
+    uv = np.zeros(nl * 2)
+    me.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2)
+    nrm = np.zeros(nl * 3)
+    me.corner_normals.foreach_get("vector", nrm)
+    nrm = nrm.reshape(-1, 3)
+    tan = np.zeros(nl * 3)
+    me.loops.foreach_get("tangent", tan)
+    tan = tan.reshape(-1, 3)
+    sign = np.zeros(nl)
+    me.loops.foreach_get("bitangent_sign", sign)
+    co = np.zeros(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    key = np.concatenate([vi[:, None].astype(float), np.round(uv * 2 ** 16), np.round(nrm * 512), sign[:, None]], 1)
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    inv = inv.ravel()
+    pos = from_blender(co[vi[first]])
+    n = from_blender(nrm[first])
+    t = from_blender(tan[first])
+    tangent = np.concatenate([t, sign[first, None]], 1)
+    tris = inv.reshape(-1, 3)
+    return pos, n, uv[first], tangent, tris, vi[first]
+
+
+def write_beast_glb(path, skeleton, pos, nrm, uv, tangent, tris, weights, part, tex, name, glow_strength=3.0):
+    """One textured, skinned primitive: the colour, normal, glow and
+    roughness maps as JPEGs in the file, the joints the species' bones."""
+    FLOAT, U16, U32, U8 = 5126, 5123, 5125, 5121
+    blob = bytearray()
+    views, accessors = [], []
+
+    def pad(bb):
+        return bb + b"\x00" * ((4 - len(bb) % 4) % 4)
+
+    def view(data, target=None):
+        off = len(blob)
+        blob.extend(pad(data))
+        v = {"buffer": 0, "byteOffset": off, "byteLength": len(data)}
+        if target:
+            v["target"] = target
+        views.append(v)
+        return len(views) - 1
+
+    def acc(arr, ctype, kind, target=None, minmax=False, normalized=False):
+        a = np.ascontiguousarray(arr)
+        e = {"bufferView": view(a.tobytes(), target), "componentType": ctype, "count": len(a), "type": kind}
+        if normalized:
+            e["normalized"] = True
+        if minmax:
+            e["min"] = a.min(axis=0).tolist()
+            e["max"] = a.max(axis=0).tolist()
+        accessors.append(e)
+        return len(accessors) - 1
+
+    top = np.argsort(-weights, axis=1)[:, :4]
+    tw = np.take_along_axis(weights, top, axis=1)
+    tw = tw / np.maximum(tw.sum(1, keepdims=True), 1e-9)
+    joints = top.astype(np.uint8)
+    joints[tw == 0] = 0
+    qw = np.round(tw * 255).astype(np.int32)
+    qw[:, 0] += 255 - qw.sum(axis=1)
+    n = nrm / np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-9)
+    t3 = tangent[:, :3] / np.maximum(np.linalg.norm(tangent[:, :3], axis=1, keepdims=True), 1e-9)
+    tg = np.concatenate([t3, np.where(tangent[:, 3:] < 0, -1.0, 1.0)], 1)
+    gl_uv = np.stack([uv[:, 0], 1 - uv[:, 1]], 1)
+    attributes = {
+        "POSITION": acc(pos.astype(np.float32), FLOAT, "VEC3", 34962, True),
+        "NORMAL": acc(n.astype(np.float32), FLOAT, "VEC3", 34962),
+        "TANGENT": acc(tg.astype(np.float32), FLOAT, "VEC4", 34962),
+        "TEXCOORD_0": acc(np.round(np.clip(gl_uv, 0, 1) * 65535).astype(np.uint16), U16, "VEC2", 34962,
+                          normalized=True),
+        "TEXCOORD_1": acc(np.stack([part, np.zeros(len(part))], 1).astype(np.float32), FLOAT, "VEC2", 34962),
+        "COLOR_0": acc(np.full((len(pos), 4), 255, np.uint8), U8, "VEC4", 34962, normalized=True),
+        "JOINTS_0": acc(joints, U8, "VEC4", 34962),
+        "WEIGHTS_0": acc(qw.astype(np.uint8), U8, "VEC4", 34962, normalized=True),
+    }
+    small = tris.max() < 65536
+    indices = acc(tris.astype(np.uint16 if small else np.uint32).ravel(), U16 if small else U32, "SCALAR", 34963)
+    images, textures = [], []
+    for k in ("albedo", "normal", "glow", "mr"):
+        images.append({"bufferView": view(tex[k][2]), "mimeType": "image/jpeg"})
+        textures.append({"source": len(images) - 1, "sampler": 0})
+    material = {
+        "name": "hide",
+        "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}, "metallicRoughnessTexture": {"index": 3},
+                                 "metallicFactor": 0.0, "roughnessFactor": 1.0},
+        "normalTexture": {"index": 1},
+        "emissiveTexture": {"index": 2},
+        "emissiveFactor": [1.0, 1.0, 1.0],
+        "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": glow_strength}},
+    }
+    nb = len(skeleton.bones)
+    ibm = np.stack([np.linalg.inv(skeleton.frame(i)).T.astype(np.float32) for i in range(nb)])
+    ibm_acc = acc(ibm.reshape(nb, 16), FLOAT, "MAT4")
+    nodes = []
+    for i, bn in enumerate(skeleton.bones):
+        q = _quat(skeleton.frame(i)[:3, :3])
+        nodes.append({"name": bn["name"], "translation": list(map(float, bn["at"])), "rotation": list(map(float, q))})
+    nodes.append({"name": name, "mesh": 0, "skin": 0})
+    gltf = {
+        "asset": {"version": "2.0", "generator": "art/lib/beast.py"},
+        "extensionsUsed": ["KHR_materials_emissive_strength"],
+        "scene": 0,
+        "scenes": [{"nodes": list(range(nb + 1))}],
+        "nodes": nodes,
+        "meshes": [{"name": name, "primitives": [{"attributes": attributes, "indices": indices, "material": 0}]}],
+        "materials": [material],
+        "textures": textures,
+        "images": images,
+        "samplers": [{"magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071}],
+        "skins": [{"joints": list(range(nb)), "inverseBindMatrices": ibm_acc}],
+        "buffers": [{"byteLength": len(blob)}],
+        "bufferViews": views,
+        "accessors": accessors,
+    }
+    js = json.dumps(gltf, separators=(",", ":")).encode()
+    js = js + b" " * ((4 - len(js) % 4) % 4)
+    bin_ = pad(bytes(blob))
+    with open(path, "wb") as f:
+        f.write(struct.pack("<III", 0x46546C67, 2, 12 + 8 + len(js) + 8 + len(bin_)))
+        f.write(struct.pack("<II", len(js), 0x4E4F534A))
+        f.write(js)
+        f.write(struct.pack("<II", len(bin_), 0x004E4942))
+        f.write(bin_)
+    return path
+
+
+def studio_textured(ob, tex, out, size=(640, 440), samples=24):
+    """Render the game mesh in its baked textures: a sheet of the whole
+    creature from four sides, and one of it close."""
+    s = bpy.context.scene
+    keep = {ob.name}
+    for o in list(bpy.data.objects):
+        if o.name not in keep:
+            bpy.data.objects.remove(o)
+    ob.data.materials.clear()
+    m = bpy.data.materials.new("textured")
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+
+    def image(k, colour):
+        img = bpy.data.images.load(tex[k][1])
+        img.colorspace_settings.name = "sRGB" if colour else "Non-Color"
+        node = nt.nodes.new("ShaderNodeTexImage")
+        node.image = img
+        return node
+
+    nt.links.new(image("albedo", True).outputs["Color"], bsdf.inputs["Base Color"])
+    nm = nt.nodes.new("ShaderNodeNormalMap")
+    nt.links.new(image("normal", False).outputs["Color"], nm.inputs["Color"])
+    nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(image("mr", False).outputs["Color"], sep.inputs["Color"])
+    nt.links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
+    nt.links.new(image("glow", True).outputs["Color"], bsdf.inputs["Emission Color"])
+    bsdf.inputs["Emission Strength"].default_value = 3.0
+    ob.data.materials.append(m)
+    v = np.zeros(len(ob.data.vertices) * 3)
+    ob.data.vertices.foreach_get("co", v)
+    v_game = from_blender(v.reshape(-1, 3))
+    t = np.zeros(len(ob.data.polygons) * 3, np.int64)
+    ob.data.polygons.foreach_get("vertices", t)
+    keep_mat = m
+    # Reuse the studio's stage and cameras with this one object in it.
+    _shoot(ob, out, views=((90, 7.0), (40, 9.0), (-5, 9.0), (150, 11.0)), distance=17.0,
+           look=(0.4, 3.9, 0.0), size=size, samples=samples)
+    _shoot(ob, out.replace(".png", "_near.png"),
+           views=((55, 1.2, (4.7, 5.4, 0)), (100, 0.2, (1.1, 1.4, -1.0)), (145, 1.0, (-5.2, 4.3, 0)),
+                  (75, 3.0, (-0.2, 5.9, 0))), distance=6.5, size=size, samples=samples)
+    del keep_mat, v_game, t
+
+
+def _shoot(ob, out, views, distance, look=(0.0, 3.6, 0.0), size=(640, 440), samples=24, lens=50):
+    s = bpy.context.scene
+    for o in list(bpy.data.objects):
+        if o is not ob:
+            bpy.data.objects.remove(o)
+    s.render.engine = "CYCLES"
+    s.cycles.device = "CPU"
+    s.cycles.samples = samples
+    s.cycles.use_denoising = True
+    s.view_settings.view_transform = "AgX"
+    s.render.resolution_x, s.render.resolution_y = size
+    world = bpy.data.worlds.new("w")
+    world.use_nodes = True
+    bg = world.node_tree.nodes["Background"]
+    bg.inputs[0].default_value = (0.55, 0.6, 0.68, 1)
+    bg.inputs[1].default_value = 0.8
+    s.world = world
+    ground = obj("ground", (np.array([[-30, 0, -30], [30, 0, -30], [30, 0, 30], [-30, 0, 30]], float), [[0, 3, 2, 1]]))
+    gm = bpy.data.materials.new("g")
+    gm.use_nodes = True
+    gm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.34, 0.30, 0.25, 1)
+    ground.data.materials.append(gm)
+    for name, energy, d, col in (("key", 3.6, (-0.5, -0.6, -1.0), (1.0, 0.93, 0.82)),
+                                 ("rim", 2.2, (0.6, 0.8, -0.5), (0.65, 0.72, 1.0))):
+        light = bpy.data.lights.new(name, "SUN")
+        light.energy = energy
+        light.color = col
+        light.angle = 0.08
+        o = bpy.data.objects.new(name, light)
+        s.collection.objects.link(o)
+        o.rotation_euler = mathutils.Vector(d).to_track_quat("-Z", "Y").to_euler()
+    tiles = []
+    base, _ = os.path.splitext(out)
+    for k, view in enumerate(views):
+        yaw, h = view[0], view[1]
+        lk = view[2] if len(view) > 2 else look
+        look_b = mathutils.Vector(to_blender(np.array([lk]))[0])
+        cam = bpy.data.cameras.new("cam")
+        cam.lens = lens
+        o = bpy.data.objects.new("cam", cam)
+        s.collection.objects.link(o)
+        a = math.radians(yaw)
+        eye = np.array([lk[0] + distance * math.cos(a), lk[1] + h, lk[2] - distance * math.sin(a)])
+        o.location = mathutils.Vector(to_blender(np.array([eye]))[0])
+        o.rotation_euler = (look_b - o.location).to_track_quat("-Z", "Y").to_euler()
+        s.camera = o
+        path = f"{base}_{k}.png"
+        s.render.filepath = path
+        bpy.ops.render.render(write_still=True)
+        bpy.data.objects.remove(o)
+        tiles.append(path)
+    rows = [tiles[i:i + 2] for i in range(0, len(tiles), 2)]
+    row_files = []
+    for r, row in enumerate(rows):
+        rf = f"{base}_row{r}.png"
+        subprocess.run(["convert", *row, "+append", rf], check=True)
+        row_files.append(rf)
+    subprocess.run(["convert", *row_files, "-append", out], check=True)
+    for f in tiles + row_files:
+        os.remove(f)
+
+
+def fill(img, mask):
+    """Push-pull: every pixel outside ``mask`` takes a colour spread from
+    the nearest pixels inside it, through a pyramid of halvings."""
+    img = np.asarray(img, float)
+    levels = []
+    c = img * mask[..., None]
+    w = mask.astype(float)
+    while True:
+        levels.append((c, w))
+        if c.shape[0] <= 1:
+            break
+        h, wd = c.shape[0] // 2, c.shape[1] // 2
+        c = c[:h * 2, :wd * 2].reshape(h, 2, wd, 2, -1).sum((1, 3))
+        w = w[:h * 2, :wd * 2].reshape(h, 2, wd, 2).sum((1, 3))
+    # Back up the pyramid: a pixel with nothing of its own takes its
+    # parent's mean.
+    c, w = levels[-1]
+    mean = c / np.maximum(w[..., None], 1e-9)
+    for c, w in reversed(levels[:-1]):
+        up = np.repeat(np.repeat(mean, 2, axis=0), 2, axis=1)[:c.shape[0], :c.shape[1]]
+        own = c / np.maximum(w[..., None], 1e-9)
+        mean = np.where(w[..., None] > 0, own, up)
+    return np.where(mask[..., None], img, mean)

@@ -54,13 +54,15 @@ read.
 
 **A creature is built the same way** (2026-10-23): `cargo run -p anim --bin
 export_beast -- ridgeback` writes its skeleton and part boxes at rest, and
-`art/blender.sh art/ridgeback/build.py` forms a body over them with
-`lib/beast.py` -- flesh as tubes unioned into one skin, plates projected onto
-it, horns and nails, paint, weights -- into `crates/game/assets/ridgeback.glb`.
-Its joints are the species' bones. About a minute; `--clay` renders the shape
-alone, `--no-export` leaves the file be, and it always writes a studio sheet
-to `target/art/ridgeback.png` and `ridgeback_near.png`. Why, and what it is
-for: [`docs/design/exploration/0029_a_target_body.md`](../docs/design/exploration/0029_a_target_body.md).
+`art/blender.sh art/ridgeback/build.py` sculpts a body over them with
+`lib/beast.py` -- forms unioned into a skin, carapace shells grown off it, a
+two-million-triangle sculpt with its detail and paint, baked onto a light
+mesh as colour, normal, glow and roughness maps -- into
+`crates/game/assets/ridgeback.glb`. Its joints are the species' bones. About
+ten minutes; `--fast` is a coarser draft in six, `--size <px>` the textures'
+size, `--no-export` leaves the file be, and it always writes a studio sheet to
+`target/art/ridgeback.png` and `ridgeback_near.png`. Why, and what it is for:
+[`docs/design/exploration/0029_a_target_body.md`](../docs/design/exploration/0029_a_target_body.md).
 
 ## The rules
 

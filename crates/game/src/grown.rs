@@ -56,13 +56,14 @@ pub struct Grown {
 }
 
 /// What a body formed by hand brings that a grown one works out: the
-/// colours it was painted in, which part each vertex belongs to (so a
-/// broken foot shows where it is), and its weak points as their own
-/// glowing flesh rather than pads.
+/// colour each vertex is tinted (white: the texture is the paint), which
+/// part each vertex belongs to (so a broken foot shows where it is), and
+/// its own material -- the colour, normal, glow and roughness maps baked
+/// off its sculpt, the glow being where its weak points are.
 pub struct Own {
     pub base: Vec<[f32; 4]>,
     pub part: Vec<u16>,
-    pub glow: Mesh,
+    pub material: StandardMaterial,
 }
 
 /// **A body formed by hand** (the owner, 2026-10-23: "take the current model,
@@ -829,24 +830,18 @@ fn rest_frames(sp: &'static Species) -> Vec<Mat4> {
     (0..sp.bones.len()).map(|b| frame(&rig.bone[b])).collect()
 }
 
-/// A body from the two meshes a formed creature's file holds: its hide and
-/// its glowing flesh, each carrying its colours, its part in the second set
-/// of texture coordinates, and its bones' weights. The part is taken off the
-/// meshes once read, so nothing downstream mistakes it for the painted
-/// cast's marker (`brushwork`).
-pub fn modelled(sp: &'static Species, hide: &Mesh, glow: &Mesh) -> Option<Grown> {
+/// A body from a formed creature's file: its mesh, carrying a tint, its
+/// part in the second set of texture coordinates and its bones' weights,
+/// and its material. The part is taken off the mesh once read, so nothing
+/// downstream mistakes it for the painted cast's marker (`brushwork`).
+pub fn modelled(sp: &'static Species, hide: &Mesh, material: &StandardMaterial) -> Option<Grown> {
     let mut mesh = hide.clone();
-    let mut glow = glow.clone();
-    let part = |m: &mut Mesh| -> Vec<u16> {
-        match m.remove_attribute(Mesh::ATTRIBUTE_UV_1) {
-            Some(VertexAttributeValues::Float32x2(uv)) => {
-                uv.iter().map(|p| p[0].round().max(0.0) as u16).collect()
-            }
-            _ => Vec::new(),
+    let parts: Vec<u16> = match mesh.remove_attribute(Mesh::ATTRIBUTE_UV_1) {
+        Some(VertexAttributeValues::Float32x2(uv)) => {
+            uv.iter().map(|p| p[0].round().max(0.0) as u16).collect()
         }
+        _ => return None,
     };
-    let parts = part(&mut mesh);
-    part(&mut glow);
     let base = match mesh.attribute(Mesh::ATTRIBUTE_COLOR)? {
         VertexAttributeValues::Float32x4(c) => c.clone(),
         _ => return None,
@@ -854,6 +849,10 @@ pub fn modelled(sp: &'static Species, hide: &Mesh, glow: &Mesh) -> Option<Grown>
     if parts.len() != base.len() {
         return None;
     }
+    let mut material = material.clone();
+    // Hide and stone hardly mirror anything (the cast's lesson: at Bevy's
+    // default a dark hide under a bright sky takes the sky's colour).
+    material.reflectance = 0.12;
     Some(Grown {
         mesh,
         paints: Vec::new(),
@@ -863,7 +862,7 @@ pub fn modelled(sp: &'static Species, hide: &Mesh, glow: &Mesh) -> Option<Grown>
         own: Some(Own {
             base,
             part: parts,
-            glow,
+            material,
         }),
     })
 }

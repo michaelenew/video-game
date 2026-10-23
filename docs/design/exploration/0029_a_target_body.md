@@ -16,107 +16,117 @@ most of all, *read*: every choice that makes it look like an animal is a
 line with a reason beside it, and the next step is to turn those lines into
 rules a grown body follows.
 
-## How it is made
+## Round one, and why it was not it
+
+The first target (commit 5f329768) was forms lofted in numpy, unioned into one
+skin, with plates, horns and nails on it and colour in its vertices. The
+owner: *"Conceptually fine, but school art project armadillo dog is not the
+vibe here. This needs to read like something you'd find in a triple A game."*
+It was right. What separates the two is not one idea but three, and round one
+had none of them:
+
+1. **Proportion and design.** A uniform body on four tubes, against a
+   front-heavy mass with a designed head.
+2. **Detail at three scales.** Big masses, then muscle groups and plate
+   groups, then wrinkles, scale, cracks and chips. A game gets the last from
+   a sculpt of millions of polygons *baked* into textures on a light mesh;
+   vertex colour on 117,000 triangles cannot hold it.
+3. **Materials that read as different things**: stone, hide, horn, heat.
+
+## Round two: sculpted and baked
 
 ```
-cargo run -p anim --bin export_beast -- ridgeback    # its skeleton and boxes, at rest
-art/blender.sh art/ridgeback/build.py                # -> crates/game/assets/ridgeback.glb
+cargo run -p anim --bin export_beast -- ridgeback
+art/blender.sh art/ridgeback/build.py            # about ten minutes; --fast for a draft in six
 ```
 
-`export_beast` writes the species' bones and part boxes exactly as the
-game's rig places them at rest (`target/art/ridgeback.json`), so the body
-is sculpted over the skeleton that will move it. `art/lib/beast.py` is the
-toolbox; `art/ridgeback/build.py` is the creature. The stages:
+**The design** is a living ruin, after Shadow of the Colossus and Monster
+Hunter's elders: a front-heavy grazer that bites, the barrel deepest under the
+shoulders and the withers a hump, a domed back of thick shingled scutes split
+down the middle by a seam of heat, dorsal spines tallest over the shoulders
+for a crown to its silhouette, a mantle of spikes flaring over each shoulder,
+a low head with horns that sweep back and curl up and a row of nubs along
+each brow, a jaw with tusks and teeth, shins banded like an armadillo's,
+three hooked claws a foot, and a tail ending in an armoured club that the
+spray of quills fans from.
 
-1. **Flesh** — soft forms in numpy, unioned into one watertight skin by a
-   voxel remesh and rounded with Taubin smoothing (which rounds without
-   shrinking). Nothing can float: the union is one surface by construction.
-   - The torso, neck, tail and every leg are **tubes**: a run of
-     cross-sections along a curve, each a superellipse with bumps. This is
-     the same generalised cylinder `game::contour` grows from (0027), drawn
-     by hand.
-   - **A muscle is a bump that runs down a section**, swelling and fading
-     with a height per station (`muscled`), never a lump stuck on. The
-     first attempt used separate ellipsoids for triceps and thighs and they
-     read as tumours.
-   - **The flanks come down round the tops of the legs**, as an elephant's
-     and a rhino's do, so a leg leaves the body near the elbow rather than
-     the hip. The legs are thick the whole way (0.75 m across at the
-     forearm) and spread into a pad at the floor.
-   - Skin folds at the wrists and below the elbows and knees, and the great
-     folds behind the shoulder and before the thigh: arcs half sunk in the
-     skin, irregular so they read as gathered hide rather than rings.
-2. **Plates** — `shell`: a grid in the plate's own coordinates is projected
-   onto the skin by rays from its axis, given a flat top, a **cut chamfer**
-   (not a rolled edge), a raised back lip so a row overlaps like a
-   pangolin's, a keel on the upper row, a rounded outline, and a little
-   variety in thickness so no two are copies. Its normals are split where
-   faces meet at more than 35°, so its edges read as edges.
-   - Two first attempts failed instructively: plates cut from the skin's own
-     faces had ragged voxel edges, and plates with a rolled bevel read as
-     quilting — "a puffer jacket" — however they were coloured.
-3. **Hard parts** — keeled back plates either side of the ridge, tallest
-   over the barrel and leaning out; spikes down the tail and the quills it
-   sprays; horns over the eyes, a nose horn, a crown of spikes over the
-   neck, tusks; four hoof-nails a foot, each over a toe.
-4. **The soft places** — the ridge as a row of folds standing off the spine
-   between the plates, the nape as a smaller row between the collar plates,
-   and the eyes: their own mesh, drawn in a material that glows, so they say
-   what they are from across the arena as the pads did.
-5. **Paint**, as vertex colours: countershading by which way the skin faces,
-   ambient occlusion by rays against the whole body, light on ridges and dark
-   in creases by curvature, a slow mottle; slate plates each their own shade,
-   worn pale at their chamfers, moss on what faces the sky; horn dark at the
-   root and pale at the tip.
-6. **Weights** — the skin's from bone segments with a thickness each, smoothed
-   over the skin; plates take the skin's under them; a horn or spike moves as
-   one, with the weights at its root.
+**The pipeline** (`art/lib/beast.py`, `art/ridgeback/build.py`):
+
+1. **Forms** -- tubes of superellipse sections, muscles running down them --
+   unioned by a voxel remesh into a coarse skin.
+2. **Carapace** -- a `Plan` says where armour is (back and mantle, collars,
+   helm and cheeks, tail, shins) as distances inside each region's edge,
+   measured on the body's own axes. Each region is a closed shell grown off
+   the skin: its thickness full over a scute, sunk in a crisp groove between
+   scutes, rising toward each scute's back edge so it lies over the next
+   (shingled), a keel down its middle, a chunky rim. The scutes are cellular
+   noise laid on the body's own along-and-round coordinates with little
+   jitter, so they fall in rows, largest along the spine, mirrored.
+3. **The sculpt** -- skin and shells unioned at 1.2 cm into about two million
+   triangles, carrying which is which through the remesh. Then the detail,
+   all vectorised noise: on the hide a crazed crease network, folds at the
+   joints and round the neck, pebbled scale down the legs, a belly of
+   transverse scales; on the stone erosion, grit, pits, long cracks and chips
+   at the grooves; on the soft places a crust split by fissures, as cooling
+   lava is; on the face nostrils, sunken eye sockets and the line of the mouth.
+4. **Paint** on the sculpt's vertices: a striped hide paler beneath, mud up
+   the legs; pale bone-stone, each scute its own tint, dark in its grooves,
+   moss and lichen on what faces the sky, charred beside the ridge; **edge
+   wear and cavity from the sculpt's own curvature** -- convex edges rubbed
+   pale, hollows dark -- which is most of what makes a surface read as a
+   material. The glow is the fissures, and the scute seams beside the ridge,
+   as if its heat showed through the joins.
+5. **The bake** -- the coarse union decimated to 60,000 triangles plus the
+   hard pieces is unwrapped, and Cycles reads the sculpt onto it: normals,
+   colour, glow and roughness, its occlusion multiplied in, through a cage
+   pushed out centimetres for the body and millimetres for a thin spike.
+   Every texel the creature does not cover is filled from the nearest that
+   it does (push-pull), because a far creature is drawn from the texture's
+   smaller copies and black between the islands darkened the whole animal.
+6. **The file** -- one skinned primitive, the four maps in it as JPEGs, the
+   joints the species' bones.
 
 ## In the game
 
-`game::grown::model_of` names the file; `beast::setup_bodies` loads it
-through Bevy's glTF loader (so a page gets it as a desktop does), the grown
-body stands in until it arrives, and `beast::install_models` puts it in
-place. The part each vertex belongs to rides in the second texture
-coordinates, so a broken foot darkens where it is (`grown::own_colours`).
-The boxes are still what is hit and stood on; F1 draws them.
-`--grown-creatures` draws the algorithm's body instead, to compare.
+`game::grown::model_of` names the file; `beast::setup_bodies` loads its mesh
+and its material through Bevy's glTF loader (so a page gets it as a desktop
+does), the grown body standing in until both arrive, and
+`beast::install_models` puts it in place, its textures squeezed into the
+GPU's compressed formats as the cast's are. The part each vertex belongs to
+rides in the second texture coordinates, so a broken foot darkens where it is
+(`grown::own_colours`). The boxes are still what is hit and stood on; F1 draws
+them. `--grown-creatures` draws the algorithm's body instead, to compare.
+
+About 102,000 triangles and four 2048 textures, 10 MB.
 
 ![In the game](../gallery/0029_ridgeback_in_game.jpg)
-![Up close, in the studio](../gallery/0029_ridgeback_near.jpg)
+![In the studio, close](../gallery/0029_ridgeback_near.jpg)
 
-4.7 MB, about 117,000 triangles: the hide, plates and hard parts in one
-mesh, the glowing flesh in another.
+Judged lit, in the game: it was too dark three times running in a game whose
+sky light is blue and whose sun was behind the camera's subject. The studio
+flatters by a lot; the palette is warmer and brighter than looks right there.
 
 ## What the algorithm has to learn from it
 
-What made the difference, in the order it did, is the list a grown body
-has to reach:
-
-1. **Hard and soft are different things.** The grown body's whole surface
-   is one smooth field; this one is a soft skin with hard plates *on* it,
-   and the plates' crisp chamfers and overlaps are most of what reads as
-   "monster" rather than "blob". A grown body needs a second layer: plates
-   laid on the field by rule (where the species' look says armour), not
-   the field's own surface coloured to look like plates.
-2. **Muscles are sections, not lumps** — a bump that runs along a limb's
-   cross-sections — and **legs are thick columns the body comes down
-   over**. Both are already how `contour` is written; the numbers here are
-   the target its `Column` should reach.
-3. **Silhouette parts are separate geometry** — horns, spikes, quills,
-   nails — placed by rays onto the skin with rules a species table can
-   state (rows along a back, a crown over a skull, nails round a pad).
-4. **Paint by occlusion and curvature**, not only by which way the skin
-   faces: the grown hide has no occlusion at all, which is a large part of
-   why it reads flat.
+1. **Hard and soft are different things.** A grown body is one smooth field;
+   this is a soft skin with shells grown off it where a plan says armour, and
+   their crisp grooves, shingled overlaps and rims are most of what reads as
+   "monster" rather than "blob". The `Plan` here -- regions as distances on
+   the body's own axes, scutes as cellular noise in its own coordinates -- is
+   written so a species table could state it.
+2. **Detail lives in a sculpt, and reaches the game as textures.** The grown
+   body can make the same sculpt (it is a field already) and the same bake.
+3. **Paint from curvature and occlusion** as much as from facing.
+4. **Silhouette parts are geometry with rules** -- rows of spines along a
+   back, a crown, a collar of spikes, nails round a pad, quills off a club.
 
 ## Still open
 
-- The head is generic from the front and small for the body; the face
-  needs a stronger brow, a nostril and a mouth that reads.
-- The legs are long for their thickness — the skeleton's, by design (the
-  back is out of reach from the floor) — and the body could come further
-  down round them.
-- Plates on a joint can cross as it bends; they are weighted to the skin
-  under them and nothing keeps two from meeting.
-- The ridge's folds are simple; they want to read as exposed, ribbed flesh.
+- The legs are still long, straight columns: the rest pose is the skeleton's,
+  and the posture a concept artist would give it (a forward knee, a lifted
+  heel) belongs in its clips as much as its sculpt.
+- The scutes read as stone slabs; a more organic plate (osteoderm with a boss,
+  keratin sheath) is a second style to try.
+- The shin bands are blocky.
+- Smart UV projection still cuts the spines into many small islands; a
+  hand-written unwrap for a tube would pack better.
