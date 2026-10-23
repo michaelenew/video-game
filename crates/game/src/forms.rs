@@ -523,25 +523,36 @@ pub fn turn(mesh: &mut Mesh, cos: f32, sin: f32) {
 
 /// **A stone arch, drawn** (`sim::valley::dragon::arches`): one piece of
 /// rock along a curve of points and radii -- the Sleeper's horn -- smoothed
-/// between its points (a Catmull-Rom curve through them), round in section,
-/// its upward faces the mountain's snow and the rest its crag. The rock the
+/// between its points (a Catmull-Rom curve through them). Weathered rather
+/// than turned: its section wider than tall, as an eroded arch's is, every
+/// ring of it lumpy, and its feet flaring where they go into the mountain,
+/// so it reads as stone the land left and not a pipe laid on it. Its
+/// upward faces are the mountain's snow and the rest its crag. The rock the
 /// simulation stands bodies on is boxes inside it (`dragon::arch_rock`),
 /// hidden.
 pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
+    const PIECES: usize = 6;
+    const SIDES: usize = 18;
+    // Wider than tall, and how lumpy, as shares of the radius.
+    const WIDE: f32 = 1.25;
+    const TALL: f32 = 0.8;
+    const LUMPS: f32 = 0.22;
+    // How far along from either end its feet flare, and by how much.
+    const FOOT: f32 = 0.18;
+    const FLARE: f32 = 0.7;
     let f = |v: sim::Fx| v.to_f32_for_render();
     let pts: Vec<(Vec3, f32)> = points
         .iter()
         .map(|(v, r)| (Vec3::new(f(v.x), f(v.y), f(v.z)), f(*r)))
         .collect();
-    // Four pieces between each pair of points, through them.
     let mut curve = Vec::new();
     for i in 0..pts.len().saturating_sub(1) {
         let p0 = pts[i.saturating_sub(1)].0;
         let (p1, r1) = pts[i];
         let (p2, r2) = pts[i + 1];
         let p3 = pts[(i + 2).min(pts.len() - 1)].0;
-        for k in 0..4 {
-            let t = k as f32 / 4.0;
+        for k in 0..PIECES {
+            let t = k as f32 / PIECES as f32;
             let (t2, t3) = (t * t, t * t * t);
             let at = 0.5
                 * ((2.0 * p1)
@@ -554,15 +565,44 @@ pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
     if let Some(&last) = pts.last() {
         curve.push(last);
     }
+    let n = curve.len();
+    if n < 2 {
+        return Kit::new().build();
+    }
+    // Each ring of the stone: its points round the curve there.
+    let rings: Vec<Vec<Vec3>> = (0..n)
+        .map(|i| {
+            let (at, r) = curve[i];
+            let ahead = curve[(i + 1).min(n - 1)].0 - curve[i.saturating_sub(1)].0;
+            let along = ahead.normalize_or(Vec3::Z);
+            let side = along.cross(Vec3::Y).normalize_or(Vec3::X);
+            let up = side.cross(along).normalize_or(Vec3::Y);
+            let u = i as f32 / (n - 1) as f32;
+            let foot = (1.0 - u.min(1.0 - u) / FOOT).max(0.0);
+            let r = r * (1.0 + FLARE * foot * foot);
+            (0..SIDES)
+                .map(|k| {
+                    let a = std::f32::consts::TAU * k as f32 / SIDES as f32;
+                    let lump = 1.0 + LUMPS * (2.0 * crate::shapes::hash01(i as u32, k as u32, 71) - 1.0);
+                    at + (side * a.cos() * WIDE + up * a.sin() * TALL) * r * lump
+                })
+                .collect()
+        })
+        .collect();
     let rock = p.crag();
     let snow = p.of(Material::Snow);
     let mut kit = Kit::new();
-    for (i, pair) in curve.windows(2).enumerate() {
-        let ((a, ra), (b, rb)) = (pair[0], pair[1]);
-        // A little past each end, so the bends close.
-        let d = (b - a).normalize_or(Vec3::Y) * ra.min(rb) * 0.35;
-        let caps = (i == 0 || i == curve.len() - 2).then_some(rock);
-        kit.tube_topped(a - d, b + d, ra, rb, 14, (rock, snow), caps);
+    for i in 0..n - 1 {
+        let mid = curve[i].0.lerp(curve[i + 1].0, 0.5);
+        for k in 0..SIDES {
+            let k1 = (k + 1) % SIDES;
+            let quad = [rings[i][k], rings[i][k1], rings[i + 1][k1], rings[i + 1][k]];
+            let centre = (quad[0] + quad[1] + quad[2] + quad[3]) * 0.25;
+            let out = (centre - mid).normalize_or(Vec3::Y);
+            let tone = 0.9 + 0.2 * crate::shapes::hash01(i as u32, k as u32, 72);
+            let c = if out.y > 0.5 { snow } else { rock };
+            kit.poly(&quad, out, [c[0] * tone, c[1] * tone, c[2] * tone]);
+        }
     }
     kit.build()
 }

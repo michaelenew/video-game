@@ -55,7 +55,7 @@ FACING = 200.0
 # all of it, so the curl stands as an arch.
 HORN_SQUASH = 1.0
 # How much slimmer the horns are drawn as stone than on the beast.
-HORN_THIN = 0.75
+HORN_THIN = 0.62
 # Sinking a horn into the mountain: none of the way along it until this
 # share, and by this share of the way it is under the land, this deep, so
 # the rest of it -- its tip -- is buried.
