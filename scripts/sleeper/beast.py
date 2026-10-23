@@ -251,6 +251,14 @@ def horn(base, directions, length, width, blend=ARMOUR, kind=BONE):
     return parts
 
 
+def trimmed(part, at, normal):
+    """A part with everything beyond a plane cut away: the plane through
+    `at`, `normal` pointing to the side removed."""
+    at, n = np.asarray(at, float), unit(normal)
+    fn = part.fn
+    return Part(lambda p: np.maximum(fn(p), (p - at) @ n), part.lo, part.hi, part.blend, part.kind)
+
+
 def scaled(part, centre, k):
     """A part drawn `k` times its size about `centre`."""
     c = np.asarray(centre, float)
@@ -335,13 +343,14 @@ def body_parts(pose):
     # an angle, not a bulb: the jaw's front cut back from a hard corner at
     # its foot up to the tusks (the owner: "continue the jaw line straight
     # along its main path, then make the chin more of an angle").
-    jaw_mid = hinge + jf * 1.3 - ju * 0.4
-    parts.append(wedge(jaw_mid, np.c_[hl, ju, jf], (1.1, 0.6, 1.35), 0.15, 0.25, 0.3))
-    slant = np.radians(30)
-    cf = unit(jf * np.cos(slant) + ju * np.sin(slant))
-    cu = unit(np.cross(cf, hl))
-    chin = hinge + jf * 2.35 - ju * 0.55
-    parts.append(wedge(chin, np.c_[hl, cu, cf], (0.95, 0.55, 0.42), 0.05, 0.12, 0.2))
+    # One block, even in depth, so its underside runs dead straight to
+    # the front; the chin's angle cut into its upper front by a slanted
+    # plane through the foot of its front face.
+    jaw_mid = hinge + jf * 1.35 - ju * 0.45
+    jaw = wedge(jaw_mid, np.c_[hl, ju, jf], (1.05, 0.62, 1.55), 0.0, 0.25, 0.3)
+    foot = jaw_mid + jf * 1.55 - ju * 0.62
+    cut = unit(jf * np.cos(np.radians(35)) + ju * np.sin(np.radians(35)))
+    parts.append(trimmed(jaw, foot, cut))
     for s_ in (1, -1):
         parts.append(wedge(at + hf * 0.95 + hu * 0.75 + hl * s_ * 0.62, np.c_[hl, hu, hf], (0.42, 0.22, 0.5), 0.2, 0.1, 0.15))
         parts.append(ellipsoid(at + hf * 0.45 - hu * 0.15 + hl * s_ * 0.95, np.c_[hl, hu, hf], (0.4, 0.55, 0.6), 0.25))
