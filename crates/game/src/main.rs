@@ -50,6 +50,7 @@ mod profile;
 mod scrape;
 mod settings;
 mod shapes;
+mod sighted;
 mod signs;
 mod sky;
 mod sound;
@@ -259,6 +260,7 @@ fn main() {
         .insert_resource(cairns::Cairns::load())
         .init_resource::<InsideOwnHead>()
         .init_resource::<beast::Boom>()
+        .init_resource::<sighted::Sighted>()
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
@@ -368,7 +370,7 @@ fn main() {
                     claimed::drape,
                     place_auras,
                 ),
-                beast::place,
+                (sighted::update, beast::place).chain(),
                 drive_camera,
                 (colour_by_side, fade_own_body).chain(),
                 hud::toggle_class_buttons,
@@ -392,7 +394,7 @@ fn main() {
         .add_systems(
             Update,
             (
-                critters::place,
+                critters::place.after(sighted::update),
                 critters::overlay,
                 (signs::place, hill::place),
                 ground::place,

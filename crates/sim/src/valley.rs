@@ -44,6 +44,7 @@ pub mod layout;
 pub mod open;
 pub mod ranges;
 pub mod roam;
+pub mod sight;
 pub mod trees;
 
 /// A box of the world a body's feet can be in.
@@ -287,12 +288,8 @@ pub fn place(id: ArenaId) -> Option<&'static Place> {
         ArenaId::DEEP => &arena::deep::PLACE,
         ArenaId::HIGH_PLANE => &arena::heights::PLANE_PLACE,
         ArenaId::SKY_ROAD => &arena::heights::SKY_ROAD_PLACE,
-        ArenaId::HIGHLANDS => &rooms::HIGHLANDS,
-        ArenaId::HORNBACK => &rooms::MEADOW,
-        ArenaId::GNAWERS => &rooms::COMMONS,
         ArenaId::MIREBACK => &rooms::MIRE,
         ArenaId::SANDMAW => &rooms::PAN,
-        ArenaId::PAIR => &rooms::DEN,
         ArenaId::BROODMOTHER => &rooms::HOLLOWS,
         ArenaId::GALEWING => &rooms::CLIFFS,
         ArenaId::VEILSTALKER => &rooms::ASHWOOD,
@@ -341,9 +338,9 @@ pub fn sheet_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
     }
 }
 
-/// **The cairn under these feet**, on the map: a snow top of a reach or of
-/// the town, by its index among the map's boxes. A room's snow is a
-/// creature's floor, not a cairn.
+/// **The cairn under these feet**, on the map: a snow top of a reach, a
+/// range or the town, by its index among the map's boxes. A room's snow is
+/// a creature's floor, not a cairn.
 pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
     atlas
         .near((feet.x, feet.z), (feet.x, feet.z))
@@ -358,8 +355,11 @@ pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
             } else {
                 atlas.places.get(src.place as usize)
             };
+            // A range is open land, and a herd's territory takes in the road
+            // and the crags beside it (2026-10-22): a cairn there counts.
             let counts = owner.is_some_and(|p| {
-                place(p.arena).is_some_and(|p| matches!(p.kind, Kind::Reach | Kind::Town))
+                ranges::of(p.arena).is_some()
+                    || place(p.arena).is_some_and(|p| matches!(p.kind, Kind::Reach | Kind::Town))
             });
             counts && s.material == crate::arena::Material::Snow && on_top(s, feet)
         })
@@ -509,36 +509,6 @@ pub mod rooms {
         }
     }
 
-    pub static MEADOW: Place = room(
-        ArenaId::HORNBACK,
-        SpeciesId::HORNBACK,
-        &[out(
-            Zone::cm([-2390, -100, -400], [-1900, 600, 400]),
-            ArenaId::MOUTH,
-            1,
-            [
-                Mark::cm(-2000, -200, (0, -200)),
-                Mark::cm(-2000, 200, (0, 200)),
-            ],
-            "the Mouth",
-        )],
-    );
-
-    pub static COMMONS: Place = room(
-        ArenaId::GNAWERS,
-        SpeciesId::GNAWERS,
-        &[out(
-            Zone::cm([-400, -100, -1490], [400, 600, -1050]),
-            ArenaId::BANK,
-            1,
-            [
-                Mark::cm(-150, -1150, (-150, 0)),
-                Mark::cm(150, -1150, (150, 0)),
-            ],
-            "the Bank",
-        )],
-    );
-
     pub static MIRE: Place = room(
         ArenaId::MIREBACK,
         SpeciesId::MIREBACK,
@@ -569,49 +539,16 @@ pub mod rooms {
         )],
     );
 
-    pub static DEN: Place = room(
-        ArenaId::PAIR,
-        SpeciesId::PAIR,
-        &[out(
-            Zone::cm([-1450, -100, -400], [-900, 600, 400]),
-            ArenaId::PINEWOOD,
-            1,
-            [
-                Mark::cm(-1000, -150, (0, -150)),
-                Mark::cm(-1000, 150, (0, 150)),
-            ],
-            "the Pinewood",
-        )],
-    );
-
     pub static HOLLOWS: Place = room(
         ArenaId::BROODMOTHER,
         SpeciesId::BROODMOTHER,
         &[out(
             Zone::cm([-1450, -100, -400], [-1050, 600, 400]),
             ArenaId::PINEWOOD,
-            2,
+            1,
             [
                 Mark::cm(-1150, -200, (0, -200)),
                 Mark::cm(-1150, 200, (0, 200)),
-            ],
-            "the Pinewood",
-        )],
-    );
-
-    /// The Ridgeback has no arena of its own (it is hunted in the proving
-    /// ground); in the valley it is met on the Highlands, which are the
-    /// proving ground's floor plan on a moor.
-    pub static HIGHLANDS: Place = room(
-        ArenaId::HIGHLANDS,
-        SpeciesId::RIDGEBACK,
-        &[out(
-            Zone::cm([-1390, -100, -300], [-1100, 600, 300]),
-            ArenaId::PINEWOOD,
-            3,
-            [
-                Mark::cm(-1000, -200, (0, -200)),
-                Mark::cm(-1000, 200, (0, 200)),
             ],
             "the Pinewood",
         )],

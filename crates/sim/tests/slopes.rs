@@ -139,10 +139,12 @@ fn a_box_higher_than_a_step_is_still_a_wall() {
 #[test]
 fn the_bank_under_the_shrine_is_walked_up_over_its_seam() {
     // Frames 162670-162800 of the replay: walking north up the bank under the
-    // Shrine, which has a seam a hand high at its top. She flickered on and
+    // Shrine, which had a seam a hand high at its top. She flickered on and
     // off the floor up it, stopped dead at the seam, and then crept up a
-    // tenth of a metre every fourth frame while sliding sideways.
-    let mut w = standing(Class::Champion, 101_046, 5_782);
+    // tenth of a metre every fourth frame while sliding sideways. The
+    // Shrine's path went on 2026-10-22, when it became a station; the same
+    // walk is now up the foothills north of the Saddle's road beneath it.
+    let mut w = standing(Class::Champion, 97_000, 2_000);
     let north = Input::QUARTER_TURN;
     let from = w.players[0].pos;
     for _ in 0..60 {
@@ -257,24 +259,25 @@ fn ground_with_no_footing_is_crossed_but_never_climbed() {
 
 #[test]
 fn a_seam_taller_than_a_step_is_a_ledge() {
-    // The Mireback's clearing meets the land round it, east of its door, a
-    // metre and more below it: a seam, not a slope, and too tall to step.
-    // The first stretch of it with no wall on it.
-    let (mut w, rise) = (49_000..53_000)
-        .step_by(50)
+    // The Mire's ledge meets its rim's bank either side, a metre and more
+    // above it: a seam, not a slope, and too tall to step. Six metres out
+    // from its door (2026-10-22; until then the Mireback's clearing meeting
+    // the land east of its door, which the station's ledge replaced).
+    let (mut w, rise) = (52_000..54_000)
+        .step_by(25)
         .find_map(|x| {
-            let w = standing(Class::Champion, x, -6_720);
+            let w = standing(Class::Champion, x, -7_600);
             let ground = w.terrain();
             let p = w.players[0].pos;
-            let past = ground.relief_at(p.x, p.z.add(Fx::ratio(3, 10)));
+            let past = ground.relief_at(p.x.add(Fx::ratio(3, 10)), p.z);
             let rise = past.sub(p.y);
             let open = ground.relief_at(p.x, p.z) == p.y;
             (open && rise.raw() > t::step_over().add(Fx::ratio(1, 4)).raw()).then_some((w, rise))
         })
-        .expect("the Mireback's clearing has no ledge along its edge");
+        .expect("the Mire's ledge has no seam along its side");
     let from = w.players[0].pos;
     for _ in 0..30 {
-        walk(&mut w, Input::W, Input::QUARTER_TURN);
+        walk(&mut w, Input::W, 0);
     }
     assert!(
         w.players[0].pos.y.raw() <= from.y.add(Fx::ratio(1, 20)).raw(),

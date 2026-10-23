@@ -90,7 +90,14 @@ const LEVEL_DATA: &[&str] = &[
     "spire.rs",
     "deep.rs",
     "ranges.rs",
+    // Where a sleeping range's herd wanders (`valley::sight`): how long a
+    // leg, how far from the middle its points are drawn -- where a creature
+    // stands while nobody is near, judged by looking at it from the road.
+    "sight.rs",
     "heights.rs",
+    // Where the stations stand and the routes of stones to and from them,
+    // sized against the jump envelope and judged by `tests/stations.rs`.
+    "stations.rs",
     "trees.rs",
     "gully.rs",
 ];

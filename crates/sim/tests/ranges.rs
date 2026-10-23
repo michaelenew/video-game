@@ -52,13 +52,48 @@ fn standing(r: &Range, at: (Fx, Fx, Fx)) -> World {
 
 /// Fighter one walked into a range: stood at its near edge, a step inside,
 /// on its floor, and a frame advanced.
+///
+/// A herd that roams wakes as you come near it, wherever it is: walked up to,
+/// then -- stood five metres inside the distance that wakes it.
 fn walked_in(r: &Range) -> World {
-    let (x, z) = (cm(r.at.0), cm(r.at.1 - r.half + 250));
-    let mut w = standing(r, (x, cm(r.floor).add(Fx::ratio(1, 2)), z));
+    let mut w = if r.roams() {
+        let mid = sim::valley::sight::herd_middle(r, 0);
+        let back = cm(ranges::WAKE - 500);
+        let (x, z) = (mid.x, mid.z.sub(back));
+        let y = sim::atlas::valley().relief_at(x, z);
+        standing(r, (x, y.add(Fx::ratio(1, 2)), z))
+    } else {
+        let (x, z) = (cm(r.at.0), cm(r.at.1 - r.half + 250));
+        standing(r, (x, cm(r.floor).add(Fx::ratio(1, 2)), z))
+    };
     for _ in 0..3 {
         w.advance([Input::new(0), Input::new(0)]);
     }
     w
+}
+
+/// **Where a range's creatures are**, in the world's coordinates: the middle
+/// of the live ones -- or, with none, the range's middle.
+fn herd_mid(w: &World, r: &Range) -> V3 {
+    let bodies: Vec<V3> = w
+        .monsters
+        .iter()
+        .flatten()
+        .filter(|m| m.alive())
+        .map(|m| m.pos)
+        .chain(w.critters.iter().filter(|c| c.alive()).map(|c| c.pos))
+        .collect();
+    if bodies.is_empty() {
+        return V3::new(cm(r.at.0), cm(r.floor), cm(r.at.1)).sub(w.map_origin());
+    }
+    let n = bodies.len() as i64;
+    let sx: i64 = bodies.iter().map(|p| p.x.raw() as i64).sum();
+    let sz: i64 = bodies.iter().map(|p| p.z.raw() as i64).sum();
+    V3::new(
+        Fx::from_raw((sx / n) as i32),
+        bodies[0].y,
+        Fx::from_raw((sz / n) as i32),
+    )
 }
 
 #[test]
@@ -132,7 +167,9 @@ fn the_road_never_wakes_a_range() {
                 let t = Fx::ratio(k, 20);
                 let x = pair[0].0.add(pair[1].0.sub(pair[0].0).mul(t));
                 let z = pair[0].1.add(pair[1].1.sub(pair[0].1).mul(t));
-                for r in RANGES.iter().filter(|r| r.stacked.is_none()) {
+                // A herd that roams is on the road on purpose: it is woken by
+                // coming near it, not by the ground (`every_roaming_herd_...`).
+                for r in RANGES.iter().filter(|r| r.stacked.is_none() && !r.roams()) {
                     let p = sim::atlas::valley().placed(r.arena).unwrap();
                     assert!(
                         !p.holds_within(x, z, margin),
@@ -180,8 +217,7 @@ fn a_peaceful_herd_starts_nothing_until_it_is_hurt() {
     let mut w = walked_in(r);
     let health = w.players[0].health;
     // Stood among them for ten seconds: nobody is hurt, nothing is roused.
-    let o = w.map_origin();
-    let mid = V3::new(cm(r.at.0), cm(r.floor), cm(r.at.1)).sub(o);
+    let mid = herd_mid(&w, r);
     w.players[0].pos = mid;
     for _ in 0..600 {
         w.advance([Input::new(0), Input::new(0)]);
@@ -211,8 +247,8 @@ fn a_territorial_creature_waits_until_you_come_close() {
     }
     assert!(!w.valley.roused, "{}: roused from its edge", r.name);
     // Into its ring.
-    let o = w.map_origin();
-    let inside = V3::new(cm(r.at.0), cm(r.floor), cm(r.at.1 - ring / 2)).sub(o);
+    let mid = herd_mid(&w, r);
+    let inside = V3::new(mid.x, mid.y, mid.z.sub(cm(ring / 2)));
     w.players[0].pos = inside;
     w.advance([Input::new(0), Input::new(0)]);
     assert!(w.valley.roused, "{}: not roused in its ring", r.name);
@@ -227,6 +263,7 @@ fn a_skittish_herd_runs_when_it_is_hurt() {
         return;
     };
     let before = stock(&w);
+    let mid = herd_mid(&w, r);
     hurt(&mut w);
     assert!(stock(&w) < before);
     for _ in 0..2 {
@@ -235,9 +272,9 @@ fn a_skittish_herd_runs_when_it_is_hurt() {
     let pack = w.pack.expect("the herd");
     assert_eq!(pack.mood, sim::pack::mood::BROKEN, "it did not run");
     // Its home is the far side from her.
-    let me = w.players[0].pos;
+    let me = w.players[0].pos.sub(mid);
     assert!(
-        pack.home.dot(me).raw() < 0,
+        pack.home.sub(mid).dot(me).raw() < 0,
         "it runs toward her: home {:?}, she is at {me:?}",
         pack.home
     );
@@ -264,7 +301,11 @@ fn a_hunting_range_is_not_held() {
 
 #[test]
 fn a_beaten_range_rests_and_comes_back() {
-    let r = &RANGES[2];
+    // One that keeps to its ground, woken by walking on to it.
+    let r = RANGES
+        .iter()
+        .find(|r| r.stacked.is_none() && !r.roams())
+        .expect("a range that keeps to its ground");
     let k = ranges::index(r.arena).unwrap();
     let mut w = walked_in(r);
     assert!(w.hunting());
@@ -368,7 +409,11 @@ fn a_roused_range_fights() {
         let o = w.map_origin();
         // In its middle -- but the roost's middle is the Needle's chimney,
         // which a vine held her in until 2026-10-16: on the dome beside it.
-        let mut at = V3::new(cm(r.at.0), cm(r.floor).add(Fx::ONE), cm(r.at.1)).sub(o);
+        let mut at = if r.roams() {
+            herd_mid(&w, r)
+        } else {
+            V3::new(cm(r.at.0), cm(r.floor).add(Fx::ONE), cm(r.at.1)).sub(o)
+        };
         if r.species == sim::species::SpeciesId::GALEWING && r.stacked.is_some() {
             at.z = at.z.sub(Fx::from_int(8));
         }
@@ -440,4 +485,371 @@ fn the_needles_top_cairn_counts_while_the_roost_is_awake() {
         w.players[0].health <= 100,
         "a cairn rested somebody mid-fight"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Sightings (2026-10-22): where a sleeping range's creatures are
+// ---------------------------------------------------------------------------
+
+/// **A sleeping herd is where its frame says**: the same frame stands it in
+/// the same place every time, it moves from frame to frame, and over a long
+/// while every body of it stays inside its range.
+#[test]
+fn a_sleeping_herd_wanders_its_range_by_the_frame_alone() {
+    use sim::valley::sight;
+    let atlas = sim::atlas::valley();
+    for r in RANGES.iter().filter(|r| r.stacked.is_none()) {
+        let base = sight::base(r.arena).expect("a range has creatures");
+        let place = atlas.placed(r.arena).copied().unwrap();
+        let ground = sim::arena::Terrain::placed(atlas, r.arena.get());
+        let at = |frame: u32| {
+            let mut s = base;
+            sight::stand(&mut s, frame, V3::ZERO, &ground);
+            s
+        };
+        let bodies = |s: &sight::Sight| -> Vec<V3> {
+            s.monsters
+                .iter()
+                .flatten()
+                .map(|m| m.pos)
+                .chain(s.critters.iter().filter(|c| c.present()).map(|c| c.pos))
+                .collect()
+        };
+        assert_eq!(
+            bodies(&at(4321)),
+            bodies(&at(4321)),
+            "{}: not a function of the frame",
+            r.name
+        );
+        let mut moved = false;
+        for k in 0..60u32 {
+            let f = k * 397 + 11;
+            let now = bodies(&at(f));
+            moved |= now != bodies(&at(f + sight::LEG / 2));
+            for p in now {
+                let m = p.add(place.at);
+                assert!(
+                    place.holds(m.x, m.z),
+                    "{}: frame {f}, a body at ({}, {}) out of its range",
+                    r.name,
+                    m.x.to_f32_for_render(),
+                    m.z.to_f32_for_render()
+                );
+            }
+        }
+        assert!(moved, "{}: its herd never moved", r.name);
+    }
+}
+
+/// **A range wakes where it was seen**: the creatures a hunt starts with are
+/// exactly where the sighting stood them on that frame -- the animal watched
+/// from the road is the one that turns to face you.
+#[test]
+fn a_range_wakes_its_creatures_where_they_were_seen() {
+    use sim::valley::sight;
+    for r in RANGES.iter().filter(|r| r.stacked.is_none()) {
+        let w = World::arrive(
+            [Class::Champion, Class::Elementalist],
+            journey(),
+            r.arena,
+            None,
+            1,
+        );
+        assert!(w.hunting(), "{}: nothing woke", r.name);
+        let mut seen = sight::base(r.arena).unwrap();
+        sight::stand(&mut seen, w.frame, V3::ZERO, &w.terrain());
+        let flat = |p: V3| (p.x, p.z);
+        let woke: Vec<_> = w.monsters.iter().flatten().map(|m| flat(m.pos)).collect();
+        let was: Vec<_> = seen
+            .monsters
+            .iter()
+            .flatten()
+            .map(|m| flat(m.pos))
+            .collect();
+        assert_eq!(woke, was, "{}: its bodies woke somewhere else", r.name);
+        let woke: Vec<_> = w
+            .critters
+            .iter()
+            .filter(|c| c.present())
+            .map(|c| flat(c.pos))
+            .collect();
+        let was: Vec<_> = seen
+            .critters
+            .iter()
+            .filter(|c| c.present())
+            .map(|c| flat(c.pos))
+            .collect();
+        assert_eq!(woke, was, "{}: its pack woke somewhere else", r.name);
+    }
+}
+
+/// **Each range stands in the place `ranges::IN` says**, which is the one
+/// whose air and colours it takes.
+#[test]
+fn every_range_is_in_the_place_it_says() {
+    for (k, r) in RANGES.iter().enumerate() {
+        let want = match ranges::IN[k] {
+            // Stacked over another place: the roost over the Needle, the
+            // Deep's levels over its own pit.
+            id if r.stacked.is_some() => id,
+            id => {
+                assert_eq!(
+                    reach_of(r),
+                    id,
+                    "{} stands in {}",
+                    r.name,
+                    reach_of(r).get().name
+                );
+                id
+            }
+        };
+        assert_eq!(ranges::in_place(r.arena), Some(want));
+    }
+}
+
+/// **No range shares its id with another arena**: each range's id is its
+/// own arena, by name. Three ranges added on 2026-10-22 were first numbered
+/// on into the versus stages' ids, and the Low Meadow came out the Caldera.
+#[test]
+fn every_range_has_an_id_of_its_own() {
+    let mut seen = std::collections::BTreeSet::new();
+    for r in &RANGES {
+        assert_eq!(
+            r.arena.get().name,
+            r.name,
+            "{}'s id is another arena's",
+            r.name
+        );
+        assert_eq!(ranges::of(r.arena).map(|q| q.name), Some(r.name));
+        assert!(seen.insert(r.arena.0), "{} shares an id", r.name);
+    }
+    for a in sim::arena::all() {
+        if ranges::of(a.id).is_none() {
+            assert!(!seen.contains(&a.id.0), "{} has a range's id", a.name);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Roaming (2026-10-22): herds that walk the valley floor, not a pocket
+// ---------------------------------------------------------------------------
+
+/// **A roaming herd's loop is open ground in its territory**: every metre of
+/// every leg, for its middle and either side of it where its bodies walk, is
+/// inside its territory, dry, never steeper than a body walks, and clear of
+/// anything taller than a step -- a tree, a boulder, a crag.
+#[test]
+fn every_roaming_herd_walks_open_ground() {
+    let atlas = sim::atlas::valley();
+    let land = atlas.land.as_ref().unwrap();
+    let mut bad = Vec::new();
+    for r in RANGES.iter().filter(|r| r.roams()) {
+        let home = atlas.placed(r.arena).copied().unwrap();
+        let n = r.walk.len();
+        for i in 0..n {
+            let (a, b) = (r.walk[i], r.walk[(i + 1) % n]);
+            let len = (((b.0 - a.0) as f64).hypot((b.1 - a.1) as f64) / 100.0) as i32 + 1;
+            for side in [-r.half / 4, 0, r.half / 4] {
+                let mut last: Option<Fx> = None;
+                for k in 0..=len {
+                    let x = a.0 + (b.0 - a.0) * k / len + side;
+                    let z = a.1 + (b.1 - a.1) * k / len + r.half / 3;
+                    let (fx, fz) = (cm(x), cm(z));
+                    let where_ = format!("{}: leg {i} at ({}, {})", r.name, x / 100, z / 100);
+                    if !home.holds(fx, fz) {
+                        bad.push(format!("{where_}: out of its territory"));
+                        break;
+                    }
+                    if land.sample(fx, fz).water.is_some() {
+                        bad.push(format!("{where_}: in water"));
+                        break;
+                    }
+                    let y = atlas.relief_at(fx, fz);
+                    if let Some(l) = last
+                        && y.sub(l).abs().raw() > sim::tuning::terrain_steepest().raw()
+                    {
+                        bad.push(format!("{where_}: too steep"));
+                        break;
+                    }
+                    last = Some(y);
+                    let (lo, hi) = (
+                        (fx.sub(Fx::ONE), fz.sub(Fx::ONE)),
+                        (fx.add(Fx::ONE), fz.add(Fx::ONE)),
+                    );
+                    let blocked = atlas.near(lo, hi).find(|&j| {
+                        let s = &atlas.solids[j as usize];
+                        s.min.x.raw() < hi.0.raw()
+                            && s.max.x.raw() > lo.0.raw()
+                            && s.min.z.raw() < hi.1.raw()
+                            && s.max.z.raw() > lo.1.raw()
+                            && s.max.y.raw() > y.add(Fx::ONE).raw()
+                            && s.min.y.raw() < y.add(Fx::from_int(4)).raw()
+                    });
+                    if let Some(j) = blocked {
+                        let s = &atlas.solids[j as usize];
+                        bad.push(format!(
+                            "{where_}: {:?} from ({:.1}, {:.1}) to ({:.1}, {:.1}) stands there",
+                            s.material,
+                            s.min.x.to_f32_for_render(),
+                            s.min.z.to_f32_for_render(),
+                            s.max.x.to_f32_for_render(),
+                            s.max.z.to_f32_for_render()
+                        ));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// **A roaming range's territory is the valley's, and no one else's**: it
+/// overlaps no other place but the reach it stands in.
+#[test]
+fn a_territory_overlaps_no_other_place() {
+    let atlas = sim::atlas::valley();
+    for (k, r) in RANGES.iter().enumerate().filter(|(_, r)| r.roams()) {
+        let me = atlas.placed(r.arena).copied().unwrap();
+        for p in &atlas.places {
+            if p.arena == r.arena || p.arena == ranges::IN[k] {
+                continue;
+            }
+            if matches!(
+                valley::place(p.arena).map(|q| q.kind),
+                Some(valley::Kind::Reach)
+            ) {
+                continue;
+            }
+            let apart = me.hi.0.raw() <= p.lo.0.raw()
+                || p.hi.0.raw() <= me.lo.0.raw()
+                || me.hi.1.raw() <= p.lo.1.raw()
+                || p.hi.1.raw() <= me.lo.1.raw();
+            assert!(
+                apart,
+                "{}'s territory overlaps {}",
+                r.name,
+                p.arena.get().name
+            );
+        }
+    }
+}
+
+/// **A roaming herd is woken by coming near it, not by its ground**: stood
+/// in its territory far from it, nothing wakes; within `ranges::WAKE` of it,
+/// it does; and a herd nobody roused sleeps again -- back on its loop -- once
+/// everybody is `ranges::RELEASE` from it.
+#[test]
+fn a_roaming_herd_wakes_when_you_come_near_and_sleeps_when_you_go() {
+    let r = RANGES.iter().find(|r| r.name == "Riverside").unwrap();
+    assert!(r.roams());
+    let mut w = World::arrive(
+        [Class::Champion, Class::Elementalist],
+        journey(),
+        ArenaId::MOUTH,
+        None,
+        1,
+    );
+    let land = |x: Fx, z: Fx| sim::atlas::valley().relief_at(x, z);
+    let put = |w: &mut World, x: Fx, z: Fx| {
+        let o = w.map_origin();
+        w.players[0].pos = V3::new(x, land(x, z).add(Fx::ratio(1, 2)), z).sub(o);
+        w.players[0].vel = V3::ZERO;
+    };
+    // In its territory, but well away from where it grazes.
+    let home = sim::atlas::valley().placed(r.arena).copied().unwrap();
+    let mid = sim::valley::sight::herd_middle(r, w.frame);
+    let corners = [
+        (
+            home.lo.0.add(Fx::from_int(3)),
+            home.lo.1.add(Fx::from_int(3)),
+        ),
+        (
+            home.hi.0.sub(Fx::from_int(3)),
+            home.lo.1.add(Fx::from_int(3)),
+        ),
+        (
+            home.lo.0.add(Fx::from_int(3)),
+            home.hi.1.sub(Fx::from_int(3)),
+        ),
+        (
+            home.hi.0.sub(Fx::from_int(3)),
+            home.hi.1.sub(Fx::from_int(3)),
+        ),
+    ];
+    let far = corners
+        .iter()
+        .copied()
+        .max_by_key(|&(x, z)| sim::math::wide_flat_dist(V3::new(x, Fx::ZERO, z), mid).raw())
+        .unwrap();
+    put(&mut w, far.0, far.1);
+    for _ in 0..30 {
+        w.advance([Input::new(0), Input::new(0)]);
+    }
+    assert!(!w.hunting(), "its ground woke it, far from it");
+    // Near it.
+    let mid = sim::valley::sight::herd_middle(r, w.frame);
+    put(&mut w, mid.x, mid.z.sub(cm(ranges::WAKE - 800)));
+    w.advance([Input::new(0), Input::new(0)]);
+    assert!(
+        w.hunting() && w.den_id() == r.arena,
+        "coming near it did not wake it"
+    );
+    // Away again, nobody having touched it: it sleeps.
+    let o = w.map_origin();
+    let here = w.players[0].pos.add(o);
+    put(&mut w, here.x, here.z.sub(cm(ranges::RELEASE * 2)));
+    for _ in 0..10 {
+        w.advance([Input::new(0), Input::new(0)]);
+    }
+    assert!(!w.hunting(), "it stayed awake with nobody near it");
+}
+
+/// **A cairn in a herd's territory still counts**: the Mouth's crag stands in
+/// the Riverside herd's, and the cairn on its top is a checkpoint.
+#[test]
+fn a_cairn_in_a_territory_counts() {
+    let atlas = sim::atlas::valley();
+    let (x, z) = (cm(16000), cm(2600));
+    let i = atlas
+        .near((x, z), (x, z))
+        .map(|i| i as usize)
+        .filter(|&i| atlas.solids[i].material == sim::arena::Material::Snow)
+        .max_by_key(|&i| atlas.solids[i].max.y.raw())
+        .expect("the crag's cairn");
+    let top = valley::top_of(&atlas.solids[i]);
+    assert!(
+        atlas
+            .place_at(x, z)
+            .is_some_and(|p| ranges::of(p.arena).is_some()),
+        "the crag is not in a territory any more"
+    );
+    assert_eq!(valley::cairn_at(atlas, top), Some(i));
+}
+
+/// **A beaten roaming herd rests too**: coming near where it would be wakes
+/// nothing until its rest is out, and nothing of it is drawn meanwhile (the
+/// renderer asks `World::resting`).
+#[test]
+fn a_beaten_roaming_herd_rests_and_comes_back() {
+    let r = RANGES.iter().find(|r| r.roams()).unwrap();
+    let k = ranges::index(r.arena).unwrap();
+    let mut w = walked_in(r);
+    assert!(w.hunting());
+    w.valley.rested[k] = w.frame;
+    w.monsters = [None; sim::monster::MAX_MONSTERS];
+    w.pack = None;
+    w.critters = sim::critter::Critters::NONE;
+    let near = |w: &mut World| {
+        let mid = sim::valley::sight::herd_middle(r, w.frame);
+        let y = sim::atlas::valley().relief_at(mid.x, mid.z);
+        let o = w.map_origin();
+        w.players[0].pos = V3::new(mid.x, y.add(Fx::ONE), mid.z).sub(o);
+        w.advance([Input::new(0), Input::new(0)]);
+    };
+    near(&mut w);
+    assert!(!w.hunting(), "a resting herd woke");
+    w.frame = w.frame.wrapping_add(sim::tuning::range_rest_frames());
+    near(&mut w);
+    assert!(w.hunting(), "it never came back");
 }

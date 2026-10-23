@@ -51,10 +51,14 @@ const PIECES: [Piece; 10] = [
     Piece::Horn(1),
 ];
 
-/// One drawable piece: which critter slot, which piece. A fixed pool spawned
-/// once, so nothing is spawned while a fight is running.
+/// One drawable piece: which pool (the world's critters, or a sleeping pack
+/// seen from afar, `crate::sighted`), which critter slot, which piece. A
+/// fixed pool spawned once, so nothing is spawned while a fight is running.
 #[derive(Component)]
-pub struct Bit(pub usize, pub Piece);
+pub struct Bit(pub usize, pub usize, pub Piece);
+
+/// How many pools of critters are drawn: the world's, and the sightings'.
+const POOLS: usize = 1 + crate::sighted::PACKS;
 
 /// Materials, made once per species and kind: hide, and eyes.
 #[derive(Resource)]
@@ -129,15 +133,17 @@ pub fn setup(
     // A small body is rounder than a big one: a rounded box, not a crate
     // (`docs/design/forms.md`); its box is still what the hit test uses.
     let cube = meshes.add(crate::shapes::soft_box(Vec3::ONE, 0.45, 8, None));
-    for slot in 0..MAX_CRITTERS {
-        for piece in PIECES {
-            commands.spawn((
-                Mesh3d(cube.clone()),
-                MeshMaterial3d(fallback.0.clone()),
-                Transform::default(),
-                Visibility::Hidden,
-                Bit(slot, piece),
-            ));
+    for pool in 0..POOLS {
+        for slot in 0..MAX_CRITTERS {
+            for piece in PIECES {
+                commands.spawn((
+                    Mesh3d(cube.clone()),
+                    MeshMaterial3d(fallback.0.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    Bit(pool, slot, piece),
+                ));
+            }
         }
     }
     commands.insert_resource(Coats {
@@ -419,6 +425,7 @@ fn mirrored(sp: &Species, c: &Critter) -> bool {
 /// Put every piece of every critter where the snapshot says.
 pub fn place(
     sim: Res<crate::Sim>,
+    sighted: Res<crate::sighted::Sighted>,
     coats: Res<Coats>,
     mut bits: Query<(
         &Bit,
@@ -427,14 +434,29 @@ pub fn place(
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
-    let cur = &sim.cur.critters;
-    let prev = &sim.prev.critters;
     let alpha = sim.clock.alpha();
-    let sp = cur.sp();
     for (bit, mut transform, mut visible, mut material) in bits.iter_mut() {
-        let Bit(slot, piece) = *bit;
+        let Bit(pool, slot, piece) = *bit;
+        // The world's critters, between its last two frames; or a sleeping
+        // pack, where it is this frame.
+        let (cur, prev, live) = if pool == 0 {
+            if sim.cur.pack.is_none() {
+                *visible = Visibility::Hidden;
+                continue;
+            }
+            (&sim.cur.critters, &sim.prev.critters, true)
+        } else {
+            match &sighted.packs[pool - 1] {
+                Some(pack) => (pack, pack, false),
+                None => {
+                    *visible = Visibility::Hidden;
+                    continue;
+                }
+            }
+        };
+        let sp = cur.sp();
         let c = &cur[slot];
-        if !c.present() || sim.cur.pack.is_none() || (c.state == is::DEAD && c.timer == 0) {
+        if !c.present() || (c.state == is::DEAD && c.timer == 0) {
             *visible = Visibility::Hidden;
             continue;
         }
@@ -474,9 +496,11 @@ pub fn place(
             ),
             Piece::Horn(n) => {
                 let side = if n == 0 { 1.0 } else { -1.0 };
-                let whole = look
-                    .horns
-                    .is_some_and(|f| f(&sim.cur, slot).is_some_and(|h| h[n as usize]));
+                // A sleeping herd has every horn it was born with.
+                let whole = !live
+                    || look
+                        .horns
+                        .is_some_and(|f| f(&sim.cur, slot).is_some_and(|h| h[n as usize]));
                 if !whole || coats.horn(cur.species, c.kind).is_none() {
                     *visible = Visibility::Hidden;
                     continue;

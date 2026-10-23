@@ -121,6 +121,10 @@ pub fn of(id: ArenaId) -> Sky {
         // light at the Mouth, noon on the Shelves, the wood's green afternoon,
         // and the thinnest, bluest air of the game on the Saddle. The reach
         // grows with the height, so the higher you are the further you see.
+        // A range is a pocket of the place it stands in, under its air.
+        id if sim::valley::ranges::in_place(id).is_some() => {
+            of(sim::valley::ranges::in_place(id).unwrap_or(ArenaId::HEARTH))
+        }
         ArenaId::HEARTH => Sky {
             reach: 500.0,
             ..Sky::over([0.93, 0.88, 0.80])
@@ -294,7 +298,8 @@ mod tests {
         // enough colour left in it to read as sky rather than as fog -- the
         // failure that produced an all-brown wash the first time round.
         for arena in sim::arena::all() {
-            if arena.id == ArenaId::BROODMOTHER || arena.id == ArenaId::DEEP {
+            let cave = |id| id == ArenaId::BROODMOTHER || id == ArenaId::DEEP;
+            if cave(arena.id) || sim::valley::ranges::in_place(arena.id).is_some_and(cave) {
                 continue; // A cave. The places dark is the right answer.
             }
             let h = Lch::of(of(arena.id).resolved().horizon);
