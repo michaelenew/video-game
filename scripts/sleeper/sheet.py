@@ -16,6 +16,7 @@ import numpy as np
 
 from pose import colours
 from model import Model
+from sculpt import sculpt
 from render import sheet, view
 from terrain import CELL, build, placed
 
@@ -95,7 +96,7 @@ def land(lo, hi):
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "target/sleeper-sheet.png"
     mv, mt = placed()
-    mc = colours(Model())
+    mc = colours(sculpt(Model()))
     lo = mv[:, [0, 2]].min(0) - MARGIN
     hi = mv[:, [0, 2]].max(0) + MARGIN
     lv, lt, lc = land(lo, hi)

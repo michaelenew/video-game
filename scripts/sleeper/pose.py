@@ -12,14 +12,15 @@ right side.
 What the owner asked for (2026-10-23): tail curled up; head tucked under a
 forelimb, looking natural; forelimbs attached at the shoulder and half the
 size; lying slightly on one side, so it is not symmetrical; one hind limb a
-ridge along the flank; a tarrasque more than a European dragon -- so the
-wings are shrunk to nubs.
+ridge along the flank; a tarrasque more than a European dragon. The body
+itself -- wings off, spikes down, the head reshaped -- is `sculpt.py`'s.
 """
 import sys
 
 import numpy as np
 
 from model import Model, axis_angle, quat_matrix, quat_mul
+from sculpt import sculpt
 
 # How far over onto its right side the whole body lies, degrees.
 ROLL = 22.0
@@ -64,8 +65,6 @@ AIMS = [
 
 # Bones scaled: (bone, factor). Scaling a bone scales what hangs from it.
 SCALES = [
-    ("wing_root.L", 0.12),
-    ("wing_root.R", 0.12),
     ("upperarm.L", 0.5),
     ("upperarm.R", 0.5),
 ]
@@ -107,6 +106,10 @@ def posed(model):
         pose[i] = (t, r, s * k)
     for bone, child, direction in AIMS:
         aim(model, pose, bone, child, direction)
+    # Its mouth shut: the jaw back to where the skull's own line is.
+    i = model.index["jaw"]
+    t, _, s = pose[i]
+    pose[i] = (t, np.array([0.0, 0.0, 0.0, 1.0]), s)
     return pose
 
 
@@ -120,7 +123,7 @@ def lie(verts):
 
 def mesh():
     """The posed, lying mesh: vertices (metres of the model) and triangles."""
-    m = Model()
+    m = sculpt(Model())
     return lie(m.skin(posed(m))), m.triangles
 
 
@@ -156,7 +159,7 @@ def main():
 
     out = sys.argv[1] if len(sys.argv) > 1 else "target/sleeper-pose.png"
     v, tris = mesh()
-    c = colours(Model())
+    c = colours(sculpt(Model()))
     panels = [
         ("from above (it faces up the page)", view(v, tris, (0.0001, -1, 0), colours=c, up=(0, 0, 1))),
         ("from its left side", view(v, tris, (-1, -0.2, 0), colours=c)),

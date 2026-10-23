@@ -453,21 +453,28 @@ sick dog" -- and judging them was blind to the steps between. Now:
 
 1. **The model**: Drummyfish's CC0 low-poly dragon, rigged, 2,416 vertices
    on 58 bones (`assets/sleeper/`).
-2. **The pose** (`scripts/sleeper/pose.py`): from the last frame of the
+2. **The body** (`scripts/sleeper/sculpt.py`; the owner: "tone down all
+   the spikiness ... keep the big spikes along the back"; "remove the
+   wings"; "make the face more tarrasque-like"): the wings cut off; the
+   mesh smoothed everywhere but the row of tall spikes down the back, so
+   the rest of its spines melt into the body; the head pressed toward a
+   short, broad egg -- a blunt, heavy skull, its horns and crest drawn in
+   -- and its mouth shut.
+3. **The pose** (`scripts/sleeper/pose.py`): from the last frame of the
    model's own "Die" clip, every bone *aimed* along a world direction --
    the neck round to the left so the head lies back along the left
    shoulder, under the left forelimb; the forelimbs at half size, out of
    the shoulders; the upper hind leg drawn up along the flank; the lower
-   one under; the tail curled round the right side; the wings shrunk to
-   nubs; and the whole body rolled 22 degrees onto its right side.
-3. **The shape** (`scripts/sleeper/terrain.py`): the posed model sized to
+   one under; the tail curled round the right side; and the whole body
+   rolled 22 degrees onto its right side.
+4. **The shape** (`scripts/sleeper/terrain.py`): the posed model sized to
    300 m, squashed to 60 % of its height, turned to face 200 degrees (a
    little west of south) and centred at (790, 400); the highest point of
    it over every 2 m cell; sunk 18 m into the mountain; every wall settled
    to a slope of 1.4 at most, as scree settles against a cliff; softened a
    cell. It writes `crates/sim/src/valley/sleeper.bin`, which the
    simulation reads.
-4. **The sheet** (`cargo run --release -p look --example sleeper`, then
+5. **The sheet** (`cargo run --release -p look --example sleeper`, then
    `python3 scripts/sleeper/sheet.py`): the three side by side from four
    directions -- the posed model, its shape alone on flat ground, and the
    mountain with it in, from the simulation's own heights -- so each step
