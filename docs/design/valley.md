@@ -476,9 +476,12 @@ and club:
 2. **Its poses** (`beast.py`'s `STANDING` and `ASLEEP`, drawn by
    `python3 scripts/sleeper/pose.py`): standing reared and hunched, the
    head thrust forward and low with its jaws open, the arms hanging;
-   asleep as a heavy animal sleeps -- down on its belly, head laid forward
-   on its folded forearms, the tail swept round its left side, settled a
-   little onto its right.
+   asleep curled up the whole of its length, lopsided -- the back bent
+   in a C to its left, the neck turned all the way round so the head
+   rests against its left haunch, the tail wrapped round the other way to
+   meet it, the club by the snout; the upper hind leg drawn up along the
+   flank, the lower tucked under, both forearms folded back; settled onto
+   its right side.
 3. **The shape** (`scripts/sleeper/terrain.py`): the sleeping beast sized
    to 300 m, squashed to 60 % of its height, its nose turned to 200
    degrees (a little west of south, at the valley), centred at (790, 400);

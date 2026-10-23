@@ -115,23 +115,24 @@ ASLEEP = {
     "hip": (0.0, 2.3, 0.0),
     "up": (0, 1, 0),
     "jaw": 0.0,
-    # Asleep as a heavy animal sleeps: down on its belly, the body bent a
-    # little to its left, the head laid forward on its folded forearms, the
-    # tail swept round its left side toward its head. From above: a head,
-    # a body, a tail curled round -- the shape that reads as a beast asleep.
-    "spine": [(0.05, 0.05, 1), (0.15, 0.0, 1), (0.25, -0.08, 0.95)],
-    "neck": [(0.15, -0.35, 0.95), (0.2, -0.45, 0.85), (0.2, -0.35, 0.9)],
-    "head": (0.25, -0.12, 0.95),
-    "tail": [(0.15, -0.7, -1), (0.4, -0.45, -0.95), (0.7, -0.1, -0.7), (0.95, -0.03, -0.15),
-             (0.75, 0.0, 0.6), (0.3, 0.0, 0.95), (-0.1, 0.0, 1), (-0.4, 0.0, 0.9)],
-    # The legs folded under, the feet flat by the flanks.
-    "leg": [(0.55, -0.45, 0.75), (0.2, -0.35, -1), (0.15, -0.4, 1), (0.1, -0.1, 1)],
-    # The forelimbs folded: the elbows back along the chest, the forearms
-    # forward under the chin, the hands turned in -- a pillow for the head.
-    "arm_L": [(0.35, -0.65, -0.65), (-0.05, -0.25, 1), (-0.55, -0.35, 0.7)],
-    "arm_R": [(-0.35, -0.65, -0.65), (0.05, -0.25, 1), (0.55, -0.35, 0.7)],
-    # Settled a little onto its right side.
-    "roll": 8.0,
+    # Curled up the whole of its length (the owner: "asymmetrically
+    # positioned, curled up -- and not just at the tail"): the back itself
+    # bent in a C to its left; the neck turned all the way round so the head
+    # rests against its left haunch, chin down; the tail wrapped round the
+    # other way to meet it, the club by the snout. Nothing mirrored: the
+    # upper hind leg drawn up along the flank, the lower tucked under; one
+    # forearm folded back along the chest, the other back under the neck;
+    # the whole beast settled onto its right side.
+    "spine": [(0.05, 0.0, 1), (0.4, -0.02, 0.92), (0.75, -0.08, 0.65)],
+    "neck": [(0.95, -0.25, 0.15), (0.7, -0.35, -0.6), (0.25, -0.35, -0.9)],
+    "head": (-0.05, -0.1, -1),
+    "tail": [(0.05, -0.7, -1), (0.4, -0.4, -0.9), (0.8, -0.1, -0.6), (1, -0.03, 0.0),
+             (0.8, 0.0, 0.6), (0.35, 0.0, 0.95), (-0.05, 0.0, 1), (-0.35, 0.0, 0.95)],
+    "leg_L": [(0.55, -0.25, 0.8), (0.35, -0.35, -0.85), (0.3, -0.3, 0.9), (0.2, -0.1, 1)],
+    "leg_R": [(-0.25, -0.65, 0.7), (-0.15, -0.45, -0.9), (-0.1, -0.4, 0.9), (-0.05, -0.1, 1)],
+    "arm_L": [(0.45, -0.75, -0.35), (0.25, -0.35, -0.95), (0.15, -0.7, -0.6)],
+    "arm_R": [(-0.25, -0.9, -0.25), (0.45, -0.2, -0.85), (0.4, -0.6, -0.65)],
+    "roll": 18.0,
 }
 
 
@@ -149,7 +150,7 @@ def skeleton(pose):
     out = {"spine": spine, "neck": neck, "tail": tail, "head": (neck[-1], head_dir)}
     for side, s in (("L", 1), ("R", -1)):
         h = hip + s * HIP[0] * body[0] + HIP[1] * body[1] + HIP[2] * body[2]
-        leg = pose.get(f"leg_{side}", pose["leg"])
+        leg = pose.get(f"leg_{side}", pose.get("leg"))
         leg = [(s * d[0], d[1], d[2]) for d in leg] if f"leg_{side}" not in pose else leg
         out[f"leg_{side}"] = chain(h, LEG, leg)
         a = spine[-1] + s * SHOULDER[0] * shoulders[0] + SHOULDER[1] * shoulders[1] + SHOULDER[2] * shoulders[2]
