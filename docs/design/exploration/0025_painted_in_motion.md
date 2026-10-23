@@ -337,3 +337,41 @@ one flat colour per kind of part. What would bring them into the same
 style, still generated from the table so breeding keeps working, is §14 if
 the owner wants it: one smooth skinned body grown over the skeleton from
 the parts, and a hide painted onto it by rule.
+
+## 14. The Ridgeback, grown (2026-10-23)
+
+The owner: *"go ahead, start with the Ridgeback."* One body grown over the
+skeleton from the species table (`game::grown`), so it keeps working for any
+species a table describes, bred ones included:
+
+![The Ridgeback as boxes (left) and grown (right), painted](../gallery/ridgeback-grown.jpg)
+
+- **Shape.** Every part but the weak points, in the rest pose, as a rounded
+  box (`ROUND`), joined to its neighbours by a smooth union (`BLEND`, about
+  half a typical part's thickness) so a neck flows into the shoulders and a
+  thigh into the hip. A long part narrows toward the end away from its joint
+  (`TAPER`): legs toward the feet, the tail to a point, the head to a muzzle.
+  Turned into a mesh by surface nets on a grid of `CELLS` across the body,
+  smoothed, and pulled back onto the surface -- about fifteen thousand
+  vertices for the Ridgeback, grown in a fraction of a second at start.
+- **Skin.** Each vertex bound to the bones of the parts nearest it, softly,
+  four at most; the bones are entities placed every frame from the
+  simulation's own rig, and the GPU skins it as it skins the cast. It bends
+  through a kick and a rear with no wedge at a joint.
+- **Hide** (`look::hide`, from one colour, where colour derivations live).
+  The first try multiplied the Ridgeback's near-black armour up and down and
+  read as one flat shape -- the unlit render showed why. A hide is a
+  palette: the named colour lifted to a middle lightness is the flank, and a
+  darker cooler back, a pale warm belly, darker bands, lighter ridges and
+  darker creases are derived from it; on what faces the sky, armour plates
+  with dark seams (a jittered-cell pattern). Where a part breaks, the hide
+  there is recoloured from the look's broken paint.
+- **Weak points** stay their own glowing pads on it, as before: they are
+  the only places worth hitting and must say so from across the arena.
+- **The brushwork** of §13 lies over it, skinned with it.
+
+What the simulation collides and hits against is unchanged; F1 still draws
+the boxes. `--box-creatures` draws the boxes instead. Not yet: the other ten
+species, the Veilstalker's veil (a grown body is not drawn at less than
+whole), and the camera's cut-away through a part for the creatures that ask
+for one.

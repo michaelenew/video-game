@@ -384,6 +384,12 @@ pub fn place_rigid(mesh: &Mesh, size: Vec3, broad: f32, salt: u32) -> Option<Mes
     place_with(&grown, "creature", salt, broad)
 }
 
+/// The strokes over a creature's grown body (`grown`), skinned to its bones
+/// as the body is.
+pub fn place_skinned(mesh: &Mesh, broad: f32, salt: u32) -> Option<Mesh> {
+    place_with(mesh, "creature", salt, broad)
+}
+
 fn place_with(mesh: &Mesh, name: &str, model: u32, broad: f32) -> Option<Mesh> {
     let pos = match mesh.attribute(Mesh::ATTRIBUTE_POSITION)? {
         VertexAttributeValues::Float32x3(v) => v,
@@ -546,6 +552,10 @@ fn place_with(mesh: &Mesh, name: &str, model: u32, broad: f32) -> Option<Mesh> {
         // What dissolves is painted all over, whatever holds it.
         let (size, keep) = if dissolving > 0.3 {
             (0.9, 1.0)
+        } else if name == "creature" {
+            // A creature's bones are not a fighter's: nothing on it is a
+            // face or a hand to leave alone.
+            (1.0, 1.0)
         } else {
             focus(joint)
         };

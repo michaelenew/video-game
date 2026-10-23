@@ -36,6 +36,7 @@ mod fx;
 mod glint;
 mod ground;
 mod grove;
+mod grown;
 mod heel;
 mod hub;
 mod hud;
@@ -306,6 +307,7 @@ fn main() {
             (
                 setup,
                 beast::setup,
+                beast::setup_bodies,
                 beast::setup_signs,
                 critters::setup,
                 signs::setup,
@@ -395,7 +397,7 @@ fn main() {
                     claimed::drape,
                     place_auras,
                 ),
-                (beast::place, beast::paint_parts).chain(),
+                (beast::place, beast::paint_parts, beast::pose_bodies).chain(),
                 drive_camera,
                 fade_own_body,
                 hud::toggle_class_buttons,

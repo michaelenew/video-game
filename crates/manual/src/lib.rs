@@ -121,6 +121,10 @@ pub const SECTIONS: &[Section] = &[
                 "The Shadow Reaver, the Champion and the Blood mage painted over: brushstrokes riding their clothes, each one a point on the skin carried by the skeleton and drawn square to the eye, so the brushwork moves with the body and never slides or squashes as they turn. Clothes only for now, and at a hem or a cuff a stroke frays past the edge like a cloak turning to flame. The other classes are drawn as without it. The reasoning and what was tried is docs/design/exploration/0025_painted_in_motion.md.",
             ),
             e(
+                "cargo run -p game --release -- --box-creatures",
+                "Draw every creature as the boxes the simulation collides against, as they were before the Ridgeback's body was grown over its skeleton: one smooth skinned body from its parts, a hide painted by rule (a darker back, a paler belly, bands, armour plates), and its weak points left glowing on it. Its boxes are what you hit and stand on either way; F1 draws them.",
+            ),
+            e(
                 "cargo run -p manual",
                 "This text, without building the game.",
             ),
