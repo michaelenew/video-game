@@ -129,8 +129,13 @@ fn bolt(s: &Seen) -> bool {
 fn cataclysm(s: &Seen) -> bool {
     s.began(SLOT_HEAVY)
 }
+/// **A dodge broke through a stone.** The mark the dodge leaves for the
+/// break (`Player::breaking`) is set and spent inside one step, so no
+/// snapshot shows it: what does is a dodge beginning on the frame a stone of
+/// hers is gone and broken ground lies where it stood.
 fn broke_through(s: &Seen) -> bool {
-    s.was().breaking == 0 && s.now().breaking > 0
+    let count = |m| stones(m).iter().flatten().count();
+    s.dodged() && count(s.now().mechanic) < count(s.was().mechanic) && s.appeared(EffectKind::Rough)
 }
 fn structure_jump(s: &Seen) -> bool {
     thrown_past(s, 8)
@@ -322,7 +327,7 @@ pub const ROOMS: [Room; 10] = [
             },
             Task {
                 what: "Break through a stone",
-                keys: "Raise one close, crosshair on it, Shift + W",
+                keys: "Look down and raise one just in front of you (within 3 m), crosshair on it, Shift + W",
                 check: broke_through,
                 lands: false,
             },

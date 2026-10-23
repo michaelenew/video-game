@@ -504,3 +504,26 @@ fn the_clash_room_can_be_timed_by_hand() {
         );
     }
 }
+
+#[test]
+fn breaking_through_a_stone_is_ticked() {
+    // The mark a break leaves on her body is spent inside the step, so the
+    // tick reads the stone gone and the broken ground on the dodge's first
+    // frame. A stone raised right in front of her breaks; one raised too far
+    // off for the dodge to reach is a plain dodge, and not ticked.
+    let run = |pitch: i16| {
+        let mut w = hall(Class::Elementalist);
+        let mut coach = Progress::default();
+        stand_in(&mut w, 4, 6);
+        for (bits, n) in [(L, 1u32), (0, 40), (SH | W, 3), (0, 40)] {
+            for _ in 0..n {
+                let before = w.clone();
+                w.advance([Input::looking_at(bits, 0, pitch), Input::default()]);
+                coach.observe(&before, &w);
+            }
+        }
+        coach.times(Class::Elementalist, 4, 2)
+    };
+    assert_eq!(run(-12000), 1, "a stone close in front");
+    assert_eq!(run(-4000), 0, "a stone out of the dodge's reach");
+}
