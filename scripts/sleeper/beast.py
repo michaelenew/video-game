@@ -333,8 +333,9 @@ def body_parts(pose):
     ju = unit(np.cross(jf, hl))
     jaw_mid = hinge + jf * 1.1 - ju * 0.4
     parts.append(wedge(jaw_mid, np.c_[hl, ju, jf], (1.1, 0.6, 1.15), 0.2, 0.45, 0.3))
-    # The chin: a heavy, rounded knob at the jaw's front, low.
-    chin = hinge + jf * 1.95 - ju * 0.45
+    # The chin: a heavy, rounded knob at the jaw's front, low, and ahead
+    # of the teeth -- the jaw's front slants back from it to the tusks.
+    chin = hinge + jf * 2.2 - ju * 0.62
     parts.append(ellipsoid(chin, np.c_[hl, ju, jf], (0.85, 0.62, 0.5), 0.3))
     for s_ in (1, -1):
         parts.append(wedge(at + hf * 0.95 + hu * 0.75 + hl * s_ * 0.62, np.c_[hl, hu, hf], (0.42, 0.22, 0.5), 0.2, 0.1, 0.15))
@@ -358,9 +359,9 @@ def body_parts(pose):
             x = 0.7 + 0.24 * k
             parts.append(blade(at + hf * x - hu * 0.45 + hl * s_ * (0.7 - 0.06 * k), -hu + hf * 0.1, 0.42, 0.11, hf, 0.04))
         for k in range(5):
-            x = 0.7 + 0.25 * k
+            x = 0.62 + 0.23 * k
             parts.append(blade(hinge + jf * x + ju * 0.15 + hl * s_ * (0.85 - 0.03 * k), ju + jf * 0.1, 0.42, 0.11, jf, 0.04))
-        parts.append(blade(hinge + jf * 1.9 + ju * 0.1 + hl * s_ * 0.72, ju + hl * s_ * 0.25 - jf * 0.15, 1.05, 0.25, jf, 0.08))
+        parts.append(blade(hinge + jf * 1.7 + ju * 0.1 + hl * s_ * 0.72, ju + hl * s_ * 0.25 - jf * 0.15, 1.05, 0.25, jf, 0.08))
     parts.append(blade(at + hf * 1.75 + hu * 0.6, hu + hf * 0.5, 0.6, 0.24, hf))
     parts[head_from:] = [scaled(q, at, HEAD_SCALE) for q in parts[head_from:]]
 
