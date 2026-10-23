@@ -37,8 +37,8 @@ SPINE = [(2.15, 2.1, 2.3), (2.0, 2.3, 2.35), (1.7, 2.35, 2.0)]
 NECK = [(1.0, 1.8, 1.65), (0.88, 1.65, 1.5), (0.77, 1.5, 1.4)]
 TAIL = [(1.8, 1.95, 1.7), (1.75, 1.7, 1.45), (1.7, 1.45, 1.2), (1.6, 1.2, 0.98),
         (1.55, 0.98, 0.8), (1.45, 0.8, 0.64), (1.3, 0.64, 0.52), (1.2, 0.52, 0.46)]
-LEG = [(2.3, 1.55, 1.1), (2.1, 1.0, 0.72), (1.2, 0.72, 0.62), (0.9, 0.62, 0.5)]
-ARM = [(2.0, 0.78, 0.62), (1.9, 0.68, 0.5), (0.7, 0.52, 0.45)]
+LEG = [(3.26, 1.55, 1.05), (2.6, 1.0, 0.7), (1.2, 0.72, 0.62), (0.9, 0.62, 0.5)]
+ARM = [(2.3, 0.62, 0.5), (2.2, 0.54, 0.4), (0.8, 0.42, 0.36)]
 HEAD = 2.5
 # How much bigger the whole head is drawn than the lengths above, about
 # where it meets the neck (the owner: "head bigger and heavier").
@@ -99,11 +99,15 @@ STANDING = {
     # clear of the ground.
     "tail": [(0, -0.4, -1), (0, -0.25, -1), (0, -0.15, -1), (0, -0.08, -1),
              (0, -0.03, -1), (0, 0.0, -1), (0.08, 0.03, -1), (0.15, 0.05, -1)],
-    # The thigh forward and a little down, the shin back, the foot up on
-    # its toes, the toes flat: the feet under its weight, set wide.
-    "leg": [(0.25, -0.5, 1), (0.05, -1, -0.5), (0.0, -1, 0.3), (0.12, -0.12, 1)],
-    # The arms hanging, the elbows a little bent, the claws down.
-    "arm": [(0.3, -1, 0.12), (0.08, -1, 0.3), (0.0, -1, 0.35)],
+    # The thigh long, forward and a little down, the knee well ahead of the
+    # hip, the shin long and back to the ankle, the foot up on its toes, the
+    # toes flat: long legs set wide under its weight, a prowler's, not a
+    # waddler's (the owner: "the presumptive movement would be more of a
+    # prowl").
+    "leg": [(0.154, -0.354, 0.923), (0.036, -0.665, -0.746), (0.0, -1, 0.3), (0.12, -0.12, 1)],
+    # The arms hanging still: the upper arm down, the elbow hinged forward,
+    # the wrist dropping the hand back down, the claws loose.
+    "arm": [(0.2, -1, -0.12), (0.1, -0.5, 1.0), (0.0, -1, 0.1)],
 }
 
 ASLEEP = {
@@ -284,7 +288,7 @@ def body_parts(pose):
     # The mass of it: a belly hanging under the middle of the back, a barrel
     # chest under the shoulders, haunches over the hips.
     left, bup, fwd = frame(spine[2] - spine[0], up)
-    parts.append(ellipsoid(spine[1] - bup * 0.7, np.c_[left, bup, fwd], (2.2, 1.7, 3.0)))
+    parts.append(ellipsoid(spine[1] - bup * 0.55, np.c_[left, bup, fwd], (2.2, 1.55, 3.0)))
     left2, bup2, fwd2 = frame(spine[3] - spine[2], up)
     parts.append(ellipsoid(spine[2] - bup2 * 0.6 + fwd2 * 0.4, np.c_[left2, bup2, fwd2], (2.5, 2.3, 1.9)))
     # Great shoulders: a hump of muscle where the neck meets the back.
@@ -296,10 +300,12 @@ def body_parts(pose):
         along(leg, LEG)
         thigh = leg[1] - leg[0]
         l, u, f = frame(thigh, up)
-        parts.append(ellipsoid(leg[0] + thigh * 0.42, np.c_[l, u, f], (1.65, 1.75, 2.0)))
+        # The thigh's muscle along the whole of its length, so the long
+        # thigh shows as long.
+        parts.append(ellipsoid(leg[0] + thigh * 0.45, np.c_[l, u, f], (1.45, 1.5, 2.25)))
         shin = leg[2] - leg[1]
         sl, su, sf = frame(shin, up if abs(unit(shin) @ up) < 0.95 else f)
-        parts.append(ellipsoid(leg[1] + shin * 0.35, np.c_[sl, su, sf], (1.0, 1.05, 1.25), 0.4))
+        parts.append(ellipsoid(leg[1] + shin * 0.35, np.c_[sl, su, sf], (0.9, 0.95, 1.35), 0.35))
         toes = leg[4] - leg[3]
         tl, tu, tf = frame(toes, up)
         parts.append(ellipsoid(leg[3] + toes * 0.3, np.c_[tl, tu, tf], (1.2, 0.5, 1.15)))
@@ -317,8 +323,8 @@ def body_parts(pose):
         hl, hu, hf = frame(hand, up if abs(unit(hand) @ up) < 0.95 else fwd)
         forearm = arm[2] - arm[1]
         fl, fu, ff = frame(forearm, up if abs(unit(forearm) @ up) < 0.95 else fwd)
-        parts.append(ellipsoid(arm[1] + forearm * 0.35, np.c_[fl, fu, ff], (0.85, 0.85, 1.05), 0.35))
-        parts.append(ellipsoid(arm[0] + (arm[1] - arm[0]) * 0.3, np.c_[fl, fu, ff], (1.0, 1.0, 1.1), 0.45))
+        parts.append(ellipsoid(arm[1] + forearm * 0.35, np.c_[fl, fu, ff], (0.66, 0.66, 1.0), 0.3))
+        parts.append(ellipsoid(arm[0] + (arm[1] - arm[0]) * 0.3, np.c_[fl, fu, ff], (0.8, 0.8, 1.05), 0.4))
         for spread in (-0.35, 0.0, 0.35):
             parts.append(blade(arm[3] + hl * spread * 0.8, unit(hand) + hl * spread * 0.35 - hu * 0.3, 1.2, 0.24, hl, 0.08))
 
