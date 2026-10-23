@@ -25,6 +25,9 @@ spikes on its back, make the spikes on its back legs smaller"):
 - **A thick neck**: pushed out from the line of its bones, thickest at the
   shoulders, at the back and sides only -- its throat is drawn in, so it
   hangs no bib down the chest.
+- **Heavy thighs, thin arms, a clubbed tail** (third pass): the thighs
+  swollen, the arms slimmed against the length `pose.py` gives them, and
+  the tail thickened all along, swelling at its end into a club.
 - **The hind legs' spikes smaller**: smoothed a few rounds, not held.
 - **A row of spikes down the back**: new cones, standing out of the middle
   of the back from the neck to the tail, tallest over the shoulders and
@@ -53,9 +56,29 @@ LEGS = ("thigh", "shin", "foot", "toes")
 # The neck: how much thicker, at its root and at the head -- at the back
 # and the sides; its throat is drawn in to this instead, so it hangs no bib
 # down the chest.
-NECK_ROOT = 1.7
-NECK_TOP = 1.3
+NECK_ROOT = 2.1
+NECK_TOP = 1.7
 THROAT = 0.75
+
+# The thighs: how much thicker (a T. rex's drumsticks).
+THIGH = 1.35
+
+# The arms: how much thinner, against their length (`pose.py` makes them
+# long enough to reach the ground, and that scales their girth with it).
+ARM = 0.6
+
+# The tail: how much thicker along its length, from the root to a club at
+# its end -- (share of the way along, factor).
+TAIL = ("tail_01", "tail_02", "tail_03", "tail_04", "tail_05", "tail_06")
+TAIL_GROW = [(0.0, 1.3), (0.6, 1.5), (1.0, 1.6)]
+
+# The club at the tail's end: an egg its last bone's flesh is pressed
+# toward, about a point this far along past that bone (a share of the
+# bone's length) -- half-lengths along the tail, across and up, metres of
+# the model -- and how much of the fin it had is kept outside it.
+CLUB_ALONG = 0.45
+CLUB_EGG = (0.42, 0.34, 0.3)
+CLUB_KEEP = 0.15
 NECK = ("neck_01", "neck_02", "neck_03", "neck_04", "neck_05")
 
 # The row of spikes: along these bones, from the tail to the head; how far
@@ -163,12 +186,17 @@ def tarrasque_head(model, p):
     return p + w[:, None] * (shaped - p)
 
 
-def thicker_neck(model, p):
-    """The neck pushed out from the line of its bones, as far as each vertex
-    is the neck's: thickest at the root, less toward the head."""
-    line = np.array([bind_point(model, b) for b in ("chest",) + NECK + ("head",)])
-    w = weight_of(model, NECK)
+def swell(model, p, carriers, line, grow, throat=None):
+    """Push the body out from (or in toward) the line through `line`'s
+    points, as far as each vertex is carried by `carriers`. `grow` is
+    (share of the way along the line, factor) pairs, eased between; a
+    `throat` factor, if given, is what the side of it facing forward and
+    down -- away from its back -- grows by instead."""
+    w = weight_of(model, carriers)
+    at, by = np.array(grow).T
     out = p.copy()
+    lengths = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    starts = np.r_[0, np.cumsum(lengths)] / lengths.sum()
     for k in np.nonzero(w > 0)[0]:
         best = None
         for i in range(len(line) - 1):
@@ -178,18 +206,60 @@ def thicker_neck(model, p):
             c = a + t * ab
             d = np.linalg.norm(p[k] - c)
             if best is None or d < best[0]:
-                best = (d, c, (i + t) / (len(line) - 1), ab)
+                best = (d, c, starts[i] + t * (starts[i + 1] - starts[i]), ab)
         _, c, along, seg = best
-        grow = NECK_ROOT + (NECK_TOP - NECK_ROOT) * along
-        # How much this point is the throat: its side of the neck facing
-        # forward and down, away from the back.
-        d = seg / np.linalg.norm(seg)
-        front = -np.cross(d, (1.0, 0, 0))
+        factor = np.interp(along, at, by)
         r = p[k] - c
-        throat = np.clip(r @ front / (np.linalg.norm(r) + 1e-9), 0, 1)
-        grow = grow + (THROAT - grow) * throat
-        out[k] = p[k] + w[k] * (c + r * grow - p[k])
+        if throat is not None:
+            d = seg / np.linalg.norm(seg)
+            front = -np.cross(d, (1.0, 0, 0))
+            share = np.clip(r @ front / (np.linalg.norm(r) + 1e-9), 0, 1)
+            factor = factor + (throat - factor) * share
+        out[k] = p[k] + w[k] * (c + r * factor - p[k])
     return out
+
+
+def egg(model, p, carriers, centre, fwd, size, keep):
+    """Press the flesh `carriers` carry toward an egg about `centre`, its
+    long axis along `fwd`: what is inside swells out toward its skin, what
+    stands out of it keeps `keep` of how far."""
+    w = weight_of(model, carriers)
+    fwd = fwd / np.linalg.norm(fwd)
+    side = np.array([1.0, 0, 0])
+    side = side - (side @ fwd) * fwd
+    side /= np.linalg.norm(side)
+    up = np.cross(fwd, side)
+    up *= np.sign(up[1]) if abs(up[1]) > 1e-6 else 1
+    axes = np.c_[fwd, side, up]
+    local = (p - centre) @ axes / np.array(size)
+    r = np.linalg.norm(local, axis=1)
+    r_new = np.where(r > 1, 1 + (r - 1) * keep, 0.6 + 0.4 * r)
+    local = local * (r_new / np.maximum(r, 1e-9))[:, None]
+    shaped = centre + (local * np.array(size)) @ axes.T
+    return p + w[:, None] * (shaped - p)
+
+
+def bones_line(model, bones, past=0.0):
+    """The bind-pose points of `bones`, and one `past` of the last bone's
+    length beyond it (a chain whose last bone has no child)."""
+    line = [bind_point(model, b) for b in bones]
+    if past:
+        line.append(line[-1] + (line[-1] - line[-2]) * past)
+    return np.array(line)
+
+
+def reshaped(model, p):
+    """The neck, the thighs, the tail and the arms, swollen or slimmed."""
+    p = swell(model, p, NECK, bones_line(model, ("chest",) + NECK + ("head",)), [(0, NECK_ROOT), (1, NECK_TOP)], THROAT)
+    for side in ("L", "R"):
+        p = swell(model, p, (f"thigh.{side}",), bones_line(model, (f"thigh.{side}", f"shin.{side}")), [(0, THIGH), (1, THIGH)])
+        arm = tuple(f"{b}.{side}" for b in ("upperarm", "forearm", "hand", "fingers"))
+        p = swell(model, p, arm, bones_line(model, arm, 1.0), [(0, ARM), (1, ARM)])
+    p = swell(model, p, TAIL, bones_line(model, ("pelvis",) + TAIL, 1.2), TAIL_GROW)
+    end = bind_point(model, "tail_06")
+    last = end - bind_point(model, "tail_05")
+    p = egg(model, p, ("tail_06",), end + last * CLUB_ALONG, last, CLUB_EGG, CLUB_KEEP)
+    return p
 
 
 def add_row(model):
@@ -266,6 +336,6 @@ def sculpt(model):
     head = np.zeros(len(unique), bool)
     np.logical_or.at(head, which, weight_of(model, HEAD) > 0.5)
     unique = smooth(unique, tris, ~head, HEAD_ROUNDS)
-    model.positions = thicker_neck(model, unique[which])
+    model.positions = reshaped(model, unique[which])
     add_row(model)
     return model

@@ -40,14 +40,16 @@ AIMS = [
     # The head: on the ground along the flank, muzzle back toward the
     # haunch, under the left forearm.
     ("head", "fire_socket", (0.05, -0.2, -1.0)),
-    # The left forelimb, uppermost: out of the shoulder and laid over the
-    # head.
-    ("upperarm.L", "forearm.L", (0.85, 0.35, 0.35)),
-    ("forearm.L", "hand.L", (0.55, -0.45, -0.7)),
-    ("hand.L", "fingers.L", (0.2, -0.6, -0.75)),
-    # The right forelimb, under: folded back along the chest.
-    ("upperarm.R", "forearm.R", (-0.5, -0.4, 0.75)),
-    ("forearm.R", "hand.R", (0.4, -0.3, 0.85)),
+    # The left forelimb, uppermost: out of the shoulder, forward and down
+    # to the elbow, and the forearm folded back along over the head.
+    ("upperarm.L", "forearm.L", (0.6, -0.45, 0.65)),
+    ("forearm.L", "hand.L", (0.2, 0.05, -1.0)),
+    ("hand.L", "fingers.L", (-0.2, -0.6, -0.75)),
+    # The right forelimb, under: the elbow down and forward, the forearm
+    # folded in under the chin.
+    ("upperarm.R", "forearm.R", (-0.35, -0.6, 0.7)),
+    ("forearm.R", "hand.R", (0.85, -0.2, 0.45)),
+    ("hand.R", "fingers.R", (0.6, -0.4, -0.6)),
     # The left hind leg, uppermost, drawn up along the flank: a ridge.
     ("thigh.L", "shin.L", (0.55, -0.25, 0.8)),
     ("shin.L", "foot.L", (0.35, -0.35, -0.85)),
@@ -65,11 +67,16 @@ AIMS = [
 
 # Bones scaled: (bone, factor). Scaling a bone scales what hangs from it.
 SCALES = [
-    ("upperarm.L", 0.65),
-    ("upperarm.R", 0.65),
+    # Forelimbs long enough to reach the ground stretched (`sculpt.py`
+    # slims them against it): `ARM_REACH` checks it.
+    ("upperarm.L", 1.25),
+    ("upperarm.R", 1.25),
     # A T. rex's legs: longer than the dragon's.
-    ("thigh.L", 1.35),
-    ("thigh.R", 1.35),
+    ("thigh.L", 1.5),
+    ("thigh.R", 1.5),
+    # A heavier head, and a longer tail.
+    ("head", 1.3),
+    ("tail_01", 1.25),
 ]
 
 # How far forward the forelimbs leave the body, metres of the model: the
@@ -144,12 +151,12 @@ def posed(model):
 # arms", "hunch it a little more"): the body pitched up only this many
 # degrees about the hips, near level and balanced over them; the legs bent
 # under the hips; the tail held straight out behind; the neck in a low S
-# and the head forward; the arms folded up at the chest.
+# and the head forward; the arms hanging. The thighs are swung forward
+# until the feet are under its centre of mass (`balanced`).
 REAR = 22.0
 STAND_AIMS = [
-    # Long, bent legs: the knee forward, the shin back, and up on its toes.
-    ("thigh.L", "shin.L", (0.1, -0.6, 0.8)),
-    ("thigh.R", "shin.R", (-0.1, -0.6, 0.8)),
+    # Long, bent legs: the knee forward (how far is `balanced`'s to find),
+    # the shin back, and up on its toes.
     ("shin.L", "foot.L", (0.0, -0.75, -0.65)),
     ("shin.R", "foot.R", (0.0, -0.75, -0.65)),
     ("foot.L", "toes.L", (0.05, -0.85, 0.5)),
@@ -165,13 +172,44 @@ STAND_AIMS = [
     ("neck_04", "neck_05", (0.0, -0.05, 1.0)),
     ("neck_05", "head", (0.0, -0.15, 1.0)),
     ("head", "fire_socket", (0.0, -0.25, 1.0)),
-    # The arms folded up at the chest: the elbow down and back, the forearm
-    # forward and up.
-    ("upperarm.L", "forearm.L", (0.45, -0.85, 0.0)),
-    ("upperarm.R", "forearm.R", (-0.45, -0.85, 0.0)),
-    ("forearm.L", "hand.L", (0.35, 0.0, 1.0)),
-    ("forearm.R", "hand.R", (-0.35, 0.0, 1.0)),
+    # The arms hanging, relaxed: down and a little forward, the elbows
+    # a little bent.
+    ("upperarm.L", "forearm.L", (0.25, -1.0, 0.1)),
+    ("upperarm.R", "forearm.R", (-0.25, -1.0, 0.1)),
+    ("forearm.L", "hand.L", (0.1, -1.0, 0.35)),
+    ("forearm.R", "hand.R", (-0.1, -1.0, 0.35)),
+    ("hand.L", "fingers.L", (0.05, -0.8, 0.6)),
+    ("hand.R", "fingers.R", (-0.05, -0.8, 0.6)),
 ]
+
+
+def centre_of_mass(verts, tris):
+    """Where the body's weight is, taking its surface as its skin: the
+    middle of its triangles, each by its area."""
+    p = verts[tris]
+    area = np.linalg.norm(np.cross(p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)
+    return (p.mean(1) * area[:, None]).sum(0) / area.sum()
+
+
+def balanced(model, pose):
+    """Swing the thighs forward until the feet stand under the centre of
+    mass, front to back: the angle below level, degrees, that puts them
+    nearest, tried every two degrees."""
+    best = None
+    for down in range(10, 90, 2):
+        trial = [tuple(np.copy(v) for v in r) for r in pose]
+        a = np.radians(down)
+        for side, x in (("L", 0.1), ("R", -0.1)):
+            aim(model, trial, f"thigh.{side}", f"shin.{side}", (x, -np.sin(a), np.cos(a)))
+        for bone, child, direction in STAND_AIMS:
+            if bone.startswith(("shin", "foot")):
+                aim(model, trial, bone, child, direction)
+        at = model.bone_points(trial)
+        feet = (at["toes.L"][2] + at["toes.R"][2]) / 2
+        off = abs(feet - centre_of_mass(model.skin(trial), model.triangles)[2])
+        if best is None or off < best[0]:
+            best = (off, trial)
+    pose[:] = best[1]
 
 
 def standing(model):
@@ -181,10 +219,21 @@ def standing(model):
     turn(model, pose, "pelvis", (1, 0, 0), -REAR)
     for bone, child, direction in STAND_AIMS:
         aim(model, pose, bone, child, direction)
+    balanced(model, pose)
     i = model.index["jaw"]
     t, _, s = pose[i]
     pose[i] = (t, np.array([0.0, 0.0, 0.0, 1.0]), s)
     return pose
+
+
+def arm_reach(model, pose):
+    """How far the arm reaches stretched against how high the shoulder is
+    over the feet: at least one, it can touch the ground."""
+    at = model.bone_points(pose)
+    chain = [at[b] for b in ("upperarm.L", "forearm.L", "hand.L", "fingers.L")]
+    length = sum(np.linalg.norm(b - a) for a, b in zip(chain, chain[1:]))
+    floor = min(at["toes.L"][1], at["toes.R"][1])
+    return length / (at["upperarm.L"][1] - floor)
 
 
 def stood():
@@ -241,6 +290,8 @@ def main():
 
     out = sys.argv[1] if len(sys.argv) > 1 else "target/sleeper-pose.png"
     c = colours(sculpt(Model()))
+    m = sculpt(Model())
+    print(f"arm reach / shoulder height: {arm_reach(m, standing(m)):.2f}")
     up, ut = stood()
     v, tris = mesh()
     size = (440, 400)
