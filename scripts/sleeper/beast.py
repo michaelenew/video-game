@@ -33,13 +33,16 @@ import numpy as np
 # The skeleton: chains of (length, radius at its start, radius at its end).
 # ---------------------------------------------------------------------------
 
-SPINE = [(1.6, 2.1, 2.35), (1.5, 2.35, 2.4), (1.3, 2.4, 2.0)]
-NECK = [(0.9, 1.6, 1.4), (0.8, 1.4, 1.2), (0.7, 1.2, 1.05)]
+SPINE = [(1.9, 2.1, 2.3), (1.8, 2.3, 2.35), (1.5, 2.35, 2.0)]
+NECK = [(0.9, 1.8, 1.65), (0.8, 1.65, 1.5), (0.7, 1.5, 1.4)]
 TAIL = [(1.4, 1.95, 1.7), (1.35, 1.7, 1.45), (1.3, 1.45, 1.2), (1.25, 1.2, 0.98),
         (1.2, 0.98, 0.8), (1.1, 0.8, 0.64), (1.0, 0.64, 0.52), (0.9, 0.52, 0.46)]
 LEG = [(2.3, 1.55, 1.1), (2.1, 1.0, 0.72), (1.2, 0.72, 0.62), (0.9, 0.62, 0.5)]
 ARM = [(2.0, 0.78, 0.62), (1.9, 0.68, 0.5), (0.7, 0.52, 0.45)]
 HEAD = 2.5
+# How much bigger the whole head is drawn than the lengths above, about
+# where it meets the neck (the owner: "head bigger and heavier").
+HEAD_SCALE = 1.35
 
 # Where the legs and arms leave the body: (side, up, along), from the hip
 # and from the shoulders, in the body's own frame.
@@ -248,6 +251,13 @@ def horn(base, directions, length, width, blend=ARMOUR, kind=BONE):
     return parts
 
 
+def scaled(part, centre, k):
+    """A part drawn `k` times its size about `centre`."""
+    c = np.asarray(centre, float)
+    fn = part.fn
+    return Part(lambda p: fn(c + (p - c) / k) * k, c + (part.lo - c) * k, c + (part.hi - c) * k, part.blend * k, part.kind)
+
+
 def body_parts(pose):
     """Every volume of the beast in a pose."""
     sk = skeleton(pose)
@@ -266,7 +276,7 @@ def body_parts(pose):
     # The mass of it: a belly hanging under the middle of the back, a barrel
     # chest under the shoulders, haunches over the hips.
     left, bup, fwd = frame(spine[2] - spine[0], up)
-    parts.append(ellipsoid(spine[1] - bup * 0.9, np.c_[left, bup, fwd], (2.4, 2.0, 2.6)))
+    parts.append(ellipsoid(spine[1] - bup * 0.7, np.c_[left, bup, fwd], (2.2, 1.7, 3.0)))
     left2, bup2, fwd2 = frame(spine[3] - spine[2], up)
     parts.append(ellipsoid(spine[2] - bup2 * 0.6 + fwd2 * 0.4, np.c_[left2, bup2, fwd2], (2.5, 2.3, 1.9)))
     # Great shoulders: a hump of muscle where the neck meets the back.
@@ -311,12 +321,13 @@ def body_parts(pose):
     # it, teeth along both jaws. Small against the body: a giant's head.
     at, d = sk["head"]
     hl, hu, hf = frame(d, up)
-    parts.append(wedge(at + hf * 1.25 + hu * 0.15, np.c_[hl, hu, hf], (1.05, 0.7, 1.35), 0.45, 0.25, 0.3))
+    head_from = len(parts)
+    parts.append(wedge(at + hf * 1.25 + hu * 0.15, np.c_[hl, hu, hf], (1.2, 0.85, 1.35), 0.4, 0.45, 0.3))
     gape = np.radians(pose.get("jaw", 0.0))
     hinge = at + hf * 0.35 - hu * 0.35
     jf = unit(hf * np.cos(gape) - hu * np.sin(gape))
     ju = unit(np.cross(jf, hl))
-    parts.append(wedge(hinge + jf * 1.05 - ju * 0.3, np.c_[hl, ju, jf], (0.95, 0.42, 1.15), 0.4, 0.15, 0.25))
+    parts.append(wedge(hinge + jf * 1.05 - ju * 0.35, np.c_[hl, ju, jf], (1.1, 0.55, 1.15), 0.35, 0.3, 0.25))
     for s_ in (1, -1):
         parts.append(wedge(at + hf * 0.95 + hu * 0.75 + hl * s_ * 0.62, np.c_[hl, hu, hf], (0.42, 0.22, 0.5), 0.2, 0.1, 0.15))
         parts.append(ellipsoid(at + hf * 0.45 - hu * 0.15 + hl * s_ * 0.95, np.c_[hl, hu, hf], (0.4, 0.55, 0.6), 0.25))
@@ -328,7 +339,7 @@ def body_parts(pose):
         parts += horn(base, [hl * s_ * 0.4 + hu * 0.9 - hf * 0.35, hl * s_ * 0.7 + hu * 0.3 - hf * 0.8,
                              hl * s_ * 0.95 - hu * 0.55 - hf * 0.35, hl * s_ * 0.75 - hu * 0.8 + hf * 0.45,
                              hl * s_ * 0.35 - hu * 0.35 + hf * 1.0, hl * s_ * 0.3 + hu * 0.15 + hf, hl * s_ * 0.2 + hu * 0.35 + hf],
-                      8.0, 0.95, 0.2)
+                      6.4, 0.85, 0.2)
         for k in range(4):
             parts.append(blade(at + hf * (0.15 - 0.28 * k) + hu * (0.55 - 0.18 * k) + hl * s_ * (0.9 + 0.12 * k),
                                -hf + hl * s_ * 0.9 + hu * 0.35, 0.6 - 0.1 * k, 0.18, hu))
@@ -337,13 +348,15 @@ def body_parts(pose):
             parts.append(blade(at + hf * x - hu * 0.5 + hl * s_ * (0.75 - 0.05 * k), -hu + hf * 0.15, 0.5, 0.12, hf, 0.04))
             parts.append(blade(hinge + jf * (x - 0.1) + ju * 0.1 + hl * s_ * (0.68 - 0.05 * k), ju + jf * 0.15, 0.42, 0.11, jf, 0.04))
     parts.append(blade(at + hf * (HEAD - 0.4) + hu * 0.55, hu + hf * 0.6, 0.75, 0.26, hf))
+    parts[head_from:] = [scaled(q, at, HEAD_SCALE) for q in parts[head_from:]]
 
-    # The back: a row of tall blades down the spine from the nape to the
-    # club, tallest over the shoulders, and armour plates either side.
-    line = list(reversed(tail[:6])) + spine[1:] + neck[1:]
+    # The back: a row of tall blades down the spine from the hips to the
+    # nape, tallest over the shoulders, and armour knobs on the flanks.
+    # Not on the tail (the owner: "remove the spikes from the tail").
+    line = spine + neck[1:]
     lens = np.r_[0, np.cumsum(np.linalg.norm(np.diff(line, axis=0), axis=1))]
     total = lens[-1]
-    peak = lens[len(tail[:6]) - 1 + len(spine) - 1] / total
+    peak = lens[len(spine) - 1] / total
     rng = np.random.default_rng(7)
     for n, x in enumerate(np.arange(0.3, total, 0.55)):
         i = min(np.searchsorted(lens, x) - 1, len(line) - 2)
@@ -381,11 +394,10 @@ def body_parts(pose):
 
 def _radii(line, sk):
     """The body's radius at each point of the back's line, for seating the
-    spikes on the skin: the tail's, then the spine's, then the neck's."""
-    tail_r = [b[1] for b in TAIL[:6]][::-1]
-    spine_r = [b[2] for b in SPINE]
+    spikes on the skin: the spine's, then the neck's."""
+    spine_r = [SPINE[0][1]] + [b[2] for b in SPINE]
     neck_r = [b[2] for b in NECK]
-    return tail_r + spine_r + neck_r
+    return spine_r + neck_r
 
 
 def smin(a, b, k):
