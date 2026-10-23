@@ -105,9 +105,10 @@ STANDING = {
     # waddler's (the owner: "the presumptive movement would be more of a
     # prowl").
     "leg": [(0.154, -0.354, 0.923), (0.036, -0.665, -0.746), (0.0, -1, 0.3), (0.12, -0.12, 1)],
-    # The arms hanging still: the upper arm down, the elbow hinged forward,
-    # the wrist dropping the hand back down, the claws loose.
-    "arm": [(0.2, -1, -0.12), (0.1, -0.5, 1.0), (0.0, -1, 0.1)],
+    # The arms hanging still: the upper arm down, the elbow bent forward a
+    # little -- relaxed, not reaching -- the wrist dropping the hand back
+    # down, the claws loose.
+    "arm": [(0.2, -1, -0.12), (0.09, -0.76, 0.64), (0.0, -1, 0.1)],
 }
 
 ASLEEP = {
