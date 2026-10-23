@@ -413,3 +413,42 @@ fn the_blood_mages_holds_are_ticked() {
     let sweep: Script = &[(R, 2, D), (0, 40, D)];
     assert!(run(Class::BloodMage, 3, 0, 2, sweep) >= 1, "a Sweep");
 }
+
+#[test]
+fn every_hall_is_a_trip_away() {
+    // The Esc menu's way in: the class first, then the trip -- from the
+    // valley, where a run starts. An arena id past sixty-three used to be no
+    // request at all, and the halls are past it.
+    for t in tutorial::ALL {
+        let mut w = World::arrive(
+            [Class::Champion; sim::state::MAX_PLAYERS],
+            sim::valley::Journey::default(),
+            sim::valley::START,
+            None,
+            1,
+        );
+        let to = sim::input::Travel::arena(t.arena);
+        assert_eq!(
+            to.destination(),
+            Some(sim::input::Destination::Arena(t.arena)),
+            "{}",
+            t.arena.get().name
+        );
+        w.advance([
+            Input::default().travelling(sim::input::Travel::class(0, t.class)),
+            Input::default(),
+        ]);
+        w.advance([Input::default().travelling(to), Input::default()]);
+        assert_eq!(w.arena, t.arena, "{} is reached", t.arena.get().name);
+        assert_eq!(w.players[0].class, t.class);
+        assert!(w.is_present(1), "the dummy is in the hall");
+    }
+    // Every id a byte names travels and reads back as itself.
+    for id in 0..=u8::MAX {
+        let to = sim::input::Travel::arena(ArenaId(id));
+        assert_eq!(
+            to.destination(),
+            Some(sim::input::Destination::Arena(ArenaId(id)))
+        );
+    }
+}
