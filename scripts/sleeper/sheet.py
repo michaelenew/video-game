@@ -14,9 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from pose import colours
-from model import Model
-from sculpt import sculpt
+from pose import asleep
 from render import sheet, view
 from terrain import CELL, build, placed
 
@@ -96,7 +94,7 @@ def land(lo, hi):
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "target/sleeper-sheet.png"
     mv, mt = placed()
-    mc = colours(sculpt(Model()))
+    _, _, mc = asleep()
     lo = mv[:, [0, 2]].min(0) - MARGIN
     hi = mv[:, [0, 2]].max(0) + MARGIN
     lv, lt, lc = land(lo, hi)
@@ -107,7 +105,7 @@ def main():
         panels.append((f"1 Model: {label}", view(mv, mt, d, size=size, colours=mc, up=up, mirror=mirror)))
         panels.append(("2 Its shape alone, on flat ground", view(sv, st, d, size=size, colours=sc, up=up, mirror=mirror)))
         panels.append(("3 On the mountain, as the game has it", view(lv, lt, d, size=size, colours=lc, up=up, mirror=mirror)))
-    title = "The Sleeper. 1: the posed model (red head, orange neck, blue tail, green forelimbs, purple hind limbs). 2: the shape made from it. 3: that shape on the mountain."
+    title = "The Sleeper. 1: the beast asleep (pale: bone). 2: the shape made from it. 3: that shape on the mountain."
     sheet(panels, columns=3, title=title).save(out)
     print(out)
 

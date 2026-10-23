@@ -8,12 +8,12 @@
 //! wears the same rock, snow and broken crests as the range round it and
 //! what is drawn is what a foot would stand on.
 //!
-//! **Its shape is a model's, posed** (2026-10-23): a CC0 low-poly dragon
-//! (`assets/sleeper/`) laid down asleep by `scripts/sleeper/pose.py` --
-//! curled up, its head under a forelimb, lying a little on its side, wings
-//! shrunk to nubs -- and looked down on by `scripts/sleeper/terrain.py`,
-//! which writes `sleeper.bin`: how far its body stands over the mountain,
-//! cell by cell. Change the pose or where it lies there, not here. The
+//! **Its shape is a creature built for it** (2026-10-23): a giant armoured
+//! lizard, a skeleton with flesh, plates, horns and a clubbed tail on it
+//! (`scripts/sleeper/beast.py`), asleep on its belly with its head on its
+//! forearms, looked down on by `scripts/sleeper/terrain.py`, which writes
+//! `sleeper.bin`: how far its body stands over the mountain, cell by cell.
+//! Change the beast, its pose or where it lies there, not here. The
 //! heights are level data (`tests/knobs.rs`), judged by looking at them.
 
 use crate::fixed::Fx;

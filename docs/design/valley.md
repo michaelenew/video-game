@@ -444,63 +444,49 @@ box: a height added to the mountain wherever its body lies, before the
 land's noise and crags go over it, so it wears the same rock and snow as
 the range round it, and what is drawn is what a foot would stand on.
 
-**Its shape is a real model, posed** (2026-10-23; the owner: "build an
-actual model ... or better pull one that's open source. Lay that dragon
-out in the pose we need it. Then write a script to build the terrain
-definition from that"). Two hand-built bodies came first -- a table of
-joints posed like a statue, then a tarrasque of mounds that read "like a
-sick dog" -- and judging them was blind to the steps between. Now:
+**Its shape is a creature built for it** (2026-10-23). The way here, for
+the record: a table of joints posed like a statue; a tarrasque of mounds
+that read "like a sick dog"; then a CC0 low-poly dragon (Drummyfish's,
+from OpenGameArt), its mesh posed and reshaped a request at a time --
+wings off, spikes smoothed, a T. rex's stance -- which the owner judged
+"goofy": "figure out a better way to make this look like a big
+threatening terrestrial lizard boss the size of a mountain ... there are
+myriad references out there". So it is now built the way a creature is
+designed, from what the giant reptiles of reference art share -- the
+tarrasque, Godzilla, a tyrannosaur's carriage, an ankylosaur's armour
+and club:
 
-1. **The model**: Drummyfish's CC0 low-poly dragon, rigged, 2,416 vertices
-   on 58 bones (`assets/sleeper/`).
-2. **The body** (`scripts/sleeper/sculpt.py`; the owner: "tone down all
-   the spikiness ... keep the big spikes along the back"; "remove the
-   wings"; "make the face more tarrasque-like"): the wings cut off; the
-   mesh smoothed everywhere but the row of tall spikes down the back, so
-   the rest of its spines melt into the body; the head pressed toward a
-   short, broad egg -- a blunt, heavy skull, its horns and crest drawn in
-   -- and its mouth shut. Then (the owner: "make the neck thicker ... add a
-   row of prominent spikes on its back, make the spikes on its back legs
-   smaller"): the neck pushed out from its bones, thickest at the
-   shoulders; the hind legs' spikes smoothed a little rather than held;
-   and a new row of blade-like spikes down the middle of the back from
-   the neck to the tail, tallest over the shoulders and hips, each riding
-   the skin under it, its foot sunk deep enough into that skin that no
-   facet of it leaves the spike in the air.
-
-   **It also stands** (`pose.py`'s `standing`; "make it stand on two
-   legs", then "the pose and proportions should be like a T rex with
-   bigger arms"): a T. rex's stance -- the body near level, balanced over
-   the hips on long, heavy thighs (1.5 times the dragon's, and swollen)
-   held forward and a little down, the shins swung back until the feet
-   stand under its centre of mass -- worked out from the mesh, not
-   guessed; on real feet, a broad pad round each toes bone; a longer, thicker tail
-   ending in a club; a thicker neck and a head 1.3 times the size; and
-   forelimbs thin beside the legs but long enough to reach the ground
-   stretched (`pose.py` prints the reach: 1.06 of the shoulder's height),
-   hanging when relaxed and leaving the body further forward than the
-   dragon's did. The throat is drawn in rather than thickened, so
-   it hangs no bib down the chest. This is how it will be when it wakes. `python3
-   scripts/sleeper/pose.py` draws it standing and asleep on one sheet.
-3. **The pose** (`scripts/sleeper/pose.py`): from the last frame of the
-   model's own "Die" clip, every bone *aimed* along a world direction --
-   the neck round to the left so the head lies back along the left
-   shoulder, under the left forelimb; the forelimbs at half size, out of
-   the shoulders; the upper hind leg drawn up along the flank; the lower
-   one under; the tail curled round the right side; and the whole body
-   rolled 22 degrees onto its right side.
-4. **The shape** (`scripts/sleeper/terrain.py`): the posed model sized to
-   300 m, squashed to 60 % of its height, turned to face 200 degrees (a
-   little west of south) and centred at (790, 400); the highest point of
-   it over every 2 m cell; sunk 18 m into the mountain; every wall settled
-   to a slope of 1.4 at most, as scree settles against a cliff; softened a
-   cell. It writes `crates/sim/src/valley/sleeper.bin`, which the
-   simulation reads.
-5. **The sheet** (`cargo run --release -p look --example sleeper`, then
-   `python3 scripts/sleeper/sheet.py`): the three side by side from four
-   directions -- the posed model, its shape alone on flat ground, and the
-   mountain with it in, from the simulation's own heights -- so each step
-   is judged on its own.
+1. **The beast** (`scripts/sleeper/beast.py`): a skeleton of fixed
+   proportions -- spine, neck, head, an eight-bone tail, two legs, two
+   arms -- and a pose is only which way each bone points, so standing and
+   asleep are the same animal. On it, flesh as smoothly blended volumes:
+   a broad heavy body, a barrel chest, a hump of shoulder, thighs like
+   drums, broad three-toed clawed feet, heavy clawed arms; a head built
+   of wedges, not balls -- a flat-topped skull, a deep jaw on a hinge,
+   brow shelves, cheek bosses, two horns sweeping forward, a fringe of
+   blades, teeth -- and small against the body, as a giant's is. Armour
+   kept crisp: two staggered rows of jagged plates down the spine,
+   tallest over the shoulders, knobs on the flanks, a spiked mace at the
+   tail's end. A rough, rocky hide over all of it. The volumes are a
+   distance field, meshed by marching cubes (`pip install
+   scikit-image`).
+2. **Its poses** (`beast.py`'s `STANDING` and `ASLEEP`, drawn by
+   `python3 scripts/sleeper/pose.py`): standing reared and hunched, the
+   head thrust forward and low with its jaws open; asleep as a heavy
+   animal sleeps -- down on its belly, head laid forward on its folded
+   forearms, the tail swept round its left side, settled a little onto
+   its right.
+3. **The shape** (`scripts/sleeper/terrain.py`): the sleeping beast sized
+   to 300 m, squashed to 60 % of its height, its nose turned to 200
+   degrees (a little west of south, at the valley), centred at (790, 400);
+   the highest point of it over every 2 m cell; sunk 18 m into the
+   mountain; every wall settled to a slope of 1.4 at most, as scree
+   settles against a cliff; softened a cell. It writes
+   `crates/sim/src/valley/sleeper.bin`, which the simulation reads.
+4. **The sheet** (`cargo run --release -p look --example sleeper`, then
+   `python3 scripts/sleeper/sheet.py`): the beast asleep, its shape alone
+   on flat ground, and the mountain with it in, side by side from four
+   directions.
 
 `SHOT_EYE=200,120,-130,370,-80,80 SHOT_AT=128,10 GAME_ARGS="--arena
 high_plane --open"` looks down on it in the game from 120 m over the

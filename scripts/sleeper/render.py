@@ -26,7 +26,7 @@ def look_basis(direction, up=(0, 1, 0)):
     return r, u, f
 
 
-def view(verts, tris, direction, size=(520, 400), colours=None, light=(-0.4, 0.8, 0.45), bones=None, pad=0.08, frame=None, up=(0, 1, 0), mirror=False):
+def view(verts, tris, direction, size=(520, 400), colours=None, light=(-0.4, 0.8, 0.45), bones=None, pad=0.08, frame=None, up=(0, 1, 0), mirror=False, perspective=0.0):
     """Draw `verts`/`tris` looking along `direction` (orthographic), fitted
     to the image. `colours` is one RGB per triangle; `bones` is a list of
     (a, b) world points drawn as lines on top. `frame` fixes the fit to a
@@ -37,8 +37,17 @@ def view(verts, tris, direction, size=(520, 400), colours=None, light=(-0.4, 0.8
     w, h = size
     r, u, f = look_basis(direction, up)
     pts = verts @ np.c_[r, u, f]
+    if perspective:
+        # A camera back along the view, so near things are bigger: the
+        # mesh's far side is `perspective` times as far as its near side.
+        depth_all = pts[:, 2]
+        near_z, far_z = depth_all.min(), depth_all.max()
+        dist = (far_z - near_z) / max(perspective - 1, 1e-6)
+        scale_z = dist / (pts[:, 2] - near_z + dist)
+        centre = pts[:, :2].mean(0)
+        pts = np.c_[(pts[:, :2] - centre) * scale_z[:, None] + centre, pts[:, 2]]
     # Fitted to what is drawn: a point no triangle uses (a cut wing's) is not.
-    ref = (frame if frame is not None else verts[np.unique(tris)]) @ np.c_[r, u, f]
+    ref = (frame @ np.c_[r, u, f]) if frame is not None else pts[np.unique(tris)]
     lo, hi = ref[:, :2].min(0), ref[:, :2].max(0)
     span = hi - lo
     scale = min(w * (1 - 2 * pad) / span[0], h * (1 - 2 * pad) / span[1])
