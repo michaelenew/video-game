@@ -47,6 +47,9 @@ pub struct Grown {
     pub shade: Vec<[f32; 5]>,
     /// Every bone's rest frame, in the order of the species' bones.
     pub rest: Vec<Mat4>,
+    /// How many cells of body were cut off for not being joined to the
+    /// rest: nought, or the sinews have a gap.
+    pub dropped: usize,
 }
 
 /// Whether creatures are drawn as boxes, as they were before bodies were
@@ -81,13 +84,15 @@ struct Lump {
     to_local: Mat4,
     middle: Vec3,
     half: Vec3,
-    round: f32,
-    /// Its long axis (0, 1 or 2), which end of it is the joint's (+1 or -1),
-    /// and how much it narrows toward the other end: none on a part not much
-    /// longer than it is wide.
+    /// Its long axis (0, 1 or 2) and which end of it is the joint's (+1 or
+    /// -1): what its contour is laid along.
     long: usize,
     root: f32,
-    taper: f32,
+    /// The shape it is grown in (`crate::contour`), and which way is up and
+    /// forward for it, in the box's frame.
+    contour: crate::contour::Contour,
+    up: Vec3,
+    fwd: Vec3,
     /// Its bounds in the world, grown by the blend's reach.
     lo: Vec3,
     hi: Vec3,
@@ -95,22 +100,18 @@ struct Lump {
 }
 
 impl Lump {
-    /// Signed distance to the rounded box: negative inside.
+    /// Signed distance to the contoured part: negative inside.
     fn distance(&self, p: Vec3) -> f32 {
-        let mut q = self.to_local.transform_point3(p) - self.middle;
-        // Narrower toward the end away from its joint: across the long axis,
-        // space is stretched there, so the same box is thinner.
-        if self.taper > 0.0 {
-            let t = (q[self.long] / self.half[self.long] * -self.root).clamp(-1.0, 1.0) * 0.5 + 0.5;
-            let f = 1.0 - self.taper * t;
-            for a in 0..3 {
-                if a != self.long {
-                    q[a] /= f;
-                }
-            }
-        }
-        let d = q.abs() - (self.half - Vec3::splat(self.round));
-        d.max(Vec3::ZERO).length() + d.max_element().min(0.0) - self.round
+        let q = self.to_local.transform_point3(p) - self.middle;
+        crate::contour::distance(
+            &self.contour,
+            q,
+            self.half,
+            self.long,
+            self.root,
+            self.up,
+            self.fwd,
+        )
     }
 
     fn near(&self, p: Vec3) -> bool {
@@ -156,19 +157,168 @@ const CELLS: f32 = 200.0;
 /// thickness: a joint is filled about this far up each side of it.
 const BLEND: f32 = 0.55;
 
-/// How round a part's edges are, as a share of its thinnest side.
-const ROUND: f32 = 0.85;
-
-/// How much a long part narrows toward its far end: a limb toward its foot,
-/// a tail toward its tip, a head toward its muzzle.
-const TAPER: f32 = 0.42;
-
 /// How many bands cross the back from nose to tail.
 const BANDS: f32 = 9.0;
 
 fn smoothstep(a: f32, b: f32, x: f32) -> f32 {
     let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
+}
+
+/// **What joins the parts** (2026-10-23; the owner: *we can't have floating
+/// sections of the body plan*): a capsule along every bone from its joint to
+/// its parent's, and from every part's middle to its bone's joint, so the
+/// body is connected along the skeleton by construction, whatever gaps the
+/// boxes leave. Its radius is a share of the thinner parts it joins.
+struct Sinew {
+    a: Vec3,
+    b: Vec3,
+    radius: f32,
+    lo: Vec3,
+    hi: Vec3,
+}
+
+impl Sinew {
+    fn distance(&self, p: Vec3) -> f32 {
+        let ab = self.b - self.a;
+        let t = ((p - self.a).dot(ab) / ab.length_squared().max(1e-9)).clamp(0.0, 1.0);
+        (p - (self.a + ab * t)).length() - self.radius
+    }
+
+    fn near(&self, p: Vec3) -> bool {
+        p.cmpge(self.lo).all() && p.cmple(self.hi).all()
+    }
+}
+
+/// How thick a sinew is, as a share of the thinner part's width.
+const SINEW: f32 = 0.42;
+
+/// A part's contour inferred from what it is: its bone's name, which way its
+/// long axis points, and the species' build -- without its place in a chain.
+fn inferred(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Contour {
+    use crate::contour::{Contour, Kind};
+    let build = crate::species::build(sp.id);
+    let look = crate::species::look(sp.id);
+    let shape = sp.shape(index);
+    let bone = &sp.bones[shape.bone];
+    let name = bone.name;
+    let half = fx3(shape.max.sub(shape.min)) * 0.5;
+    let long = longest(half);
+    let mut axis = Vec3::ZERO;
+    axis[long] = 1.0;
+    let world_axis = rest[shape.bone].transform_vector3(axis);
+    let vertical = world_axis.y.abs() > 0.7;
+    let c = if index == look.head || name.starts_with("head") {
+        Contour::of(Kind::Wedge)
+    } else if name.starts_with("tail") {
+        Contour::of(Kind::Whip)
+    } else if name.starts_with("wing") {
+        Contour::of(Kind::Wing)
+    } else if name.starts_with("neck") {
+        Contour::of(Kind::Column).between(Contour::of(Kind::Taper), 0.5)
+    } else if vertical {
+        Contour::of(Kind::Taper).between(Contour::of(Kind::Column), build.heavy)
+    } else {
+        Contour::of(Kind::Barrel)
+    };
+    c.fat(build.fat).muscle(build.muscle)
+}
+
+/// The contour a part is grown in: the species' own word for it, or one
+/// inferred from what the part is; and its place in its chain.
+fn contour_of(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Contour {
+    let build = crate::species::build(sp.id);
+    let said = build
+        .contours
+        .iter()
+        .find(|(i, _)| *i == index)
+        .map(|(_, c)| *c);
+    let c = said.unwrap_or_else(|| inferred(sp, index, rest));
+    // **A chain of parts is one contour** (a tail's three segments thinning
+    // to one point, a leg's two to one foot): the parts along one line of
+    // bones that are the same kind, and this part's share of their length.
+    // A part's own say on its span stands.
+    if said.is_some_and(|s| s.span != (0.0, 1.0)) {
+        return c;
+    }
+    let (from, to) = chain_span(sp, index, rest);
+    c.span(from, to)
+}
+
+/// Which kind a part mostly is.
+fn main_kind(sp: &Species, i: usize, rest: &[Mat4]) -> usize {
+    let c = crate::species::build(sp.id)
+        .contours
+        .iter()
+        .find(|(j, _)| *j == i)
+        .map(|(_, c)| *c)
+        .unwrap_or_else(|| inferred(sp, i, rest));
+    c.kinds
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.total_cmp(b.1))
+        .map(|(k, _)| k)
+        .unwrap_or(0)
+}
+
+/// Where `index` lies along the chain of same-kind parts its bone is in: up
+/// the bones to the first ancestor whose part is another kind, then down
+/// through single children of the same kind. Shares by each part's length.
+fn chain_span(sp: &Species, index: usize, rest: &[Mat4]) -> (f32, f32) {
+    let part_on = |bone: usize| {
+        (0..sp.parts.len()).find(|&i| in_body(sp, i) && sp.parts[i].shape.bone == bone)
+    };
+    let kind = main_kind(sp, index, rest);
+    let mut bone = sp.parts[index].shape.bone;
+    loop {
+        let parent = sp.bones[bone].parent;
+        if parent == sim::beast::NO_PARENT {
+            break;
+        }
+        match part_on(parent) {
+            Some(p) if main_kind(sp, p, rest) == kind => bone = parent,
+            _ => break,
+        }
+    }
+    let mut chain = vec![];
+    loop {
+        if let Some(p) = part_on(bone) {
+            chain.push(p);
+        }
+        let kids: Vec<usize> = (0..sp.bones.len())
+            .filter(|&b| sp.bones[b].parent == bone)
+            .filter(|&b| part_on(b).is_some_and(|p| main_kind(sp, p, rest) == kind))
+            .collect();
+        if kids.len() != 1 {
+            break;
+        }
+        bone = kids[0];
+    }
+    let length = |i: usize| {
+        let sh = sp.shape(i);
+        let h = fx3(sh.max.sub(sh.min)) * 0.5;
+        h[longest(h)] * 2.0
+    };
+    let total: f32 = chain.iter().map(|&i| length(i)).sum();
+    let before: f32 = chain
+        .iter()
+        .take_while(|&&i| i != index)
+        .map(|&i| length(i))
+        .sum();
+    if total <= 0.0 || !chain.contains(&index) {
+        return (0.0, 1.0);
+    }
+    (before / total, (before + length(index)) / total)
+}
+
+fn longest(half: Vec3) -> usize {
+    if half.x >= half.y && half.x >= half.z {
+        0
+    } else if half.y >= half.z {
+        1
+    } else {
+        2
+    }
 }
 
 /// Grow `sp`'s body. `None` for a species with no part that makes one.
@@ -220,16 +370,23 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         lo = lo.min(plo);
         hi = hi.max(phi);
         // The long axis, and which end of it the bone's joint is nearer.
-        let long = if half.x >= half.y && half.x >= half.z {
-            0
-        } else if half.y >= half.z {
-            1
-        } else {
-            2
-        };
-        let across = (half[(long + 1) % 3] + half[(long + 2) % 3]) * 0.5;
-        let taper = TAPER * ((half[long] / across - 1.4) / 1.6).clamp(0.0, 1.0);
+        let long = longest(half);
+        // The joint end is the end nearer the bone's origin (the box is in
+        // the bone's frame, and the bone's origin is its joint): a leg hangs
+        // down from its joint, a tail runs back from its.
         let root = if middle[long] > 0.0 { -1.0 } else { 1.0 };
+        // Which way is up for the contour, in the box's frame: the world's
+        // up, pulled into the bone's frame, so a barrel's belly sags down
+        // and a leg's bellies sit front and back whichever way its box is
+        // written.
+        let up_local = to_world
+            .inverse()
+            .transform_vector3(Vec3::Y)
+            .normalize_or(Vec3::Y);
+        let fwd_local = to_world
+            .inverse()
+            .transform_vector3(Vec3::X)
+            .normalize_or(Vec3::X);
         lumps.push((
             i,
             Lump {
@@ -238,13 +395,59 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
                 half,
                 long,
                 root,
-                taper,
-                round: half.min_element() * 2.0 * ROUND * 0.5,
+                contour: contour_of(sp, i, &rest),
+                up: up_local,
+                fwd: fwd_local,
                 lo: plo - reach,
                 hi: phi + reach,
                 bone: s.bone,
             },
         ));
+    }
+    // The sinews: along every bone that carries a part, and from every part
+    // to its joint.
+    let mut sinews: Vec<Sinew> = Vec::new();
+    let thin_on = |bone: usize| {
+        lumps
+            .iter()
+            .filter(|(_, l)| l.bone == bone)
+            .map(|(_, l)| l.half.min_element() * 2.0)
+            .fold(f32::MAX, f32::min)
+    };
+    let mut sinew = |a: Vec3, b: Vec3, radius: f32| {
+        let r = Vec3::splat(radius + blend * 1.5);
+        sinews.push(Sinew {
+            a,
+            b,
+            radius,
+            lo: a.min(b) - r,
+            hi: a.max(b) + r,
+        });
+    };
+    for (b, def) in sp.bones.iter().enumerate() {
+        let thin = thin_on(b);
+        if thin == f32::MAX {
+            continue;
+        }
+        let joint = rest[b].transform_point3(Vec3::ZERO);
+        if def.parent != sim::beast::NO_PARENT {
+            let parent = rest[def.parent].transform_point3(Vec3::ZERO);
+            let thin_parent = thin_on(def.parent);
+            let radius = thin.min(if thin_parent == f32::MAX {
+                thin
+            } else {
+                thin_parent
+            }) * SINEW;
+            sinew(joint, parent, radius.max(blend));
+        }
+        for (_, l) in lumps.iter().filter(|(_, l)| l.bone == b) {
+            let middle = rest[b].transform_point3(l.middle);
+            sinew(
+                joint,
+                middle,
+                (l.half.min_element() * 2.0 * SINEW).max(blend),
+            );
+        }
     }
 
     // The field, sampled on a grid round the whole body.
@@ -262,6 +465,12 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
                 d = if d == f32::MAX { e } else { smin(d, e, blend) };
             }
         }
+        for s in &sinews {
+            if s.near(p) {
+                let e = s.distance(p);
+                d = if d == f32::MAX { e } else { smin(d, e, blend) };
+            }
+        }
         if d == f32::MAX { cell * 4.0 } else { d }
     };
     let mut f = vec![0.0f32; nx * ny * nz];
@@ -270,6 +479,62 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         for j in 0..ny {
             for i in 0..nx {
                 f[id(i, j, k)] = field(at(i, j, k));
+            }
+        }
+    }
+
+    // **One piece.** Whatever is not joined to the largest body is dropped:
+    // a flood fill over the cells inside, six-connected. With the sinews
+    // there should be nothing to drop; `dropped` says if there was.
+    let mut dropped = 0usize;
+    {
+        let mut comp = vec![u32::MAX; f.len()];
+        let mut sizes: Vec<usize> = Vec::new();
+        let mut stack = Vec::new();
+        for start in 0..f.len() {
+            if f[start] >= 0.0 || comp[start] != u32::MAX {
+                continue;
+            }
+            let c = sizes.len() as u32;
+            let mut size = 0;
+            comp[start] = c;
+            stack.push(start);
+            while let Some(v) = stack.pop() {
+                size += 1;
+                let (i, j, k) = (v % nx, (v / nx) % ny, v / (nx * ny));
+                let mut step = |u: usize| {
+                    if f[u] < 0.0 && comp[u] == u32::MAX {
+                        comp[u] = c;
+                        stack.push(u);
+                    }
+                };
+                if i > 0 {
+                    step(v - 1)
+                }
+                if i + 1 < nx {
+                    step(v + 1)
+                }
+                if j > 0 {
+                    step(v - nx)
+                }
+                if j + 1 < ny {
+                    step(v + nx)
+                }
+                if k > 0 {
+                    step(v - nx * ny)
+                }
+                if k + 1 < nz {
+                    step(v + nx * ny)
+                }
+            }
+            sizes.push(size);
+        }
+        if let Some((largest, _)) = sizes.iter().enumerate().max_by_key(|(_, s)| **s) {
+            for v in 0..f.len() {
+                if comp[v] != u32::MAX && comp[v] != largest as u32 {
+                    f[v] = cell;
+                    dropped += 1;
+                }
             }
         }
     }
@@ -525,6 +790,7 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         paints,
         shade,
         rest,
+        dropped,
     })
 }
 
@@ -640,5 +906,6 @@ mod tests {
         };
         assert!(j.iter().flatten().all(|&b| (b as usize) < sp.bones.len()));
         assert_eq!(g.rest.len(), sp.bones.len());
+        assert_eq!(g.dropped, 0, "the body is one piece");
     }
 }

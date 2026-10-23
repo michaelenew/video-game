@@ -27,6 +27,7 @@ mod brushwork;
 mod cairns;
 mod claimed;
 mod coat;
+mod contour;
 mod critters;
 mod crosshair;
 mod debug;

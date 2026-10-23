@@ -1177,6 +1177,15 @@ pub fn setup_bodies(
         let Some(grown) = crate::grown::grow(sp) else {
             continue;
         };
+        // The sinews join every part along the skeleton, so nothing should
+        // ever be cut off; a species that loses cells here has a gap worth
+        // looking at (`docs/design/exploration/0027_contours.md`).
+        if grown.dropped > 0 {
+            eprintln!(
+                "{}: {} cells of body not joined to the rest were dropped",
+                sp.name, grown.dropped
+            );
+        }
         let inverse: Vec<Mat4> = grown.rest.iter().map(|m| m.inverse()).collect();
         let strokes = crate::brushwork::on()
             .then(|| {

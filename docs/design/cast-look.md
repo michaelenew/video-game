@@ -193,6 +193,18 @@ it's done"*, *"show me a walk and a turntable of both"* (10-22) -- send the
 pictures, not a description of them, and say plainly what has not been
 looked at.
 
+## 5a. Creatures
+
+The creatures are grown from their species tables, never modelled by hand
+(exploration 0025 §14, 0027), so what the owner asks of them is asked of the
+grower:
+
+| # | Rule | The owner | Where it lives |
+| --- | --- | --- | --- |
+| C1 | **One piece.** No floating sections of the body plan: every part is joined to its neighbours along the skeleton, whatever gaps the boxes leave. | *"we can't have floating sections of the body plan"* (10-23) | `grown.rs` sinews; `Grown::dropped` is nought (tested) |
+| C2 | **Natural shape, not algorithmic smoothing.** A part is grown in the contour of what it is -- a load-bearing column, a tapering runner's leg, a ribbed barrel, a whip, a keel, a wing, a wedge -- with the muscle and the structure showing under the flesh. | *"a more naturalistic shape, not just an algorithmic smoothing. Thin creatures show their ribs. A ridgeback's legs should be like a rhino's or an elephant's -- thick, round, but with obvious muscle underneath and shaped to distribute load"* (10-23) | `contour.rs` kinds; `species::Build` |
+| C3 | **Kinds blend.** A part can be between kinds, and a species dials fat, muscle and heaviness for its whole body. | *"some way to build a gradient between them"* (10-23) | `Contour::between`, `Build` |
+
 ## 6. Parked
 
 - **Facets** (10-20): the owner's favourite of the style proposals --
