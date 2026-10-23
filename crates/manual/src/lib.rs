@@ -908,6 +908,10 @@ pub const SECTIONS: &[Section] = &[
                 "Draw the sheets in docs/design/gallery/breed/ from `breedcheck -- boxes` dumps in <dir>/lines/: one row per lineage, the generations across, each body isometric on a gridded ground, a red frame where a major moved. Needs Pillow.",
             ),
             e(
+                "python3 scripts/sleeper/pose.py [out.png]",
+                "Draw the Sleeper -- the beast asleep in the mountains north of the Pinewood -- standing and asleep, from six sides (scripts/sleeper/beast.py builds it: a skeleton with flesh, plates, horns and a club on it, meshed from a distance field). python3 scripts/sleeper/terrain.py lays the sleeping beast on the map: it writes crates/sim/src/valley/sleeper.bin, how far it raises the land, and sleeper_arch.txt, its horns as stone arches. cargo run --release -p look --example sleeper, then python3 scripts/sleeper/sheet.py, draws the beast, the shape made of it and the mountain with it in, side by side. Needs numpy, Pillow and scikit-image (docs/design/valley.md, the Sleeper).",
+            ),
+            e(
                 "cargo run -p sim --bin critcheck",
                 "Can every move touch something short? Stands one critter of a pack at 1, 2, 3 and 5 m in front of each class, crosshair on its middle, presses every move, and prints where it touched -- beside where the same move touches a fighter standing there, which is what it is held to. The dev pack's 0.6 m gnat by default; --species <pack> --kind <name> for another.",
             ),
@@ -1047,6 +1051,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_AT=<x>,<z>",
                 "Stand player one at that point of the place the world is in (metres, decimals allowed), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A third number is the height to look down from. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
+            ),
+            e(
+                "SHOT_EYE=<x>,<y>,<z>,<tx>,<ty>,<tz>",
+                "Put the camera at (x, y, z) looking at (tx, ty, tz), in metres in the place the world is in, whatever the fighter is doing -- a capture of something no fighter's camera frames, such as the Sleeper's horn arch: SHOT_EYE=560,300,470,690,240,370 SHOT_AT=700,0 with --arena pinewood --open. What is loaded follows the camera.",
             ),
             e(
                 "SHOT_CLIMB=up",
