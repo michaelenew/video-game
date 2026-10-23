@@ -56,10 +56,11 @@ ones that are odd terrain, make them midpoints in some mobility sections."
 Until then every creature's arena was a clearing at the end of a side path,
 ringed by its rim's bank, and empty until you walked in. Now:
 
-- **The creatures of plain ground are ranges by the road** (§1b): the herd
-  in the Mouth's meadow, the Gnawers on the Bank, a Ridgeback on the
-  Pinewood's moor, beside the ones that were already out there. Nothing
-  rings them; you see them from the road and walk over.
+- **The creatures of plain ground roam the valley** (§1b): the herds and
+  packs -- Hornbacks, Gnawers, Ridgebacks, the Pair -- each walk a loop of
+  the valley floor of their reach, across the road and back, and wake when
+  you come near them, wherever they are. Nothing rings them and nothing is
+  carved for them.
 - **The creatures of odd ground are stations** (§1f): the Mire, the Pan, the
   Hollows, the Cliffs, the Ashwood and the Shrine, each its own arena as it
   was tuned, raised over the land beside the road as a table of rock and
@@ -276,8 +277,9 @@ in its own coordinates and is kept inside its own bounds, but its floor is the
 land -- a pocket of meadow fifty metres off the road, the Wood's clearing, the
 Needle's dome -- and nothing rings it. Walking into one wakes it, as walking
 into a room does; walking more than `Hunt, held this far outside its room`
-away puts it back to sleep. The road never passes through one
-(`the_road_never_wakes_a_range`): you see them from it and choose. The
+away puts it back to sleep. The road never passes through one that keeps
+to its ground (`the_road_never_wakes_a_range`); one that roams is on the
+road on purpose (below). The
 last three were rooms off side paths until 2026-10-22 (§1): the herd's low
 meadow, the Gnawers' Commons and the Highlands' Ridgeback, now beside the
 road where they are seen from it, as the Riverside, the Hillside and the
@@ -285,17 +287,35 @@ Moor (names of their own: a range's name is its `--arena` name, and the
 rooms' arenas keep theirs for `--hunt`). The Pair's Den went with them; the Glade
 has the Pair.
 
+**Most of them roam the valley** (2026-10-22, the owner: "make the
+creatures that do make sense roam around the valley instead of in
+offshoots"). The herds and the packs -- the Hornback herd, the Gnawers, the
+Ridgebacks, the Pair -- have no pocket any more: each has **a territory**, a
+stretch of its reach's valley floor with the road in it (`Range::span`), and
+walks **a loop** of points round it (`Range::walk`), grazing at each, across
+the road and back. Nothing is carved for them; their ground is the valley's,
+kept clear of trees and boulders along their way (`layout`), and
+`every_roaming_herd_walks_open_ground` walks every loop for water, steepness
+and anything standing in it. A roaming herd **is woken by coming near it**
+-- within `ranges::WAKE` (30 m) of it, wherever on its loop it is -- not by
+its ground, and **goes back to sleep**, back on its loop, once everybody is
+`ranges::RELEASE` (60 m) from it and nothing roused it; roused, or hunting,
+it follows as any creature does (§1e). A territory is only ever the world's
+frame for its own hunt: walking the road through one is walking the reach,
+and a cairn in one counts. The Galewings, the Mantis and the creatures of
+the Deep keep to their places.
+
 | Range | Where | What | Temperament | Temper |
 | --- | --- | --- | --- | --- |
-| **Wood's Edge** | the Great Wood's clearing, by its entrance | the Hornback herd | skittish | 0 |
-| **South Bank** | across the Mouth's river from the road | the Gnawers | hunting | 0 |
-| **Upper Meadow** | the Bank, south of the road | two Ridgebacks | peaceful | 0 |
-| **Glade** | the Pinewood, north of the road | the Pair | territorial, 14 m | 2 |
-| **Snowfield** | the Saddle, south of the road | a Ridgeback | hunting | 3 |
+| **Wood's Edge** | roams the Great Wood's clearing by its entrance | the Hornback herd | skittish | 0 |
+| **South Bank** | roams the strip between the Mouth's river and the mountains | the Gnawers | hunting | 0 |
+| **Upper Meadow** | roams the Bank's meadow, road and all | two Ridgebacks | peaceful | 0 |
+| **Glade** | roams the Pinewood's road among the pines, west | the Pair | territorial, 14 m | 2 |
+| **Snowfield** | roams the Saddle's road | a Ridgeback | hunting | 3 |
 | **Roost** | the Needle's dome, 353 m up | a Galewing, circling the ruins and perching on the tallest stump | territorial, 32 m | 1 |
-| **Riverside** (2026-10-22) | the Mouth's meadow, north of the road | the Hornback herd | peaceful | 0 |
-| **Hillside** (2026-10-22) | the Bank's meadow, north of the road | the Gnawers | territorial, 14 m | 0 |
-| **Moor** (2026-10-22) | the Pinewood, a bay north of the road | a Ridgeback | territorial, 16 m | 2 |
+| **Riverside** (2026-10-22) | roams the Mouth's meadow north of the river, across the road | the Hornback herd | peaceful | 0 |
+| **Hillside** (2026-10-22) | roams the foot of the Bank's climb | the Gnawers | territorial, 14 m | 0 |
+| **Moor** (2026-10-22) | roams the Pinewood's road up to the Waterfall's pool | a Ridgeback | territorial, 16 m | 2 |
 
 **Temperaments** (VALE-4, "depends per creature"): *hunting* comes for you;
 *territorial* watches until somebody is inside its ring, or hurts it;
@@ -395,10 +415,11 @@ the road, and whether the routes are interesting enough, wants a person.
 every other creature of the valley is asleep: nothing about it is in the
 world. **Where a sleeping creature stands is a function of the frame number
 and nothing else**, the way a moving stone's is (`sim::drift`): a range's
-herd walks its pocket on a clock of legs -- turn toward the next point, walk
-there at its own walk, graze out the rest of the leg -- the points drawn
-from a hash of the range and the leg, a third of the way out from its middle
-so its formation stays inside its bounds. So the renderer asks `sim` for
+herd walks round its loop of points on a fixed clock -- turn toward the
+next, walk there at its own walk, graze `sight::GRAZE` (15 s) -- the loop's
+whole length one cycle, so the frame alone says where on it the herd is; a
+range that keeps to its pocket walks between points drawn from a hash of
+the range and the leg instead. So the renderer asks `sim` for
 every range and station near the first fighter, nearest first -- ten bodies
 and three packs at most -- and draws each with the same parts and coats as
 a live hunt's, from across the valley, and nothing about it is simulated.
@@ -849,10 +870,20 @@ for a pair who does not.** The five reaches are 974 m end to end with about
 7. **One map**: everything [atlas.md](atlas.md) §Open lists -- how the joins
    read, the sky changing at a doorway, the Long Valley's loop.
 8. **Sleeping creatures are drawn, not heard or shadowed by the world**
-   (2026-10-22, §1g). A sighted herd walks through a tree or a boulder in its
-   pocket -- its wander knows only its range's floor -- and the nearest ten
+   (2026-10-22, §1g). A herd that keeps to a pocket walks through a tree or
+   a boulder in it -- its wander knows only its range's floor; a roaming
+   herd's loop is kept clear and tested -- and the nearest ten
    bodies and three packs are drawn, so a valley with more on show would
    want the far ones drawn simpler. A station rests nobody and is never
    resting: won, it is back the next time you walk in, as rooms always were.
 9. **The Ring and the Long Valley are still rooms off the town**: not
    creature clearings off the road, so they were left as they were.
+10. **A roaming herd is woken where it is, and the pack's mind was tuned on
+    flat floors.** The Gnawers stood round a fighter on one stretch of the
+    Bank's climb and never bit (2026-10-22); their loop was moved off it, and
+    `a_roused_range_fights` stands in each herd where it is on the first
+    frame, but nothing checks every point of every loop. A herd that wakes
+    on a slope wants playing.
+11. **A herd falls asleep where it stood and is drawn next where its loop
+    says**: one left awake and unroused jumps to its loop's place when
+    everybody walks off, sixty metres away.

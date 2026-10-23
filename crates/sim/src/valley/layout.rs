@@ -467,7 +467,11 @@ fn ways() -> Vec<Way> {
     out.push(road(&saddle::WAY));
     // The ranges' pockets of meadow beside the road (`ranges`): level
     // ground for a creature to roam, the land rising round it.
-    for r in super::ranges::RANGES.iter().filter(|r| r.stacked.is_none()) {
+    // A herd that roams has no pocket: its ground is the valley's own.
+    for r in super::ranges::RANGES
+        .iter()
+        .filter(|r| r.stacked.is_none() && !r.roams())
+    {
         if r.arena == super::ranges::RANGES[0].arena {
             continue; // the Wood's edge is the clearing's own floor
         }
@@ -632,12 +636,45 @@ fn clear(land: &Land, x: Fx, z: Fx, crags: &[Crag], keep: Fx) -> bool {
     if near_a_stone {
         return false;
     }
+    // Nor on a roaming herd's loop: it walks there, and is drawn walking.
+    if on_a_herd_s_way(x, z) {
+        return false;
+    }
     crags.iter().all(|c| {
         let dx = x.sub(cm(c.x)).abs();
         let dz = z.sub(cm(c.z)).abs();
         dx.raw() > cm(Crag::HALF + 500).raw() || dz.raw() > cm(Crag::HALF + 500).raw()
     })
 }
+
+/// **Is a map point on a roaming herd's way** (`ranges::Range::walk`):
+/// within [`HERD_WAY`] of a leg of its loop, as its bodies walk it -- the
+/// loop moved as its formation is, from the middle of its marks.
+fn on_a_herd_s_way(x: Fx, z: Fx) -> bool {
+    let (px, pz) = (
+        ((x.raw() as i64) * 100) >> 16,
+        ((z.raw() as i64) * 100) >> 16,
+    );
+    super::ranges::RANGES.iter().filter(|r| r.roams()).any(|r| {
+        let n = r.walk.len();
+        let lift = r.half as i64 / 3;
+        (0..n).any(|i| {
+            let (a, b) = (r.walk[i], r.walk[(i + 1) % n]);
+            let (ax, az) = (a.0 as i64, a.1 as i64 + lift);
+            let (bx, bz) = (b.0 as i64, b.1 as i64 + lift);
+            let (vx, vz) = (bx - ax, bz - az);
+            let len2 = (vx * vx + vz * vz).max(1);
+            let t = (((px - ax) * vx + (pz - az) * vz) * 1000 / len2).clamp(0, 1000);
+            let (cx, cz) = (ax + vx * t / 1000, az + vz * t / 1000);
+            let (dx, dz) = (px - cx, pz - cz);
+            dx * dx + dz * dz <= HERD_WAY * HERD_WAY
+        })
+    })
+}
+
+/// How far either side of a roaming herd's loop nothing grows, centimetres:
+/// its formation's width and a body's.
+const HERD_WAY: i64 = 900;
 
 /// **The trees and the boulders**: every [`SPACING`] a candidate, jittered,
 /// kept by the reach's density where the ground is clear.

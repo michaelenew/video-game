@@ -98,6 +98,19 @@ impl World {
             return;
         };
         let feet = |w: &World, i: usize| w.players[i].pos.add(here.at);
+        // **A roaming herd wakes when somebody comes near it** (2026-10-22),
+        // wherever on its loop it is: the world moves into its territory's
+        // coordinates and its hunt starts where it was seen.
+        if !self.hunting() {
+            if let Some(r) = self.approached(&here) {
+                self.valley.wake = false;
+                if let Some(to) = atlas.placed(r.arena).copied() {
+                    self.rebase(atlas, &here, &to);
+                    self.begin_hunt(r.species);
+                }
+                return;
+            }
+        }
         // **A hunt that ended away from home** wakes the room or range the
         // world is in now, as walking into it would have.
         if !self.hunting() && self.valley.wake {
@@ -106,6 +119,7 @@ impl World {
             if let Some(Kind::Room(species)) = super::place(self.arena).map(|p| p.kind)
                 && inside
                 && !self.resting(self.arena)
+                && !super::ranges::of(self.arena).is_some_and(|r| r.roams())
             {
                 self.begin_hunt(species);
                 return;
@@ -124,15 +138,33 @@ impl World {
             if self.standing().next().is_none() {
                 return;
             }
-            let near_home = self.standing().any(|i| {
+            let in_home = self.standing().any(|i| {
                 let f = feet(self, i);
                 den.holds_within(f.x, f.z, margin) && den.in_band(f.y)
             });
-            if near_home {
-                if den.arena != here.arena {
-                    // Back home with the hunt still on: the world goes home
-                    // with them.
-                    self.rebase(atlas, &here, &den);
+            // A roaming herd is held by being near it, wherever it is --
+            // anybody within `ranges::RELEASE` of one of its creatures -- and
+            // not by its ground, which takes in the road; one walking home
+            // after giving up is held by nothing but its way home.
+            let roamer = super::ranges::of(den.arena).is_some_and(|r| r.roams());
+            let held = if roamer {
+                !self.valley.homing && self.near_the_herd()
+            } else {
+                in_home
+            };
+            if held {
+                // Back home with the hunt still on: the world goes home with
+                // them. Near a roaming herd out of its territory, it runs
+                // where a hunt out of home runs (below).
+                let to = if in_home {
+                    Some(den)
+                } else {
+                    self.nearest_anchor(atlas, &here)
+                };
+                if let Some(to) = to
+                    && to.arena != here.arena
+                {
+                    self.rebase(atlas, &here, &to);
                 }
                 return;
             }
@@ -164,10 +196,13 @@ impl World {
                 return;
             }
         }
+        // **A roaming herd's territory is not where you are** (2026-10-22):
+        // it takes in the road, and walking it is walking the reach. Only its
+        // hunt runs in its coordinates; out of one, the world is in the place
+        // under the territory.
         let room = self.standing().find_map(|i| {
             let f = feet(self, i);
-            atlas
-                .place_for(f)
+            framing(atlas, f)
                 .filter(|p| p.arena != self.arena && is_room(p))
                 .copied()
         });
@@ -176,11 +211,11 @@ impl World {
             let f = feet(self, i);
             // Still here -- and, for a range stacked over another place,
             // still at its height -- unless a stacked place has the feet.
-            let over = atlas.place_for(f).filter(|p| p.band.is_some());
-            if here.holds_feet(f) && over.is_none_or(|p| p.arena == here.arena) {
+            let over = framing(atlas, f).filter(|p| p.band.is_some());
+            if here.holds_feet(f) && !roams(&here) && over.is_none_or(|p| p.arena == here.arena) {
                 return None;
             }
-            atlas.place_for(f).copied()
+            framing(atlas, f).copied()
         });
         let Some(to) = to else {
             return;
@@ -195,10 +230,54 @@ impl World {
         match super::place(to.arena).map(|p| p.kind) {
             // A range beaten not long ago is resting: its pocket is empty.
             Some(Kind::Room(_)) if self.resting(to.arena) => {}
+            // A roaming herd's territory is the valley's floor: walking on to
+            // it wakes nothing; coming near the herd does (above).
+            Some(Kind::Room(_)) if super::ranges::of(to.arena).is_some_and(|r| r.roams()) => {}
             Some(Kind::Room(species)) => self.begin_hunt(species),
             Some(Kind::Ring) => self.enter_the_ring(),
             _ => {}
         }
+    }
+
+    /// **The roaming range somebody has come near**, if any: within
+    /// `ranges::WAKE` of its herd's middle on the flat and `WAKE_HIGH` of its
+    /// floor, and not resting. Nearest first in the table's order.
+    fn approached(&self, here: &Placed) -> Option<&'static super::ranges::Range> {
+        let wake = crate::arena::cm(super::ranges::WAKE);
+        let high = crate::arena::cm(super::ranges::WAKE_HIGH);
+        super::ranges::RANGES.iter().find(|r| {
+            if !r.roams() || self.resting(r.arena) {
+                return false;
+            }
+            let mid = super::sight::herd_middle(r, self.frame);
+            // Its floor where it is: a herd climbs with the road.
+            let floor = atlas::valley().relief_at(mid.x, mid.z);
+            self.standing().any(|i| {
+                let f = self.players[i].pos.add(here.at);
+                let d = crate::math::wide_flat_dist(f, mid);
+                d.raw() <= wake.raw() && f.y.sub(floor).abs().raw() <= high.raw()
+            })
+        })
+    }
+
+    /// Is anybody on their feet within `ranges::RELEASE` of one of the hunt's
+    /// creatures, flat?
+    fn near_the_herd(&self) -> bool {
+        let reach = crate::arena::cm(super::ranges::RELEASE);
+        let bodies = self
+            .monsters
+            .iter()
+            .flatten()
+            .filter(|m| m.alive())
+            .map(|m| m.pos)
+            .chain(self.critters.iter().filter(|c| c.alive()).map(|c| c.pos));
+        let mut near = false;
+        for b in bodies {
+            near |= self
+                .standing()
+                .any(|i| crate::math::wide_flat_dist(self.players[i].pos, b).raw() <= reach.raw());
+        }
+        near
     }
 
     /// **Is this range resting**: beaten less than `tuning::range_rest` ago.
@@ -223,8 +302,13 @@ impl World {
         let Some(range) = super::ranges::of(self.den_id()) else {
             return;
         };
-        // The range's middle, where the world is: its origin, seen from here.
-        let mid = self.den().off;
+        // The range's middle, where the world is: its origin, seen from here
+        // -- or, for a herd that roams, the middle of the herd itself.
+        let mid = if range.roams() {
+            self.herd_centre().unwrap_or(self.den().off)
+        } else {
+            self.den().off
+        };
         use super::ranges::Temperament as T;
         // Hurt since last frame: the creatures' health, all of it, fell.
         let stock: i32 = self
@@ -291,7 +375,11 @@ impl World {
                 crate::fixed::Fx::from_raw((sz / n.max(1)) as i32),
             )
             .sub(V3::new(mid.x, crate::fixed::Fx::ZERO, mid.z));
-            let out = crate::arena::cm(range.half * 4 / 5);
+            let out = crate::arena::cm(if range.roams() {
+                super::ranges::RELEASE / 2
+            } else {
+                range.half * 4 / 5
+            });
             mid.add(
                 crate::math::wide_normalized(centre)
                     .scale(out)
@@ -314,6 +402,32 @@ impl World {
                 }
             }
         }
+    }
+
+    /// The middle of the hunt's live creatures, flat, at the floor of the
+    /// first.
+    fn herd_centre(&self) -> Option<V3> {
+        let (mut sx, mut sz, mut n) = (0i64, 0i64, 0i64);
+        let mut y = None;
+        let bodies = self
+            .monsters
+            .iter()
+            .flatten()
+            .filter(|m| m.alive())
+            .map(|m| m.pos)
+            .chain(self.critters.iter().filter(|c| c.alive()).map(|c| c.pos));
+        for p in bodies {
+            sx += p.x.raw() as i64;
+            sz += p.z.raw() as i64;
+            n += 1;
+            y.get_or_insert(p.y);
+        }
+        let y = y?;
+        Some(V3::new(
+            crate::fixed::Fx::from_raw((sx / n) as i32),
+            y,
+            crate::fixed::Fx::from_raw((sz / n) as i32),
+        ))
     }
 
     /// **The place with its own origin nearest the first fighter on their
@@ -531,6 +645,24 @@ impl World {
         }
         self.valley.away = 0;
         self.valley.homing = false;
+    }
+}
+
+/// Is this place a roaming herd's territory?
+fn roams(p: &Placed) -> bool {
+    super::ranges::of(p.arena).is_some_and(|r| r.roams())
+}
+
+/// **The place the world is in for a body's feet**: the map's place for them
+/// (`Atlas::place_for`), passing over a roaming herd's territory to the place
+/// under it.
+fn framing(atlas: &Atlas, feet: V3) -> Option<&Placed> {
+    match atlas.place_for(feet) {
+        Some(p) if roams(p) => atlas
+            .places
+            .iter()
+            .find(|q| !roams(q) && q.holds_feet(feet)),
+        other => other,
     }
 }
 

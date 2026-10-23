@@ -177,6 +177,58 @@ pub fn wander(r: &Range, frame: u32, walk_cm_s: i64) -> ((i64, i64), Fx, bool, i
     (at, yaw, true, along)
 }
 
+/// How long a roaming herd grazes at each point of its loop, in frames.
+pub const GRAZE: u32 = 900;
+
+/// **Where a roaming range's herd is on frame `frame`** ([`Range::walk`]):
+/// round its loop of points, turning toward the next at each, walking there
+/// at its own walk and grazing out [`GRAZE`] -- the loop's whole length one
+/// cycle, so the frame alone says where on it the herd is. As [`wander`]:
+/// how far from its middle (cm), its facing, whether it walks, how far it
+/// has walked this leg.
+pub fn roam(r: &Range, frame: u32, walk_cm_s: i64) -> ((i64, i64), Fx, bool, i64) {
+    let pts = r.walk;
+    let n = pts.len();
+    let at = |i: usize| {
+        let (x, z) = pts[i % n];
+        ((x - r.at.0) as i64, (z - r.at.1) as i64)
+    };
+    let walk = walk_cm_s.max(1);
+    let leg = |i: usize| {
+        let (_, len) = heading(at(i), at(i + 1));
+        ((len * 60 / walk) as u32, len)
+    };
+    let cycle: u32 = (0..n).map(|i| TURN + leg(i).0 + GRAZE).sum::<u32>().max(1);
+    let k = r.arena.0 as u32;
+    let mut t = frame.wrapping_add(dice(k, 0, 9) as u32 * 997) % cycle;
+    for i in 0..n {
+        let (frames, len) = leg(i);
+        let (from, to) = (at(i), at(i + 1));
+        let (was, _) = heading(at(i + n - 1), from);
+        let (yaw, _) = heading(from, to);
+        if t < TURN {
+            let f = Fx::from_raw((t as i64 * 65536 / TURN as i64) as i32);
+            return (from, turn_toward(was, yaw, f), false, 0);
+        }
+        t -= TURN;
+        if t < frames {
+            let w = t as i64;
+            let f = frames.max(1) as i64;
+            let p = (
+                from.0 + (to.0 - from.0) * w / f,
+                from.1 + (to.1 - from.1) * w / f,
+            );
+            return (p, yaw, true, len * w / f);
+        }
+        t -= frames;
+        if t < GRAZE {
+            return (to, yaw, false, len);
+        }
+        t -= GRAZE;
+    }
+    (at(0), Fx::ZERO, false, 0)
+}
+
 /// **Stand a place's creatures where they are on `frame`**: a range's herd
 /// moved along its wander, facing its way, its legs where its walk has them;
 /// a room's creatures on their marks, breathing. `offset` is the place's
@@ -193,6 +245,7 @@ pub fn stand(sight: &mut Sight, frame: u32, offset: V3, ground: &Terrain) {
         None => PACK_WALK,
     };
     let (moved, yaw, walking, along) = match range {
+        Some(r) if r.roams() => roam(r, frame, walk),
         Some(r) => wander(r, frame, walk),
         None => ((0, 0), Fx::ZERO, false, 0),
     };
@@ -236,4 +289,27 @@ pub fn stand(sight: &mut Sight, frame: u32, offset: V3, ground: &Terrain) {
             };
         }
     }
+}
+
+/// **The middle of a roaming range's herd on `frame`**, on the map: its
+/// loop's point, moved as [`stand`] moves its bodies, from the middle of its
+/// marks. What waking it by approach measures from (`valley::open`).
+pub fn herd_middle(r: &Range, frame: u32) -> V3 {
+    let sp = r.species.get();
+    let walk = if sp.has_body() {
+        sp.walk().raw() as i64 * 100 / 65536
+    } else {
+        PACK_WALK
+    };
+    let (moved, _, _, _) = if r.roams() {
+        roam(r, frame, walk)
+    } else {
+        wander(r, frame, walk)
+    };
+    let cm = |v: i64| crate::arena::cm(v as i32);
+    V3::new(
+        cm(r.at.0 as i64 + moved.0),
+        cm(r.floor as i64),
+        cm(r.at.1 as i64 + moved.1 + r.half as i64 / 3),
+    )
 }

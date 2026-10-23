@@ -94,10 +94,14 @@ fn ggrs_synctest_finds_no_desync_walking_from_one_place_into_the_next() {
         Input::looking_at(Input::W | random, 0, -1500)
     };
     let w = synctest_with(w, "the valley's gate", 900, walking);
-    assert_eq!(
-        w.arena,
-        sim::arena::ArenaId::MOUTH,
-        "never got out of the town"
+    // Into the Mouth -- or, walking on, up to the herd that roams its meadow
+    // (since 2026-10-22), whose hunt then runs in its territory's frame:
+    // woken under rollback too.
+    let mouth = sim::arena::ArenaId::MOUTH;
+    assert!(
+        w.arena == mouth || sim::valley::ranges::in_place(w.arena) == Some(mouth),
+        "never got out of the town: in {}",
+        w.arena().name
     );
 }
 

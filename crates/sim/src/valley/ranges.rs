@@ -68,6 +68,36 @@ pub struct Range {
     /// Where the creature's own fight looks for its features, in the range's
     /// coordinates: the Galewing's circle and perch.
     pub sites: &'static [Site],
+    /// **Its territory**, half its extent east-west and north-south from its
+    /// middle (centimetres): the ground its creatures are kept on. A pocket
+    /// is a square [`Range::half`] across; a roaming range's is a stretch of
+    /// its reach, road and all.
+    pub span: (i32, i32),
+    /// **Where it roams** (2026-10-22): a loop of points on the map
+    /// (centimetres) its herd walks round while nobody is near, grazing at
+    /// each -- across the valley floor and the road, not in a pocket off it.
+    /// Empty for a range that keeps to its pocket. A roaming range wakes when
+    /// somebody comes within [`WAKE`] of its creatures, wherever they are,
+    /// and sleeps again once everybody is [`RELEASE`] from them.
+    pub walk: &'static [(i32, i32)],
+    /// What its ground is, as the land is drawn and walked: its reach's.
+    pub ground: Material,
+}
+
+/// **How near a roaming range's creatures wake it**, flat (centimetres),
+/// and how far above or below them a body may be and still count.
+pub const WAKE: i32 = 3000;
+pub const WAKE_HIGH: i32 = 800;
+
+/// **How far from every one of them everybody has to be** for a roaming
+/// range's hunt, roused by nobody, to go back to sleep.
+pub const RELEASE: i32 = 6000;
+
+impl Range {
+    /// Does it roam the valley, rather than keep to a pocket?
+    pub const fn roams(&self) -> bool {
+        !self.walk.is_empty()
+    }
 }
 
 /// The first range's id. Ranges are numbered from here...
@@ -112,6 +142,9 @@ const fn range(
         temper,
         stacked: None,
         sites: &[],
+        span: (half, half),
+        walk: &[],
+        ground: Material::Grass,
     }
 }
 
@@ -137,69 +170,179 @@ const ROOST_SITES: [Site; 2] = [
     },
 ];
 
+/// Where the Wood's Edge herd roams.
+const WOODS_EDGE_WALK: [(i32, i32); 6] = [
+    (-9000, -17500),
+    (-5000, -16500),
+    (-2000, -18500),
+    (-4500, -20500),
+    (-9000, -21000),
+    (-10500, -19500),
+];
+
+/// Where the South Bank herd roams.
+const SOUTH_BANK_WALK: [(i32, i32); 7] = [
+    (6000, -3700),
+    (8000, -5000),
+    (9000, -4200),
+    (12000, -3600),
+    (15500, -3500),
+    (11000, -3700),
+    (7500, -3900),
+];
+
+/// Where the Upper Meadow herd roams.
+const UPPER_MEADOW_WALK: [(i32, i32); 7] = [
+    (26500, 600),
+    (28500, 2400),
+    (30500, 2800),
+    (32500, 1500),
+    (31500, -800),
+    (29000, -1000),
+    (27500, -300),
+];
+
+/// Where the Glade herd roams.
+const GLADE_WALK: [(i32, i32); 6] = [
+    (66000, 500),
+    (67500, 1000),
+    (69500, 1000),
+    (71000, 500),
+    (69500, -700),
+    (67500, -300),
+];
+
+/// Where the Snowfield herd roams.
+const SNOWFIELD_WALK: [(i32, i32); 7] = [
+    (88000, 300),
+    (90000, -1200),
+    (92000, -1500),
+    (94500, -800),
+    (96500, 200),
+    (94000, 1200),
+    (91000, 600),
+];
+
+/// Where the Riverside herd roams.
+const RIVERSIDE_WALK: [(i32, i32); 8] = [
+    (9500, 900),
+    (10500, 2400),
+    (11500, 3200),
+    (13000, 1500),
+    (17000, 0),
+    (15000, 300),
+    (12500, 1200),
+    (10500, 1000),
+];
+
+/// Where the Hillside herd roams.
+const HILLSIDE_WALK: [(i32, i32); 6] = [
+    (34300, 250),
+    (35300, 600),
+    (36500, -400),
+    (37200, -1100),
+    (36000, -1000),
+    (35000, -400),
+];
+
+/// Where the Moor herd roams.
+const MOOR_WALK: [(i32, i32); 6] = [
+    (72500, 1500),
+    (74000, 2200),
+    (75500, 800),
+    (77500, -300),
+    (76000, -1000),
+    (73800, -500),
+];
+
 /// **The ranges**, nearest the town first. Easy by the town and harder the
 /// further in -- by species, the tiers the waystones count, and by temper.
 pub const RANGES: [Range; 17] = [
-    // The Hornback herd, grazing the Great Wood's edge: they run if you
-    // start anything.
-    range(
-        0,
-        "Wood's Edge",
-        SpeciesId::HORNBACK,
-        1,
-        (-6000, -20000, 0),
-        2500,
-        Temperament::Skittish,
-        0,
-    ),
-    // Gnawers rooting along the Mouth's south bank, across the river from
-    // the road: they come for you.
-    range(
-        1,
-        "South Bank",
-        SpeciesId::GNAWERS,
-        1,
-        (12500, -5400, 50),
-        1500,
-        Temperament::Hunting,
-        0,
-    ),
-    // Two Ridgebacks on the Bank's upper meadow: a herd that wants nothing
-    // but the grass, and fights back if hurt.
-    range(
-        2,
-        "Upper Meadow",
-        SpeciesId::RIDGEBACK,
-        2,
-        (29000, -5600, 2100),
-        2000,
-        Temperament::Peaceful,
-        0,
-    ),
-    // The Pair in a glade north of the Pinewood's road: left alone at the
-    // glade's edge, come for you in its middle.
-    range(
-        3,
-        "Glade",
-        SpeciesId::PAIR,
-        2,
-        (66500, 5600, 5650),
-        2000,
-        Temperament::Territorial { ring: 1400 },
-        2,
-    ),
-    // A Ridgeback on the Saddle's snowfield, cleverer than any by the town,
-    // and hunting.
-    range(
-        4,
-        "Snowfield",
-        SpeciesId::RIDGEBACK,
-        1,
-        (88500, -4600, 8400),
-        2000,
-        Temperament::Hunting,
-        3,
-    ),
+    // The Hornback herd, roaming the Great Wood's clearing by its entrance:
+    // they run if you start anything.
+    Range {
+        span: (5500, 5000),
+        walk: &WOODS_EDGE_WALK,
+        ground: Material::Grass,
+        ..range(
+            0,
+            "Wood's Edge",
+            SpeciesId::HORNBACK,
+            1,
+            (-6000, -20000, 0),
+            2500,
+            Temperament::Skittish,
+            0,
+        )
+    },
+    // Gnawers roaming the Mouth's south bank, across the river from the
+    // road: they come for you.
+    Range {
+        span: (5500, 2000),
+        walk: &SOUTH_BANK_WALK,
+        ground: Material::Grass,
+        ..range(
+            1,
+            "South Bank",
+            SpeciesId::GNAWERS,
+            1,
+            (11000, -4800, 50),
+            1500,
+            Temperament::Hunting,
+            0,
+        )
+    },
+    // Two Ridgebacks roaming the Bank's meadow, road and all: a herd that
+    // wants nothing but the grass, and fights back if hurt.
+    Range {
+        span: (4000, 3500),
+        walk: &UPPER_MEADOW_WALK,
+        ground: Material::Grass,
+        ..range(
+            2,
+            "Upper Meadow",
+            SpeciesId::RIDGEBACK,
+            2,
+            (29500, 800, 2100),
+            2000,
+            Temperament::Peaceful,
+            0,
+        )
+    },
+    // The Pair, prowling the Pinewood's road among the pines: left alone
+    // further off, they come for you near.
+    Range {
+        span: (3200, 3000),
+        walk: &GLADE_WALK,
+        ground: Material::Grass,
+        ..range(
+            3,
+            "Glade",
+            SpeciesId::PAIR,
+            2,
+            (68500, 700, 5650),
+            2000,
+            Temperament::Territorial { ring: 1400 },
+            2,
+        )
+    },
+    // A Ridgeback roaming the Saddle's snowfield and its road, cleverer than
+    // any by the town, and hunting.
+    Range {
+        span: (6000, 3000),
+        walk: &SNOWFIELD_WALK,
+        ground: Material::Snow,
+        ..range(
+            4,
+            "Snowfield",
+            SpeciesId::RIDGEBACK,
+            1,
+            (92500, 0, 8500),
+            2000,
+            Temperament::Hunting,
+            3,
+        )
+    },
     // **The roost**: a Galewing on the Needle's dome, three hundred and
     // fifty metres up -- watching from its perch until somebody sets foot
     // on the ruins (VALE-5, "fight").
@@ -315,47 +458,57 @@ pub const RANGES: [Range; 17] = [
         Temperament::Territorial { ring: 1500 },
         2,
     ),
-    // **By the road** (2026-10-22): the creatures whose rooms were clearings
-    // at the end of side paths -- the herd's low meadow, the Gnawers' den, the
-    // Highlands' Ridgeback -- out on the land beside the road instead, where
-    // they are seen from it. The owner: "remove the very obvious little areas
-    // off the valley".
-    //
-    // The herd in the Mouth's meadow, north of the road: it grazes, and
-    // fights back if hurt.
-    range(
-        14,
-        "Riverside",
-        SpeciesId::HORNBACK,
-        1,
-        (11500, 6600, 50),
-        2200,
-        Temperament::Peaceful,
-        0,
-    ),
-    // The Gnawers on the Bank's upper meadow, north of the road: they let
-    // you pass on the road and come for you nearer.
-    range(
-        15,
-        "Hillside",
-        SpeciesId::GNAWERS,
-        1,
-        (30500, 6100, 2100),
-        2000,
-        Temperament::Territorial { ring: 1400 },
-        0,
-    ),
-    // A Ridgeback on the Pinewood's moor, in a bay north of the road.
-    range(
-        16,
-        "Moor",
-        SpeciesId::RIDGEBACK,
-        1,
-        (73500, 6200, 5750),
-        2000,
-        Temperament::Territorial { ring: 1600 },
-        2,
-    ),
+    // The herd in the Mouth's meadow, north of the river, across the road
+    // and back: it grazes, and fights back if hurt.
+    Range {
+        span: (6500, 4400),
+        walk: &RIVERSIDE_WALK,
+        ground: Material::Grass,
+        ..range(
+            14,
+            "Riverside",
+            SpeciesId::HORNBACK,
+            1,
+            (12500, 3600, 50),
+            2200,
+            Temperament::Peaceful,
+            0,
+        )
+    },
+    // The Gnawers on the Bank's climb, up and down the road: they let you
+    // pass further off and come for you nearer.
+    Range {
+        span: (3000, 2600),
+        walk: &HILLSIDE_WALK,
+        ground: Material::Grass,
+        ..range(
+            15,
+            "Hillside",
+            SpeciesId::GNAWERS,
+            1,
+            (36600, -500, 2800),
+            2000,
+            Temperament::Territorial { ring: 1400 },
+            0,
+        )
+    },
+    // A Ridgeback roaming the Pinewood's head, up the road to the
+    // Waterfall's pool and back.
+    Range {
+        span: (3200, 3000),
+        walk: &MOOR_WALK,
+        ground: Material::Grass,
+        ..range(
+            16,
+            "Moor",
+            SpeciesId::RIDGEBACK,
+            1,
+            (75000, 300, 5750),
+            2000,
+            Temperament::Territorial { ring: 1600 },
+            2,
+        )
+    },
 ];
 
 /// A point of the High Plane on the map, from its middle (centimetres), at
@@ -461,25 +614,26 @@ pub const fn index(id: ArenaId) -> Option<usize> {
 
 const fn arena_of(r: &Range) -> Arena {
     let h = r.half;
+    let (sx, sz) = r.span;
     Arena {
         id: r.arena,
         name: r.name,
         creature: None,
-        bounds: Bounds::cm((-h, h), (-h, h)),
-        floor: Material::Grass,
+        bounds: Bounds::cm((-sx, sx), (-sz, sz)),
+        floor: r.ground,
         regions: &[],
         solids: &[],
         spawns: Spawns {
             // Where a fighter stands after a hunt here is lost and there is
             // no cairn: the range's near edge, facing in.
             versus: [
-                Mark::cm(-150, -h + 300, (-150, 0)),
-                Mark::cm(150, -h + 300, (150, 0)),
+                Mark::cm(-150, -sz + 300, (-150, 0)),
+                Mark::cm(150, -sz + 300, (150, 0)),
             ],
             hunt: Some(HuntMarks {
                 hunters: [
-                    Mark::cm(-150, -h + 300, (-150, 0)),
-                    Mark::cm(150, -h + 300, (150, 0)),
+                    Mark::cm(-150, -sz + 300, (-150, 0)),
+                    Mark::cm(150, -sz + 300, (150, 0)),
                 ],
                 creatures: [
                     Mark::cm(-h / 4, h / 3, (-h / 4, -h)),

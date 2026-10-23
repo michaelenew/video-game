@@ -138,7 +138,8 @@ with `--hunt <name>` (`?hunt=<name>` in the browser); `Shift+H` steps through al
 game, `T` tempers the one you are hunting, and the HUD's list shows your trophies.
 [review.md](review.md) has each one's command, numbers and open questions.
 **In the valley** (since 2026-10-22, [valley.md](valley.md) §1) they are out on
-the land: the plain-ground creatures on ranges beside the road, the six whose
+the land: the herds and packs roaming the valley floor and its road, waking as you
+come near, the six whose
 arenas are odd ground raised as **stations** in the middle of jump sections, and
 every sleeping one drawn where it is from across the valley -- where it stands is a
 function of the frame, so it is seen without being simulated.

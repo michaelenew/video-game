@@ -338,9 +338,9 @@ pub fn sheet_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
     }
 }
 
-/// **The cairn under these feet**, on the map: a snow top of a reach or of
-/// the town, by its index among the map's boxes. A room's snow is a
-/// creature's floor, not a cairn.
+/// **The cairn under these feet**, on the map: a snow top of a reach, a
+/// range or the town, by its index among the map's boxes. A room's snow is
+/// a creature's floor, not a cairn.
 pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
     atlas
         .near((feet.x, feet.z), (feet.x, feet.z))
@@ -355,8 +355,11 @@ pub fn cairn_at(atlas: &crate::atlas::Atlas, feet: V3) -> Option<usize> {
             } else {
                 atlas.places.get(src.place as usize)
             };
+            // A range is open land, and a herd's territory takes in the road
+            // and the crags beside it (2026-10-22): a cairn there counts.
             let counts = owner.is_some_and(|p| {
-                place(p.arena).is_some_and(|p| matches!(p.kind, Kind::Reach | Kind::Town))
+                ranges::of(p.arena).is_some()
+                    || place(p.arena).is_some_and(|p| matches!(p.kind, Kind::Reach | Kind::Town))
             });
             counts && s.material == crate::arena::Material::Snow && on_top(s, feet)
         })
