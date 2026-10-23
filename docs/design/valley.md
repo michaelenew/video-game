@@ -442,40 +442,40 @@ discernible only from certain angles. Maybe it wakes up eventually."
 asleep** (`sim::valley::dragon`). It is the land, not a creature and not a
 box: a height added to the mountain wherever its body lies, before the
 land's noise and crags go over it, so it wears the same rock and snow as
-the range round it, and what is drawn is what a foot would stand on. Its
-shoulders are at (770, 360) on the map; it is about 250 m across and 330 m
-long, standing up to seventy metres over the mountain it lies on.
+the range round it, and what is drawn is what a foot would stand on.
 
-**A tarrasque, not a European dragon** (the owner, on the first pass:
-"that pose is super unnatural"). The first pass was a statue: wings
-folded, chin on both forepaws, a row of plates down a symmetrical back,
-and it read as a dragon from above and nowhere else in particular -- too
-plainly from above, and as cliffs between its limbs. What it is now:
+**Its shape is a real model, posed** (2026-10-23; the owner: "build an
+actual model ... or better pull one that's open source. Lay that dragon
+out in the pose we need it. Then write a script to build the terrain
+definition from that"). Two hand-built bodies came first -- a table of
+joints posed like a statue, then a tarrasque of mounds that read "like a
+sick dog" -- and judging them was blind to the steps between. Now:
 
-- **wingless and heavy**, a broad bowed back with a row of low spikes;
-- **lying a little over on its right side**, so its high line is its
-  left flank rather than its spine and nothing about it is symmetrical;
-- **its tail curled up** round the low side to the front, the tip turned
-  in on itself;
-- **its head turned back and tucked under the left forelimb**, a broad
-  skull narrowing to a heavy muzzle, a low brow;
-- **forelimbs half the first pass's size**, growing out of the shoulders;
-  the right one under the body, only its elbow and paw showing;
-- **the left hind leg drawn up along the flank as a ridge**, as before;
-  the right one under the body.
+1. **The model**: Drummyfish's CC0 low-poly dragon, rigged, 2,416 vertices
+   on 58 bones (`assets/sleeper/`).
+2. **The pose** (`scripts/sleeper/pose.py`): from the last frame of the
+   model's own "Die" clip, every bone *aimed* along a world direction --
+   the neck round to the left so the head lies back along the left
+   shoulder, under the left forelimb; the forelimbs at half size, out of
+   the shoulders; the upper hind leg drawn up along the flank; the lower
+   one under; the tail curled round the right side; the wings shrunk to
+   nubs; and the whole body rolled 22 degrees onto its right side.
+3. **The shape** (`scripts/sleeper/terrain.py`): the posed model sized to
+   300 m, squashed to 60 % of its height, turned to face 200 degrees (a
+   little west of south) and centred at (790, 400); the highest point of
+   it over every 2 m cell; sunk 18 m into the mountain; every wall settled
+   to a slope of 1.4 at most, as scree settles against a cliff; softened a
+   cell. It writes `crates/sim/src/valley/sleeper.bin`, which the
+   simulation reads.
+4. **The sheet** (`cargo run --release -p look --example sleeper`, then
+   `python3 scripts/sleeper/sheet.py`): the three side by side from four
+   directions -- the posed model, its shape alone on flat ground, and the
+   mountain with it in, from the simulation's own heights -- so each step
+   is judged on its own.
 
-Its pieces are blended where they meet, as a limb meets a body, rather
-than one standing out of the other as a wall; and the land's crags are
-damped a little on it, so its shape is there to be found without it being
-the one smooth thing on the skyline. Screenshots:
 `SHOT_EYE=200,120,-130,370,-80,80 SHOT_AT=128,10 GAME_ARGS="--arena
-high_plane --open"` looks down on it from 120 m over the plane's edge.
-
-It is level data (`tests/knobs.rs`): a table of chains of joints, each a
-point, a width and a height, every piece between two a mound rounded across
-its top. Nothing shows until the mountain under it has risen forty metres
-off its floor, and all of it by a hundred, so no valley, foothill, road or
-room is touched (`tests/valley.rs` walks them all as before).
+high_plane --open"` looks down on it in the game from 120 m over the
+plane's edge.
 
 **Waking it** is not built (§6, item 8).
 
