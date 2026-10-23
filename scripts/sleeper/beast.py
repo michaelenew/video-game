@@ -414,12 +414,12 @@ def body_parts(pose):
         # it, and a point a little dull (the owner: "thicker at the base so
         # they don't read like a stone overhanging ... the tips just a
         # little dull").
-        parts.append(blade(base - u * 0.2, u + f * -0.25 + l * s_ * 0.12, 0.7 + 3.4 * size, 1.25 * size + 0.3, f,
-                           ARMOUR * 2, BONE, 2.0, 0.07 + 0.05 * size))
+        parts.append(blade(base - u * 0.25, u + f * -0.25 + l * s_ * 0.12, 0.75 + 3.4 * size, 1.5 * size + 0.4, f,
+                           ARMOUR * 2, BONE, 1.5, 0.08 + 0.04 * size))
         if size > 0.55:
             # Over the shoulders and hips, a lower plate outside each.
-            parts.append(blade(p + u * (radius - 0.6) + l * -s_ * 0.95, u * 0.8 + l * -s_ * 0.6 - f * 0.2, 0.5 + 1.6 * size, 0.8 * size + 0.15, f,
-                               ARMOUR * 2, BONE, 2.0, 0.06))
+            parts.append(blade(p + u * (radius - 0.65) + l * -s_ * 0.95, u * 0.8 + l * -s_ * 0.6 - f * 0.2, 0.55 + 1.6 * size, 1.0 * size + 0.2, f,
+                               ARMOUR * 2, BONE, 1.5, 0.07))
         # Armour knobs on the flanks, scattered.
         for s2 in (1, -1):
             a_ = 0.55 + 0.25 * rng.random()
