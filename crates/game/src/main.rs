@@ -61,6 +61,7 @@ mod stream;
 mod swing;
 mod town;
 mod trophies;
+mod tutorial;
 mod valley;
 mod veil;
 mod warm;
@@ -113,6 +114,12 @@ fn chosen_start(opts: &platform::Options) -> picker::Start {
         opts.value("--arena"),
         opts.value("--temper"),
     );
+    // `--tutorial [class]`: that class's hall (`tutorial`).
+    if let Some(class) = chosen_tutorial(opts)
+        && let Some(t) = sim::tutorial::for_class(class)
+    {
+        start.arena = Some(t.arena);
+    }
     // **The valley is where a run starts** (`docs/design/valley.md`): Hearth's
     // square, unless a fight was asked for -- `--hunt`, `--arena`, or
     // `--versus` for the proving ground as it always was.
@@ -120,6 +127,19 @@ fn chosen_start(opts: &platform::Options) -> picker::Start {
         start.arena = Some(sim::valley::START);
     }
     start
+}
+
+/// `--tutorial [class]`: the class whose tutorial hall a run starts in --
+/// the one named, or player one's.
+fn chosen_tutorial(opts: &platform::Options) -> Option<sim::Class> {
+    if let Some(name) = opts.value("--tutorial") {
+        return Some(parse_class(name).unwrap_or(sim::class::ROTATION[0]));
+    }
+    opts.flag("--tutorial").then(|| {
+        opts.value("--p1")
+            .and_then(parse_class)
+            .unwrap_or(sim::class::ROTATION[0])
+    })
 }
 
 /// `--open`: every waystone in the valley lit, as if every creature had been
@@ -159,6 +179,7 @@ fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
     std::array::from_fn(|i| {
         opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
+            .or_else(|| (i == 0).then(|| chosen_tutorial(opts)).flatten())
             .unwrap_or(sim::class::ROTATION[0])
     })
 }
@@ -252,6 +273,7 @@ fn main() {
         .init_resource::<heel::Heels>()
         .init_resource::<sound::Soundscape>()
         .init_resource::<Joints>()
+        .init_resource::<tutorial::Coach>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -412,7 +434,7 @@ fn main() {
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
-                (menu::notice_cairns, menu::draw).chain(),
+                (menu::notice_cairns, menu::draw, tutorial::draw).chain(),
                 // What you carry and your morph (`sim::keep`).
                 (
                     heel::follow,
@@ -6588,7 +6610,10 @@ fn tick_sim(
     mut scape: ResMut<sound::Soundscape>,
     mut keeping: ResMut<bag::Keeping>,
     settings: Res<settings::Settings>,
+    mut coach: ResMut<tutorial::Coach>,
 ) {
+    // A hall follows the class you are playing (`tutorial::steer`).
+    tutorial::steer(&mut sim, &mut coach);
     // A won hunt is the player's trophy (world W1), whoever's machine it was
     // won on: each peer writes its own. Read from the world as it stands at
     // the top of the frame, which is the last one drawn.
@@ -6866,6 +6891,11 @@ fn tick_sim(
                 }
             });
             let two = match sim.dummy {
+                // A tutorial hall's dummy is the room's (`tutorial`), unless
+                // a person has the second keys.
+                mode if mode != Dummy::Human && tutorial::dummy_input(&sim.cur).is_some() => {
+                    tutorial::dummy_input(&sim.cur).unwrap_or_default()
+                }
                 // Not in a hunt: the bot fights a fighter, and in a hunt
                 // player two is out of it (see `seated`).
                 Dummy::Bot(level) if !sim.cur.hunting() => spar(
@@ -6944,6 +6974,7 @@ fn tick_sim(
                 ledger.confirm_through(cur.frame, cur);
             }
             scape.observe(&sim.prev, &sim.cur);
+            tutorial::observe(&mut coach, &sim.prev, &sim.cur);
             // What was picked up and fed, for this game's bag and morphs.
             let me = sim.local_player();
             keeping.record(&sim.prev, &pair, &sim.cur, me);

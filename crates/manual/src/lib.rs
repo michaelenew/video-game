@@ -531,6 +531,21 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "Tutorials",
+        in_browser: true,
+        blurb: "A hall for each class: the first room says what the class is, how it plays and how it wins; then a room for each click and one for its keys, each move to try once; past those, the advanced rooms, one technique each. Walk into a room to open it. docs/design/tutorials.md has every hall.",
+        entries: &[
+            e(
+                "--tutorial <class>, ?tutorial=reaver",
+                "Start in that class's tutorial hall: champion, reaver, elementalist, blood or dual (player one's class with no name). The Esc menu's Tutorials row goes to any of them, and Tab in a hall walks you into the next class's.",
+            ),
+            e(
+                "The checklist",
+                "On the right, the room you are in and what to do there. A box is ticked the first time you do a thing; a count beside it says how many times since, so practising is counted too. A move that should strike the dummy waits to see whether it did, and says Hit or missed.",
+            ),
+        ],
+    },
+    Section {
         title: "The valley",
         in_browser: true,
         blurb: "A run starts in Hearth, the walled town at the valley's mouth: walk out of its gates into a world of places joined together, a climb from the river to the Saddle with every creature in a room off the way, and the Ring in town for fighting each other. docs/design/valley.md has the whole map.",

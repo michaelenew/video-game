@@ -117,6 +117,8 @@ pub mod stages;
 
 pub mod hills;
 
+pub mod hall;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -204,6 +206,13 @@ impl ArenaId {
     /// trip to nowhere refused.
     pub const GORGE: ArenaId = ArenaId(59);
     pub const HENGE: ArenaId = ArenaId(61);
+    /// **The tutorial halls** (`hall`, `crate::tutorial`): one per class on
+    /// offer, after the valley's ranges.
+    pub const HALL_CHAMPION: ArenaId = ArenaId(72);
+    pub const HALL_REAVER: ArenaId = ArenaId(73);
+    pub const HALL_ELEMENTALIST: ArenaId = ArenaId(74);
+    pub const HALL_BLOOD: ArenaId = ArenaId(75);
+    pub const HALL_DUAL: ArenaId = ArenaId(76);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -297,6 +306,12 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::DELTA => Some(&hills::DELTA),
         ArenaId::GORGE => Some(&hills::GORGE),
         ArenaId::HENGE => Some(&hills::HENGE),
+
+        ArenaId::HALL_CHAMPION => Some(&hall::CHAMPION),
+        ArenaId::HALL_REAVER => Some(&hall::REAVER),
+        ArenaId::HALL_ELEMENTALIST => Some(&hall::ELEMENTALIST),
+        ArenaId::HALL_BLOOD => Some(&hall::BLOOD),
+        ArenaId::HALL_DUAL => Some(&hall::DUAL),
         id => match crate::valley::ranges::index(id) {
             Some(k) => Some(&crate::valley::ranges::ARENAS[k]),
             None => None,

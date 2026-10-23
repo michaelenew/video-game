@@ -565,6 +565,14 @@ pub fn update_picker(
     if shown.as_ref() == Some(&now) {
         return;
     }
+    // A tutorial hall has its own panel where the list would be.
+    if sim::tutorial::of(sim.cur.arena).is_some() {
+        if let Ok(mut t) = text.single_mut() {
+            *t = Text::new("");
+        }
+        *shown = Some(now);
+        return;
+    }
     if let Ok(mut t) = text.single_mut() {
         *t = Text::new(crate::picker::listing(
             &sim.cur,

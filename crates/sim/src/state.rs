@@ -2334,6 +2334,41 @@ impl World {
         }
     }
 
+    /// **One frame of a tutorial hall** (`crate::tutorial`): the dummy is
+    /// stood back up to a full bar, and into the room fighter zero is in --
+    /// on the room's mark, fresh -- whenever it is anywhere else, so walking
+    /// into a room brings it with you and a blow that throws it out of the
+    /// room puts it back. Fighter zero is topped up whenever she runs low,
+    /// so nobody is knocked out of a lesson. A no-op anywhere else.
+    fn step_hall(&mut self) {
+        let Some(tut) = crate::tutorial::of(self.arena) else {
+            return;
+        };
+        let me = &mut self.players[0];
+        if me.health < me.full_health() / 3 {
+            me.health = me.full_health() - me.grey;
+        }
+        if !self.is_present(1) {
+            return;
+        }
+        let room = crate::tutorial::room_at(tut, self.players[0].pos.x);
+        let (lo, hi) = crate::tutorial::span(room);
+        let d = &mut self.players[1];
+        d.health = d.full_health() - d.grey;
+        if d.pos.x.raw() < lo.raw() || d.pos.x.raw() >= hi.raw() {
+            let mark = crate::arena::hall::dummy_mark(tut.rooms, room);
+            let class = d.class;
+            *d = Player {
+                pos: mark.at,
+                facing: mark.facing,
+                ..Player::new(class)
+            };
+            if let Mechanic::Shadow(_) = d.mechanic {
+                d.mechanic = Mechanic::Shadow(class::Shadow::attending(d.pos, d.facing));
+            }
+        }
+    }
+
     /// **One frame of the valley** (`crate::valley`). Where it is peaceful, a
     /// fighter who has died is stood on their last cairn -- or where they
     /// came in -- and one standing on a cairn is rested. Then the frame
@@ -2550,7 +2585,11 @@ impl World {
     /// A drafting world, fighting each other on a stage: not a hunt, not a
     /// jump course, not the valley.
     pub fn picks_classes(&self) -> bool {
-        self.draft && !self.hunting() && !self.valley.on && crate::course::of(self.arena).is_none()
+        self.draft
+            && !self.hunting()
+            && !self.valley.on
+            && crate::course::of(self.arena).is_none()
+            && crate::tutorial::of(self.arena).is_none()
     }
 
     /// **Are the classes locked?** For a versus round, from the moment its
@@ -3137,6 +3176,10 @@ impl World {
                 ready,
             };
         }
+
+        // A tutorial hall: the dummy into the room you are in, and nobody
+        // knocked out (`crate::tutorial`).
+        self.step_hall();
 
         // Stones move before the fighters do, so what a fighter walks into --
         // or stands on -- is where the stone is this frame rather than where it
@@ -4339,7 +4382,10 @@ impl World {
             };
             return;
         }
-        if matches!(self.phase, Phase::Fighting) && !self.peaceful() {
+        if matches!(self.phase, Phase::Fighting)
+            && !self.peaceful()
+            && crate::tutorial::of(self.arena).is_none()
+        {
             // **Last one standing.** Two fighters is the duel it always was;
             // with three or four it is everybody against everybody, and the
             // round ends when one is left -- or none, a double knockout.
