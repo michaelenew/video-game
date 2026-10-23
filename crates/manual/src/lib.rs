@@ -125,6 +125,10 @@ pub const SECTIONS: &[Section] = &[
                 "The Shadow Reaver, the Champion and the Blood mage painted over: brushstrokes riding their clothes, each one a point on the skin carried by the skeleton and drawn square to the eye, so the brushwork moves with the body and never slides or squashes as they turn. Clothes only for now, and at a hem or a cuff a stroke frays past the edge like a cloak turning to flame. The other classes are drawn as without it. The reasoning and what was tried is docs/design/exploration/0025_painted_in_motion.md.",
             ),
             e(
+                "cargo run -p game --release -- --grown-creatures",
+                "Draw the Ridgeback's body grown by the algorithm from its parts, rather than the body formed by hand that is its target (art/ridgeback/build.py, docs/design/exploration/0029_a_target_body.md): to compare the two. The grown body also stands in for the formed one in the moment before its file has loaded.",
+            ),
+            e(
                 "cargo run -p game --release -- --box-creatures",
                 "Draw every creature as the boxes the simulation collides against, as they were before the Ridgeback's body was grown over its skeleton: one smooth skinned body from its parts, a hide painted by rule (a darker back, a paler belly, bands, armour plates), and its weak points left glowing on it. Its boxes are what you hit and stand on either way; F1 draws them.",
             ),
@@ -909,6 +913,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "cargo run -p anim --bin bake_beast",
                 "Re-bake every creature's pose table from its recipes in crates/anim/src/beast/<species>/, each into its own crates/sim/src/species/<species>/baked.rs. Its parts are simulation geometry, so this one writes into crates/sim. --species <name> for just one.",
+            ),
+            e(
+                "cargo run -p anim --bin export_beast -- <species>",
+                "Write a creature's skeleton and part boxes at rest, as the game's rig places them, to target/art/<species>.json: what a body formed by hand is sculpted over (art/<species>/build.py, art/blender.sh to run it). docs/design/exploration/0029_a_target_body.md.",
             ),
             e(
                 "cargo run -p anim --bin preview_beast -- <clip>",

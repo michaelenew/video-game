@@ -431,6 +431,7 @@ fn main() {
                 (
                     sighted::update,
                     beast::place,
+                    beast::install_models,
                     beast::paint_parts,
                     beast::pose_bodies,
                 )

@@ -1163,7 +1163,46 @@ struct Species {
     grown: crate::grown::Grown,
     binds: Handle<bevy::render::mesh::skinning::SkinnedMeshInverseBindposes>,
     strokes: Option<Handle<Mesh>>,
+    /// A formed body's glowing flesh (`crate::grown::Own`), as an asset.
+    glow: Option<Handle<Mesh>>,
 }
+
+impl Species {
+    /// A body made ready to draw: its binds, the brushwork over it, and a
+    /// formed body's glowing flesh.
+    fn made(
+        sp: &'static kinds::Species,
+        grown: crate::grown::Grown,
+        meshes: &mut Assets<Mesh>,
+        binds: &mut Assets<bevy::render::mesh::skinning::SkinnedMeshInverseBindposes>,
+    ) -> Species {
+        let inverse: Vec<Mat4> = grown.rest.iter().map(|m| m.inverse()).collect();
+        let strokes = crate::brushwork::on()
+            .then(|| {
+                let size = grown_size(&grown.mesh);
+                crate::brushwork::place_skinned(
+                    &grown.mesh,
+                    crate::brushwork::creature_broad(size),
+                    sp.id.0 as u32 * 7_919,
+                )
+            })
+            .flatten()
+            .map(|m| meshes.add(m));
+        let glow = grown.own.as_ref().map(|own| meshes.add(own.glow.clone()));
+        Species {
+            binds: binds.add(inverse),
+            grown,
+            strokes,
+            glow,
+        }
+    }
+}
+
+/// The formed bodies still on their way from disk (`crate::grown::model_of`):
+/// a species, its hide and its glowing flesh. The grown body stands in for
+/// it until both have arrived.
+#[derive(Resource, Default)]
+pub struct Arriving(Vec<(SpeciesId, Handle<Mesh>, Handle<Mesh>)>);
 
 /// One creature slot's body: its bone entities, its body and strokes, and
 /// what it is showing now.
@@ -1171,6 +1210,8 @@ struct SlotBody {
     joints: Vec<Entity>,
     body: Entity,
     strokes: Entity,
+    /// A formed body's glowing flesh, in a material that glows.
+    glow: Entity,
     /// The species it is dressed as, its own mesh (coloured for it), and the
     /// state that colouring was made for: which parts are broken.
     dressed: Option<(SpeciesId, Handle<Mesh>, u64)>,
@@ -1191,15 +1232,29 @@ pub struct Body;
 /// draw one.
 pub fn setup_bodies(
     mut commands: Commands,
+    server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut skins: ResMut<Assets<crate::still::SkinMaterial>>,
     mut binds: ResMut<Assets<bevy::render::mesh::skinning::SkinnedMeshInverseBindposes>>,
     mut brushes: ResMut<Assets<crate::brushwork::Brushwork>>,
 ) {
     let mut species: Vec<Option<Species>> = (0..kinds::COUNT).map(|_| None).collect();
+    let mut arriving = Arriving::default();
     for sp in kinds::all() {
         if !crate::grown::grows(sp.id) {
             continue;
+        }
+        if let Some(file) = crate::grown::model_of(sp.id) {
+            let primitive = |p| {
+                server.load(
+                    bevy::gltf::GltfAssetLabel::Primitive {
+                        mesh: 0,
+                        primitive: p,
+                    }
+                    .from_asset(file),
+                )
+            };
+            arriving.0.push((sp.id, primitive(0), primitive(1)));
         }
         let Some(grown) = crate::grown::grow(sp) else {
             continue;
@@ -1213,24 +1268,9 @@ pub fn setup_bodies(
                 sp.name, grown.dropped
             );
         }
-        let inverse: Vec<Mat4> = grown.rest.iter().map(|m| m.inverse()).collect();
-        let strokes = crate::brushwork::on()
-            .then(|| {
-                let size = grown_size(&grown.mesh);
-                crate::brushwork::place_skinned(
-                    &grown.mesh,
-                    crate::brushwork::creature_broad(size),
-                    sp.id.0 as u32 * 7_919,
-                )
-            })
-            .flatten()
-            .map(|m| meshes.add(m));
-        species[sp.id.0 as usize] = Some(Species {
-            binds: binds.add(inverse),
-            grown,
-            strokes,
-        });
+        species[sp.id.0 as usize] = Some(Species::made(sp, grown, &mut meshes, &mut binds));
     }
+    commands.insert_resource(arriving);
     if species.iter().all(Option::is_none) {
         commands.insert_resource(Bodies {
             species,
@@ -1274,14 +1314,75 @@ pub fn setup_bodies(
                 bevy::render::view::NoFrustumCulling,
             ))
             .id();
+        // The weak points' flesh glows as the pads did: the species' weak
+        // paint as light, under the colour the file paints it.
+        let glow = commands
+            .spawn((
+                Mesh3d::default(),
+                MeshMaterial3d(skins.add(crate::still::skin(StandardMaterial {
+                    base_color: Color::WHITE,
+                    emissive: LinearRgba::rgb(1.6, 0.25, 0.1),
+                    perceptual_roughness: 0.6,
+                    ..default()
+                }))),
+                Transform::default(),
+                Visibility::Hidden,
+                bevy::render::view::NoFrustumCulling,
+            ))
+            .id();
         slots.push(SlotBody {
             joints,
             body,
             strokes,
+            glow,
             dressed: None,
         });
     }
     commands.insert_resource(Bodies { species, slots });
+}
+
+/// **Put a formed body in place once its file has arrived**: the species'
+/// grown stand-in is replaced, and every slot dressed as it is dressed again.
+pub fn install_models(
+    mut arriving: ResMut<Arriving>,
+    bodies: Option<ResMut<Bodies>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut binds: ResMut<Assets<bevy::render::mesh::skinning::SkinnedMeshInverseBindposes>>,
+) {
+    let Some(mut bodies) = bodies else {
+        return;
+    };
+    if arriving.0.is_empty() {
+        return;
+    }
+    let mut still = Vec::new();
+    for (id, hide, glow) in std::mem::take(&mut arriving.0) {
+        let (Some(h), Some(g)) = (meshes.get(&hide), meshes.get(&glow)) else {
+            still.push((id, hide, glow));
+            continue;
+        };
+        let Some(sp) = kinds::all().find(|s| s.id == id) else {
+            continue;
+        };
+        let Some(grown) = crate::grown::modelled(sp, h, g) else {
+            eprintln!(
+                "{}: its model has no colours or parts; drawn grown",
+                sp.name
+            );
+            continue;
+        };
+        let made = Species::made(sp, grown, &mut meshes, &mut binds);
+        let Bodies { species, slots } = &mut *bodies;
+        if let Some(entry) = species.get_mut(id.0 as usize) {
+            *entry = Some(made);
+        }
+        for slot in slots.iter_mut() {
+            if slot.dressed.as_ref().is_some_and(|(d, _, _)| *d == id) {
+                slot.dressed = None;
+            }
+        }
+    }
+    arriving.0 = still;
 }
 
 /// The size of the box round a mesh.
@@ -1313,7 +1414,7 @@ pub fn pose_bodies(
     let Bodies { species, slots } = &mut *bodies;
     for (slot, place) in slots.iter_mut().enumerate() {
         let hide = |seen: &mut Query<&mut Visibility>| {
-            for e in [place.body, place.strokes] {
+            for e in [place.body, place.strokes, place.glow] {
                 if let Ok(mut v) = seen.get_mut(e) {
                     *v = Visibility::Hidden;
                 }
@@ -1361,16 +1462,26 @@ pub fn pose_bodies(
             if let Some(strokes) = &made.strokes {
                 commands
                     .entity(place.strokes)
-                    .insert((Mesh3d(strokes.clone()), skin));
+                    .insert((Mesh3d(strokes.clone()), skin.clone()));
+            }
+            if let Some(glow) = &made.glow {
+                commands
+                    .entity(place.glow)
+                    .insert((Mesh3d(glow.clone()), skin));
             }
             place.dressed = Some((beast.species, mesh, u64::MAX));
         }
         if let Some((_, mesh, was)) = place.dressed.as_mut() {
             if *was != broken {
                 let look = crate::species::look(beast.species);
-                let colours = crate::grown::colours(&made.grown, |p| {
-                    crate::grown::paint_of(sp, look, broken & (1 << p.min(63)) != 0, p)
-                });
+                let colours = match &made.grown.own {
+                    Some(own) => {
+                        crate::grown::own_colours(own, look, |p| broken & (1 << p.min(63)) != 0)
+                    }
+                    None => crate::grown::colours(&made.grown, |p| {
+                        crate::grown::paint_of(sp, look, broken & (1 << p.min(63)) != 0, p)
+                    }),
+                };
                 if let Some(m) = meshes.get_mut(&*mesh) {
                     m.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
                 }
@@ -1383,7 +1494,11 @@ pub fn pose_bodies(
                 *t = Transform::from_matrix(crate::grown::frame(&rig.bone[b]));
             }
         }
-        for (e, show) in [(place.body, true), (place.strokes, made.strokes.is_some())] {
+        for (e, show) in [
+            (place.body, true),
+            (place.strokes, made.strokes.is_some()),
+            (place.glow, made.glow.is_some()),
+        ] {
             if let Ok(mut v) = seen.get_mut(e) {
                 *v = if show {
                     Visibility::Inherited

@@ -50,6 +50,33 @@ pub struct Grown {
     /// How many cells of body were cut off for not being joined to the
     /// rest: nought, or the sinews have a gap.
     pub dropped: usize,
+    /// A body formed by hand rather than grown ([`modelled`]): its own
+    /// colours and its glowing flesh.
+    pub own: Option<Own>,
+}
+
+/// What a body formed by hand brings that a grown one works out: the
+/// colours it was painted in, which part each vertex belongs to (so a
+/// broken foot shows where it is), and its weak points as their own
+/// glowing flesh rather than pads.
+pub struct Own {
+    pub base: Vec<[f32; 4]>,
+    pub part: Vec<u16>,
+    pub glow: Mesh,
+}
+
+/// **A body formed by hand** (the owner, 2026-10-23: "take the current model,
+/// form it by hand into a creature you might find in Monster Hunter or Dark
+/// Souls... we'll refine that first, then update the algorithms to get there
+/// without manual effort"): the file `art/<species>/build.py` writes over the
+/// species' own skeleton (`docs/design/exploration/0029_a_target_body.md`).
+/// It is the target a grown body is measured against, and it is drawn in
+/// its place -- unless `--grown-creatures` asks for the algorithm, to compare.
+pub fn model_of(id: sim::species::SpeciesId) -> Option<&'static str> {
+    (grows(id)
+        && !crate::platform::flag("--grown-creatures")
+        && id == sim::species::SpeciesId::RIDGEBACK)
+        .then_some("ridgeback.glb")
 }
 
 /// Whether creatures are drawn as boxes, as they were before bodies were
@@ -64,9 +91,10 @@ pub fn grows(id: sim::species::SpeciesId) -> bool {
     !off() && id == sim::species::SpeciesId::RIDGEBACK
 }
 
-/// Is this part drawn as the grown body rather than as its own box?
+/// Is this part drawn as the grown body rather than as its own box? A body
+/// formed by hand draws its weak points too.
 pub fn covers(sp: &Species, index: usize) -> bool {
-    grows(sp.id) && in_body(sp, index)
+    grows(sp.id) && (in_body(sp, index) || model_of(sp.id).is_some())
 }
 
 /// Which parts make the body: everything with a body of its own, but the
@@ -323,13 +351,7 @@ fn longest(half: Vec3) -> usize {
 
 /// Grow `sp`'s body. `None` for a species with no part that makes one.
 pub fn grow(sp: &'static Species) -> Option<Grown> {
-    let rig = sim::beast::Rig::build(
-        sp,
-        sim::V3::ZERO,
-        sim::Fx::ZERO,
-        &sim::beast::Pose::rest(sp.bones.len()),
-    );
-    let rest: Vec<Mat4> = (0..sp.bones.len()).map(|b| frame(&rig.bone[b])).collect();
+    let rest = rest_frames(sp);
     let indices: Vec<usize> = (0..sp.parts.len()).filter(|&i| in_body(sp, i)).collect();
     if indices.is_empty() {
         return None;
@@ -791,7 +813,84 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         shade,
         rest,
         dropped,
+        own: None,
     })
+}
+
+/// The rest frame of every bone of a species, standing at the origin facing
+/// `+x`: what a body is bound in, grown or formed.
+fn rest_frames(sp: &'static Species) -> Vec<Mat4> {
+    let rig = sim::beast::Rig::build(
+        sp,
+        sim::V3::ZERO,
+        sim::Fx::ZERO,
+        &sim::beast::Pose::rest(sp.bones.len()),
+    );
+    (0..sp.bones.len()).map(|b| frame(&rig.bone[b])).collect()
+}
+
+/// A body from the two meshes a formed creature's file holds: its hide and
+/// its glowing flesh, each carrying its colours, its part in the second set
+/// of texture coordinates, and its bones' weights. The part is taken off the
+/// meshes once read, so nothing downstream mistakes it for the painted
+/// cast's marker (`brushwork`).
+pub fn modelled(sp: &'static Species, hide: &Mesh, glow: &Mesh) -> Option<Grown> {
+    let mut mesh = hide.clone();
+    let mut glow = glow.clone();
+    let part = |m: &mut Mesh| -> Vec<u16> {
+        match m.remove_attribute(Mesh::ATTRIBUTE_UV_1) {
+            Some(VertexAttributeValues::Float32x2(uv)) => {
+                uv.iter().map(|p| p[0].round().max(0.0) as u16).collect()
+            }
+            _ => Vec::new(),
+        }
+    };
+    let parts = part(&mut mesh);
+    part(&mut glow);
+    let base = match mesh.attribute(Mesh::ATTRIBUTE_COLOR)? {
+        VertexAttributeValues::Float32x4(c) => c.clone(),
+        _ => return None,
+    };
+    if parts.len() != base.len() {
+        return None;
+    }
+    Some(Grown {
+        mesh,
+        paints: Vec::new(),
+        shade: Vec::new(),
+        rest: rest_frames(sp),
+        dropped: 0,
+        own: Some(Own {
+            base,
+            part: parts,
+            glow,
+        }),
+    })
+}
+
+/// A formed body's colours with what is broken shown: its own paint, gone
+/// toward the species' broken colour where its part has broken.
+pub fn own_colours(own: &Own, look: &Look, broken: impl Fn(usize) -> bool) -> Vec<[f32; 4]> {
+    let scar = Vec3::from(
+        LinearRgba::from(Color::srgb(
+            look.broken.rgb[0],
+            look.broken.rgb[1],
+            look.broken.rgb[2],
+        ))
+        .to_f32_array_no_alpha(),
+    );
+    own.base
+        .iter()
+        .zip(&own.part)
+        .map(|(c, &p)| {
+            if broken(p as usize) {
+                let c = Vec3::new(c[0], c[1], c[2]);
+                (c * 0.35 + scar * 0.65).extend(1.0).to_array()
+            } else {
+                *c
+            }
+        })
+        .collect()
 }
 
 /// The hide's colours for one body, linear: each vertex the hides of the
