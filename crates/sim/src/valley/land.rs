@@ -558,7 +558,7 @@ impl Land {
         // Its body is a little smoother than the range round it -- enough
         // that its shape is there to be found, not so much that it is the
         // one smooth thing on the skyline.
-        let smooth = Fx::ONE.sub(slept.div(Fx::from_int(24)).min(Fx::ratio(2, 5)));
+        let smooth = Fx::ONE.sub(slept.div(Fx::from_int(24)).min(Fx::ratio(1, 2)));
         let height = best.add(noise(x, z).mul(amp)).add(crag.mul(smooth));
         Sample {
             height,

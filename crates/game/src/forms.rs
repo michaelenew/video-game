@@ -85,6 +85,30 @@ impl Kit {
         }
     }
 
+    /// One polygon shaded smoothly: a normal and a colour at each corner,
+    /// wound to face the first corner's normal. Stone that should read as
+    /// worn, not cut: the Sleeper's arch.
+    pub fn smooth_poly(&mut self, pts: &[Vec3], normals: &[Vec3], rgbs: &[[f32; 3]]) {
+        if pts.len() < 3 {
+            return;
+        }
+        let raw = (pts[1] - pts[0]).cross(pts[2] - pts[0]);
+        let flip = raw.dot(normals[0]) < 0.0;
+        let base = self.p.len() as u32;
+        for ((p, n), c) in pts.iter().zip(normals).zip(rgbs) {
+            self.p.push(p.to_array());
+            self.n.push(n.normalize_or(Vec3::Y).to_array());
+            self.c.push(lin(*c));
+        }
+        for t in 1..pts.len() as u32 - 1 {
+            if flip {
+                self.i.extend_from_slice(&[base, base + t + 1, base + t]);
+            } else {
+                self.i.extend_from_slice(&[base, base + t, base + t + 1]);
+            }
+        }
+    }
+
     /// A box between two corners, its six faces flat. `top` colours its top
     /// face, `rgb` the rest.
     pub fn cube(&mut self, lo: Vec3, hi: Vec3, rgb: [f32; 3], top: [f32; 3]) {
@@ -523,20 +547,21 @@ pub fn turn(mesh: &mut Mesh, cos: f32, sin: f32) {
 
 /// **A stone arch, drawn** (`sim::valley::dragon::arches`): one piece of
 /// rock along a curve of points and radii -- the Sleeper's horn -- smoothed
-/// between its points (a Catmull-Rom curve through them). Weathered rather
-/// than turned: its section wider than tall, as an eroded arch's is, every
-/// ring of it lumpy, and its feet flaring where they go into the mountain,
-/// so it reads as stone the land left and not a pipe laid on it. Its
-/// upward faces are the mountain's snow and the rest its crag. The rock the
-/// simulation stands bodies on is boxes inside it (`dragon::arch_rock`),
+/// between its points (a Catmull-Rom curve through them). Worn rather than
+/// turned: its section wider than tall, as an eroded arch's is, swelling and
+/// thinning in broad, slow undulations along it and round it, its feet
+/// flaring where they go into the mountain; shaded smoothly, its colour the
+/// mountain's crag fading to its snow on the faces that turn up. The rock
+/// the simulation stands bodies on is boxes inside it (`dragon::arch_rock`),
 /// hidden.
 pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
-    const PIECES: usize = 6;
-    const SIDES: usize = 18;
-    // Wider than tall, and how lumpy, as shares of the radius.
+    const PIECES: usize = 8;
+    const SIDES: usize = 24;
+    // Wider than tall, and how much it swells and thins, as shares of the
+    // radius.
     const WIDE: f32 = 1.25;
     const TALL: f32 = 0.8;
-    const LUMPS: f32 = 0.22;
+    const SWELL: f32 = 0.12;
     // How far along from either end its feet flare, and by how much.
     const FOOT: f32 = 0.18;
     const FLARE: f32 = 0.7;
@@ -569,8 +594,9 @@ pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
     if n < 2 {
         return Kit::new().build();
     }
-    // Each ring of the stone: its points round the curve there.
-    let rings: Vec<Vec<Vec3>> = (0..n)
+    // Each ring of the stone: its points round the curve there, and which
+    // way the stone faces at each.
+    let rings: Vec<Vec<(Vec3, Vec3)>> = (0..n)
         .map(|i| {
             let (at, r) = curve[i];
             let ahead = curve[(i + 1).min(n - 1)].0 - curve[i.saturating_sub(1)].0;
@@ -583,26 +609,35 @@ pub fn arch(points: &[(sim::V3, sim::Fx)], p: &Palette) -> Mesh {
             (0..SIDES)
                 .map(|k| {
                     let a = std::f32::consts::TAU * k as f32 / SIDES as f32;
-                    let lump =
-                        1.0 + LUMPS * (2.0 * crate::shapes::hash01(i as u32, k as u32, 71) - 1.0);
-                    at + (side * a.cos() * WIDE + up * a.sin() * TALL) * r * lump
+                    // Broad, slow undulations, never a facet's worth.
+                    let swell = 1.0
+                        + SWELL
+                            * (0.6 * (2.0 * a + 7.0 * u).sin()
+                                + 0.4 * (3.0 * a - 11.0 * u + 1.3).sin());
+                    let (c, s) = (a.cos(), a.sin());
+                    let at = at + (side * c * WIDE + up * s * TALL) * r * swell;
+                    // The ellipse's own normal: across it as wide, up as tall.
+                    let normal = (side * c / WIDE + up * s / TALL).normalize_or(up);
+                    (at, normal)
                 })
                 .collect()
         })
         .collect();
-    let rock = p.crag();
+    let rock = look::tint::mix(p.crag(), p.of(Material::Rock), 0.5);
     let snow = p.of(Material::Snow);
+    let colour = |normal: Vec3| {
+        let t = ((normal.y - 0.55) / 0.35).clamp(0.0, 1.0);
+        look::tint::mix(rock, snow, t * t * (3.0 - 2.0 * t))
+    };
     let mut kit = Kit::new();
     for i in 0..n - 1 {
-        let mid = curve[i].0.lerp(curve[i + 1].0, 0.5);
         for k in 0..SIDES {
             let k1 = (k + 1) % SIDES;
-            let quad = [rings[i][k], rings[i][k1], rings[i + 1][k1], rings[i + 1][k]];
-            let centre = (quad[0] + quad[1] + quad[2] + quad[3]) * 0.25;
-            let out = (centre - mid).normalize_or(Vec3::Y);
-            let tone = 0.96 + 0.08 * crate::shapes::hash01(i as u32, k as u32, 72);
-            let c = if out.y > 0.75 { snow } else { rock };
-            kit.poly(&quad, out, [c[0] * tone, c[1] * tone, c[2] * tone]);
+            let corners = [rings[i][k], rings[i][k1], rings[i + 1][k1], rings[i + 1][k]];
+            let pts = corners.map(|c| c.0);
+            let normals = corners.map(|c| c.1);
+            let colours = normals.map(colour);
+            kit.smooth_poly(&pts, &normals, &colours);
         }
     }
     kit.build()

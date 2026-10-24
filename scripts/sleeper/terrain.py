@@ -45,7 +45,7 @@ ARCH = ROOT / "crates" / "sim" / "src" / "valley" / "sleeper_arch.txt"
 LENGTH = 300.0
 # How much of its height it keeps: below one, it lies lower than the model
 # stands -- flatter, more mountain than animal.
-SQUASH = 0.6
+SQUASH = 0.7
 # Where it lies on the map (metres) -- the middle of its footprint -- and
 # which way it faces: the bearing of its nose, degrees clockwise from north
 # (+z). 180 is south, at the valley.
@@ -63,10 +63,10 @@ HORN_HOLDS = 0.2
 HORN_EMERGES = 0.6
 HORN_UNDER = 25.0
 # How deep it is sunk into the mountain, metres.
-SINK = 18.0
+SINK = 13.0
 # The steepest any of it stands, rise over run: a flank's wall settles to
 # this. The valley's mountainsides are 1.4.
-SETTLE = 1.4
+SETTLE = 1.6
 # The cell of the grid, metres.
 CELL = 2.0
 # How many cells the softening reaches.
