@@ -22,10 +22,16 @@
 //!    mottle so a flank is not one flat colour. A part that breaks changes
 //!    colour where it is.
 //!
+//! 4. **Toward the sculpted target** (2026-10-24, exploration 0029): parts
+//!    fuller than their boxes, a carapace grown off the skin wherever the
+//!    table says armour (`crate::carapace`), hard parts by rule
+//!    (`crate::horns`), paint by region, and the fine detail worked out in
+//!    the skin's shader from the rest pose each vertex carries.
+//!
 //! What the simulation collides and hits against is unchanged: the boxes are
 //! still the truth, and the debug overlay still draws them. The weak points
-//! are left out of the body and drawn as their own glowing pads on it, so
-//! they say what they are from across the arena as they always did.
+//! stand out of the body as crests of flesh whose fissures glow, so they say
+//! what they are from across the arena as the pads did.
 
 use std::collections::HashMap;
 
@@ -53,6 +59,13 @@ pub struct Grown {
     /// A body formed by hand rather than grown ([`modelled`]): its own
     /// colours and its glowing flesh.
     pub own: Option<Own>,
+    /// Per vertex, what it is (exploration 0029): how much it is stone (the
+    /// carapace) and soft (a weak point's flesh), which hard part it is (0
+    /// none, 1 horn or spine, 2 claw or tusk, 3 quill) and how far along it.
+    pub region: Vec<[f32; 4]>,
+    /// Per vertex: metres to the groove between scutes, its scute's own
+    /// number, how open it is to the sky (occlusion), how near a weak point.
+    pub stone: Vec<[f32; 4]>,
 }
 
 /// What a body formed by hand brings that a grown one works out: the
@@ -92,10 +105,11 @@ pub fn grows(id: sim::species::SpeciesId) -> bool {
     !off() && id == sim::species::SpeciesId::RIDGEBACK
 }
 
-/// Is this part drawn as the grown body rather than as its own box? A body
-/// formed by hand draws its weak points too.
+/// Is this part drawn as the grown body rather than as its own box?
 pub fn covers(sp: &Species, index: usize) -> bool {
-    grows(sp.id) && (in_body(sp, index) || model_of(sp.id).is_some())
+    // Weak points too: a grown body stands them out of its skin as glowing
+    // flesh (exploration 0029), and a formed one paints them so.
+    grows(sp.id) && !sp.parts[index].shape.hollow
 }
 
 /// Which parts make the body: everything with a body of its own, but the
@@ -126,6 +140,8 @@ struct Lump {
     lo: Vec3,
     hi: Vec3,
     bone: usize,
+    /// Its armour (`crate::carapace`), where it has any.
+    shell: Option<crate::carapace::Shell>,
 }
 
 impl Lump {
@@ -179,8 +195,10 @@ fn smin(a: f32, b: f32, k: f32) -> f32 {
 }
 
 /// How many cells across the body's longest side the grid has: the detail
-/// the surface can hold. About eight centimetres on the Ridgeback.
-const CELLS: f32 = 200.0;
+/// the surface can hold. About five and a half centimetres on the Ridgeback:
+/// fine enough for the carapace's grooves to read in the mesh, the rest of
+/// its detail being the skin shader's (`skin.wgsl`).
+const CELLS: f32 = 260.0;
 
 /// How far the smooth union reaches, as a share of a typical part's
 /// thickness: a joint is filled about this far up each side of it.
@@ -232,7 +250,7 @@ fn inferred(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Contou
     let bone = &sp.bones[shape.bone];
     let name = bone.name;
     let half = fx3(shape.max.sub(shape.min)) * 0.5;
-    let long = longest(half);
+    let long = along_bone(sp, shape.bone, rest, half);
     let mut axis = Vec3::ZERO;
     axis[long] = 1.0;
     let world_axis = rest[shape.bone].transform_vector3(axis);
@@ -326,7 +344,7 @@ fn chain_span(sp: &Species, index: usize, rest: &[Mat4]) -> (f32, f32) {
     let length = |i: usize| {
         let sh = sp.shape(i);
         let h = fx3(sh.max.sub(sh.min)) * 0.5;
-        h[longest(h)] * 2.0
+        h[along_bone(sp, sh.bone, rest, h)] * 2.0
     };
     let total: f32 = chain.iter().map(|&i| length(i)).sum();
     let before: f32 = chain
@@ -338,6 +356,57 @@ fn chain_span(sp: &Species, index: usize, rest: &[Mat4]) -> (f32, f32) {
         return (0.0, 1.0);
     }
     (before / total, (before + length(index)) / total)
+}
+
+/// A part's box in the world at rest, as its bounds.
+fn world_box(sp: &Species, rest: &[Mat4], i: usize) -> (Vec3, Vec3) {
+    let s = sp.shape(i);
+    let (a, b) = (fx3(s.min), fx3(s.max));
+    let m = rest[s.bone];
+    let mut lo = Vec3::splat(f32::MAX);
+    let mut hi = Vec3::splat(f32::MIN);
+    for c in 0..8 {
+        let k = Vec3::new(
+            if c & 1 == 0 { a.x } else { b.x },
+            if c & 2 == 0 { a.y } else { b.y },
+            if c & 4 == 0 { a.z } else { b.z },
+        );
+        let w = m.transform_point3(k);
+        lo = lo.min(w);
+        hi = hi.max(w);
+    }
+    (lo, hi)
+}
+
+/// Which of a part's box axes runs along its bone: the one most along the
+/// line from the bone's parent to it (or, for the root, from it to its
+/// first child), so a torso part lies along the body, a leg's runs down it
+/// and a tail's back -- unless that side is under half the box's longest,
+/// when the box's own shape says more.
+fn along_bone(sp: &Species, bone: usize, rest: &[Mat4], half: Vec3) -> usize {
+    let at = |b: usize| rest[b].transform_point3(Vec3::ZERO);
+    let parent = sp.bones[bone].parent;
+    let dir = if parent != sim::beast::NO_PARENT {
+        at(bone) - at(parent)
+    } else {
+        match (0..sp.bones.len()).find(|&c| sp.bones[c].parent == bone && sp.bones[c].side == 0) {
+            Some(c) => at(c) - at(bone),
+            None => return longest(half),
+        }
+    };
+    let local = rest[bone].inverse().transform_vector3(dir).abs();
+    let k = if local.x >= local.y && local.x >= local.z {
+        0
+    } else if local.y >= local.z {
+        1
+    } else {
+        2
+    };
+    if half[k] >= half.max_element() * 0.5 {
+        k
+    } else {
+        longest(half)
+    }
 }
 
 fn longest(half: Vec3) -> usize {
@@ -369,12 +438,42 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
 
     let mut lumps: Vec<(usize, Lump)> = Vec::new();
     let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+    let build = crate::species::build(sp.id);
+    let look = crate::species::look(sp.id);
     for &i in &indices {
         let s = sp.shape(i);
         let (a, b) = (fx3(s.min), fx3(s.max));
-        let half = ((b - a) * 0.5).max(Vec3::splat(0.005));
-        let middle = (a + b) * 0.5;
+        let mut half = ((b - a) * 0.5).max(Vec3::splat(0.005));
+        let mut middle = (a + b) * 0.5;
         let to_world = rest[s.bone];
+        // The long axis follows the bone, not the box's longest side: the
+        // Ridgeback's barrel is wider than it is long, and contoured along its
+        // longest side it was a tube lying across the body (2026-10-23). And it
+        // is fixed before the part is made fuller, which must never turn it.
+        let long = along_bone(sp, s.bone, &rest, half);
+        // **Fuller than the boxes** (exploration 0029): a barrel hangs below
+        // its box, so the chest is deep and the belly low between the legs,
+        // and a leg is a column thicker than its box, which the body comes
+        // down over.
+        {
+            let mut axis = Vec3::ZERO;
+            axis[long] = 1.0;
+            let up_local = to_world
+                .inverse()
+                .transform_vector3(Vec3::Y)
+                .normalize_or(Vec3::Y);
+            if to_world.transform_vector3(axis).y.abs() > 0.7 {
+                let (a1, a2) = ((long + 1) % 3, (long + 2) % 3);
+                half[a1] *= build.girth;
+                half[a2] *= build.girth;
+            } else if main_kind(sp, i, &rest) == crate::contour::Kind::Barrel as usize
+                && up_local.y.abs() > 0.9
+            {
+                let extra = build.belly * half.y * 2.0;
+                middle.y -= extra * 0.5 * up_local.y.signum();
+                half.y += extra * 0.5;
+            }
+        }
         let mut plo = Vec3::splat(f32::MAX);
         let mut phi = Vec3::splat(f32::MIN);
         for c in 0..8 {
@@ -392,8 +491,7 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         let reach = Vec3::splat(blend * 1.5);
         lo = lo.min(plo);
         hi = hi.max(phi);
-        // The long axis, and which end of it the bone's joint is nearer.
-        let long = longest(half);
+        // Which end of the long axis the bone's joint is nearer.
         // The joint end is the end nearer the bone's origin (the box is in
         // the bone's frame, and the bone's origin is its joint): a leg hangs
         // down from its joint, a tail runs back from its.
@@ -410,6 +508,36 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
             .inverse()
             .transform_vector3(Vec3::X)
             .normalize_or(Vec3::X);
+        let shell = {
+            let mut axis = Vec3::ZERO;
+            axis[long] = 1.0;
+            let bone = &sp.bones[s.bone];
+            let side = if bone.side < 0 { -1.0 } else { 1.0 };
+            let outward = to_world
+                .inverse()
+                .transform_vector3(Vec3::Z * side)
+                .normalize_or(Vec3::Z);
+            let carries_leg = sp.legs.iter().any(|l| sp.bones[l.hip].parent == s.bone);
+            let lower_leg = sp.legs.iter().any(|l| l.knee == s.bone);
+            let head = i == look.head || bone.name.starts_with("head");
+            let neck = bone.name.starts_with("neck");
+            crate::carapace::shell_of(
+                half,
+                long,
+                root,
+                up_local,
+                fwd_local,
+                outward,
+                to_world.transform_vector3(axis),
+                carries_leg,
+                lower_leg,
+                head,
+                neck,
+                build.armour,
+                build.scute,
+                31 + i as u32 * 7,
+            )
+        };
         lumps.push((
             i,
             Lump {
@@ -421,12 +549,47 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
                 contour: contour_of(sp, i, &rest),
                 up: up_local,
                 fwd: fwd_local,
-                lo: plo - reach,
-                hi: phi + reach,
+                lo: plo - reach - Vec3::splat(build.armour * 2.0),
+                hi: phi + reach + Vec3::splat(build.armour * 2.0),
                 bone: s.bone,
+                shell,
             },
         ));
     }
+    // Where the armour parts: round every weak point, which is exactly
+    // where it is not (the trench the ridge stands in, the gap in the
+    // collars for the nape).
+    let weak: Vec<(Vec3, Vec3)> = (0..sp.parts.len())
+        .filter(|&i| sp.parts[i].weak)
+        .map(|i| {
+            let s = sp.shape(i);
+            let (a, b) = (fx3(s.min), fx3(s.max));
+            let m = rest[s.bone];
+            let mut lo = Vec3::splat(f32::MAX);
+            let mut hi = Vec3::splat(f32::MIN);
+            for c in 0..8 {
+                let k = Vec3::new(
+                    if c & 1 == 0 { a.x } else { b.x },
+                    if c & 2 == 0 { a.y } else { b.y },
+                    if c & 4 == 0 { a.z } else { b.z },
+                );
+                let w = m.transform_point3(k);
+                lo = lo.min(w);
+                hi = hi.max(w);
+            }
+            // Down to the skin: a weak strip on the back opens the stone all
+            // the way down to the flesh it stands out of.
+            (lo - Vec3::new(0.0, 1.0, 0.0), hi)
+        })
+        .collect();
+    let opening = |p: Vec3| {
+        let mut open = 1.0f32;
+        for (lo, hi) in &weak {
+            let d = (*lo - p).max(p - *hi).max(Vec3::ZERO).length();
+            open = open.min(smoothstep(0.08, 0.2, d));
+        }
+        open
+    };
     // The sinews: along every bone that carries a part, and from every part
     // to its joint.
     let mut sinews: Vec<Sinew> = Vec::new();
@@ -473,20 +636,143 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         }
     }
 
+    // **What the boxes do not say** (exploration 0029): toes under each
+    // claw, the club the quills fan from, a jaw under the skull, and the soft
+    // places as flesh standing out of the skin -- the ridge between the
+    // armour's halves, the nape between the collars. Joined more tightly
+    // than the parts, so they keep their shape.
+    let boxes: Vec<(Vec3, Vec3)> = (0..sp.parts.len())
+        .map(|i| world_box(sp, &rest, i))
+        .collect();
+    let mut extras: Vec<Sinew> = Vec::new();
+    let mut crests: Vec<Sinew> = Vec::new();
+    let capsule = |a: Vec3, b: Vec3, radius: f32| {
+        let r = Vec3::splat(radius + 0.3);
+        Sinew {
+            a,
+            b,
+            radius,
+            lo: a.min(b) - r,
+            hi: a.max(b) + r,
+        }
+    };
+    if build.claws > 0 {
+        for leg in sp.legs {
+            let (lo, hi) = boxes[leg.foot];
+            let c = (lo + hi) * 0.5;
+            // The pad's radius: across the foot, never up it.
+            let half = (hi - lo) * 0.5;
+            let r = half.x.max(half.z) * build.girth.min(1.15);
+            let n = build.claws as usize;
+            for j in 0..n {
+                let a = if n == 1 {
+                    0.0
+                } else {
+                    (j as f32 / (n - 1) as f32 - 0.5) * 1.7
+                };
+                let at = Vec3::new(c.x, lo.y + 0.26, c.z)
+                    + Vec3::new(a.cos(), 0.0, a.sin()) * (r * 0.85);
+                extras.push(capsule(at, at, 0.22));
+            }
+        }
+    }
+    if let Some(spikes) = &look.spikes {
+        let (lo, hi) = boxes[spikes.along[1]];
+        let half = (hi - lo) * 0.5;
+        let y = (lo.y + hi.y) * 0.5;
+        extras.push(capsule(
+            Vec3::new(lo.x + 0.5, y, 0.0),
+            Vec3::new(lo.x + 0.9, y + 0.1, 0.0),
+            half.z * 1.4,
+        ));
+    }
+    if build.horns > 0.0 {
+        let (lo, hi) = boxes[look.head];
+        let (l, h) = (hi.x - lo.x, hi.y - lo.y);
+        let half_z = (hi.z - lo.z) * 0.5;
+        // A jaw hung under the skull, and the bite's muscle behind the eye.
+        extras.push(capsule(
+            Vec3::new(lo.x + 0.15 * l, lo.y + 0.24 * h, 0.0),
+            Vec3::new(hi.x - 0.08 * l, lo.y + 0.10 * h, 0.0),
+            0.22 * h,
+        ));
+        for side in [-1.0f32, 1.0] {
+            let at = Vec3::new(lo.x + 0.18 * l, lo.y + 0.38 * h, side * half_z * 0.85);
+            extras.push(capsule(at, at, 0.3 * h));
+        }
+    }
+    for i in (0..sp.parts.len()).filter(|&i| sp.parts[i].weak) {
+        let (lo, hi) = boxes[i];
+        let half = (hi - lo) * 0.5;
+        let y = lo.y + (hi.y - lo.y) * 0.3;
+        let r = half.z * 0.8;
+        crests.push(capsule(
+            Vec3::new(lo.x + r, y, 0.0),
+            Vec3::new(hi.x - r, y, 0.0),
+            r,
+        ));
+    }
+
     // The field, sampled on a grid round the whole body.
-    let margin = Vec3::splat(blend * 2.0);
+    // Room round the parts for everything the field grows past them: the
+    // blend, and the armour and the fuller legs.
+    let margin = Vec3::splat(blend * 2.0 + build.armour * 3.0 + 0.3);
     let (lo, hi) = (lo - margin, hi + margin);
     let cell = (hi - lo).max_element() / CELLS;
     let n = ((hi - lo) / cell).ceil().as_uvec3() + UVec3::ONE;
     let (nx, ny, nz) = (n.x as usize, n.y as usize, n.z as usize);
     let at = |i: usize, j: usize, k: usize| lo + Vec3::new(i as f32, j as f32, k as f32) * cell;
+    let armour_at = |p: Vec3, nearest: usize| -> (f32, f32, f32) {
+        let l = &lumps[nearest].1;
+        match &l.shell {
+            Some(sh) => {
+                let q = l.to_local.transform_point3(p) - l.middle;
+                let (h, groove, own) = crate::carapace::thickness(sh, q);
+                (h * if h > 0.0 { opening(p) } else { 1.0 }, groove, own)
+            }
+            None => (0.0, 9.0, 0.0),
+        }
+    };
+    // The armour at a point: each nearby part's, weighted by how near the
+    // point is to that part -- never one part's alone, which would step from
+    // a fifth of a metre to nothing where two parts meet and leave the
+    // mesher a cliff it cannot close.
+    let armour_blend = |p: Vec3, near: &[(f32, usize)]| -> (f32, f32, f32) {
+        let best = near.iter().map(|n| n.0).fold(f32::MAX, f32::min);
+        let (mut h, mut g, mut o, mut wsum) = (0.0, 0.0, 0.0, 0.0);
+        for &(e, k) in near {
+            let w = (-(e - best) / 0.12).exp();
+            if w < 0.02 {
+                continue;
+            }
+            let (hk, gk, ok) = armour_at(p, k);
+            h += hk * w;
+            g += gk.min(1.0) * w;
+            o += ok * w;
+            wsum += w;
+        }
+        if wsum == 0.0 {
+            (0.0, 9.0, 0.0)
+        } else {
+            (h / wsum, g / wsum, o / wsum)
+        }
+    };
     let field = |p: Vec3| {
         let mut d = f32::MAX;
-        for (_, l) in &lumps {
+        let mut near: [(f32, usize); 8] = [(f32::MAX, 0); 8];
+        let mut n = 0;
+        for (k, (_, l)) in lumps.iter().enumerate() {
             if l.near(p) {
                 let e = l.distance(p);
+                if n < near.len() {
+                    near[n] = (e, k);
+                    n += 1;
+                }
                 d = if d == f32::MAX { e } else { smin(d, e, blend) };
             }
+        }
+        if n > 0 && d.abs() < 0.6 {
+            d -= armour_blend(p, &near[..n]).0;
         }
         for s in &sinews {
             if s.near(p) {
@@ -494,7 +780,20 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
                 d = if d == f32::MAX { e } else { smin(d, e, blend) };
             }
         }
+        for s in extras.iter().chain(&crests) {
+            if s.near(p) {
+                let e = s.distance(p);
+                d = if d == f32::MAX { e } else { smin(d, e, 0.15) };
+            }
+        }
         if d == f32::MAX { cell * 4.0 } else { d }
+    };
+    // How much a point is a soft place's flesh.
+    let softness = |p: Vec3| {
+        crests
+            .iter()
+            .map(|s| smoothstep(0.12, 0.0, s.distance(p)))
+            .fold(0.0f32, f32::max)
     };
     let mut f = vec![0.0f32; nx * ny * nz];
     let id = |i: usize, j: usize, k: usize| (k * ny + j) * nx + i;
@@ -787,6 +1086,93 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         // Negative bends away (a ridge), positive bends in (a crease).
         shade[v][2] = (bend / 0.35).clamp(-1.0, 1.0);
     }
+    // **What each vertex is** (exploration 0029): stone where the armour
+    // stands off the skin, soft where a weak point's flesh is; and what its
+    // paint reads -- the groove between scutes, its scute's own number, how
+    // open it is to the sky, how near a weak point.
+    let near_lump = |p: Vec3| -> [(f32, usize); 8] {
+        let mut near: [(f32, usize); 8] = [(f32::MAX, 0); 8];
+        let mut n = 0;
+        for (k, (_, l)) in lumps.iter().enumerate() {
+            if l.near(p) && n < near.len() {
+                near[n] = (l.distance(p), k);
+                n += 1;
+            }
+        }
+        near
+    };
+    let mut region = Vec::with_capacity(positions.len());
+    let mut stone = Vec::with_capacity(positions.len());
+    for (p, nrm) in positions.iter().zip(&normals) {
+        let near = near_lump(*p);
+        let count = near.iter().filter(|n| n.0 < f32::MAX).count();
+        let (h, groove, own) = if count > 0 {
+            armour_blend(*p, &near[..count])
+        } else {
+            (0.0, 9.0, 0.0)
+        };
+        let soft = softness(*p);
+        region.push([smoothstep(0.02, 0.07, h) * (1.0 - soft), soft, 0.0, 0.0]);
+        // Occlusion, read off the field itself: how much of the space a
+        // little way out along the normal is inside the body.
+        let mut occ = 0.0;
+        for (step, w) in [(0.15f32, 0.4f32), (0.35, 0.3), (0.7, 0.2), (1.2, 0.1)] {
+            occ += w * ((step - field(*p + *nrm * step)).max(0.0) / step);
+        }
+        let weakness = weak
+            .iter()
+            .map(|(lo, hi)| (*lo - *p).max(*p - *hi).max(Vec3::ZERO).length())
+            .fold(f32::MAX, f32::min);
+        stone.push([
+            groove.min(1.0),
+            own,
+            (1.0 - occ * 1.6).clamp(0.0, 1.0),
+            smoothstep(0.9, 0.15, weakness),
+        ]);
+    }
+
+    // **The hard parts**, by rule (`crate::horns`), each bound wholly to
+    // one bone.
+    let bone_at = |p: Vec3| {
+        lumps
+            .iter()
+            .filter(|(_, l)| l.near(p))
+            .map(|(_, l)| (l.distance(p), l.bone))
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|x| x.1)
+            .unwrap_or(0)
+    };
+    let hard = crate::horns::grow(&crate::horns::Plan {
+        sp,
+
+        boxes: boxes.clone(),
+        field: &field,
+        bone_at: &bone_at,
+        spines: build.spines,
+        horns: build.horns,
+        claws: build.claws,
+        reach: 1.85,
+    });
+    for hp in &hard {
+        let base = positions.len() as u32;
+        let kind = match hp.kind {
+            crate::horns::Kind::Horn | crate::horns::Kind::Spine => 1.0,
+            crate::horns::Kind::Claw => 2.0,
+            crate::horns::Kind::Quill => 3.0,
+        };
+        for ((p, n), u) in hp.positions.iter().zip(&hp.normals).zip(&hp.along) {
+            positions.push(*p);
+            normals.push(*n);
+            joints.push([hp.bone as u16, 0, 0, 0]);
+            weights.push([1.0, 0.0, 0.0, 0.0]);
+            paints.push([(hp.part as u16, 1.0), (0, 0.0), (0, 0.0)]);
+            shade.push([0.5, 0.0, 0.0, 0.5, 1.0]);
+            region.push([0.0, 0.0, kind, *u]);
+            stone.push([9.0, 0.0, 1.0, 0.0]);
+        }
+        tris.extend(hp.tris.iter().map(|t| t + base));
+    }
+
     let colours = vec![[1.0f32; 4]; positions.len()];
     let mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -800,7 +1186,34 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         Mesh::ATTRIBUTE_NORMAL,
         normals.iter().map(|n| n.to_array()).collect::<Vec<_>>(),
     )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0f32; 2]; positions.len()])
+    // Where each vertex is at rest, and what it is there, in the two sets of
+    // texture coordinates (which skinning leaves alone) for the skin's
+    // detail (`skin.wgsl`): rest x and y; rest z, and one number that still
+    // means something after the rasteriser blends three of them -- how much
+    // stone (0 to 1), soft flesh (2 to 3), or a hard part (-1). Packing four
+    // values into the bits of one did not: halfway along a triangle the low
+    // bits were noise, and a horn came out speckled with stone.
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_UV_0,
+        positions.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>(),
+    )
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_UV_1,
+        positions
+            .iter()
+            .zip(&region)
+            .map(|(p, r)| {
+                let what = if r[2] > 0.0 {
+                    -1.0
+                } else if r[1] > 0.5 {
+                    2.0 + r[1]
+                } else {
+                    r[0]
+                };
+                [p.z, what]
+            })
+            .collect::<Vec<_>>(),
+    )
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
     .with_inserted_attribute(
         Mesh::ATTRIBUTE_JOINT_INDEX,
@@ -815,6 +1228,8 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         rest,
         dropped,
         own: None,
+        region,
+        stone,
     })
 }
 
@@ -859,6 +1274,8 @@ pub fn modelled(sp: &'static Species, hide: &Mesh, material: &StandardMaterial) 
         shade: Vec::new(),
         rest: rest_frames(sp),
         dropped: 0,
+        region: Vec::new(),
+        stone: Vec::new(),
         own: Some(Own {
             base,
             part: parts,
@@ -894,28 +1311,93 @@ pub fn own_colours(own: &Own, look: &Look, broken: impl Fn(usize) -> bool) -> Ve
 
 /// The hide's colours for one body, linear: each vertex the hides of the
 /// parts under it (`look::hide`, from the colour `paint` says each part
-/// wears now), at its place on the hide.
-pub fn colours(grown: &Grown, paint: impl Fn(usize) -> Paint) -> Vec<[f32; 4]> {
-    let mut cache: HashMap<u16, look::hide::Hide> = HashMap::new();
+/// wears now), at its place on the hide; and where it is armour, a weak
+/// point's flesh or a hard part, that instead (`look::hide::Carapace`, its
+/// heat from `weak`) -- worn pale on its edges, dark in its grooves, moss
+/// where it faces the sky, all of it shut in where the body closes round it.
+pub fn colours(grown: &Grown, paint: impl Fn(usize) -> Paint, weak: [f32; 3]) -> Vec<[f32; 4]> {
+    let mut cache: HashMap<u16, (look::hide::Hide, look::hide::Carapace)> = HashMap::new();
+    let mix = |a: [f32; 3], b: [f32; 3], t: f32| -> [f32; 3] {
+        let t = t.clamp(0.0, 1.0);
+        [
+            a[0] + (b[0] - a[0]) * t,
+            a[1] + (b[1] - a[1]) * t,
+            a[2] + (b[2] - a[2]) * t,
+        ]
+    };
     grown
         .paints
         .iter()
         .zip(&grown.shade)
-        .map(|(pick, s)| {
-            let mut c = Vec3::ZERO;
+        .enumerate()
+        .map(|(v, (pick, s))| {
+            let region = grown.region.get(v).copied().unwrap_or([0.0; 4]);
+            let st = grown.stone.get(v).copied().unwrap_or([9.0, 0.0, 1.0, 0.0]);
+            let mut c = [0.0f32; 3];
+            let mut wsum = 0.0;
             for &(i, w) in pick {
                 if w <= 0.0 {
                     continue;
                 }
-                let hide = *cache
-                    .entry(i)
-                    .or_insert_with(|| look::hide::Hide::of(paint(i as usize).rgb));
-                let [r, g, b] = hide.at(s[0], s[1], s[2], s[3], s[4]);
-                // The palette is written as the eye sees it (sRGB); a vertex
-                // colour is linear.
-                c += Vec3::from(LinearRgba::from(Color::srgb(r, g, b)).to_f32_array_no_alpha()) * w;
+                let (hide, shell) = *cache.entry(i).or_insert_with(|| {
+                    let rgb = paint(i as usize).rgb;
+                    (
+                        look::hide::Hide::of(rgb),
+                        look::hide::Carapace::of(rgb, weak),
+                    )
+                });
+                let up = s[0];
+                let skin = hide.at(up, s[1], s[2], s[3], 1.0);
+                // Stone: each scute its own tint, darker where it faces
+                // down, dark in its groove, worn on its edges, mossed on top,
+                // charred beside a weak point.
+                let mut stone = mix(shell.stone, shell.stone_warm, st[1] * 0.6);
+                stone = mix(stone, shell.stone_dark, smoothstep(0.55, 0.1, up) * 0.5);
+                stone = mix(
+                    stone,
+                    shell.groove,
+                    (1.0 - smoothstep(0.01, 0.06, st[0])) * 0.85,
+                );
+                stone = mix(stone, [0.95, 0.92, 0.85], (-s[2]).max(0.0) * 0.35);
+                stone = mix(
+                    stone,
+                    shell.moss,
+                    smoothstep(0.7, 0.9, up) * smoothstep(0.45, 0.62, s[3]) * 0.8,
+                );
+                stone = mix(stone, shell.char, st[3] * 0.55);
+                let flesh = mix(shell.ember_deep, shell.ember, s[3]);
+                let mut here = mix(skin, stone, region[0]);
+                here = mix(here, flesh, region[1]);
+                let u = region[3];
+                here = match region[2] as u32 {
+                    1 => mix(shell.horn_root, shell.horn_tip, smoothstep(0.05, 0.75, u)),
+                    2 => mix(
+                        [0.30, 0.25, 0.18],
+                        [0.88, 0.84, 0.72],
+                        smoothstep(0.0, 0.8, u),
+                    ),
+                    3 => mix(shell.ember_deep, shell.horn_tip, smoothstep(0.05, 0.6, u)),
+                    _ => here,
+                };
+                for k in 0..3 {
+                    c[k] += here[k] * w;
+                }
+                wsum += w;
             }
-            c.extend(1.0).to_array()
+            let ao = 0.5 + 0.5 * st[2];
+            let [r, g, b] = [
+                c[0] / wsum.max(1e-6) * ao,
+                c[1] / wsum.max(1e-6) * ao,
+                c[2] / wsum.max(1e-6) * ao,
+            ];
+            // The palette is written as the eye sees it (sRGB); a vertex
+            // colour is linear.
+            let lin = LinearRgba::from(Color::srgb(
+                r.clamp(0.0, 1.0),
+                g.clamp(0.0, 1.0),
+                b.clamp(0.0, 1.0),
+            ));
+            [lin.red, lin.green, lin.blue, 1.0]
         })
         .collect()
 }
@@ -984,6 +1466,33 @@ fn noise(p: Vec3) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `GROWN_OBJ=1 cargo test -p game --bin game grown_obj`: the grown
+    /// Ridgeback as `target/grown.obj`, to look at outside the game.
+    #[test]
+    fn grown_obj() {
+        if crate::platform::env("GROWN_OBJ").is_none() {
+            return;
+        }
+        let sp = sim::species::SpeciesId::RIDGEBACK.get();
+        let g = grow(sp).expect("a body");
+        let Some(VertexAttributeValues::Float32x3(p)) = g.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            return;
+        };
+        let Some(Indices::U32(t)) = g.mesh.indices() else {
+            return;
+        };
+        let mut out = String::new();
+        for v in p {
+            out.push_str(&format!("v {} {} {}\n", v[0], v[1], v[2]));
+        }
+        for f in t.chunks_exact(3) {
+            out.push_str(&format!("f {} {} {}\n", f[0] + 1, f[1] + 1, f[2] + 1));
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/grown.obj");
+        crate::platform::write_to(&path, &out, "the grown body");
+    }
 
     #[test]
     fn the_ridgeback_grows_one_closed_body_bound_to_its_bones() {

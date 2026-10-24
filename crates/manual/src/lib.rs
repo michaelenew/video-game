@@ -126,7 +126,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game --release -- --grown-creatures",
-                "Draw the Ridgeback's body grown by the algorithm from its parts, rather than the body formed by hand that is its target (art/ridgeback/build.py, docs/design/exploration/0029_a_target_body.md): to compare the two. The grown body also stands in for the formed one in the moment before its file has loaded.",
+                "Draw the Ridgeback's body grown by rule from its species table, rather than the body sculpted by hand that is its target (art/ridgeback/build.py): the parts made fuller than their boxes, a carapace grown off the skin wherever the table says armour and parting round the weak points, spines, horns, claws and quills by rule, and the fine detail -- creased hide, pitted stone, a glowing lava crust on the soft places -- worked out in the skin's shader. To compare the two; docs/design/exploration/0029_a_target_body.md. The grown body also stands in for the sculpted one in the moment before its file has loaded.",
             ),
             e(
                 "cargo run -p game --release -- --box-creatures",
@@ -1118,6 +1118,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_PORTRAIT=seat,angle,distance,height",
                 "Take the camera off the fight and put it distance metres from that seat's fighter (0 is player one), angle degrees round from straight in front of them, looking at height metres above their feet -- how a character is looked at as a piece of art: SHOT_PORTRAIT=0,25,2.4,1.0 is the Shadow Reaver head to foot, 0,20,0.9,1.62 her face. Pair it with DEMO=0 and SHOT_FRAME, and --look brushed for the painted picture.",
+            ),
+            e(
+                "GROWN_OBJ=1 cargo test -p game --bin game grown_obj",
+                "Write the grown Ridgeback's mesh to target/grown.obj, to look at outside the game: what --grown-creatures draws, before the skin's detail.",
             ),
             e(
                 "SHOT_BEAST=angle,distance,height",

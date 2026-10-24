@@ -184,6 +184,28 @@ pub struct Build {
     pub heavy: f32,
     /// Parts contoured by the species' own word, by index.
     pub contours: &'static [(usize, crate::contour::Contour)],
+    /// **What the sculpted target taught** (2026-10-23, exploration 0029):
+    /// the choices that made the hand-made body read as a monster, stated so
+    /// a grown one makes them too. How far a barrel hangs below its box, as a
+    /// share of its depth: a deep chest, the belly low between the legs.
+    pub belly: f32,
+    /// How much thicker a leg is than its box: a column the body comes down
+    /// over.
+    pub girth: f32,
+    /// How thick the carapace is over the back, in metres (0: none): grown
+    /// off the skin wherever it is armoured, in scutes, parting where a weak
+    /// point stands.
+    pub armour: f32,
+    /// How big a scute is across the back, in metres.
+    pub scute: f32,
+    /// How tall the spines either side of a weak strip down the back stand,
+    /// in metres (0: none).
+    pub spines: f32,
+    /// How long the horns over the eyes are, in metres (0: none); with them
+    /// come brow nubs, a nose horn and tusks.
+    pub horns: f32,
+    /// How many claws a foot has.
+    pub claws: u8,
 }
 
 impl Build {
@@ -192,6 +214,13 @@ impl Build {
         muscle: 0.5,
         heavy: 0.5,
         contours: &[],
+        belly: 0.15,
+        girth: 1.0,
+        armour: 0.0,
+        scute: 0.8,
+        spines: 0.0,
+        horns: 0.0,
+        claws: 0,
     };
 }
 

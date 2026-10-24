@@ -120,6 +120,59 @@ flatters by a lot; the palette is warmer and brighter than looks right there.
 4. **Silhouette parts are geometry with rules** -- rows of spines along a
    back, a crown, a collar of spikes, nails round a pad, quills off a club.
 
+## The grown body, toward the target (2026-10-24)
+
+The owner: *"make the proc gen version produce as close to this as you
+can."* The grown body (`game::grown`, `--grown-creatures`) now makes each of
+the four lessons above from the species table, with no hand at all:
+
+![The formed target (left) and the grown body (right), from the same angles](../gallery/0029_formed_and_grown.jpg)
+
+- **Fuller forms** (`Build::belly`, `girth`): a barrel hangs below its box,
+  so the chest is deep; a leg is a column thicker than its box. On the way, a
+  bug that had always been there: a part's contour was laid along its box's
+  longest side, and the Ridgeback's barrel is wider than it is long, so the
+  torso had been a tube lying *across* the body -- much of the "trash bag".
+  A part's long axis follows its bone now (`along_bone`).
+- **The carapace** (`game::carapace`, `Build::armour`, `scute`) is
+  thickness taken off the field: over a part's top, further round where a
+  leg hangs from it (the mantle, the haunch), down the front and outside of a
+  lower leg, and **parting round every weak point** -- which is all the rule
+  needs to give the ridge its trench and the nape its gap. Scutes are cellular
+  noise on the part's own axes, shingled, keeled, grooved, rimmed, blended
+  across neighbouring parts so a step from one part's armour to the next
+  never leaves the mesher a cliff (an early version had holes there).
+- **Hard parts by rule** (`game::horns`, `Build::spines`, `horns`, `claws`):
+  spines flanking a weak strip down the back, tallest toward the shoulders,
+  and down the tail; a collar where the armour ends over the part the
+  forelegs hang from; horns, brow nubs, a nose horn and tusks; claws round a
+  pad, with toes in the field under them; quills fanned off the end of the
+  tail the species' spray names, with a club in the field for them to grow
+  from; a jaw under a wedge skull; the soft places as crests of flesh.
+- **Paint by region** (`look::hide::Carapace`): pale stone derived from the
+  colour the species names, dark in its grooves, worn on its edges, moss on
+  what faces the sky, charred beside a weak point; horn dark to pale; and
+  occlusion read off the field itself.
+- **Detail at the pixel** (`skin.wgsl`, `still::Detail`), where the target
+  used baked textures: a grown body has no texture layout, so its rest-pose
+  position and what it is (stone, soft flesh, a hard part) ride in its two
+  sets of texture coordinates, and the skin works out creases and pebbling,
+  erosion, pits and cracks, and a lava crust whose fissures glow, from the
+  same cellular noise the sculpt used, bumping the normal by the screen's own
+  derivatives (Mikkelsen's surface gradient) and fading any detail finer than
+  two pixels so nothing sparkles. Packing four values into one number did not
+  survive the rasteriser's blending -- the horns came out speckled -- so it
+  carries one that does: stone 0 to 1, soft 2 to 3, a hard part -1.
+
+About 55,000 vertices, grown in about two and a half seconds; one piece,
+which `grown::tests` still holds it to.
+
+**Where it is still short of the target**: it follows the boxes, so the tail
+runs level and thick where the sculpt drooped it along its bones; the head is
+a rounded wedge rather than a modelled skull; the carapace reads as panels
+rather than the target's slabs, the grid being five centimetres; and the
+legs are still straight posts in both.
+
 ## Still open
 
 - The legs are still long, straight columns: the rest pose is the skeleton's,

@@ -5,8 +5,10 @@ use crate::contour::{Contour, Kind};
 use sim::species::ridgeback::{self, bones};
 
 pub const LOOK: Look = Look {
+    // A warm, weathered brown: the hide of the sculpted target, from which a
+    // grown body derives its pale stone too (`look::hide::Carapace`).
     armour: Paint {
-        rgb: [0.24, 0.27, 0.23],
+        rgb: [0.42, 0.33, 0.25],
         glow: [0.0, 0.0, 0.0],
         roughness: 0.92,
     },
@@ -54,6 +56,17 @@ pub const BUILD: Build = Build {
     fat: 0.65,
     muscle: 0.8,
     heavy: 1.0,
+    // The sculpted target's choices (`art/ridgeback/build.py`): a barrel a
+    // metre deeper than its box, legs a third thicker, a fifth of a metre of
+    // stone over the back in metre scutes, spines up to a metre and a
+    // quarter, horns a metre and a half, three claws a foot.
+    belly: 0.8,
+    girth: 1.3,
+    armour: 0.2,
+    scute: 1.05,
+    spines: 1.25,
+    horns: 1.6,
+    claws: 3,
     contours: &[
         (ridgeback::HEAD, Contour::of(Kind::Wedge).muscle(0.6)),
         (

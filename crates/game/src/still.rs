@@ -87,7 +87,7 @@ fn map(which: usize) -> Handle<Image> {
 const SHADE_SHADER: Handle<Shader> = weak_handle!("c5a83e17-2d6f-4b9a-8e14-6f3c9b2d7a05");
 const SKIN_SHADER: Handle<Shader> = weak_handle!("e2f7b4a9-6c1d-4e38-9a52-8d4f1c7e3b60");
 
-pub use shade::Shade;
+pub use shade::{Detail, Shade};
 
 /// The uniform on its own, because `ShaderType`'s derive writes a layout
 /// check per field beside it that nothing calls.
@@ -108,6 +108,19 @@ mod shade {
         pub right: Vec4,
         pub up: Vec4,
         pub along: Vec4,
+    }
+
+    /// **A grown creature's detail** (exploration 0029): whether the skin
+    /// works the sculpt's fine detail out at the pixel (`on.x`, 0 or 1) --
+    /// creases and pebbling on hide, erosion, pits and cracks on stone, a
+    /// lava crust on a weak point's flesh -- and the colour and strength the
+    /// crust's fissures glow (`ember`). Read off the rest-pose position and
+    /// the region a grown body carries in its texture coordinates
+    /// (`grown::grow`); off for everything else.
+    #[derive(ShaderType, Reflect, Clone, Copy, Debug, Default, PartialEq)]
+    pub struct Detail {
+        pub ember: Vec4,
+        pub on: Vec4,
     }
 
     impl Shade {
@@ -136,6 +149,8 @@ pub struct Shaded {
     pub map_a: Handle<Image>,
     #[texture(102)]
     pub map_b: Handle<Image>,
+    #[uniform(103)]
+    pub detail: Detail,
 }
 
 impl Default for Shaded {
@@ -144,6 +159,7 @@ impl Default for Shaded {
             shade: Shade::NONE,
             map_a: MAP_A,
             map_b: MAP_B,
+            detail: Detail::default(),
         }
     }
 }

@@ -1181,8 +1181,12 @@ impl Species {
         let strokes = crate::brushwork::on()
             .then(|| {
                 let size = grown_size(&grown.mesh);
+                // The brushwork reads a second set of texture coordinates as
+                // the cast's paint marker; a grown body's carries its detail.
+                let mut plain = grown.mesh.clone();
+                plain.remove_attribute(Mesh::ATTRIBUTE_UV_1);
                 crate::brushwork::place_skinned(
-                    &grown.mesh,
+                    &plain,
                     crate::brushwork::creature_broad(size),
                     sp.id.0 as u32 * 7_919,
                 )
@@ -1414,6 +1418,7 @@ pub fn pose_bodies(
     sighted: Res<crate::sighted::Sighted>,
     mut bodies: ResMut<Bodies>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut skins: ResMut<Assets<crate::still::SkinMaterial>>,
     mut transforms: Query<&mut Transform>,
     mut seen: Query<&mut Visibility>,
     mut commands: Commands,
@@ -1463,6 +1468,18 @@ pub fn pose_bodies(
                 inverse_bindposes: made.binds.clone(),
                 joints: place.joints[..sp.bones.len()].to_vec(),
             };
+            // A grown body's skin works the sculpt's detail out at the pixel,
+            // its weak points' fissures glowing their colour.
+            if made.look.is_none() {
+                if let Some(m) = skins.get_mut(&place.hide) {
+                    let w = crate::species::look(beast.species).weak.rgb;
+                    let lin = LinearRgba::from(Color::srgb(w[0], w[1], w[2]));
+                    m.extension.detail = crate::still::Detail {
+                        ember: Vec4::new(lin.red, lin.green, lin.blue, 4.0),
+                        on: Vec4::new(1.0, 0.0, 0.0, 0.0),
+                    };
+                }
+            }
             let look = made.look.clone().unwrap_or_else(|| place.hide.clone());
             commands.entity(place.body).insert((
                 Mesh3d(mesh.clone()),
@@ -1483,9 +1500,11 @@ pub fn pose_bodies(
                     Some(own) => {
                         crate::grown::own_colours(own, look, |p| broken & (1 << p.min(63)) != 0)
                     }
-                    None => crate::grown::colours(&made.grown, |p| {
-                        crate::grown::paint_of(sp, look, broken & (1 << p.min(63)) != 0, p)
-                    }),
+                    None => crate::grown::colours(
+                        &made.grown,
+                        |p| crate::grown::paint_of(sp, look, broken & (1 << p.min(63)) != 0, p),
+                        look.weak.rgb,
+                    ),
                 };
                 if let Some(m) = meshes.get_mut(&*mesh) {
                     m.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
