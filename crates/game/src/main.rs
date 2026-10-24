@@ -18,6 +18,7 @@
 //! in-game with Tab. Names are matched loosely: bulwark, champion, reaver,
 //! elementalist, blood, dual.
 
+mod anatomy;
 mod arenas;
 mod bag;
 mod bake;

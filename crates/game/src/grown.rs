@@ -66,6 +66,10 @@ pub struct Grown {
     /// Per vertex: metres to the groove between scutes, its scute's own
     /// number, how open it is to the sky (occlusion), how near a weak point.
     pub stone: Vec<[f32; 4]>,
+    /// The species' build, which its paint reads (feathered, segmented),
+    /// and its body's own colour (its look's armour), for what grows off it.
+    pub build: &'static crate::species::Build,
+    pub armour: [f32; 3],
 }
 
 /// What a body formed by hand brings that a grown one works out: the
@@ -87,11 +91,23 @@ pub struct Own {
 /// It is the target a grown body is measured against, and it is drawn in
 /// its place -- unless `--grown-creatures` asks for the algorithm, to compare.
 pub fn model_of(id: sim::species::SpeciesId) -> Option<&'static str> {
-    (grows(id)
-        && !crate::platform::flag("--grown-creatures")
-        && id == sim::species::SpeciesId::RIDGEBACK)
-        .then_some("ridgeback.glb")
+    if !grows(id) || crate::platform::flag("--grown-creatures") {
+        return None;
+    }
+    MODELLED
+        .iter()
+        .find(|(s, _)| *s == id)
+        .map(|(_, file)| *file)
 }
+
+/// The species with a formed body (`art/<species>/build.py`), and its file:
+/// the Ridgeback first (2026-10-23), then the Galewing and the Mantis
+/// (2026-10-24, exploration 0030).
+const MODELLED: [(sim::species::SpeciesId, &str); 3] = [
+    (sim::species::SpeciesId::RIDGEBACK, "ridgeback.glb"),
+    (sim::species::SpeciesId::GALEWING, "galewing.glb"),
+    (sim::species::SpeciesId::MANTIS, "mantis.glb"),
+];
 
 /// Whether creatures are drawn as boxes, as they were before bodies were
 /// grown (`--box-creatures`): to compare, and to fall back.
@@ -100,9 +116,11 @@ pub fn off() -> bool {
 }
 
 /// Which species are drawn with a grown body: the Ridgeback first (the owner,
-/// 2026-10-23: "start with the Ridgeback").
+/// 2026-10-23: "start with the Ridgeback"), then the Galewing and the Mantis
+/// (2026-10-24: "two other creatures hand crafted then a growing algorithm
+/// to match") -- the ones with a formed target to grow toward.
 pub fn grows(id: sim::species::SpeciesId) -> bool {
-    !off() && id == sim::species::SpeciesId::RIDGEBACK
+    !off() && MODELLED.iter().any(|(s, _)| *s == id)
 }
 
 /// Is this part drawn as the grown body rather than as its own box?
@@ -142,13 +160,16 @@ struct Lump {
     bone: usize,
     /// Its armour (`crate::carapace`), where it has any.
     shell: Option<crate::carapace::Shell>,
+    /// A segmented body's rings along it (`Build::chitin`): how far apart,
+    /// and how deep the groove between two (0: none).
+    rings: (f32, f32),
 }
 
 impl Lump {
     /// Signed distance to the contoured part: negative inside.
     fn distance(&self, p: Vec3) -> f32 {
         let q = self.to_local.transform_point3(p) - self.middle;
-        crate::contour::distance(
+        let d = crate::contour::distance(
             &self.contour,
             q,
             self.half,
@@ -156,7 +177,20 @@ impl Lump {
             self.root,
             self.up,
             self.fwd,
-        )
+        );
+        let (gap, depth) = self.rings;
+        if gap <= 0.0 {
+            return d;
+        }
+        // Each segment rising toward its back edge, a groove between two:
+        // an insect's abdomen, a millipede's.
+        let t = q[self.long] / gap;
+        let f = t - t.floor();
+        let groove = 1.0 - smoothstep(0.0, 0.18, f.min(1.0 - f) * 2.0);
+        // Not at the ends, where the part has thinned and a groove would
+        // cut its tip off.
+        let end = (q[self.long] / self.half[self.long]).abs();
+        d + depth * smoothstep(0.92, 0.7, end) * (groove - 0.25 * f * self.root.signum())
     }
 
     fn near(&self, p: Vec3) -> bool {
@@ -255,7 +289,12 @@ fn inferred(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Contou
     axis[long] = 1.0;
     let world_axis = rest[shape.bone].transform_vector3(axis);
     let vertical = world_axis.y.abs() > 0.7;
-    let c = if index == look.head || name.starts_with("head") {
+    let (lo, hi) = world_box(sp, rest, index);
+    let role = crate::anatomy::role(sp, index, lo, hi);
+    let c = if role != crate::anatomy::Role::Body {
+        // A wing, a fan of a tail, a scythe: flat, with a thickened edge.
+        Contour::of(Kind::Wing)
+    } else if index == look.head || name.starts_with("head") {
         Contour::of(Kind::Wedge)
     } else if name.starts_with("tail") {
         Contour::of(Kind::Whip)
@@ -473,6 +512,41 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
                 half[long] = (top - joint).abs() * 0.5;
             }
         }
+        // **What the part is** (`crate::anatomy`, exploration 0030): a
+        // feathered wing's flesh is the front of its box, the flight
+        // feathers the rest; a feathered fan's is a stub at the body, the
+        // feathers filling the box; a beaked head's is its back, the beak
+        // its front.
+        {
+            let (wlo, whi) = world_box(sp, &rest, i);
+            let role = crate::anatomy::role(sp, i, wlo, whi);
+            let fwd = to_world.inverse().transform_vector3(Vec3::X);
+            let a = (0..3)
+                .max_by(|&p, &q| fwd[p].abs().total_cmp(&fwd[q].abs()))
+                .unwrap_or(0);
+            let front = fwd[a].signum();
+            let keep = |middle: &mut Vec3, half: &mut Vec3, share: f32, from_front: bool| {
+                let sign = if from_front { front } else { -front };
+                let edge = middle[a] + sign * half[a];
+                half[a] *= share;
+                middle[a] = edge - sign * half[a];
+            };
+            if build.feathers > 0.0 && role == crate::anatomy::Role::Wing {
+                keep(&mut middle, &mut half, crate::anatomy::WING_FLESH, true);
+                // A wing's arm is thinner than the box it is hit in.
+                let up = to_world.inverse().transform_vector3(Vec3::Y).abs();
+                let thin = (0..3).max_by(|&p, &q| up[p].total_cmp(&up[q])).unwrap_or(1);
+                half[thin] *= 0.5;
+            }
+            if build.feathers > 0.0 && role == crate::anatomy::Role::Fan {
+                keep(&mut middle, &mut half, crate::anatomy::FAN_FLESH, true);
+                let c = (a + 2) % 3;
+                half[c] *= 0.45;
+            }
+            if build.beak > 0.0 && i == look.head {
+                keep(&mut middle, &mut half, 1.0 - build.beak * 0.85, false);
+            }
+        }
         // **Fuller than the boxes** (exploration 0029): a barrel hangs below
         // its box, so the chest is deep and the belly low between the legs,
         // and a leg is a column thicker than its box, which the body comes
@@ -575,6 +649,24 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
                 hi: phi + reach + Vec3::splat(build.armour * 2.0),
                 bone: s.bone,
                 shell,
+                rings: {
+                    let (wlo, whi) = world_box(sp, &rest, i);
+                    let flat_body =
+                        crate::anatomy::role(sp, i, wlo, whi) == crate::anatomy::Role::Body;
+                    let mut axis = Vec3::ZERO;
+                    axis[long] = 1.0;
+                    let lying = to_world.transform_vector3(axis).y.abs() < 0.7;
+                    if build.chitin > 0.0
+                        && flat_body
+                        && lying
+                        && sp.bones[s.bone].side == 0
+                        && i != look.head
+                    {
+                        (build.chitin, half.min_element() * 0.06)
+                    } else {
+                        (0.0, 0.0)
+                    }
+                },
             },
         ));
     }
@@ -682,7 +774,16 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
     };
     // A dog's paw on every leg (`horns::paws`): the palm, and each toe a
     // knuckle that arches up and a pad that comes down to the floor.
-    let paws = crate::horns::paws(sp, &boxes, &rest, build.claws, build.girth);
+    let paws = if build.foot == crate::species::Foot::Paw {
+        crate::horns::paws(sp, &boxes, &rest, build.claws, build.girth)
+    } else {
+        Vec::new()
+    };
+    // A bird's toes, an insect's tarsus (`crate::anatomy::feet`).
+    for (a, b, r) in crate::anatomy::feet(sp, build, &boxes, &rest).0 {
+        lo = lo.min(a.min(b) - Vec3::splat(r));
+        digits.push(capsule(a, b, r));
+    }
     for paw in &paws {
         let k = paw.scale;
         lo = lo.min(boxes[paw.foot].0);
@@ -1307,14 +1408,29 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         paws: &paws,
         reach: 1.85,
     });
+    let roles: Vec<crate::anatomy::Role> = (0..sp.parts.len())
+        .map(|i| crate::anatomy::role(sp, i, boxes[i].0, boxes[i].1))
+        .collect();
+    let mut hard = hard;
+    hard.extend(crate::anatomy::grow(&crate::anatomy::Plan {
+        sp,
+        build,
+        look,
+        boxes: &boxes,
+        roles: &roles,
+        rest: &rest,
+        field: &field,
+    }));
     for hp in &hard {
         let base = positions.len() as u32;
-        let kind = match hp.kind {
-            crate::horns::Kind::Horn | crate::horns::Kind::Spine => 1.0,
-            crate::horns::Kind::Claw => 2.0,
-            crate::horns::Kind::Quill => 3.0,
-        };
-        for ((p, n), u) in hp.positions.iter().zip(&hp.normals).zip(&hp.along) {
+        let kind = hp.kind.code();
+        for (((p, n), u), x) in hp
+            .positions
+            .iter()
+            .zip(&hp.normals)
+            .zip(&hp.along)
+            .zip(&hp.across)
+        {
             positions.push(*p);
             normals.push(*n);
             joints.push([hp.bone as u16, 0, 0, 0]);
@@ -1322,7 +1438,9 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
             paints.push([(hp.part as u16, 1.0), (0, 0.0), (0, 0.0)]);
             shade.push([0.5, 0.0, 0.0, 0.5, 1.0]);
             region.push([0.0, 0.0, kind, *u]);
-            stone.push([9.0, 0.0, 1.0, 0.0]);
+            // A hard part's second number is where it is across: a vane's
+            // shaft and edges.
+            stone.push([9.0, *x, 1.0, 0.0]);
         }
         tris.extend(hp.tris.iter().map(|t| t + base));
     }
@@ -1384,6 +1502,8 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         own: None,
         region,
         stone,
+        build,
+        armour: look.armour.rgb,
     })
 }
 
@@ -1430,6 +1550,8 @@ pub fn modelled(sp: &'static Species, hide: &Mesh, material: &StandardMaterial) 
         dropped: 0,
         region: Vec::new(),
         stone: Vec::new(),
+        build: crate::species::build(sp.id),
+        armour: crate::species::look(sp.id).armour.rgb,
         own: Some(Own {
             base,
             part: parts,
@@ -1440,22 +1562,28 @@ pub fn modelled(sp: &'static Species, hide: &Mesh, material: &StandardMaterial) 
 
 /// A formed body's colours with what is broken shown: its own paint, gone
 /// toward the species' broken colour where its part has broken.
-pub fn own_colours(own: &Own, look: &Look, broken: impl Fn(usize) -> bool) -> Vec<[f32; 4]> {
-    let scar = Vec3::from(
-        LinearRgba::from(Color::srgb(
-            look.broken.rgb[0],
-            look.broken.rgb[1],
-            look.broken.rgb[2],
-        ))
-        .to_f32_array_no_alpha(),
-    );
+pub fn own_colours(
+    own: &Own,
+    look: &Look,
+    broken: impl Fn(usize) -> bool,
+    tinted: impl Fn(usize) -> Option<Paint>,
+) -> Vec<[f32; 4]> {
+    let linear = |rgb: [f32; 3]| {
+        Vec3::from(LinearRgba::from(Color::srgb(rgb[0], rgb[1], rgb[2])).to_f32_array_no_alpha())
+    };
+    let scar = linear(look.broken.rgb);
     own.base
         .iter()
         .zip(&own.part)
         .map(|(c, &p)| {
+            let c3 = Vec3::new(c[0], c[1], c[2]);
             if broken(p as usize) {
-                let c = Vec3::new(c[0], c[1], c[2]);
-                (c * 0.35 + scar * 0.65).extend(1.0).to_array()
+                (c3 * 0.35 + scar * 0.65).extend(1.0).to_array()
+            } else if let Some(paint) = tinted(p as usize) {
+                // Over the body's own paint, so the feathers still read.
+                (c3 * 0.45 + linear(paint.rgb) * 0.55)
+                    .extend(1.0)
+                    .to_array()
             } else {
                 *c
             }
@@ -1519,6 +1647,18 @@ pub fn colours(grown: &Grown, paint: impl Fn(usize) -> Paint, weak: [f32; 3]) ->
                     smoothstep(0.7, 0.9, up) * smoothstep(0.45, 0.62, s[3]) * 0.8,
                 );
                 stone = mix(stone, shell.char, st[3] * 0.55);
+                // Feathered: slate above and pale below, the line between
+                // them wavering with the mottle -- a raptor's countershading.
+                let skin = if grown.build.feathers > 0.0 {
+                    let pale = mix(paint(i as usize).rgb, [0.80, 0.77, 0.70], 0.8);
+                    mix(
+                        skin,
+                        pale,
+                        smoothstep(0.5, 0.3, up + (s[3] - 0.5) * 0.15) * 0.8,
+                    )
+                } else {
+                    skin
+                };
                 let flesh = mix(shell.ember_deep, shell.ember, s[3]);
                 let mut here = mix(skin, stone, region[0]);
                 here = mix(here, flesh, region[1]);
@@ -1531,6 +1671,67 @@ pub fn colours(grown: &Grown, paint: impl Fn(usize) -> Paint, weak: [f32; 3]) ->
                         smoothstep(0.0, 0.8, u),
                     ),
                     3 => mix(shell.ember_deep, shell.horn_tip, smoothstep(0.05, 0.6, u)),
+                    // A feather: barred across, darker to its tip, a pale
+                    // fringe round its edge and a pale shaft.
+                    4 => {
+                        // The body's own colour, or the part's where that
+                        // is darker -- a cracking or broken wing -- but not
+                        // a pale band on the skin under them.
+                        let own = paint(i as usize).rgb;
+                        let body = grown.armour;
+                        let lum = |c: [f32; 3]| c[0] + c[1] + c[2];
+                        let rgb = if lum(own) < lum(body) { own } else { body };
+                        let rgb = [rgb[0] * 0.8, rgb[1] * 0.8, rgb[2] * 0.82];
+                        let x = st[1].abs();
+                        let bars = smoothstep(
+                            0.35,
+                            0.65,
+                            (u * std::f32::consts::PI * 7.0).sin() * 0.5 + 0.5,
+                        );
+                        let dark = [rgb[0] * 0.5, rgb[1] * 0.5, rgb[2] * 0.52];
+                        let mut f = mix(rgb, dark, bars * 0.55 + smoothstep(0.6, 1.0, u) * 0.35);
+                        let pale = mix(rgb, [0.80, 0.77, 0.70], 0.6);
+                        f = mix(
+                            f,
+                            pale,
+                            smoothstep(0.94, 1.0, u).max(smoothstep(0.85, 1.0, x)) * 0.35,
+                        );
+                        mix(f, [0.80, 0.77, 0.70], smoothstep(0.12, 0.0, x) * 0.3)
+                    }
+                    // A beak: the cere at its base, dark horn, a pale tip.
+                    5 => mix(
+                        mix(
+                            [0.88, 0.70, 0.22],
+                            [0.20, 0.20, 0.22],
+                            smoothstep(0.0, 0.18, u),
+                        ),
+                        [0.62, 0.62, 0.58],
+                        smoothstep(0.7, 1.0, u),
+                    ),
+                    // Bone-white, darkening to its point.
+                    6 => mix(
+                        [0.93, 0.91, 0.80],
+                        [0.30, 0.27, 0.22],
+                        smoothstep(0.6, 1.0, u) * 0.6,
+                    ),
+                    // An eye: an insect's dark and glassy; a raptor's amber
+                    // round a black pupil looking out.
+                    8 => {
+                        if grown.build.eyes > 0.0 {
+                            [0.16, 0.22, 0.10]
+                        } else {
+                            mix(
+                                mix(
+                                    [0.35, 0.18, 0.05],
+                                    [1.0, 0.72, 0.18],
+                                    smoothstep(0.3, 0.6, u),
+                                ),
+                                [0.02, 0.02, 0.02],
+                                smoothstep(0.86, 0.94, u),
+                            )
+                        }
+                    }
+                    9 => [0.10, 0.12, 0.06],
                     _ => here,
                 };
                 for k in 0..3 {
@@ -1625,10 +1826,13 @@ mod tests {
     /// Ridgeback as `target/grown.obj`, to look at outside the game.
     #[test]
     fn grown_obj() {
-        if crate::platform::env("GROWN_OBJ").is_none() {
+        let Some(which) = crate::platform::env("GROWN_OBJ") else {
             return;
-        }
-        let sp = sim::species::SpeciesId::RIDGEBACK.get();
+        };
+        // `1` for the Ridgeback, or a species' name.
+        let sp = sim::species::all()
+            .find(|s| s.name.eq_ignore_ascii_case(&which))
+            .unwrap_or(sim::species::SpeciesId::RIDGEBACK.get());
         let g = grow(sp).expect("a body");
         let Some(VertexAttributeValues::Float32x3(p)) = g.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
         else {
@@ -1644,13 +1848,44 @@ mod tests {
         for f in t.chunks_exact(3) {
             out.push_str(&format!("f {} {} {}\n", f[0] + 1, f[1] + 1, f[2] + 1));
         }
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/grown.obj");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            if sp.id == sim::species::SpeciesId::RIDGEBACK {
+                "../../target/grown.obj".to_string()
+            } else {
+                format!("../../target/grown_{}.obj", sp.name.to_lowercase())
+            },
+        );
         crate::platform::write_to(&path, &out, "the grown body");
     }
 
     #[test]
-    fn the_ridgeback_grows_one_closed_body_bound_to_its_bones() {
-        let sp = sim::species::SpeciesId::RIDGEBACK.get();
+    fn every_grown_species_is_one_closed_body_bound_to_its_bones() {
+        for (id, _) in MODELLED {
+            one_body(id.get());
+        }
+    }
+
+    /// The new rules leave something to see: a feathered body grows its
+    /// feathers, a beak and talons; an insect its scythes' serration,
+    /// antennae and compound eyes (exploration 0030).
+    #[test]
+    fn the_galewing_and_the_mantis_grow_what_their_targets_have() {
+        use crate::horns::Kind;
+        let count = |id: sim::species::SpeciesId, kind: Kind| {
+            let g = grow(id.get()).expect("a body");
+            g.region.iter().filter(|r| r[2] == kind.code()).count()
+        };
+        let gw = sim::species::SpeciesId::GALEWING;
+        for kind in [Kind::Feather, Kind::Beak, Kind::Claw, Kind::Eye] {
+            assert!(count(gw, kind) > 0, "the Galewing grows no {kind:?}");
+        }
+        let mt = sim::species::SpeciesId::MANTIS;
+        for kind in [Kind::Bone, Kind::Antenna, Kind::Eye, Kind::Claw] {
+            assert!(count(mt, kind) > 0, "the Mantis grows no {kind:?}");
+        }
+    }
+
+    fn one_body(sp: &'static Species) {
         let g = grow(sp).expect("a body");
         let verts = g.mesh.count_vertices();
         assert!(verts > 2_000 && verts < 120_000, "{verts}");
@@ -1667,6 +1902,6 @@ mod tests {
         };
         assert!(j.iter().flatten().all(|&b| (b as usize) < sp.bones.len()));
         assert_eq!(g.rest.len(), sp.bones.len());
-        assert_eq!(g.dropped, 0, "the body is one piece");
+        assert_eq!(g.dropped, 0, "{}: the body is one piece", sp.name);
     }
 }

@@ -74,4 +74,5 @@ pub const BUILD: Build = Build {
             Contour::of(Kind::Column).between_const(Kind::Taper, 0.4),
         ),
     ],
+    ..Build::DEFAULT
 };

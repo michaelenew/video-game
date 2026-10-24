@@ -1121,7 +1121,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "GROWN_OBJ=1 cargo test -p game --bin game grown_obj",
-                "Write the grown Ridgeback's mesh to target/grown.obj, to look at outside the game: what --grown-creatures draws, before the skin's detail.",
+                "Write the grown Ridgeback's mesh to target/grown.obj, to look at outside the game: what --grown-creatures draws, before the skin's detail. GROWN_OBJ=<species> (galewing, mantis, ...) writes that species' to target/grown_<species>.obj.",
             ),
             e(
                 "SHOT_BEAST=angle,distance,height",

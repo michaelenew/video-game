@@ -25,6 +25,34 @@ pub enum Kind {
     Spine,
     Claw,
     Quill,
+    /// A feather: a flight feather, a covert, a tail or crest feather
+    /// (`crate::anatomy`, 2026-10-24).
+    Feather,
+    /// A beak: dark horn, its base the cere's colour.
+    Beak,
+    /// Bone-white: a scythe's serration, a raptorial arm's spines.
+    Bone,
+    /// An eye: a raptor's, or an insect's compound one.
+    Eye,
+    /// An antenna: thin, dark, ringed.
+    Antenna,
+}
+
+impl Kind {
+    /// What it is, as the one number a vertex carries for its paint
+    /// (`grown::colours`) -- and which the skin shader reads as "hard".
+    pub fn code(self) -> f32 {
+        match self {
+            Kind::Horn | Kind::Spine => 1.0,
+            Kind::Claw => 2.0,
+            Kind::Quill => 3.0,
+            Kind::Feather => 4.0,
+            Kind::Beak => 5.0,
+            Kind::Bone => 6.0,
+            Kind::Eye => 8.0,
+            Kind::Antenna => 9.0,
+        }
+    }
 }
 
 /// One hard part: its mesh in the world at rest, how far along it each
@@ -37,10 +65,13 @@ pub struct Hard {
     pub bone: usize,
     pub part: usize,
     pub kind: Kind,
+    /// Where each vertex is across it, from one edge (-1) through its
+    /// middle to the other (1): a vane's shaft and edges. Zero for a tube.
+    pub across: Vec<f32>,
 }
 
 /// A point on a Catmull-Rom curve through `p` at `u` (0 to 1).
-fn spline(p: &[Vec3], u: f32) -> Vec3 {
+pub fn spline(p: &[Vec3], u: f32) -> Vec3 {
     let n = p.len();
     if n == 1 {
         return p[0];
@@ -132,6 +163,96 @@ pub fn tube(
     (positions, normals, tris, along)
 }
 
+/// A flat blade along `path` -- a feather, a scythe's serrated edge, an
+/// insect's wing -- `widths[i]` across at each station (half to either
+/// side of its shaft, `lean` of it moved to the trailing side), lying in
+/// the plane whose normal is `normal`, `thick` through and cambered, a
+/// closed slab so it reads from both sides. Returns positions, normals,
+/// triangles, how far along and how far across each vertex is.
+#[allow(clippy::type_complexity)]
+pub fn vane(
+    path: &[Vec3],
+    widths: &[f32],
+    normal: Vec3,
+    thick: f32,
+    lean: f32,
+) -> (Vec<Vec3>, Vec<Vec3>, Vec<u32>, Vec<f32>, Vec<f32>) {
+    const ACROSS: usize = 7;
+    let length: f32 = path.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let rings = ((length / 0.06) as usize).clamp(6, 28);
+    let mut positions = Vec::new();
+    let mut normals = Vec::new();
+    let mut along = Vec::new();
+    let mut across = Vec::new();
+    for r in 0..rings {
+        let u = r as f32 / (rings - 1) as f32;
+        let c = spline(path, u);
+        let tg = (spline(path, (u + 0.01).min(1.0)) - spline(path, (u - 0.01).max(0.0)))
+            .normalize_or(Vec3::X);
+        let side = tg.cross(normal).normalize_or(Vec3::Z);
+        let up = side.cross(tg);
+        let k = u * (widths.len() - 1) as f32;
+        let i = (k.floor() as usize).min(widths.len() - 2);
+        let w = widths[i] + (widths[i + 1] - widths[i]) * (k - i as f32);
+        for sgn in [1.0f32, -1.0] {
+            for a in 0..ACROSS {
+                let x = a as f32 / (ACROSS - 1) as f32 * 2.0 - 1.0;
+                let off = if x < 0.0 {
+                    x * w * (1.0 - lean)
+                } else {
+                    x * w * (1.0 + lean)
+                };
+                let h = thick * (1.0 - x * x * 0.8) * sgn + thick * 0.6 * (1.0 - x * x);
+                positions.push(c + side * off + up * h);
+                normals.push((up * sgn + side * x * 0.3).normalize_or(up));
+                along.push(u);
+                across.push(x);
+            }
+        }
+    }
+    let per = (2 * ACROSS) as u32;
+    let k = ACROSS as u32;
+    let mut tris = Vec::new();
+    for r in 0..rings as u32 - 1 {
+        let (a0, a1) = (r * per, (r + 1) * per);
+        for j in 0..k - 1 {
+            tris.extend([a0 + j, a1 + j, a1 + j + 1, a0 + j, a1 + j + 1, a0 + j + 1]);
+            let (b0, b1) = (a0 + k, a1 + k);
+            tris.extend([b0 + j + 1, b1 + j + 1, b1 + j, b0 + j + 1, b1 + j, b0 + j]);
+        }
+        // The two edges.
+        tris.extend([a0 + k, a1 + k, a1, a0 + k, a1, a0]);
+        let (e0, e1) = (a0 + k - 1, a1 + k - 1);
+        tris.extend([e0, e1, e1 + k, e0, e1 + k, e0 + k]);
+    }
+    (positions, normals, tris, along, across)
+}
+
+/// A vane as a hard part on `bone` and `part`.
+#[allow(clippy::too_many_arguments)]
+pub fn vane_piece(
+    path: &[Vec3],
+    widths: &[f32],
+    normal: Vec3,
+    thick: f32,
+    lean: f32,
+    bone: usize,
+    part: usize,
+    kind: Kind,
+) -> Hard {
+    let (positions, normals, tris, along, across) = vane(path, widths, normal, thick, lean);
+    Hard {
+        positions,
+        normals,
+        tris,
+        along,
+        bone,
+        part,
+        kind,
+        across,
+    }
+}
+
 fn smooth(a: f32, b: f32, x: f32) -> f32 {
     let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
@@ -166,7 +287,7 @@ pub fn meet(field: &dyn Fn(Vec3) -> f32, from: Vec3, to: Vec3) -> Option<(Vec3, 
 
 /// A horn-like piece rooted at `root` (on the body, sunk a little into it).
 #[allow(clippy::too_many_arguments)]
-fn piece(
+pub fn piece(
     path: Vec<Vec3>,
     radii: &[f32],
     ridges: f32,
@@ -178,6 +299,7 @@ fn piece(
     kind: Kind,
 ) -> Hard {
     let (positions, normals, tris, along) = tube(&path, radii, ridges, depth, flat, ref_);
+    let n = positions.len();
     Hard {
         positions,
         normals,
@@ -186,6 +308,7 @@ fn piece(
         bone,
         part,
         kind,
+        across: vec![0.0; n],
     }
 }
 

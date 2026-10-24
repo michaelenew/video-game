@@ -102,15 +102,44 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         // about two of them would only sparkle, so each fades out before it
         // gets there.
         let pixel = max(length(dpdx(rest)), length(dpdy(rest)));
-        if (skin > 0.01) {
+        // What the skin is: plumage (1), chitin (2), or hide.
+        let plumage = select(0.0, skin, detail.on.y > 0.5 && detail.on.y < 1.5);
+        let chitin = select(0.0, skin, detail.on.y > 1.5);
+        if (plumage > 0.01) {
+            // Feathers: cells longer than wide along the body, each a
+            // cushion with a dark seam where the next overlaps it, and fine
+            // barbs down it.
+            let fw = worley(rest * vec3<f32>(2.6, 4.6, 4.6), 41u);
+            let seam = 1.0 - smoothstep(0.0, 0.09, fw.y - fw.x);
+            let cushion = 1.0 - fw.x;
+            let barbs = sin((rest.y * 0.7 + rest.z) * 250.0 + fbm3(rest * 2.0) * 4.0);
+            let kf = keep(0.25, pixel);
+            let kb = keep(0.03, pixel);
+            h += plumage * (0.010 * cushion * kf - 0.006 * seam * kf + 0.0006 * barbs * kb);
+            dark += plumage * (seam * 0.35 * kf - cushion * 0.08);
+        }
+        if (chitin > 0.01) {
+            // Chitin: smooth, a few broad plates with sutures between, fine
+            // pits, and a gloss the hide does not have.
+            let pw = worley(rest * vec3<f32>(4.0, 2.0, 4.0), 43u);
+            let suture = 1.0 - smoothstep(0.0, 0.025, pw.y - pw.x);
+            let pits = smoothstep(0.25, 0.0, worley(rest * 140.0, 44u).x);
+            let ks = keep(0.05, pixel);
+            let kp = keep(0.008, pixel);
+            h += chitin * (-0.003 * suture * ks - 0.0005 * pits * kp + 0.002 * (fbm3(rest * 6.0) - 0.5));
+            dark += chitin * (suture * 0.5 * ks + pits * 0.1 * kp);
+            pbr_input.material.perceptual_roughness = mix(pbr_input.material.perceptual_roughness, 0.32, chitin);
+        }
+        let hide = skin - plumage - chitin;
+        if (hide > 0.01) {
             let w1 = worley(rest * 9.0, 5u);
             let crease = 1.0 - smoothstep(0.0, 0.1, w1.y - w1.x);
             let w2 = worley(rest * vec3<f32>(22.0, 46.0, 22.0), 9u);
             let fine = 1.0 - smoothstep(0.0, 0.12, w2.y - w2.x);
             let kc = keep(0.11, pixel);
             let kf = keep(0.022, pixel);
-            h += skin * (-0.004 * crease * kc - 0.0015 * fine * kf + 0.005 * (fbm3(rest * 3.0) - 0.5));
-            dark += skin * (crease * 0.3 * kc + fine * 0.08 * kf);
+            h += hide * (-0.004 * crease * kc - 0.0015 * fine * kf + 0.005 * (fbm3(rest * 3.0) - 0.5));
+            dark += hide * (crease * 0.3 * kc + fine * 0.08 * kf);
         }
         if (stone > 0.01) {
             let erode = fbm3(rest * 2.6) - 0.5;

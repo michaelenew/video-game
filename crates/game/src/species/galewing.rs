@@ -8,7 +8,7 @@
 //! Nothing on it is a weak point or breakable in the shared sense: its wings
 //! break on their own bars.
 
-use super::{Look, Paint, Tint};
+use super::{Build, Foot, Look, Paint, Tint};
 use sim::species::galewing::{self as gw, fight};
 
 pub const LOOK: Look = Look {
@@ -63,4 +63,22 @@ pub const TINT: Tint = Tint {
         },
     ],
     stage: fight::wing_stage,
+};
+
+/// **How it is built** (2026-10-24, exploration 0030): the sculpted target's
+/// choices (`art/galewing/build.py`) as rules -- a deep breast, feathered
+/// thighs, wings that are a slab carrying flight feathers past it, a fan of
+/// a tail, a hooked beak and a crest, a raptor's talons.
+pub const BUILD: Build = Build {
+    fat: 0.6,
+    muscle: 0.5,
+    heavy: 0.3,
+    belly: 0.25,
+    girth: 1.2,
+    claws: 4,
+    foot: Foot::Talon,
+    feathers: 1.0,
+    beak: 0.5,
+    crest: 1.0,
+    ..Build::DEFAULT
 };

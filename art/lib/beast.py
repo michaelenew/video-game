@@ -1391,9 +1391,12 @@ def write_beast_glb(path, skeleton, pos, nrm, uv, tangent, tris, weights, part, 
     return path
 
 
-def studio_textured(ob, tex, out, size=(640, 440), samples=24):
+def studio_textured(ob, tex, out, size=(640, 440), samples=24, views=None, distance=17.0,
+                    look=(0.4, 3.9, 0.0), near=None, near_distance=6.5):
     """Render the game mesh in its baked textures: a sheet of the whole
-    creature from four sides, and one of it close."""
+    creature from four sides, and one of it close. ``views`` and ``near``
+    are ``(yaw, height[, look])`` per picture; the defaults are the
+    Ridgeback's."""
     s = bpy.context.scene
     keep = {ob.name}
     for o in list(bpy.data.objects):
@@ -1429,11 +1432,11 @@ def studio_textured(ob, tex, out, size=(640, 440), samples=24):
     ob.data.polygons.foreach_get("vertices", t)
     keep_mat = m
     # Reuse the studio's stage and cameras with this one object in it.
-    _shoot(ob, out, views=((90, 7.0), (40, 9.0), (-5, 9.0), (150, 11.0)), distance=17.0,
-           look=(0.4, 3.9, 0.0), size=size, samples=samples)
+    _shoot(ob, out, views=views or ((90, 7.0), (40, 9.0), (-5, 9.0), (150, 11.0)), distance=distance,
+           look=look, size=size, samples=samples)
     _shoot(ob, out.replace(".png", "_near.png"),
-           views=((55, 1.2, (4.7, 5.4, 0)), (100, 0.2, (1.1, 1.4, -1.0)), (145, 1.0, (-5.2, 4.3, 0)),
-                  (75, 3.0, (-0.2, 5.9, 0))), distance=6.5, size=size, samples=samples)
+           views=near or ((55, 1.2, (4.7, 5.4, 0)), (100, 0.2, (1.1, 1.4, -1.0)), (145, 1.0, (-5.2, 4.3, 0)),
+                          (75, 3.0, (-0.2, 5.9, 0))), distance=near_distance, size=size, samples=samples)
     del keep_mat, v_game, t
 
 

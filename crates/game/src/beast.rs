@@ -1458,6 +1458,21 @@ pub fn pose_bodies(
         let broken = (0..sp.parts.len().min(64))
             .filter(|&p| beast.broken(p))
             .fold(0u64, |m, p| m | 1 << p);
+        // A species' tint (the Galewing's wings cracking and breaking) is
+        // part of what its colouring was made for.
+        let tint = crate::species::tint(beast.species).filter(|_| slot < MAX_MONSTERS);
+        let stage = |p: usize| tint.and_then(|t| (t.stage)(&sim.cur, p));
+        let state = (0..sp.parts.len()).fold(broken, |h, p| {
+            let s = stage(p).map_or(0u64, |i| i as u64 + 1);
+            (h ^ s
+                .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                .rotate_left(p as u32 * 5))
+            .wrapping_mul(0x0000_0100_0000_01B3)
+        });
+        let staged = |p: usize| {
+            tint.zip(stage(p))
+                .and_then(|(t, i)| t.stages.get(i).copied().map(|paint| (i, paint)))
+        };
         let fresh = place
             .dressed
             .as_ref()
@@ -1476,7 +1491,23 @@ pub fn pose_bodies(
                     let lin = LinearRgba::from(Color::srgb(w[0], w[1], w[2]));
                     m.extension.detail = crate::still::Detail {
                         ember: Vec4::new(lin.red, lin.green, lin.blue, 4.0),
-                        on: Vec4::new(1.0, 0.0, 0.0, 0.0),
+                        // What the skin is: hide, plumage or chitin
+                        // (`Build::feathers`, `chitin`; `skin.wgsl`).
+                        on: Vec4::new(
+                            1.0,
+                            {
+                                let b = crate::species::build(beast.species);
+                                if b.feathers > 0.0 {
+                                    1.0
+                                } else if b.chitin > 0.0 {
+                                    2.0
+                                } else {
+                                    0.0
+                                }
+                            },
+                            0.0,
+                            0.0,
+                        ),
                     };
                 }
             }
@@ -1494,22 +1525,32 @@ pub fn pose_bodies(
             place.dressed = Some((beast.species, mesh, u64::MAX));
         }
         if let Some((_, mesh, was)) = place.dressed.as_mut() {
-            if *was != broken {
+            if *was != state {
                 let look = crate::species::look(beast.species);
                 let colours = match &made.grown.own {
-                    Some(own) => {
-                        crate::grown::own_colours(own, look, |p| broken & (1 << p.min(63)) != 0)
-                    }
+                    // A formed body is painted whole already: a stage past
+                    // the first is laid over it.
+                    Some(own) => crate::grown::own_colours(
+                        own,
+                        look,
+                        |p| broken & (1 << p.min(63)) != 0,
+                        |p| staged(p).filter(|(i, _)| *i > 0).map(|(_, paint)| paint),
+                    ),
                     None => crate::grown::colours(
                         &made.grown,
-                        |p| crate::grown::paint_of(sp, look, broken & (1 << p.min(63)) != 0, p),
+                        |p| match staged(p) {
+                            Some((_, paint)) => paint,
+                            None => {
+                                crate::grown::paint_of(sp, look, broken & (1 << p.min(63)) != 0, p)
+                            }
+                        },
                         look.weak.rgb,
                     ),
                 };
                 if let Some(m) = meshes.get_mut(&*mesh) {
                     m.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
                 }
-                *was = broken;
+                *was = state;
             }
         }
         let rig = beast.rig();

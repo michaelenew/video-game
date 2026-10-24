@@ -207,6 +207,39 @@ pub struct Build {
     /// How many toes a foot has, each with its claw: a dog's paw
     /// (`horns::paws`); 0 for none.
     pub claws: u8,
+    /// **What the Galewing and the Mantis taught** (2026-10-24, exploration
+    /// 0030), each a rule over the species table (`crate::anatomy`).
+    /// What a foot is: a paw (`claws` toes), a bird's talons, an insect's
+    /// tarsus.
+    pub foot: Foot,
+    /// How long a feather is, against the Galewing's (0: no feathers). A
+    /// feathered body's wings are a slab carrying flight feathers past it,
+    /// its flat tail a fan of them, and its skin is plumage.
+    pub feathers: f32,
+    /// A hooked beak on the front of the head, the head's share it takes
+    /// (0: none); and a crest of feathers swept back off the crown.
+    pub beak: f32,
+    pub crest: f32,
+    /// How far apart the rings of a segmented body are, in metres (0: not
+    /// segmented); its skin is chitin.
+    pub chitin: f32,
+    /// How long the spines under a raptorial arm are, in metres (0: none).
+    pub grip: f32,
+    /// How long the antennae are, in metres (0: none).
+    pub antennae: f32,
+    /// How big a compound eye is across, in metres (0: none).
+    pub eyes: f32,
+}
+
+/// What a foot is (`Build::foot`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Foot {
+    /// A dog's: a palm and toes (`horns::paws`).
+    Paw,
+    /// A bird of prey's: three toes forward and one back, each a talon.
+    Talon,
+    /// An insect's: the tarsus, beaded along the floor, with its two claws.
+    Tarsus,
 }
 
 impl Build {
@@ -222,6 +255,14 @@ impl Build {
         spines: 0.0,
         horns: 0.0,
         claws: 0,
+        foot: Foot::Paw,
+        feathers: 0.0,
+        beak: 0.0,
+        crest: 0.0,
+        chitin: 0.0,
+        grip: 0.0,
+        antennae: 0.0,
+        eyes: 0.0,
     };
 }
 
@@ -229,6 +270,8 @@ impl Build {
 pub fn build(id: SpeciesId) -> &'static Build {
     match id {
         SpeciesId::RIDGEBACK => &ridgeback::BUILD,
+        SpeciesId::GALEWING => &galewing::BUILD,
+        SpeciesId::MANTIS => &mantis::BUILD,
         _ => &Build::DEFAULT,
     }
 }

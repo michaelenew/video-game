@@ -64,6 +64,15 @@ size, `--no-export` leaves the file be, and it always writes a studio sheet to
 `target/art/ridgeback.png` and `ridgeback_near.png`. Why, and what it is for:
 [`docs/design/exploration/0029_a_target_body.md`](../docs/design/exploration/0029_a_target_body.md).
 
+**Since 2026-10-24 a creature is a spec on one builder**, `lib/creature.py`:
+its forms, any shells, its sculpt and paint, its hard pieces (horns, claws,
+feathers, scythes -- `ringed_horn` and `vane`), and the segments its skin is
+weighted to; the builder does the union, the bake, the weights and the file.
+`art/galewing/build.py` and `art/mantis/build.py` are written that way, about
+four minutes each (`SCALE` sizes the voxels to the animal: the Mantis is three
+metres, so 0.3). The Ridgeback's build predates it and still carries its own
+copy of the pipeline. Why: [`docs/design/exploration/0030_two_more_targets.md`](../docs/design/exploration/0030_two_more_targets.md).
+
 ## The rules
 
 - **Never edit the `.glb` by hand.** Change the script and rebuild, or the
