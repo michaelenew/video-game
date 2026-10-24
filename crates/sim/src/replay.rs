@@ -36,6 +36,7 @@
 
 use crate::arena::{self, ArenaId};
 use crate::class::ALL_CLASSES;
+use crate::crowd::{Aggregate, MAX_STREAMS};
 use crate::input::Input;
 use crate::species::{self, SpeciesId};
 use crate::state::MAX_PLAYERS;
@@ -321,6 +322,38 @@ impl Link {
     }
 }
 
+/// **What a frame is fed beside its inputs**: the crowd field's aggregates
+/// due at it (`World::advance_with`, [`crate::crowd`]). The game keeps them
+/// on the region ledger, which is a crate above this one; a tape played
+/// without them is a different fight from the one the game played as soon
+/// as the first aggregate is due, so the judge plays it with the ledger
+/// (`regions::Ledger`'s `Feed`) and [`Unfed`] is for a fight that was
+/// never fed, the way a harness plays one.
+pub trait Feed {
+    /// The tape is about to be played from `start`.
+    fn begin(&mut self, tape: &Tape, start: &World);
+    /// What frame `before.frame + 1` is fed, as `before` is advanced by
+    /// `inputs` into it.
+    fn due(
+        &mut self,
+        before: &World,
+        inputs: [Input; MAX_PLAYERS],
+    ) -> ([Aggregate; MAX_STREAMS], usize);
+    /// The frame was made: `after` is the world it made.
+    fn kept(&mut self, after: &World);
+}
+
+/// Nothing fed: `World::advance`, frame after frame.
+pub struct Unfed;
+
+impl Feed for Unfed {
+    fn begin(&mut self, _: &Tape, _: &World) {}
+    fn due(&mut self, _: &World, _: [Input; MAX_PLAYERS]) -> ([Aggregate; MAX_STREAMS], usize) {
+        ([Aggregate::NONE; MAX_STREAMS], 0)
+    }
+    fn kept(&mut self, _: &World) {}
+}
+
 /// A fight, recorded: where it started and what was pressed.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tape {
@@ -432,6 +465,11 @@ impl Tape {
         let mut w = self.start.world();
         w.frame = self.first_frame;
         let have = w.state_checksum();
+        if have != self.start_hash
+            && let Some(old) = self.champions_unseated()
+        {
+            return Ok(old);
+        }
         if have != self.start_hash {
             return Err(format!(
                 "the start world does not match: the tape says {:016x}, this build makes {:016x} from `{}`{}",
@@ -448,15 +486,34 @@ impl Tape {
         Ok(w)
     }
 
+    /// **A tape saved before 2026-10-24**: the game filled the seats nobody
+    /// plays with the Champion, where its line says player one's class, so
+    /// its start is the line's with those seats the Champion. That world, if
+    /// it is the one the tape's checksum names.
+    fn champions_unseated(&self) -> Option<World> {
+        let mut start = self.start;
+        let named = (start.seats as usize).clamp(2, MAX_PLAYERS);
+        for c in start.classes.iter_mut().skip(named) {
+            *c = Class::Champion;
+        }
+        let mut w = start.world();
+        w.frame = self.first_frame;
+        (w.state_checksum() == self.start_hash).then_some(w)
+    }
+
     /// Play the tape through, from its start world, showing every frame to
-    /// `watch` as the world before, the inputs, and the world after. The
-    /// world it ends on is returned; [`Tape::matched`] says whether it is
-    /// the one the game ended on.
+    /// `watch` as the world before, the inputs, and the world after. `feed`
+    /// gives each frame what the game gave it beside its inputs: the crowd
+    /// field's aggregates, off the region ledger (`regions::Ledger` is the
+    /// one the game keeps). The world it ends on is returned;
+    /// [`Tape::matched`] says whether it is the one the game ended on.
     pub fn play(
         &self,
+        feed: &mut impl Feed,
         mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
     ) -> Result<World, String> {
         let mut w = self.world()?;
+        feed.begin(self, &w);
         let mut events = self.events.iter().peekable();
         for (i, inputs) in self.frames.iter().enumerate() {
             while let Some((at, event)) = events.peek() {
@@ -469,7 +526,9 @@ impl Tape {
                 events.next();
             }
             let before = w.clone();
-            w.advance(*inputs);
+            let (due, n) = feed.due(&before, *inputs);
+            w.advance_with(*inputs, &due[..n]);
+            feed.kept(&w);
             watch(&before, *inputs, &w);
         }
         Ok(w)
@@ -815,7 +874,7 @@ mod tests {
         let text = tape.to_text();
         let back = Tape::from_text(&text).expect("parses");
         let end = back
-            .play(|_, _, _| {})
+            .play(&mut Unfed, |_, _, _| {})
             .expect("the start is one a start describes");
         assert_eq!(back.matched(&end), Some(true));
         assert_eq!(end, w);

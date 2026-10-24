@@ -7,3 +7,5 @@ license.workspace = true
 
 [dependencies]
 sim = { path = "../sim" }
+# The books, for playing a tape back fed as the game fed it.
+regions = { path = "../regions" }

@@ -188,13 +188,20 @@ fn seats_of(dummy: Dummy) -> u8 {
 
 /// Every seat's class: `--p1` to `--p4`, the first of the rotation (the
 /// Champion) where none is named.
+///
+/// **A seat nobody plays is player one's class** -- what a replay's start
+/// line says of one (`sim::replay::Start::tidied`), since it never names
+/// it. They were the Champion, so every tape whose first player was not one
+/// was refused by its own start checksum (2026-10-24).
 fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
-    std::array::from_fn(|i| {
+    let named: [sim::Class; MAX_PLAYERS] = std::array::from_fn(|i| {
         opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
             .or_else(|| (i == 0).then(|| chosen_tutorial(opts)).flatten())
             .unwrap_or(sim::class::ROTATION[0])
-    })
+    });
+    let played = chosen_players(opts) as usize;
+    std::array::from_fn(|i| if i < played { named[i] } else { named[0] })
 }
 
 /// **How many play** (`--players`, `?players=` in a link): two to four. More
@@ -230,10 +237,15 @@ fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
         .drafting(drafts());
         return seated(w, dummy);
     }
-    let w = picker::world(chosen_start(opts), chosen_classes(opts), drafts());
+    // Seated as the start is built, the way its tape's line rebuilds it:
+    // seated after, a room for three or four started from a world no line
+    // describes.
     match chosen_players(opts) {
-        n if n > 2 => w.seated(n),
-        _ => seated(w, dummy),
+        n if n > 2 => picker::world(chosen_start(opts), chosen_classes(opts), drafts(), n),
+        _ => seated(
+            picker::world(chosen_start(opts), chosen_classes(opts), drafts(), 2),
+            dummy,
+        ),
     }
 }
 
@@ -830,7 +842,12 @@ impl Default for Sim {
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
             history: Rewind::new(&seed),
-            ledger: regions::Ledger::new(&seed, 0, dev_mode()),
+            // A tape plays back on the books it was recorded beside: a
+            // match's begin at its agreed start.
+            ledger: match &playing {
+                Some(p) => regions::Ledger::for_tape(&p.tape, &seed, dev_mode()),
+                None => regions::Ledger::new(&seed, 0, dev_mode()),
+            },
             regions_said: 0,
             rehearsing: None,
             travel: sim::input::Travel::NONE,
@@ -8494,6 +8511,28 @@ mod tests {
             sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
             sim::moves::get(sim::Class::BloodMage, slot).reach,
         )
+    }
+
+    /// **The world a run starts in is the one its tape's start line
+    /// rebuilds**, whoever player one is: the seats nobody plays were the
+    /// Champion, the line says they are player one's class, and every tape
+    /// of a Reaver's match was refused by its own start (2026-10-24).
+    #[test]
+    fn a_run_starts_where_its_tape_says_it_did() {
+        for args in [
+            "--p1 shadowreaver --p2 champion --arena needle",
+            "--p1 bloodmage --hunt ridgeback",
+            "--p1 dualmage --p2 elementalist --players 3 --p3 shadowreaver",
+        ] {
+            let opts = platform::Options::from_args(args.split(' ').map(String::from));
+            for dummy in [Dummy::Human, Dummy::Idle] {
+                let w = start_world(&opts, dummy);
+                let tape = sim::replay::Tape::begin(&w, "test");
+                if let Err(e) = tape.world() {
+                    panic!("{args}: {e}");
+                }
+            }
+        }
     }
 
     #[test]

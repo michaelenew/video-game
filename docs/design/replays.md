@@ -155,6 +155,27 @@ plays a replay back in the game: both seats' inputs come off the file and the
 camera follows the look it recorded, until it runs out and the controls are
 yours. A desktop only — a page has no file to open.
 
+**A tape is played fed, the way the game fed it** (2026-10-24). Beside its
+inputs every frame is given the crowd field's aggregates
+([regions.md](regions.md)), off the region books, and those are not on the
+tape. `Tape::play` takes a `sim::replay::Feed`, and the judge and `--replay`
+both keep the books with `regions::Ledger::for_tape`: begun at the agreed
+start for a match, fresh for training, as the two drivers begin them.
+Played unfed, a tape the game saved came out a different fight once the
+first aggregate was due (frame 210), and the judge said `DOES NOT
+REPRODUCE`. (`sim::replay::Unfed` is for a fight that was
+never fed, the way a harness plays one.) The same day, the seats nobody
+plays were found to be the Champion in the game and player one's class on
+the start line, so any tape whose player one was not a Champion was refused
+by its own start checksum; the game seats them as the line says now.
+
+Found on the owner's tape of a versus match that ended in a desync. Fed and
+started right, it reproduced its machine's end exactly, through native and
+wasm alike, and through forty thousand simulated rollbacks: that machine's
+world was the confirmed inputs' and nothing else, so the part was on the
+other side. **A desync is judged from both machines' tapes**, which
+diverge where it happened.
+
 ## 5 · What it is for
 
 The backlog's word is *unplayed*. The loop this makes possible:
