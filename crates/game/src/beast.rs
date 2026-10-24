@@ -1269,7 +1269,7 @@ pub fn setup_bodies(
             );
             arriving.0.push((sp.id, mesh, material));
         }
-        let Some(grown) = crate::grown::grow(sp) else {
+        let Some(grown) = crate::grown::grow(&crate::grown::Anatomy::of_species(sp)) else {
             continue;
         };
         // The sinews join every part along the skeleton, so nothing should

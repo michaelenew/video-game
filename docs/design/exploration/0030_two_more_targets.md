@@ -110,5 +110,5 @@ has.
   back are shaped; its neck disappears into it.
 - The grown Mantis's legs are thicker than the target's, the blend that joins
   parts swelling every joint of a leg that thin.
-- The Ridgeback's build still carries its own copy of the pipeline; moving it
-  onto `creature.py` is mechanical and wants one checked rebuild.
+- ~~The Ridgeback's build still carries its own copy of the pipeline.~~ Moved
+  onto `creature.py` (exploration 0031); a trial build came out the same.

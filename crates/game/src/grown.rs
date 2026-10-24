@@ -38,6 +38,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::render::render_asset::RenderAssetUsages;
+use sim::beast::{Bone, Leg, Part};
 use sim::species::Species;
 
 use crate::species::{Look, Paint};
@@ -68,7 +69,7 @@ pub struct Grown {
     pub stone: Vec<[f32; 4]>,
     /// The species' build, which its paint reads (feathered, segmented),
     /// and its body's own colour (its look's armour), for what grows off it.
-    pub build: &'static crate::species::Build,
+    pub build: crate::species::Build,
     pub armour: [f32; 3],
 }
 
@@ -81,6 +82,80 @@ pub struct Own {
     pub base: Vec<[f32; 4]>,
     pub part: Vec<u16>,
     pub material: StandardMaterial,
+}
+
+/// **What a body is grown from** (2026-10-24, exploration 0031): a skeleton,
+/// boxes on it and the legs through them, with the frame each box is written
+/// in, what the species' build and look say, and anything its source knows
+/// that the boxes do not. A species' table makes one ([`Anatomy::of_species`]);
+/// so does a bred genome's body (`crate::bred`), whose boxes run along their
+/// own axes rather than their bones'. The growing reads nothing else.
+#[derive(Clone)]
+pub struct Anatomy {
+    pub bones: Vec<Bone>,
+    /// Every part, its box already in metres.
+    pub parts: Vec<Part>,
+    pub legs: Vec<Leg>,
+    /// Every bone's rest frame, and every part's: the frame its box is in.
+    pub rest: Vec<Mat4>,
+    pub frames: Vec<Mat4>,
+    /// Which of a part's box axes runs along it, where the source knows
+    /// (a bred part runs along its own `x`); the bones say otherwise.
+    pub long: Vec<Option<usize>>,
+    /// What a part is, where the source knows better than its box
+    /// (`crate::anatomy::role`): a bred raptorial limb's foot is a blade
+    /// though nothing breaks it.
+    pub roles: Vec<Option<crate::anatomy::Role>>,
+    /// A part's own contour, where the source says (a bred upright thorax
+    /// is a stalk); before the build's table, which is by part index.
+    pub shapes: Vec<Option<crate::contour::Contour>>,
+    /// Whether a part closes past the end of its box as a hemisphere of its
+    /// own end's radius, rather than flat: a bred body's limb segments meet
+    /// joint to joint, and flat ends there read as pipes.
+    pub capsules: bool,
+    pub build: crate::species::Build,
+    pub look: Look,
+}
+
+impl Anatomy {
+    /// A species' table, at its tuned size.
+    pub fn of_species(sp: &'static Species) -> Anatomy {
+        let rest = rest_frames(sp);
+        let parts: Vec<Part> = (0..sp.parts.len())
+            .map(|i| Part {
+                shape: sp.shape(i),
+                ..sp.parts[i]
+            })
+            .collect();
+        let frames = parts.iter().map(|p| rest[p.shape.bone]).collect();
+        Anatomy {
+            bones: sp.bones.to_vec(),
+            legs: sp.legs.to_vec(),
+            long: vec![None; parts.len()],
+            roles: vec![None; parts.len()],
+            shapes: vec![None; parts.len()],
+            capsules: false,
+            parts,
+            rest,
+            frames,
+            build: *crate::species::build(sp.id),
+            look: *crate::species::look(sp.id),
+        }
+    }
+
+    /// A part's box, in metres, in its frame.
+    pub fn shape(&self, i: usize) -> sim::beast::Shape {
+        self.parts[i.min(self.parts.len() - 1)].shape
+    }
+
+    /// How thick a part is: the middle of its box's three half-sizes, in
+    /// its own frame -- a leg's across it, however the leg is turned. Its
+    /// bounds in the world would add the length of a leg that leans.
+    pub fn thickness(&self, i: usize) -> f32 {
+        let s = self.shape(i);
+        let h = fx3(s.max.sub(s.min)) * 0.5;
+        h.x + h.y + h.z - h.max_element() - h.min_element()
+    }
 }
 
 /// **A body formed by hand** (the owner, 2026-10-23: "take the current model,
@@ -133,7 +208,7 @@ pub fn covers(sp: &Species, index: usize) -> bool {
 /// Which parts make the body: everything with a body of its own, but the
 /// weak points, which are drawn as themselves on it, and a hollow part, which
 /// is a room, not flesh.
-fn in_body(sp: &Species, index: usize) -> bool {
+fn in_body(sp: &Anatomy, index: usize) -> bool {
     let p = &sp.parts[index];
     !p.weak && !p.shape.hollow
 }
@@ -163,21 +238,38 @@ struct Lump {
     /// A segmented body's rings along it (`Build::chitin`): how far apart,
     /// and how deep the groove between two (0: none).
     rings: (f32, f32),
+    /// Closed past its ends as a capsule ([`Anatomy::capsules`]).
+    capsule: bool,
 }
 
 impl Lump {
     /// Signed distance to the contoured part: negative inside.
     fn distance(&self, p: Vec3) -> f32 {
         let q = self.to_local.transform_point3(p) - self.middle;
-        let d = crate::contour::distance(
-            &self.contour,
-            q,
-            self.half,
-            self.long,
-            self.root,
-            self.up,
-            self.fwd,
-        );
+        let at = |q: Vec3| {
+            crate::contour::distance(
+                &self.contour,
+                q,
+                self.half,
+                self.long,
+                self.root,
+                self.up,
+                self.fwd,
+            )
+        };
+        let over = q[self.long].abs() - self.half[self.long];
+        let d = if self.capsule && over > 0.0 {
+            // Past the end: a hemisphere of the end's own radius.
+            let mut end = q;
+            end[self.long] = q[self.long].signum() * self.half[self.long];
+            let mut axis = Vec3::ZERO;
+            axis[self.long] = end[self.long];
+            let radius = (-at(axis)).max(1e-3);
+            let a = at(end);
+            Vec2::new(over, (a + radius).max(0.0)).length() - radius
+        } else {
+            at(q)
+        };
         let (gap, depth) = self.rings;
         if gap <= 0.0 {
             return d;
@@ -276,18 +368,18 @@ const SINEW: f32 = 0.42;
 
 /// A part's contour inferred from what it is: its bone's name, which way its
 /// long axis points, and the species' build -- without its place in a chain.
-fn inferred(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Contour {
+fn inferred(sp: &Anatomy, index: usize, rest: &[Mat4]) -> crate::contour::Contour {
     use crate::contour::{Contour, Kind};
-    let build = crate::species::build(sp.id);
-    let look = crate::species::look(sp.id);
+    let build = &sp.build;
+    let look = &sp.look;
     let shape = sp.shape(index);
     let bone = &sp.bones[shape.bone];
     let name = bone.name;
     let half = fx3(shape.max.sub(shape.min)) * 0.5;
-    let long = along_bone(sp, shape.bone, rest, half);
+    let long = long_of(sp, index, rest, half);
     let mut axis = Vec3::ZERO;
     axis[long] = 1.0;
-    let world_axis = rest[shape.bone].transform_vector3(axis);
+    let world_axis = sp.frames[index].transform_vector3(axis);
     let vertical = world_axis.y.abs() > 0.7;
     let (lo, hi) = world_box(sp, rest, index);
     let role = crate::anatomy::role(sp, index, lo, hi);
@@ -312,13 +404,15 @@ fn inferred(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Contou
 
 /// The contour a part is grown in: the species' own word for it, or one
 /// inferred from what the part is; and its place in its chain.
-fn contour_of(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Contour {
-    let build = crate::species::build(sp.id);
-    let said = build
-        .contours
-        .iter()
-        .find(|(i, _)| *i == index)
-        .map(|(_, c)| *c);
+fn contour_of(sp: &Anatomy, index: usize, rest: &[Mat4]) -> crate::contour::Contour {
+    let build = &sp.build;
+    let said = sp.shapes[index].or_else(|| {
+        build
+            .contours
+            .iter()
+            .find(|(i, _)| *i == index)
+            .map(|(_, c)| *c)
+    });
     let c = said.unwrap_or_else(|| inferred(sp, index, rest));
     // **A chain of parts is one contour** (a tail's three segments thinning
     // to one point, a leg's two to one foot): the parts along one line of
@@ -332,12 +426,15 @@ fn contour_of(sp: &Species, index: usize, rest: &[Mat4]) -> crate::contour::Cont
 }
 
 /// Which kind a part mostly is.
-fn main_kind(sp: &Species, i: usize, rest: &[Mat4]) -> usize {
-    let c = crate::species::build(sp.id)
-        .contours
-        .iter()
-        .find(|(j, _)| *j == i)
-        .map(|(_, c)| *c)
+fn main_kind(sp: &Anatomy, i: usize, rest: &[Mat4]) -> usize {
+    let c = sp.shapes[i]
+        .or_else(|| {
+            sp.build
+                .contours
+                .iter()
+                .find(|(j, _)| *j == i)
+                .map(|(_, c)| *c)
+        })
         .unwrap_or_else(|| inferred(sp, i, rest));
     c.kinds
         .iter()
@@ -350,7 +447,7 @@ fn main_kind(sp: &Species, i: usize, rest: &[Mat4]) -> usize {
 /// Where `index` lies along the chain of same-kind parts its bone is in: up
 /// the bones to the first ancestor whose part is another kind, then down
 /// through single children of the same kind. Shares by each part's length.
-fn chain_span(sp: &Species, index: usize, rest: &[Mat4]) -> (f32, f32) {
+fn chain_span(sp: &Anatomy, index: usize, rest: &[Mat4]) -> (f32, f32) {
     let part_on = |bone: usize| {
         (0..sp.parts.len()).find(|&i| in_body(sp, i) && sp.parts[i].shape.bone == bone)
     };
@@ -383,7 +480,7 @@ fn chain_span(sp: &Species, index: usize, rest: &[Mat4]) -> (f32, f32) {
     let length = |i: usize| {
         let sh = sp.shape(i);
         let h = fx3(sh.max.sub(sh.min)) * 0.5;
-        h[along_bone(sp, sh.bone, rest, h)] * 2.0
+        h[long_of(sp, i, rest, h)] * 2.0
     };
     let total: f32 = chain.iter().map(|&i| length(i)).sum();
     let before: f32 = chain
@@ -398,10 +495,10 @@ fn chain_span(sp: &Species, index: usize, rest: &[Mat4]) -> (f32, f32) {
 }
 
 /// A part's box in the world at rest, as its bounds.
-fn world_box(sp: &Species, rest: &[Mat4], i: usize) -> (Vec3, Vec3) {
+fn world_box(sp: &Anatomy, _rest: &[Mat4], i: usize) -> (Vec3, Vec3) {
     let s = sp.shape(i);
     let (a, b) = (fx3(s.min), fx3(s.max));
-    let m = rest[s.bone];
+    let m = sp.frames[i];
     let mut lo = Vec3::splat(f32::MAX);
     let mut hi = Vec3::splat(f32::MIN);
     for c in 0..8 {
@@ -422,7 +519,13 @@ fn world_box(sp: &Species, rest: &[Mat4], i: usize) -> (Vec3, Vec3) {
 /// first child), so a torso part lies along the body, a leg's runs down it
 /// and a tail's back -- unless that side is under half the box's longest,
 /// when the box's own shape says more.
-fn along_bone(sp: &Species, bone: usize, rest: &[Mat4], half: Vec3) -> usize {
+/// Which of part `i`'s box axes runs along it: what its source says, or
+/// along its bone.
+fn long_of(sp: &Anatomy, i: usize, rest: &[Mat4], half: Vec3) -> usize {
+    sp.long[i].unwrap_or_else(|| along_bone(sp, sp.parts[i].shape.bone, rest, half))
+}
+
+fn along_bone(sp: &Anatomy, bone: usize, rest: &[Mat4], half: Vec3) -> usize {
     let at = |b: usize| rest[b].transform_point3(Vec3::ZERO);
     let parent = sp.bones[bone].parent;
     let dir = if parent != sim::beast::NO_PARENT {
@@ -459,8 +562,8 @@ fn longest(half: Vec3) -> usize {
 }
 
 /// Grow `sp`'s body. `None` for a species with no part that makes one.
-pub fn grow(sp: &'static Species) -> Option<Grown> {
-    let rest = rest_frames(sp);
+pub fn grow(sp: &Anatomy) -> Option<Grown> {
+    let rest = sp.rest.clone();
     let indices: Vec<usize> = (0..sp.parts.len()).filter(|&i| in_body(sp, i)).collect();
     if indices.is_empty() {
         return None;
@@ -477,19 +580,19 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
 
     let mut lumps: Vec<(usize, Lump)> = Vec::new();
     let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
-    let build = crate::species::build(sp.id);
-    let look = crate::species::look(sp.id);
+    let build = &sp.build;
+    let look = &sp.look;
     for &i in &indices {
         let s = sp.shape(i);
         let (a, b) = (fx3(s.min), fx3(s.max));
         let mut half = ((b - a) * 0.5).max(Vec3::splat(0.005));
         let mut middle = (a + b) * 0.5;
-        let to_world = rest[s.bone];
+        let to_world = sp.frames[i];
         // The long axis follows the bone, not the box's longest side: the
         // Ridgeback's barrel is wider than it is long, and contoured along its
         // longest side it was a tube lying across the body (2026-10-23). And it
         // is fixed before the part is made fuller, which must never turn it.
-        let long = along_bone(sp, s.bone, &rest, half);
+        let long = long_of(sp, i, &rest, half);
         // **A foot ends at its wrist** (2026-10-24): where the leg has a paw
         // (`sim::beast::Bone::paw`), the lower leg's flesh stops at the
         // joint and the paw grown below it (`horns::paws`) meets the floor.
@@ -585,8 +688,15 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
             phi = phi.max(w);
         }
         let reach = Vec3::splat(blend * 1.5);
-        lo = lo.min(plo);
-        hi = hi.max(phi);
+        // A capsule closes as far past its box as it is thick.
+        let cap = if sp.capsules {
+            let (a1, a2) = ((long + 1) % 3, (long + 2) % 3);
+            half[a1].max(half[a2])
+        } else {
+            0.0
+        };
+        lo = lo.min(plo - Vec3::splat(cap));
+        hi = hi.max(phi + Vec3::splat(cap));
         // Which end of the long axis the bone's joint is nearer.
         // The joint end is the end nearer the bone's origin (the box is in
         // the bone's frame, and the bone's origin is its joint): a leg hangs
@@ -645,10 +755,11 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
                 contour: contour_of(sp, i, &rest),
                 up: up_local,
                 fwd: fwd_local,
-                lo: plo - reach - Vec3::splat(build.armour * 2.0),
-                hi: phi + reach + Vec3::splat(build.armour * 2.0),
+                lo: plo - reach - Vec3::splat(build.armour * 2.0 + cap),
+                hi: phi + reach + Vec3::splat(build.armour * 2.0 + cap),
                 bone: s.bone,
                 shell,
+                capsule: sp.capsules,
                 rings: {
                     let (wlo, whi) = world_box(sp, &rest, i);
                     let flat_body =
@@ -678,7 +789,7 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         .map(|i| {
             let s = sp.shape(i);
             let (a, b) = (fx3(s.min), fx3(s.max));
-            let m = rest[s.bone];
+            let m = sp.frames[i];
             let mut lo = Vec3::splat(f32::MAX);
             let mut hi = Vec3::splat(f32::MIN);
             for c in 0..8 {
@@ -741,7 +852,9 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
             sinew(joint, parent, radius.max(blend));
         }
         for (_, l) in lumps.iter().filter(|(_, l)| l.bone == b) {
-            let middle = rest[b].transform_point3(l.middle);
+            // The part's middle in its own frame -- which for a species is
+            // its bone's, and for a bred part is not.
+            let middle = l.to_local.inverse().transform_point3(l.middle);
             sinew(
                 joint,
                 middle,
@@ -826,7 +939,7 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
     // point of the hock.
     if build.girth > 1.0 {
         let g = build.girth;
-        for leg in sp.legs {
+        for leg in &sp.legs {
             let (ulo, uhi) = boxes[leg.upper];
             let (flo, fhi) = boxes[leg.foot];
             let (uc, uh) = ((ulo + uhi) * 0.5, (uhi - ulo) * 0.5);
@@ -927,6 +1040,13 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
     // The field, sampled on a grid round the whole body.
     // Room round the parts for everything the field grows past them: the
     // blend, and the armour and the fuller legs.
+    // Everything the field holds, not only the boxes: a sinew to a joint
+    // outside every box (a bred wing folded) would otherwise run off the
+    // grid and be cut open there.
+    for c in sinews.iter().chain(&extras).chain(&crests).chain(&digits) {
+        lo = lo.min(c.lo);
+        hi = hi.max(c.hi);
+    }
     let margin = Vec3::splat(blend * 2.0 + build.armour * 3.0 + 0.3);
     let (lo, hi) = (lo - margin, hi + margin);
     let cell = (hi - lo).max_element() / CELLS;
@@ -1502,7 +1622,7 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         own: None,
         region,
         stone,
-        build,
+        build: *build,
         armour: look.armour.rgb,
     })
 }
@@ -1550,7 +1670,7 @@ pub fn modelled(sp: &'static Species, hide: &Mesh, material: &StandardMaterial) 
         dropped: 0,
         region: Vec::new(),
         stone: Vec::new(),
-        build: crate::species::build(sp.id),
+        build: *crate::species::build(sp.id),
         armour: crate::species::look(sp.id).armour.rgb,
         own: Some(Own {
             base,
@@ -1833,7 +1953,7 @@ mod tests {
         let sp = sim::species::all()
             .find(|s| s.name.eq_ignore_ascii_case(&which))
             .unwrap_or(sim::species::SpeciesId::RIDGEBACK.get());
-        let g = grow(sp).expect("a body");
+        let g = grow(&Anatomy::of_species(sp)).expect("a body");
         let Some(VertexAttributeValues::Float32x3(p)) = g.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
         else {
             return;
@@ -1872,7 +1992,7 @@ mod tests {
     fn the_galewing_and_the_mantis_grow_what_their_targets_have() {
         use crate::horns::Kind;
         let count = |id: sim::species::SpeciesId, kind: Kind| {
-            let g = grow(id.get()).expect("a body");
+            let g = grow(&Anatomy::of_species(id.get())).expect("a body");
             g.region.iter().filter(|r| r[2] == kind.code()).count()
         };
         let gw = sim::species::SpeciesId::GALEWING;
@@ -1886,7 +2006,7 @@ mod tests {
     }
 
     fn one_body(sp: &'static Species) {
-        let g = grow(sp).expect("a body");
+        let g = grow(&Anatomy::of_species(sp)).expect("a body");
         let verts = g.mesh.count_vertices();
         assert!(verts > 2_000 && verts < 120_000, "{verts}");
         let Some(VertexAttributeValues::Float32x4(w)) =

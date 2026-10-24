@@ -30,35 +30,27 @@ legs like a rhino's, plated down the shin.
 4. *Bake*: a light mesh for the game, its colour, normals, glow and
    roughness read off the sculpt into textures.
 
-Every number is metres in the game's frame (``+x`` to the head, ``+y`` up,
-``+z`` its right), at rest. The left is written and mirrored.
+Built on ``art/lib/creature.py`` (2026-10-24), as the Galewing and the
+Mantis are: this file is only what is the Ridgeback's. Every number is
+metres in the game's frame (``+x`` to the head, ``+y`` up, ``+z`` its
+right), at rest. The left is written and mirrored.
 """
 
 import os
 import sys
-import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.join(HERE, "..", "..")
 sys.path[:0] = [os.path.join(HERE, "..", "lib")]
 
 import numpy as np  # noqa: E402
 
 import beast as b  # noqa: E402
+import creature as c  # noqa: E402
+from creature import Axis, mixc, muscled, ringed_horn, say, smooth, st, subdivide  # noqa: E402,F401
 
-SKELETON = os.path.join(ROOT, "target/art/ridgeback.json")
-OUT = os.path.join(ROOT, "crates/game/assets/ridgeback.glb")
-WORK = os.path.join(ROOT, "target/art/ridgeback")
-
-T0 = time.time()
-
-
-def say(*a):
-    print(f"[{time.time() - T0:6.1f}s]", *a, flush=True)
-
-
-def st(t, w, top, bot, nt=2.0, nb=2.0, bumps=(), dy=0.0, dz=0.0):
-    return {"t": t, "w": w, "top": top, "bot": bot, "nt": nt, "nb": nb, "bumps": bumps, "dy": dy, "dz": dz}
+NAME = "ridgeback"
+SCALE = 1.0
+TRIS = 60000
 
 
 def sym(*pairs):
@@ -68,14 +60,6 @@ def sym(*pairs):
         if abs(a) > 1e-6 and abs(abs(a) - np.pi) > 1e-6:
             out.append((-a, w, h))
     return tuple(out)
-
-
-def muscled(rows, muscles, nt=2.0, nb=2.0):
-    out = []
-    for i, (t, w, top, bot) in enumerate(rows):
-        bumps = tuple((a, wd, hs[i]) for a, wd, hs in muscles)
-        out.append(st(t, w, top, bot, nt=nt, nb=nb, bumps=bumps))
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -287,44 +271,6 @@ def soft_forms():
 # ---------------------------------------------------------------------------
 
 
-class Axis:
-    """A curve, sampled densely, with frames: for laying things round it."""
-
-    def __init__(self, path, ref=(0, 1, 0), n=400):
-        self.c = b.spline(path, n)
-        self.tg, self.side, self.up = b.frames(self.c, ref)
-        self.n = n
-
-    def coords(self, p, chunk=200000):
-        """For each point: how far along (0 to 1), the angle round from
-        ``up`` toward ``side``, and the distance off the curve."""
-        s = np.zeros(len(p))
-        phi = np.zeros(len(p))
-        r = np.zeros(len(p))
-        for a in range(0, len(p), chunk):
-            q = p[a:a + chunk]
-            d2 = ((q[:, None, :] - self.c[None, ::4, :]) ** 2).sum(-1)
-            i = np.argmin(d2, axis=1) * 4
-            # refine among the neighbours
-            best = i.copy()
-            bd = np.full(len(q), np.inf)
-            for k in range(-4, 5):
-                j = np.clip(i + k, 0, self.n - 1)
-                dd = ((q - self.c[j]) ** 2).sum(-1)
-                better = dd < bd
-                best[better], bd[better] = j[better], dd[better]
-            d = q - self.c[best]
-            s[a:a + chunk] = best / (self.n - 1)
-            phi[a:a + chunk] = np.arctan2((d * self.side[best]).sum(-1), (d * self.up[best]).sum(-1))
-            r[a:a + chunk] = np.sqrt(bd)
-        return s, phi, r
-
-
-def smooth(a, c, x):
-    t = np.clip((np.asarray(x, float) - a) / (c - a), 0, 1)
-    return t * t * (3 - 2 * t)
-
-
 class Plan:
     """Which part of the body a point is, and how far inside the armour
     there: one region per kind of plate, each with its scute size, its
@@ -462,22 +408,6 @@ class Plan:
         return cid, groove, middle, lean, across
 
 
-def subdivide(v, t):
-    """Every triangle into four, at its edges' midpoints."""
-    e = np.sort(np.concatenate([t[:, [0, 1]], t[:, [1, 2]], t[:, [2, 0]]]), axis=1)
-    uniq, inv = np.unique(e, axis=0, return_inverse=True)
-    inv = inv.ravel()
-    mid = (v[uniq[:, 0]] + v[uniq[:, 1]]) / 2
-    nv = len(v)
-    m = inv.reshape(3, -1).T + nv  # (tri, [01, 12, 20])
-    a, b_, c = t[:, 0], t[:, 1], t[:, 2]
-    m01, m12, m20 = m[:, 0], m[:, 1], m[:, 2]
-    nt = np.concatenate([
-        np.stack([a, m01, m20], 1), np.stack([m01, b_, m12], 1),
-        np.stack([m20, m12, c], 1), np.stack([m01, m12, m20], 1)])
-    return np.concatenate([v, mid]), nt
-
-
 def carapace(v, t, plan):
     """The armour as closed shells grown off the coarse skin: wherever the
     plan puts armour, the skin is lifted by its region's thickness -- full
@@ -545,51 +475,6 @@ def carapace(v, t, plan):
 # ---------------------------------------------------------------------------
 # 3. Hard parts: horns, spikes, claws, teeth
 # ---------------------------------------------------------------------------
-
-
-def ringed_horn(path, radii, sides=None, rings=None, ridges=14, depth=0.05, flat=1.0, twist=0.0, ref=None):
-    """A horn with growth ridges: a tube whose radius runs through ``radii``
-    with ``ridges`` bands round it, each a little proud of the next.
-    ``flat`` squashes its section along ``ref`` (by default the world axis
-    least along it, so a horn that points straight up still has a frame)."""
-    path = np.asarray(path, float)
-    length = np.linalg.norm(np.diff(path, axis=0), axis=1).sum()
-    rings = rings or int(np.clip(length / 0.045, 10, 48))
-    sides = sides or int(np.clip(max(radii) / 0.012, 8, 18))
-    curve = b.spline(path, rings)
-    if ref is None:
-        mean = curve[-1] - curve[0]
-        mean = mean / max(np.linalg.norm(mean), 1e-9)
-        axes = np.eye(3)
-        ref = axes[np.argmin(np.abs(axes @ mean))]
-        if abs(mean[1]) < 0.7:
-            ref = np.array([0.0, 1.0, 0.0])
-    tg, side, up = b.frames(curve, ref)
-    m = len(curve)
-    s = np.linspace(0, 1, m)
-    rr = np.interp(s, np.linspace(0, 1, len(radii)), radii)
-    band = 1 + depth * (np.abs(np.sin(s * np.pi * ridges)) ** 0.5 - 0.5) * smooth(0.0, 0.1, s) * smooth(1.0, 0.75, s)
-    theta = np.linspace(0, 2 * np.pi, sides, endpoint=False)
-    verts = []
-    for i in range(m):
-        th = theta + twist * s[i]
-        ring = curve[i] + rr[i] * band[i] * (np.outer(np.cos(th), up[i]) * flat + np.outer(np.sin(th), side[i]))
-        verts.append(ring)
-    verts = np.concatenate(verts)
-    faces = []
-    for i in range(m - 1):
-        a, c = i * sides, (i + 1) * sides
-        for j in range(sides):
-            k = (j + 1) % sides
-            faces.append([a + j, c + j, c + k, a + k])
-    c0 = len(verts)
-    verts = np.vstack([verts, curve[0], curve[-1] + tg[-1] * 0.001])
-    last = (m - 1) * sides
-    for j in range(sides):
-        k = (j + 1) % sides
-        faces.append([c0, j, k])
-        faces.append([c0 + 1, last + k, last + j])
-    return verts, faces
 
 
 def hard_parts(surf):
@@ -755,11 +640,6 @@ HORN_TIP = np.array([0.96, 0.93, 0.84])
 EYE = np.array([1.0, 0.80, 0.30])
 
 
-def mixc(a, c, f):
-    f = np.clip(np.asarray(f, float), 0, 1)[:, None]
-    return np.asarray(a, float) * (1 - f) + np.asarray(c, float) * f
-
-
 def soft_regions(p):
     """How much each point is the ridge's flesh or the nape's, 0 to 1."""
     x, y, z = p[:, 0], p[:, 1], p[:, 2]
@@ -768,7 +648,7 @@ def soft_regions(p):
     return ridge, nape
 
 
-def sculpt(v, t, kind, plan):
+def sculpt_with(v, t, kind, plan):
     """The detail pass on the dense union, and its paint: returns the moved
     vertices and per-vertex albedo, glow and roughness."""
     n = b.normals(v, t)
@@ -925,6 +805,12 @@ def paint_hard(pieces):
             c = mixc(np.array([0.34, 0.29, 0.24]), np.array([0.90, 0.85, 0.74]), smooth(0.1, 0.9, s))
         c = c * (0.85 + 0.3 * b.fbm(v, 9.0, 2, seed=50))[:, None]
         g = np.zeros((len(v), 3))
+        if kind == "eye":
+            c_ = np.tile(EYE, (len(v), 1))
+            cols.append(c_)
+            glows.append(np.tile(EYE * 1.2, (len(v), 1)))
+            roughs.append(np.full(len(v), 0.2))
+            continue
         if kind == "quill":
             g = mixc(EMBER_DEEP, EMBER, np.ones(len(v))) * smooth(0.35, 0.0, s)[:, None] * 0.8
         cols.append(c)
@@ -975,129 +861,28 @@ def bones(sk):
     return out
 
 
-def parts_of(sk, points):
-    """The nearest of the creature's parts to each point (weak or not)."""
-    best = np.full(len(points), np.inf)
-    out = np.zeros(len(points), dtype=np.int64)
-    for k in range(len(sk.parts)):
-        lo, hi = sk.part_box(k)
-        d = b.box_distance(points, lo, hi)
-        better = d < best
-        out[better], best[better] = k, d[better]
-    return out
-
-
 # ---------------------------------------------------------------------------
-# The build
+# The spec the builder reads (`art/lib/creature.py`)
 # ---------------------------------------------------------------------------
 
+PLAN = Plan()
 
-def main():
-    args = sys.argv[1:]
-    fast = "--fast" in args
-    size = int(args[args.index("--size") + 1]) if "--size" in args else (1024 if fast else 2048)
-    look = args[args.index("--look") + 1] if "--look" in args else os.path.join(ROOT, "target/art/ridgeback.png")
-    os.makedirs(WORK, exist_ok=True)
-    import bpy
 
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    sk = b.Skeleton(SKELETON)
-    plan = Plan()
+def forms():
+    return soft_forms()
 
-    say("forms")
-    cv, ct = b.flesh(soft_forms(), voxel=0.03, smooth=14)
-    cn = b.normals(cv, ct)
-    surf = b.Surface(cv, ct)
-    say(f"coarse skin {len(cv)} verts")
-    sv, stt = carapace(cv, ct, plan)
 
-    # The union: skin and shells into one sculpt, carrying which is which.
-    say("union")
-    hi_voxel = 0.02 if fast else 0.012
-    ob = b.obj("sculpt", b.joined([(cv, ct), (sv, stt)]), smooth=False)
-    me = ob.data
-    kind = np.concatenate([np.zeros(len(cv)), np.ones(len(sv))])
-    a = me.attributes.new("kind", "FLOAT", "POINT")
-    a.data.foreach_set("value", kind)
-    me.remesh_voxel_size = hi_voxel
-    me.use_remesh_preserve_attributes = True
-    with bpy.context.temp_override(active_object=ob, object=ob, selected_objects=[ob]):
-        bpy.ops.object.voxel_remesh()
-    hv = np.zeros(len(me.vertices) * 3)
-    me.vertices.foreach_get("co", hv)
-    hv = b.from_blender(hv.reshape(-1, 3))
-    kind = np.zeros(len(me.vertices))
-    me.attributes["kind"].data.foreach_get("value", kind)
-    v_, t_ = b.read(ob)
-    bpy.data.objects.remove(ob)
-    ht = t_
-    say(f"sculpt {len(hv)} verts, {len(ht)} tris")
-    hv = b.taubin(hv, ht, 2)
+def shells(v, t):
+    return carapace(v, t, PLAN)
 
-    # The game's mesh: the union before its detail, made light.
-    lv, lt = b.decimate((hv, ht), 60000 / len(ht))
-    say(f"game mesh {len(lv)} verts, {len(lt)} tris")
 
-    # The detail and the paint, on the sculpt.
-    hv, albedo, glow, rough = sculpt(hv, ht, kind, plan)
-    pieces = hard_parts(surf) + eyes(surf)
-    hcols, hglows, hroughs = paint_hard(pieces)
-    for k, ((v, f), kd) in enumerate(pieces):
-        if kd == "eye":
-            hcols[k] = np.tile(EYE, (len(v), 1))
-            hglows[k] = np.tile(EYE * 1.2, (len(v), 1))
-            hroughs[k] = np.full(len(v), 0.2)
-    hard_v, hard_f = b.joined([p[0] for p in pieces])
-    hard_t = b.triangles(hard_f)
-    say(f"{len(pieces)} hard pieces, {len(hard_t)} tris")
+def hard(surf):
+    return hard_parts(surf) + eyes(surf)
 
-    # High: the sculpt and the hard pieces, carrying their paint.
-    high_v = np.concatenate([hv, hard_v])
-    high_t = np.concatenate([ht, hard_t + len(hv)])
-    high_c = np.concatenate([albedo] + hcols)
-    high_g = np.concatenate([glow] + hglows)
-    high_r = np.concatenate([rough] + hroughs)
-    # Low: the light mesh and the same hard pieces.
-    low_v = np.concatenate([lv, hard_v])
-    low_t = np.concatenate([lt, hard_t + len(lv)])
 
-    def srgb_lin(c):
-        return b.srgb_to_linear(np.clip(c, 0, 1))
-
-    high = b.obj("high", (high_v, high_t))
-    for name, vals in (("albedo", srgb_lin(high_c)), ("glow", np.clip(high_g, 0, 4)),
-                       ("rough", np.stack([high_r] * 3, 1))):
-        ca = high.data.color_attributes.new(name, "FLOAT_COLOR", "POINT")
-        ca.data.foreach_set("color", np.concatenate([vals, np.ones((len(vals), 1))], 1).astype(np.float32).ravel())
-    low = b.obj("low", (low_v, low_t))
-    say("unwrap")
-    extrude = np.concatenate([np.full(len(lv), 0.06), np.full(len(hard_v), 0.006)])
-    tex = b.bake_textures(low, high, size, WORK, fast=fast, extrude=extrude)
-    say("baked")
-
-    # Weights, parts, and the file.
-    gv, gn, guv, gtan, gt, src = b.gather_low(low)
-    segs = bones(sk)
-    w_skin = b.weights(lv, lt, segs, falloff=0.15, smooth=10)
-    # Hard pieces move as one with the skin at their root.
-    w_low = np.zeros((len(low_v), w_skin.shape[1]))
-    w_low[:len(lv)] = w_skin
-    near = b.nearest(lv, hard_v)
-    off = len(lv)
-    for (v, f), kd in pieces:
-        k = len(v)
-        rootv = int(np.argmin(surf.distance(np.asarray(v[: min(k, 64)]))))
-        w_low[off:off + k] = w_skin[near[off - len(lv) + rootv]]
-        off += k
-    weights = w_low[src]
-    part = parts_of(sk, gv)
-    say(f"export: {len(gv)} verts, {len(gt)} tris")
-    if "--no-export" not in args:
-        b.write_beast_glb(OUT, sk, gv, gn, guv, gtan, gt, weights, part, tex, "ridgeback")
-        say(f"wrote {OUT}: {os.path.getsize(OUT) / 1e6:.1f} MB")
-    b.studio_textured(low, tex, look)
-    say(f"wrote {look}")
+def sculpt(v, t, kind):
+    return sculpt_with(v, t, kind, PLAN)
 
 
 if __name__ == "__main__":
-    main()
+    c.make(sys.modules[__name__])

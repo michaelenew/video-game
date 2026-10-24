@@ -1124,6 +1124,10 @@ pub const SECTIONS: &[Section] = &[
                 "Write the grown Ridgeback's mesh to target/grown.obj, to look at outside the game: what --grown-creatures draws, before the skin's detail. GROWN_OBJ=<species> (galewing, mantis, ...) writes that species' to target/grown_<species>.obj.",
             ),
             e(
+                "GROWN_LINES=1 cargo test -p game --bin game grown_lines",
+                "Grow every stage of the crossbreed lines (exploration 0031: each formed creature fed toward the next, and one backcrossed) to target/lines/<line>_<stage>.obj, coloured, with target/lines/lines.tsv saying what each stage is; art/blender.sh art/lineage.py renders them into strips.",
+            ),
+            e(
                 "SHOT_BEAST=angle,distance,height",
                 "The same round the hunt's creature: the camera distance metres from it, angle degrees round from the way it faces, looking at height metres above its feet. With --painted-cast it shows a creature's brushwork; SHOT_SPIN turns it.",
             ),

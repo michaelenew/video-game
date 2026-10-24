@@ -70,8 +70,13 @@ feathers, scythes -- `ringed_horn` and `vane`), and the segments its skin is
 weighted to; the builder does the union, the bake, the weights and the file.
 `art/galewing/build.py` and `art/mantis/build.py` are written that way, about
 four minutes each (`SCALE` sizes the voxels to the animal: the Mantis is three
-metres, so 0.3). The Ridgeback's build predates it and still carries its own
-copy of the pipeline. Why: [`docs/design/exploration/0030_two_more_targets.md`](../docs/design/exploration/0030_two_more_targets.md).
+metres, so 0.3). Why: [`docs/design/exploration/0030_two_more_targets.md`](../docs/design/exploration/0030_two_more_targets.md).
+The Ridgeback's moved onto it too (2026-10-24, exploration 0031).
+
+**Crossbreed lines** (exploration 0031): `GROWN_LINES=1 cargo test -p game
+--bin game grown_lines` grows every stage of the lines in `game::bred::lines`
+to `target/lines/`, and `art/blender.sh art/lineage.py` renders each line as
+a strip of its stages (`--line <name> --stages 0,3,6` for a few).
 
 ## The rules
 

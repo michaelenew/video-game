@@ -19,11 +19,14 @@
 //! elementalist, blood, dual.
 
 mod anatomy;
+// Grows bred bodies; the game does not draw a morph with one yet (exploration 0031).
 mod arenas;
 mod bag;
 mod bake;
 mod beast;
 mod blades;
+#[allow(dead_code)]
+mod bred;
 mod brushwork;
 mod cairns;
 mod carapace;

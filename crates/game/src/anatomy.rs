@@ -26,9 +26,9 @@
 
 use bevy::prelude::*;
 
+use crate::grown::Anatomy as Species;
 use crate::horns::{Hard, Kind, meet, piece, vane_piece};
 use crate::species::{Build, Foot, Look};
-use sim::species::Species;
 
 /// What a part is, beyond its contour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,10 +40,17 @@ pub enum Role {
     Fan,
     /// Breakable, long and thin: a scythe.
     Blade,
+    /// A wing folded along the flank, a plane standing on edge: its
+    /// feathers lie along it in rows (a bred body standing, exploration
+    /// 0031).
+    Folded,
 }
 
 /// A part's role, from its box in the world at rest and its bone.
 pub fn role(sp: &Species, part: usize, lo: Vec3, hi: Vec3) -> Role {
+    if let Some(r) = sp.roles.get(part).copied().flatten() {
+        return r;
+    }
     let half = (hi - lo) * 0.5;
     let bone = &sp.bones[sp.parts[part].shape.bone];
     let leg = sp.legs.iter().any(|l| l.upper == part || l.foot == part);
@@ -67,7 +74,7 @@ pub fn role(sp: &Species, part: usize, lo: Vec3, hi: Vec3) -> Role {
 /// What the rules need: the species, its build and look, every part's box
 /// and role, the rest frames, and the body's field to set things onto.
 pub struct Plan<'a> {
-    pub sp: &'static Species,
+    pub sp: &'a crate::grown::Anatomy,
     pub build: &'a Build,
     pub look: &'a Look,
     pub boxes: &'a [(Vec3, Vec3)],
@@ -138,6 +145,91 @@ fn wing_chain(p: &Plan, side: f32) -> Vec<usize> {
     parts
 }
 
+/// The feathers of a wing part written along its own axis: secondaries back
+/// across its chord with a covert over each, or, the outermost part, the
+/// primaries fanning from back to out along it.
+fn plane_feathers(p: &Plan, i: usize, side: f32, tip: bool) -> Vec<Hard> {
+    let sp = p.sp;
+    let f = sp.frames[i];
+    let sh = sp.shape(i);
+    let v3 = |v: sim::V3| {
+        Vec3::new(
+            v.x.to_f32_for_render(),
+            v.y.to_f32_for_render(),
+            v.z.to_f32_for_render(),
+        )
+    };
+    let (c, h) = (
+        (v3(sh.min) + v3(sh.max)) * 0.5,
+        (v3(sh.max) - v3(sh.min)) * 0.5,
+    );
+    // Of the two sides across it, the chord is the wider; the other is the
+    // plane's normal.
+    let (chord_ax, normal_ax) = if h.y >= h.z { (1, 2) } else { (2, 1) };
+    let unit = |a: usize| {
+        let mut e = Vec3::ZERO;
+        e[a] = 1.0;
+        f.transform_vector3(e).normalize_or(Vec3::X)
+    };
+    let span = unit(0);
+    let back = if unit(chord_ax).x > 0.0 {
+        -unit(chord_ax)
+    } else {
+        unit(chord_ax)
+    };
+    let out = if span.z * side >= 0.0 { span } else { -span };
+    let mut normal = unit(normal_ax);
+    if normal.y < 0.0 {
+        normal = -normal;
+    }
+    let centre = f.transform_point3(c);
+    let chord = h[chord_ax] * 2.0;
+    let spacing = 0.3 * p.build.feathers;
+    let n = ((h.x * 2.0) / spacing).ceil().clamp(2.0, 24.0) as usize;
+    let bone = sp.parts[i].shape.bone;
+    let mut hard = Vec::new();
+    for j in 0..n {
+        let t = (j as f32 + 0.5) / n as f32 * 2.0 - 1.0;
+        let root = centre + out * t * h.x * 0.95 - normal * 0.004 * j as f32;
+        // The hand's feathers fan from back to out along it.
+        let d = if tip {
+            let w = (t * 0.5 + 0.5) * 0.8;
+            (back * (1.0 - w) + out * w).normalize()
+        } else {
+            back
+        };
+        let length = chord * if tip { 0.85 } else { 0.7 } + 0.05;
+        let width = spacing * 1.6;
+        let path = [
+            root,
+            root + d * length * 0.5 + normal * length * 0.03,
+            root + d * length,
+        ];
+        hard.push(vane_piece(
+            &path,
+            &[width * 0.28, width * 0.5, width * 0.1],
+            normal,
+            0.012 * width.max(0.2) / 0.4,
+            0.35,
+            bone,
+            i,
+            Kind::Feather,
+        ));
+        let cov = root - back * chord * 0.2 + normal * h[normal_ax] * 1.2;
+        hard.push(vane_piece(
+            &[cov, cov + d * length * 0.25, cov + d * length * 0.45],
+            &[width * 0.25, width * 0.4, width * 0.1],
+            normal,
+            0.012 * width.max(0.2) / 0.4,
+            0.25,
+            bone,
+            i,
+            Kind::Feather,
+        ));
+    }
+    hard
+}
+
 /// The share of a feathered wing part's chord its flesh keeps, from the
 /// front: the rest is flight feathers.
 pub const WING_FLESH: f32 = 0.55;
@@ -151,8 +243,24 @@ pub fn grow(p: &Plan) -> Vec<Hard> {
     let sp = p.sp;
     let bone_of = |i: usize| sp.parts[i].shape.bone;
     if b.feathers > 0.0 {
+        // A wing whose box runs along its own axis (a bred one): its span
+        // is that axis and its chord across it, however it is swept or
+        // lifted -- the feathers laid in its own plane, pointing back.
         for side in [-1.0f32, 1.0] {
-            let chain = wing_chain(p, side);
+            let chain: Vec<usize> = wing_chain(p, side)
+                .into_iter()
+                .filter(|&i| sp.long[i] == Some(0))
+                .collect();
+            for (k, &i) in chain.iter().enumerate() {
+                let tip = k + 1 == chain.len();
+                out.extend(plane_feathers(p, i, side, tip));
+            }
+        }
+        for side in [-1.0f32, 1.0] {
+            let chain: Vec<usize> = wing_chain(p, side)
+                .into_iter()
+                .filter(|&i| sp.long[i] != Some(0))
+                .collect();
             let total: f32 = chain
                 .iter()
                 .map(|&i| p.boxes[i].1.z - p.boxes[i].0.z)
@@ -259,6 +367,59 @@ pub fn grow(p: &Plan) -> Vec<Hard> {
                     0.1 * f,
                     bone_of(i),
                     i,
+                ));
+            }
+        }
+    }
+    // A wing folded: rows of long feathers lying along its plane, pointing
+    // the way it runs back, each row a little outside the one above.
+    if b.feathers > 0.0 {
+        for i in (0..sp.parts.len()).filter(|&i| p.roles[i] == Role::Folded) {
+            let f = sp.frames[i];
+            let sh = sp.shape(i);
+            let lo = Vec3::new(
+                sh.min.x.to_f32_for_render(),
+                sh.min.y.to_f32_for_render(),
+                sh.min.z.to_f32_for_render(),
+            );
+            let hi = Vec3::new(
+                sh.max.x.to_f32_for_render(),
+                sh.max.y.to_f32_for_render(),
+                sh.max.z.to_f32_for_render(),
+            );
+            let (c, h) = ((lo + hi) * 0.5, (hi - lo) * 0.5);
+            // Its thin side is the plane's normal; of the other two, its
+            // length is along `x`.
+            let thin = if h.y <= h.z { 1 } else { 2 };
+            let tall = 3 - thin;
+            let axis = [Vec3::X, Vec3::Y, Vec3::Z];
+            let along = f.transform_vector3(axis[0]).normalize_or(Vec3::NEG_X);
+            let back = if along.x <= 0.0 { 1.0 } else { -1.0 };
+            let d = along * back;
+            let normal = f.transform_vector3(axis[thin]).normalize_or(Vec3::Z);
+            let rows = 3;
+            for r in 0..rows {
+                let t = (r as f32 + 0.5) / rows as f32 * 2.0 - 1.0;
+                let mut local = c;
+                local[0] -= back * h.x * 0.9;
+                local[tall] += t * h[tall] * 0.8;
+                local[thin] += h[thin] * (0.6 + 0.3 * r as f32);
+                let root = f.transform_point3(local);
+                let length = h.x * 2.0 * (1.0 - 0.12 * r as f32);
+                let width = h[tall] * 2.0 / rows as f32 * 1.8;
+                out.push(vane_piece(
+                    &[
+                        root,
+                        root + d * length * 0.5 + normal * 0.01,
+                        root + d * length,
+                    ],
+                    &[width * 0.3, width * 0.5, width * 0.15],
+                    normal,
+                    0.012 * width.max(0.2) / 0.4,
+                    0.2,
+                    bone_of(i),
+                    i,
+                    Kind::Feather,
                 ));
             }
         }
@@ -488,7 +649,6 @@ fn foot_of(
     leg: &sim::beast::Leg,
 ) -> (Vec3, f32, usize, Vec3, Vec3) {
     let (lo, hi) = boxes[leg.foot];
-    let half = (hi - lo) * 0.5;
     let paw = (0..sp.bones.len()).find(|&b| sp.bones[b].paw && sp.bones[b].parent == leg.knee);
     let joint = match paw {
         Some(b) => rest[b].transform_point3(Vec3::ZERO),
@@ -496,7 +656,7 @@ fn foot_of(
     };
     (
         joint,
-        half.x.max(half.z),
+        sp.thickness(leg.foot),
         paw.unwrap_or(sp.parts[leg.foot].shape.bone),
         lo,
         hi,
@@ -516,7 +676,7 @@ pub fn feet(
     match build.foot {
         Foot::Paw => {}
         Foot::Talon => {
-            for leg in sp.legs {
+            for leg in &sp.legs {
                 let (joint, half, bone, lo, _) = foot_of(sp, boxes, rest, leg);
                 let s = half / 0.45;
                 let palm = Vec3::new(joint.x, lo.y + 0.12 * s, joint.z);
@@ -553,7 +713,7 @@ pub fn feet(
             }
         }
         Foot::Tarsus => {
-            for leg in sp.legs {
+            for leg in &sp.legs {
                 let (joint, half, bone, _, _) = foot_of(sp, boxes, rest, leg);
                 let s = half / 0.07;
                 let d = Vec3::new(0.55, 0.0, leg.side as f32 * 0.84).normalize();

@@ -346,7 +346,7 @@ pub struct Paw {
 /// toes on each (none at all for zero), for legs `girth` times as thick as
 /// their boxes: a paw is broader than the wrist it hangs from.
 pub fn paws(
-    sp: &'static sim::species::Species,
+    sp: &crate::grown::Anatomy,
     boxes: &[(Vec3, Vec3)],
     rest: &[Mat4],
     toes: u8,
@@ -356,11 +356,10 @@ pub fn paws(
         return Vec::new();
     }
     let mut out = Vec::new();
-    for leg in sp.legs {
+    for leg in &sp.legs {
         let (lo, hi) = boxes[leg.foot];
         let c = (lo + hi) * 0.5;
-        let half = (hi - lo) * 0.5;
-        let s = half.x.max(half.z) / 0.44 * girth.max(1.0);
+        let s = sp.thickness(leg.foot) / 0.44 * girth.max(1.0);
         let paw_bone =
             (0..sp.bones.len()).find(|&b| sp.bones[b].paw && sp.bones[b].parent == leg.knee);
         let joint = match paw_bone {
@@ -400,7 +399,7 @@ pub fn paws(
 
 /// What a body needs to say where its hard parts go.
 pub struct Plan<'a> {
-    pub sp: &'static sim::species::Species,
+    pub sp: &'a crate::grown::Anatomy,
 
     /// Every part's box in the world at rest, as `(lo, hi)`.
     pub boxes: Vec<(Vec3, Vec3)>,
@@ -418,7 +417,7 @@ pub struct Plan<'a> {
 /// Every hard part the table calls for.
 pub fn grow(plan: &Plan) -> Vec<Hard> {
     let sp = plan.sp;
-    let look = crate::species::look(sp.id);
+    let look = &sp.look;
     let field = plan.field;
     let mut out = Vec::new();
     let centre_of = |i: usize| (plan.boxes[i].0 + plan.boxes[i].1) * 0.5;
