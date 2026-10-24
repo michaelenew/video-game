@@ -88,9 +88,13 @@ NECK = [(1.9, 5.15, 0), (2.65, 5.32, 0), (3.45, 5.34, 0), (4.10, 5.18, 0)]
 HEAD = [(3.95, 5.30, 0), (4.55, 5.30, 0), (5.15, 5.12, 0), (5.80, 4.90, 0)]
 TAIL = [(-2.9, 5.02, 0), (-4.15, 4.95, 0), (-5.4, 4.5, 0), (-6.54, 3.9, 0), (-7.75, 3.38, 0)]
 FORE = [(1.14, 5.0, -0.80), (1.12, 4.5, -1.0), (1.06, 3.4, -1.04), (1.04, 2.35, -1.0),
-        (1.10, 1.2, -1.0), (1.15, 0.45, -1.0), (1.18, 0.0, -1.0)]
+        (1.10, 1.2, -1.0), (1.20, 0.50, -1.0), (1.36, 0.24, -1.0)]
 HIND = [(-1.75, 5.0, -0.82), (-1.86, 4.4, -0.97), (-1.72, 3.3, -1.02), (-1.55, 2.3, -1.0),
-        (-1.77, 1.3, -0.97), (-1.90, 0.6, -0.97), (-1.76, 0.0, -0.97)]
+        (-1.72, 1.3, -0.97), (-1.64, 0.50, -0.97), (-1.46, 0.24, -0.97)]
+# Where each left leg's second joint is -- the wrist, the ankle -- below
+# which the paw stays flat on the ground (``sim::beast::Bone::paw``).
+WRIST = (1.20, 0.50, -1.0)
+ANKLE = (-1.64, 0.50, -0.97)
 # Angles round a leg, from its front toward its inside (+z on the left).
 OUTSIDE, BACK, FRONT = -np.pi / 2, np.pi, 0.0
 
@@ -165,9 +169,10 @@ def tail():
 
 
 def foreleg():
-    """A column from inside the shoulder to the floor, thick the whole way:
+    """A column from inside the shoulder to the wrist, thick the whole way:
     the deltoid capping it, the triceps a mass behind, the elbow's point,
-    the forearm's muscle down its outside; a pad that spreads at the floor."""
+    the forearm's muscle down its outside; it narrows into the wrist and
+    the pastern slopes forward into the paw."""
     rows = [
         (0.0, 0.88, 0.88, 0.96),
         (0.10, 0.84, 0.84, 1.00),
@@ -175,8 +180,8 @@ def foreleg():
         (0.50, 0.50, 0.48, 0.56),
         (0.60, 0.50, 0.50, 0.48),
         (0.80, 0.46, 0.45, 0.45),
-        (0.91, 0.45, 0.44, 0.44),
-        (1.0, 0.64, 0.68, 0.58),
+        (0.90, 0.40, 0.40, 0.42),
+        (1.0, 0.36, 0.34, 0.34),
     ]
     muscles = [
         (OUTSIDE + 0.6, 0.55, [0.12, 0.20, 0.08, 0.0, 0.0, 0.0, 0.0, 0.0]),
@@ -195,8 +200,8 @@ def hindleg():
         (0.32, 0.64, 0.66, 0.78),
         (0.50, 0.48, 0.50, 0.48),
         (0.70, 0.44, 0.40, 0.52),
-        (0.87, 0.42, 0.40, 0.42),
-        (1.0, 0.60, 0.64, 0.54),
+        (0.88, 0.40, 0.38, 0.40),
+        (1.0, 0.36, 0.34, 0.34),
     ]
     muscles = [
         (BACK + 0.5, 0.6, [0.12, 0.20, 0.10, 0.0, 0.0, 0.0, 0.0]),
@@ -209,14 +214,40 @@ def hindleg():
     return [b.tube(HIND, muscled(rows, muscles), ref=(1, 0, 0), sides=48)]
 
 
-def toes():
-    """Three great toes round the front of each pad, each a mass the claw
-    grows from."""
+def toe_layout(joint):
+    """A dog's paw off a wrist or an ankle at ``joint`` (the left leg's):
+    where the palm sits, and each of the four toes -- its middle, which way
+    it points, how big it is. The two middle toes lead and the outer two sit
+    back, in an arc round the front of the palm, with a cleft between each."""
+    j = np.asarray(joint, float)
+    palm = np.array([j[0] + 0.32, 0.25, j[2]])
+    toes = []
+    for deg, dist, size in ((-56, 0.50, 0.88), (-19, 0.60, 1.0), (19, 0.60, 1.0), (56, 0.50, 0.88)):
+        a = np.radians(deg)
+        d = np.array([np.cos(a), 0.0, np.sin(a)])
+        c = palm + d * dist
+        c[1] = 0.21 * size
+        toes.append((c, d, size))
+    return palm, toes
+
+
+def paws():
+    """Each foot a dog's: a broad palm, four knuckled toes split by clefts,
+    and on a foreleg the pad at the back of the wrist and the dewclaw up
+    its inside. The left two; ``soft_forms`` mirrors them."""
     out = []
-    for (fx, fz, r) in ((1.18, -1.0, 0.64), (-1.76, -0.97, 0.60)):
-        for a in np.radians([-48, 0, 48]):
-            d = np.array([np.cos(a), 0.0, np.sin(a)])
-            out.append(b.blob(np.array([fx, 0.26, fz]) + d * (r - 0.12), (0.24, 0.24, 0.21)))
+    for joint, fore in ((WRIST, True), (ANKLE, False)):
+        palm, toes = toe_layout(joint)
+        out.append(b.blob(palm, (0.52, 0.25, 0.55)))
+        for c, d, size in toes:
+            axes = np.array([d, (0.0, 1.0, 0.0), np.cross(d, (0.0, 1.0, 0.0))])
+            out.append(b.blob(c, (0.25 * size, 0.21 * size, 0.155 * size), axes=axes))
+            # The knuckle: each toe arches up before it comes down.
+            out.append(b.blob(c - d * 0.10 * size + np.array([0, 0.11, 0]), (0.13, 0.12, 0.11), axes=axes))
+        j = np.asarray(joint, float)
+        if fore:
+            out.append(b.blob(j + np.array([-0.36, -0.04, 0.0]), (0.15, 0.17, 0.16)))
+            out.append(b.blob(j + np.array([0.06, 0.26, 0.33]), (0.10, 0.15, 0.09)))
     return out
 
 
@@ -247,8 +278,8 @@ def club():
 
 
 def soft_forms():
-    left = foreleg() + hindleg()
-    return [torso(), neck(), tail()] + head() + crests() + toes() + club() + left + [b.mirror(f) for f in left]
+    left = foreleg() + hindleg() + paws()
+    return [torso(), neck(), tail()] + head() + crests() + club() + left + [b.mirror(f) for f in left]
 
 
 # ---------------------------------------------------------------------------
@@ -675,16 +706,25 @@ def hard_parts(surf):
     for s in (-1, 1):
         out.append((ringed_horn([(0.80, 2.45, s * 1.0), (0.45, 2.65, s * 1.08), (0.18, 2.95, s * 1.10)],
                                 [0.11, 0.07, 0.0], ridges=5, depth=0.05, sides=14), "spine"))
-    # Claws: one over each toe, thick and hooked down.
-    for (fx, fz, r) in ((1.18, -1.0, 0.64), (-1.76, -0.97, 0.60)):
+    # Claws: one off the end of each toe, short, thick and hooked to the
+    # floor, a dog's; and the dewclaw's, up the inside of each foreleg.
+    for joint, fore in ((WRIST, True), (ANKLE, False)):
+        _, toes = toe_layout(joint)
         for s in (-1, 1):
-            zc = fz if s == -1 else -fz
-            for a in np.radians([-48, 0, 48]):
-                d = np.array([np.cos(a), 0.0, np.sin(a) * (1 if s == -1 else -1)])
-                base = np.array([fx, 0.30, zc]) + d * (r + 0.02)
-                out.append((ringed_horn([base - d * 0.12, base + d * 0.12 + np.array([0, -0.08, 0]),
-                                         base + d * 0.24 + np.array([0, -0.26, 0])],
-                                        [0.15, 0.11, 0.0], ridges=4, depth=0.04, sides=16, flat=0.75), "claw"))
+            flip = np.array([1.0, 1.0, -s * 1.0])
+            for c, d, size in toes:
+                base = (c + d * 0.17 * size + np.array([0, 0.05, 0])) * flip
+                dd = d * flip
+                out.append((ringed_horn([base - dd * 0.10, base + dd * 0.10 * size + np.array([0, -0.01, 0]),
+                                         base + dd * 0.19 * size + np.array([0, -0.17 * size, 0])],
+                                        [0.085 * size, 0.06 * size, 0.0], ridges=3, depth=0.03, sides=14,
+                                        flat=0.8), "claw"))
+            if fore:
+                j = np.asarray(joint, float)
+                dew = (j + np.array([0.12, 0.22, 0.40])) * flip
+                out.append((ringed_horn([dew - np.array([0.06, 0, 0]), dew + np.array([0.05, -0.04, 0]),
+                                         dew + np.array([0.10, -0.14, 0])], [0.05, 0.035, 0.0], ridges=2,
+                                        depth=0.02, sides=12), "claw"))
     return out
 
 
@@ -822,6 +862,8 @@ def sculpt(v, t, kind, plan):
     c = mixc(c, HIDE_DUST, smooth(0.3, 0.9, up) * 0.45 + (1 - crease) * 0.10)
     c = mixc(c, HIDE_DARK, crease * 0.75 + folds * 0.5 + fine * 0.25)
     c = mixc(c, MUD, smooth(1.4, 0.15, y) * 0.8)
+    # The pads under each paw: bare, dark, worn leather.
+    c = mixc(c, np.array([0.16, 0.12, 0.10]), smooth(0.14, 0.05, y) * smooth(0.1, -0.5, up))
     c = c * (0.85 + 0.3 * b.fbm(v, 1.2, 3, seed=40))[:, None]
     # The beak: dark, smooth horn, paler at its cutting edge.
     c = mixc(c, mixc(np.array([0.20, 0.17, 0.14]), np.array([0.55, 0.50, 0.42]), smooth(5.0, 4.86, y) * 0.8),
@@ -924,9 +966,11 @@ def bones(sk):
     for side, z in (("l", -1.0), ("r", 1.0)):
         out += [
             (i[f"shoulder.{side}"], (1.10, 4.55, 1.0 * z), (1.04, 2.35, 1.0 * z), 0.55),
-            (i[f"forearm.{side}"], (1.04, 2.35, 1.0 * z), (1.18, 0.0, 1.0 * z), 0.48),
+            (i[f"forearm.{side}"], (1.04, 2.35, 1.0 * z), (1.20, 0.50, 1.0 * z), 0.46),
+            (i[f"forepaw.{side}"], (1.20, 0.46, 1.0 * z), (2.0, 0.18, 1.0 * z), 0.40),
             (i[f"thigh.{side}"], (-1.86, 4.45, 0.97 * z), (-1.55, 2.3, 0.97 * z), 0.55),
-            (i[f"shin.{side}"], (-1.55, 2.3, 0.97 * z), (-1.76, 0.0, 0.97 * z), 0.45),
+            (i[f"shin.{side}"], (-1.55, 2.3, 0.97 * z), (-1.64, 0.50, 0.97 * z), 0.44),
+            (i[f"hindpaw.{side}"], (-1.64, 0.46, 0.97 * z), (-0.86, 0.18, 0.97 * z), 0.40),
         ]
     return out
 

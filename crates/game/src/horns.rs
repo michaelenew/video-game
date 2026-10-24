@@ -9,7 +9,8 @@
 //!   forelegs hang from;
 //! - **horns** sweep back off the skull and curl up and forward, with nubs
 //!   along each brow, a horn on the nose and tusks out of the jaw;
-//! - **claws** go round the front of every foot's pad;
+//! - **claws** come off the end of every toe of a dog's paw ([`paws`]):
+//!   short, thick and hooked to the floor, and a dewclaw up a foreleg;
 //! - **quills** fan out of the end of the tail that throws them.
 //!
 //! Each is a tube with growth ridges, set onto the body where a ray meets
@@ -188,6 +189,92 @@ fn piece(
     }
 }
 
+/// One toe of a paw: its middle, which way it points, how big it is.
+#[derive(Clone, Copy, Debug)]
+pub struct Toe {
+    pub at: Vec3,
+    pub dir: Vec3,
+    pub size: f32,
+}
+
+/// **A dog's paw** (2026-10-24), worked out from a leg the way the sculpted
+/// Ridgeback's are drawn (`art/ridgeback/build.py`, `toe_layout`): a broad
+/// palm ahead of the wrist or the ankle, and the toes in an arc round its
+/// front, the middle ones leading and the outer ones set back, a cleft
+/// between each. `scale` is the paw's size against the Ridgeback's.
+#[derive(Clone, Debug)]
+pub struct Paw {
+    pub palm: Vec3,
+    pub scale: f32,
+    pub toes: Vec<Toe>,
+    /// The bone the paw rides -- the leg's paw bone where it has one
+    /// (`sim::beast::Bone::paw`), else its lower leg -- and the foot part.
+    pub bone: usize,
+    pub foot: usize,
+    /// A foreleg, which also has the pad at the back of its wrist and a
+    /// dewclaw up its inside; and which way is the inside (`+z` or `-z`).
+    pub fore: bool,
+    pub inside: f32,
+    /// The wrist or ankle.
+    pub joint: Vec3,
+}
+
+/// Every leg's paw, from the feet's boxes and the rest frames, with `toes`
+/// toes on each (none at all for zero), for legs `girth` times as thick as
+/// their boxes: a paw is broader than the wrist it hangs from.
+pub fn paws(
+    sp: &'static sim::species::Species,
+    boxes: &[(Vec3, Vec3)],
+    rest: &[Mat4],
+    toes: u8,
+    girth: f32,
+) -> Vec<Paw> {
+    if toes == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for leg in sp.legs {
+        let (lo, hi) = boxes[leg.foot];
+        let c = (lo + hi) * 0.5;
+        let half = (hi - lo) * 0.5;
+        let s = half.x.max(half.z) / 0.44 * girth.max(1.0);
+        let paw_bone =
+            (0..sp.bones.len()).find(|&b| sp.bones[b].paw && sp.bones[b].parent == leg.knee);
+        let joint = match paw_bone {
+            Some(b) => rest[b].transform_point3(Vec3::ZERO),
+            None => Vec3::new(c.x, lo.y + 0.5 * s, c.z),
+        };
+        let palm = Vec3::new(joint.x + 0.32 * s, lo.y + 0.25 * s, joint.z);
+        let n = toes as usize;
+        let toes = (0..n)
+            .map(|j| {
+                let u = if n == 1 {
+                    0.0
+                } else {
+                    j as f32 / (n - 1) as f32 * 2.0 - 1.0
+                };
+                let a = u * 0.98;
+                let dir = Vec3::new(a.cos(), 0.0, a.sin());
+                let size = 1.0 - 0.12 * u.abs();
+                let mut at = palm + dir * (0.60 - 0.10 * u.abs()) * s;
+                at.y = lo.y + 0.21 * s * size;
+                Toe { at, dir, size }
+            })
+            .collect();
+        out.push(Paw {
+            palm,
+            scale: s,
+            toes,
+            bone: paw_bone.unwrap_or(sp.parts[leg.foot].shape.bone),
+            foot: leg.foot,
+            fore: leg.front,
+            inside: -leg.side as f32,
+            joint,
+        });
+    }
+    out
+}
+
 /// What a body needs to say where its hard parts go.
 pub struct Plan<'a> {
     pub sp: &'static sim::species::Species,
@@ -199,7 +286,8 @@ pub struct Plan<'a> {
     pub bone_at: &'a dyn Fn(Vec3) -> usize,
     pub spines: f32,
     pub horns: f32,
-    pub claws: u8,
+    /// Every leg's paw, which the claws come off.
+    pub paws: &'a [Paw],
     /// How far round a part's top its armour reaches, for the collar.
     pub reach: f32,
 }
@@ -463,43 +551,46 @@ pub fn grow(plan: &Plan) -> Vec<Hard> {
         }
     }
 
-    // -- Claws round the front of every foot's pad.
-    if plan.claws > 0 {
-        for leg in sp.legs {
-            let foot = leg.foot;
-            let (lo, hi) = plan.boxes[foot];
-            let c = centre_of(foot);
-            let r = half_of(foot).x.max(half_of(foot).z);
-            let n = plan.claws as usize;
-            for j in 0..n {
-                let a = if n == 1 {
-                    0.0
-                } else {
-                    (j as f32 / (n - 1) as f32 - 0.5) * 1.7
-                };
-                let d = Vec3::new(a.cos(), 0.0, a.sin());
-                let base = Vec3::new(c.x, lo.y + 0.3, c.z) + d * (r * 1.1);
-                let Some((p, _)) = meet(field, base + d * 1.0, Vec3::new(c.x, lo.y + 0.3, c.z))
-                else {
-                    continue;
-                };
-                out.push(piece(
-                    vec![
-                        p - d * 0.12,
-                        p + d * 0.12 + Vec3::new(0.0, -0.08, 0.0),
-                        p + d * 0.24 + Vec3::new(0.0, -0.26, 0.0),
-                    ],
-                    &[0.15, 0.11, 0.0],
-                    4.0,
-                    0.04,
-                    0.75,
-                    None,
-                    sp.parts[foot].shape.bone,
-                    foot,
-                    Kind::Claw,
-                ));
-                let _ = hi;
-            }
+    // -- Claws: one off the end of every toe, short, thick and hooked to
+    // the floor, a dog's; and a dewclaw up the inside of each foreleg.
+    for paw in plan.paws {
+        let s = paw.scale;
+        for toe in &paw.toes {
+            let (d, k) = (toe.dir, toe.size * s);
+            let base = toe.at + d * 0.17 * k + Vec3::new(0.0, 0.05 * s, 0.0);
+            out.push(piece(
+                vec![
+                    base - d * 0.10 * s,
+                    base + d * 0.10 * k + Vec3::new(0.0, -0.01 * s, 0.0),
+                    base + d * 0.19 * k + Vec3::new(0.0, -0.17 * k, 0.0),
+                ],
+                &[0.085 * k, 0.06 * k, 0.0],
+                3.0,
+                0.03,
+                0.8,
+                None,
+                paw.bone,
+                paw.foot,
+                Kind::Claw,
+            ));
+        }
+        if paw.fore {
+            let dew = paw.joint + Vec3::new(0.12, 0.22, 0.40 * paw.inside) * s;
+            out.push(piece(
+                vec![
+                    dew - Vec3::new(0.06, 0.0, 0.0) * s,
+                    dew + Vec3::new(0.05, -0.04, 0.0) * s,
+                    dew + Vec3::new(0.10, -0.14, 0.0) * s,
+                ],
+                &[0.05 * s, 0.035 * s, 0.0],
+                2.0,
+                0.02,
+                1.0,
+                None,
+                sp.parts[paw.foot].shape.bone,
+                paw.foot,
+                Kind::Claw,
+            ));
         }
     }
 

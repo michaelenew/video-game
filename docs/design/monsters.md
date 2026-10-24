@@ -677,6 +677,21 @@ raised foot reaching forward, the reared forelegs pawing, the kneel onto a
 forearm laid flat in front as a dog lies down -- and `sim/tests/knees.rs`
 fails on any baked frame that bends one backward.
 
+**Every leg folds twice** (2026-10-24, the owner: *"basically all animals
+have two joints in the legs"*). A leg was a hip and a knee and a box to the
+floor, so a foot was the end of a post. Every walking creature now has a bone
+below each leg's second joint -- a wrist or an ankle half a metre off the
+floor on the Ridgeback, the Veilstalker's and the Pair's paws, the Mireback's
+hands and feet, the Galewing's feet, the Mantis's tarsi -- and that bone is a
+**paw** (`sim::beast::Bone::paw`): the rig takes the pitch of every bone above
+it back off, so it lies flat on the ground whatever the gait, a lame leg's
+fold or a climb's crouch does to the leg above it, and a clip can still curl
+it from there. The paws are last in each skeleton and carry no part: the
+breakable foot is still the whole lower leg, which is what a fighter on the
+floor reaches, so no clip, hit or pin moved. `sim/tests/paws.rs` holds both
+halves: every leg has a second joint, and every paw is level on every baked
+frame whose body is upright.
+
 The same lesson in a different place: **two keys at the same instant with
 different poses are a step, not a motion.** The shake had its last startup key
 and its first whip key both at the phase boundary, and the arbitrarily large

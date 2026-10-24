@@ -204,7 +204,8 @@ pub struct Build {
     /// How long the horns over the eyes are, in metres (0: none); with them
     /// come brow nubs, a nose horn and tusks.
     pub horns: f32,
-    /// How many claws a foot has.
+    /// How many toes a foot has, each with its claw: a dog's paw
+    /// (`horns::paws`); 0 for none.
     pub claws: u8,
 }
 

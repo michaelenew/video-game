@@ -74,6 +74,15 @@ pub struct Bone {
     /// lives in the skeleton rather than in the animation, exactly as it does
     /// for the fighters.
     pub side: i32,
+    /// **A paw** (2026-10-24): the bone below a leg's second joint, the
+    /// wrist or the ankle. Every animal's leg folds twice -- a knee and an
+    /// ankle -- and what the second fold is *for* is keeping the foot flat on
+    /// the ground while the leg above it swings. So a paw does not carry the
+    /// pitch of the bones above it: [`Rig::build`] takes their sum back off,
+    /// and the paw stays level whatever the gait, a lame leg's fold or a
+    /// climb's crouch does to the leg. Its own channel still turns it from
+    /// there, which is how a clip curls a lifted paw.
+    pub paw: bool,
 }
 
 /// Write a bone. `const` so a species' skeleton is a table.
@@ -83,6 +92,15 @@ pub const fn bone(name: &'static str, parent: usize, rest: V3, side: i32) -> Bon
         parent,
         rest,
         side,
+        paw: false,
+    }
+}
+
+/// Write a paw: a bone that stays level (see [`Bone::paw`]).
+pub const fn paw(name: &'static str, parent: usize, rest: V3, side: i32) -> Bone {
+    Bone {
+        paw: true,
+        ..bone(name, parent, rest, side)
     }
 }
 
@@ -434,7 +452,15 @@ impl Rig {
 
         for (b, def) in species.bones.iter().enumerate() {
             let a = pose.bone[b];
-            let local = Mat3::from_angles(a.x, a.y, a.z);
+            let mut pitch = a.x;
+            if def.paw {
+                let mut up = def.parent;
+                while up != NO_PARENT {
+                    pitch = pitch.sub(pose.bone[up].x);
+                    up = species.bones[up].parent;
+                }
+            }
+            let local = Mat3::from_angles(pitch, a.y, a.z);
             let (parent_at, parent_rot) = if def.parent == NO_PARENT {
                 (origin, facing)
             } else {

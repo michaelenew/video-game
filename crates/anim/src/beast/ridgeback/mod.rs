@@ -85,6 +85,7 @@ pub fn group_of(bone: usize) -> (Group, u8) {
         TAIL3 => (Group::Tail, 2),
         TAIL4 => (Group::Tail, 3),
         SHOULDER_L | SHOULDER_R | THIGH_L | THIGH_R => (Group::Legs, 0),
+        FOREPAW_L | FOREPAW_R | HINDPAW_L | HINDPAW_R => (Group::Legs, 2),
         _ => (Group::Legs, 1),
     }
 }

@@ -451,6 +451,28 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         // longest side it was a tube lying across the body (2026-10-23). And it
         // is fixed before the part is made fuller, which must never turn it.
         let long = along_bone(sp, s.bone, &rest, half);
+        // **A foot ends at its wrist** (2026-10-24): where the leg has a paw
+        // (`sim::beast::Bone::paw`), the lower leg's flesh stops at the
+        // joint and the paw grown below it (`horns::paws`) meets the floor.
+        // The box itself still reaches the ground; this is only the body.
+        // A species that grows no paw (`Build::claws` zero) keeps its legs
+        // to the floor.
+        if let Some(pb) = (0..sp.bones.len()).find(|&b| {
+            build.claws > 0
+                && sp.bones[b].paw
+                && sp.bones[b].parent == s.bone
+                && sp.legs.iter().any(|l| l.foot == i)
+        }) {
+            let joint = to_world
+                .inverse()
+                .transform_point3(rest[pb].transform_point3(Vec3::ZERO))[long];
+            let root = if middle[long] > 0.0 { -1.0 } else { 1.0 };
+            let top = middle[long] + root * half[long];
+            if (top - joint) * root > 0.2 {
+                middle[long] = (top + joint) * 0.5;
+                half[long] = (top - joint).abs() * 0.5;
+            }
+        }
         // **Fuller than the boxes** (exploration 0029): a barrel hangs below
         // its box, so the chest is deep and the belly low between the legs,
         // and a leg is a column thicker than its box, which the body comes
@@ -646,6 +668,8 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         .collect();
     let mut extras: Vec<Sinew> = Vec::new();
     let mut crests: Vec<Sinew> = Vec::new();
+    // Toes, joined tightly enough that the cleft between two stays a cleft.
+    let mut digits: Vec<Sinew> = Vec::new();
     let capsule = |a: Vec3, b: Vec3, radius: f32| {
         let r = Vec3::splat(radius + 0.3);
         Sinew {
@@ -656,23 +680,91 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
             hi: a.max(b) + r,
         }
     };
-    if build.claws > 0 {
+    // A dog's paw on every leg (`horns::paws`): the palm, and each toe a
+    // knuckle that arches up and a pad that comes down to the floor.
+    let paws = crate::horns::paws(sp, &boxes, &rest, build.claws, build.girth);
+    for paw in &paws {
+        let k = paw.scale;
+        lo = lo.min(boxes[paw.foot].0);
+        // The pastern, from the wrist down and forward into the palm.
+        extras.push(capsule(
+            paw.joint,
+            paw.palm + Vec3::new(-0.08, 0.06, 0.0) * k,
+            0.24 * k,
+        ));
+        let across = Vec3::Z * 0.27 * k;
+        extras.push(capsule(paw.palm - across, paw.palm + across, 0.25 * k));
+        extras.push(capsule(
+            paw.palm - Vec3::X * 0.2 * k,
+            paw.palm + Vec3::X * 0.22 * k,
+            0.25 * k,
+        ));
+        for toe in &paw.toes {
+            let r = toe.size * k;
+            digits.push(capsule(
+                toe.at - toe.dir * 0.10 * r,
+                toe.at + toe.dir * 0.09 * r,
+                0.16 * r,
+            ));
+            let knuckle = toe.at - toe.dir * 0.10 * r + Vec3::Y * 0.11 * k;
+            digits.push(capsule(knuckle, knuckle, 0.12 * k));
+        }
+        if paw.fore {
+            let pad = paw.joint + Vec3::new(-0.36, -0.04, 0.0) * k;
+            extras.push(capsule(pad, pad, 0.15 * k));
+            let dew = paw.joint + Vec3::new(0.06, 0.26, 0.33 * paw.inside) * k;
+            extras.push(capsule(dew, dew, 0.1 * k));
+        }
+    }
+    // **The legs' muscle** (exploration 0029: "the legs are straight
+    // posts"): the masses the sculpted target's legs have, placed off the
+    // leg's two boxes. A foreleg: the deltoid capping it outside, the
+    // triceps behind its upper half, the forearm's muscle down the outside
+    // of its lower. A hindleg: the thigh's mass in front, the hamstring
+    // behind down to the knee, the calf behind the top of the shin and the
+    // point of the hock.
+    if build.girth > 1.0 {
+        let g = build.girth;
         for leg in sp.legs {
-            let (lo, hi) = boxes[leg.foot];
-            let c = (lo + hi) * 0.5;
-            // The pad's radius: across the foot, never up it.
-            let half = (hi - lo) * 0.5;
-            let r = half.x.max(half.z) * build.girth.min(1.15);
-            let n = build.claws as usize;
-            for j in 0..n {
-                let a = if n == 1 {
-                    0.0
-                } else {
-                    (j as f32 / (n - 1) as f32 - 0.5) * 1.7
-                };
-                let at = Vec3::new(c.x, lo.y + 0.26, c.z)
-                    + Vec3::new(a.cos(), 0.0, a.sin()) * (r * 0.85);
-                extras.push(capsule(at, at, 0.22));
+            let (ulo, uhi) = boxes[leg.upper];
+            let (flo, fhi) = boxes[leg.foot];
+            let (uc, uh) = ((ulo + uhi) * 0.5, (uhi - ulo) * 0.5);
+            let (fc, fh) = ((flo + fhi) * 0.5, (fhi - flo) * 0.5);
+            let (side, r) = (leg.side as f32, uh.x.max(uh.z) * g);
+            let (uy, fy) = (uhi.y - ulo.y, fhi.y - flo.y);
+            let at = |c: Vec3, x: f32, y: f32, z: f32| Vec3::new(c.x + x, y, c.z + side * z);
+            if leg.front {
+                extras.push(capsule(
+                    at(uc, 0.1 * r, uhi.y - 0.16 * uy, 0.62 * r),
+                    at(uc, 0.05 * r, uhi.y - 0.40 * uy, 0.68 * r),
+                    0.48 * r,
+                ));
+                extras.push(capsule(
+                    at(uc, -0.78 * r, uhi.y - 0.2 * uy, 0.05 * r),
+                    at(uc, -0.7 * r, uhi.y - 0.62 * uy, 0.12 * r),
+                    0.48 * r,
+                ));
+                extras.push(capsule(
+                    at(fc, 0.2 * fh.x * g, fhi.y - 0.06 * fy, 0.7 * fh.z * g),
+                    at(fc, 0.1 * fh.x * g, fhi.y - 0.40 * fy, 0.6 * fh.z * g),
+                    0.42 * fh.z * g,
+                ));
+            } else {
+                extras.push(capsule(
+                    at(uc, 0.7 * r, uhi.y - 0.15 * uy, 0.35 * r),
+                    at(uc, 0.55 * r, uhi.y - 0.55 * uy, 0.35 * r),
+                    0.5 * r,
+                ));
+                extras.push(capsule(
+                    at(uc, -0.75 * r, uhi.y - 0.2 * uy, 0.2 * r),
+                    at(uc, -0.65 * r, ulo.y + 0.15 * uy, 0.15 * r),
+                    0.48 * r,
+                ));
+                extras.push(capsule(
+                    at(fc, -0.8 * fh.x * g, fhi.y - 0.1 * fy, 0.0),
+                    at(fc, -0.5 * fh.x * g, fhi.y - 0.45 * fy, 0.0),
+                    0.45 * fh.x * g,
+                ));
             }
         }
     }
@@ -699,7 +791,25 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         for side in [-1.0f32, 1.0] {
             let at = Vec3::new(lo.x + 0.18 * l, lo.y + 0.38 * h, side * half_z * 0.85);
             extras.push(capsule(at, at, 0.3 * h));
+            // The skull's own shape over the wedge: a heavy brow over each
+            // eye, a cheekbone flaring below it.
+            extras.push(capsule(
+                Vec3::new(lo.x + 0.42 * l, lo.y + 0.86 * h, side * half_z * 0.62),
+                Vec3::new(lo.x + 0.68 * l, lo.y + 0.80 * h, side * half_z * 0.55),
+                0.13 * h,
+            ));
+            extras.push(capsule(
+                Vec3::new(lo.x + 0.30 * l, lo.y + 0.52 * h, side * half_z * 0.95),
+                Vec3::new(lo.x + 0.62 * l, lo.y + 0.50 * h, side * half_z * 0.78),
+                0.13 * h,
+            ));
         }
+        // A ridge down the nose to the boss the nose horn stands on.
+        extras.push(capsule(
+            Vec3::new(lo.x + 0.62 * l, lo.y + 0.84 * h, 0.0),
+            Vec3::new(hi.x - 0.12 * l, lo.y + 0.70 * h, 0.0),
+            0.12 * h,
+        ));
     }
     for i in (0..sp.parts.len()).filter(|&i| sp.parts[i].weak) {
         let (lo, hi) = boxes[i];
@@ -784,6 +894,12 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
             if s.near(p) {
                 let e = s.distance(p);
                 d = if d == f32::MAX { e } else { smin(d, e, 0.15) };
+            }
+        }
+        for s in &digits {
+            if s.near(p) {
+                let e = s.distance(p);
+                d = if d == f32::MAX { e } else { smin(d, e, 0.05) };
             }
         }
         if d == f32::MAX { cell * 4.0 } else { d }
@@ -1039,6 +1155,44 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
             j[k] = *b as u16;
             w[k] = x / total;
         }
+        // Below a wrist or an ankle, the lower leg's hold passes to the
+        // paw's bone, eased across the joint, so the paw turns flat while
+        // the leg above it swings (`sim::beast::Bone::paw`).
+        for paw in paws.iter().filter(|w| sp.bones[w.bone].paw) {
+            let leg = sp.bones[paw.bone].parent;
+            let Some(from) = j
+                .iter()
+                .zip(&w)
+                .position(|(b, x)| *b as usize == leg && *x > 0.0)
+            else {
+                continue;
+            };
+            let band = 0.12 * paw.scale;
+            let off = *p - paw.joint;
+            let share = smoothstep(band, -band, off.y)
+                * smoothstep(
+                    1.6 * paw.scale,
+                    1.1 * paw.scale,
+                    Vec2::new(off.x, off.z).length(),
+                );
+            if share <= 0.0 {
+                continue;
+            }
+            let moved = w[from] * share;
+            let to = (0..4).min_by(|&a, &b| w[a].total_cmp(&w[b])).unwrap_or(0);
+            if to == from {
+                if share > 0.5 {
+                    j[from] = paw.bone as u16;
+                }
+                continue;
+            }
+            w[from] -= moved;
+            if w[to] > 0.0 {
+                w[from] += w[to];
+            }
+            j[to] = paw.bone as u16;
+            w[to] = moved;
+        }
         joints.push(j);
         weights.push(w);
 
@@ -1150,7 +1304,7 @@ pub fn grow(sp: &'static Species) -> Option<Grown> {
         bone_at: &bone_at,
         spines: build.spines,
         horns: build.horns,
-        claws: build.claws,
+        paws: &paws,
         reach: 1.85,
     });
     for hp in &hard {

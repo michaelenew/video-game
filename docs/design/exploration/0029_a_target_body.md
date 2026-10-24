@@ -171,7 +171,39 @@ which `grown::tests` still holds it to.
 runs level and thick where the sculpt drooped it along its bones; the head is
 a rounded wedge rather than a modelled skull; the carapace reads as panels
 rather than the target's slabs, the grid being five centimetres; and the
-legs are still straight posts in both.
+legs are still straight posts in both. (Round three answers the legs' muscle,
+the paws and the torn plates; the tail and the skull stand.)
+
+## Round three: two joints in a leg, a dog's paw, and detail (2026-10-24)
+
+The owner: *"we need to make sure the creatures have enough leg bones.
+Basically all animals have two joints in the legs ... the aesthetic of the
+ridgeback is more like a dog now and it needs more paw-like feet. Then the
+grown version needs probably another detailing pass."*
+
+- **A second joint** in every walking creature's legs, in the simulation:
+  a paw bone below a wrist or an ankle that stays level on the ground
+  (`sim::beast::Bone::paw`, `docs/design/monsters.md`, `sim/tests/paws.rs`).
+  Re-baking for it also brought the Galewing's and the Mantis's tables up to
+  date with their recipes, which had drifted.
+- **A dog's paw on the sculpt** (`art/ridgeback/build.py`, `paws`,
+  `toe_layout`): the leg narrows into the wrist, the pastern slopes forward
+  into a broad palm, four knuckled toes split by clefts with a short thick
+  claw off each, the pad at the back of a forelimb's wrist and a dewclaw up
+  its inside, dark pads underneath; skinned to the paw bones.
+- **The same paw grown** (`game::horns::paws`): one layout, from the foot's
+  box and the paw bone, read by both the field (a palm, a pastern, toes
+  joined tightly enough that the clefts stay clefts) and the claws. The lower
+  leg's flesh stops at the wrist, and below it the skin is handed from the
+  leg's bone to the paw's, eased across the joint.
+- **Detail**: the legs' muscle by rule off their two boxes (a foreleg's
+  deltoid, triceps and forearm; a hindleg's thigh, hamstring and calf); the
+  skull's brow, cheekbones and nasal ridge over the wedge; and each scute
+  domed, with grooves and rims wide enough for the mesher to see -- the old
+  ones were narrower than a cell and tore into fins along the back.
+
+![The sculpt with its paws](../gallery/0029_paws_sculpt.jpg)
+![The sculpted (top) and grown (bottom) Ridgeback in the game, and their feet](../gallery/0029_paws_in_game.jpg)
 
 ## Still open
 

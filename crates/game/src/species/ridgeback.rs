@@ -59,14 +59,14 @@ pub const BUILD: Build = Build {
     // The sculpted target's choices (`art/ridgeback/build.py`): a barrel a
     // metre deeper than its box, legs a third thicker, a fifth of a metre of
     // stone over the back in metre scutes, spines up to a metre and a
-    // quarter, horns a metre and a half, three claws a foot.
+    // quarter, horns a metre and a half, a dog's four toes a foot.
     belly: 0.8,
     girth: 1.3,
     armour: 0.2,
     scute: 1.05,
     spines: 1.25,
     horns: 1.6,
-    claws: 3,
+    claws: 4,
     contours: &[
         (ridgeback::HEAD, Contour::of(Kind::Wedge).muscle(0.6)),
         (

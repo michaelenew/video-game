@@ -189,13 +189,18 @@ pub fn thickness(sh: &Shell, q: Vec3) -> (f32, f32, f32) {
     let groove = (f2 - f1) * sh.scute * 0.5;
     let own = hash01(id ^ 0x9e37);
     let mut h = sh.thick * (0.85 + 0.3 * own);
+    // Domed: each scute a cushion of stone, highest at its middle, so a
+    // plate reads by its own shape and not only by the crack round it.
+    h += sh.thick * 0.45 * (1.0 - (f1 / 0.62).powi(2)).max(0.0);
     // Shingled: rising toward the scute's back edge.
     let lean = (along - cx * sh.scute / 0.62) * sh.behind;
     h += sh.thick * 0.55 * (lean / 0.45).clamp(-0.45, 1.0);
-    // The groove: a channel between scutes, chamfered either side.
-    h *= 0.25 + 0.75 * smoothstep(0.02, 0.07, groove);
-    // The rim: chunky, eased in over its last few centimetres.
-    h *= smoothstep(-0.04, 0.08, inside) * (0.75 + 0.25 * smoothstep(0.0, 0.12, inside));
+    // The groove: a channel between scutes, chamfered either side -- wide
+    // enough that the mesher, a cell every six centimetres or so, sees a
+    // channel rather than a crack it tears into fins (2026-10-24).
+    h *= 0.15 + 0.85 * smoothstep(0.025, 0.10, groove);
+    // The rim: chunky, eased in over its last hand's width.
+    h *= smoothstep(-0.05, 0.13, inside) * (0.75 + 0.25 * smoothstep(0.0, 0.16, inside));
     (h.max(0.0), groove, own)
 }
 
