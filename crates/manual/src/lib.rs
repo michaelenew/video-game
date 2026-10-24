@@ -1128,6 +1128,14 @@ pub const SECTIONS: &[Section] = &[
                 "Grow every stage of the crossbreed lines (exploration 0031: each formed creature fed toward the next, and one backcrossed) to target/lines/<line>_<stage>.obj, coloured, with target/lines/lines.tsv saying what each stage is; art/blender.sh art/lineage.py renders them into strips.",
             ),
             e(
+                "BRED_DUMP=1 cargo test -p game --bin game bred_dump",
+                "Print the bred Ridgeback's, Galewing's and Mantis's parts: each box's middle, half-size and axis, for comparing a bred body with its species table. BRED_DUMP=<line>:<stage> prints one stage of a crossbreed line instead, with its hand edits.",
+            ),
+            e(
+                "GROWN_STAGES=0,3,6",
+                "With GROWN_LINES: grow those stages of the lines alone. A stage with hand edits (game::touch, exploration 0032) is written twice, the breeder's body as <line>_<stage>_raw.obj beside the edited one.",
+            ),
+            e(
                 "SHOT_BEAST=angle,distance,height",
                 "The same round the hunt's creature: the camera distance metres from it, angle degrees round from the way it faces, looking at height metres above its feet. With --painted-cast it shows a creature's brushwork; SHOT_SPIN turns it.",
             ),

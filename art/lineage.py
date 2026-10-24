@@ -1,7 +1,7 @@
 """Render crossbreed lines, stage by stage (exploration 0031).
 
     GROWN_LINES=1 cargo test -p game --bin game grown_lines     # the stages
-    art/blender.sh art/lineage.py [--samples 24] [--size 420x320] [--line <name>] [--stages 0,3,6]
+    art/blender.sh art/lineage.py [--samples 24] [--size 420x320] [--line <name>] [--stages 0,3,6] [--yaw 35] [--pitch 16]
 
 Reads every ``target/lines/<line>_<stage>.obj`` (a grown body, coloured as
 the game colours it) and ``target/lines/lines.tsv`` (what each stage is),
@@ -39,7 +39,7 @@ def load(path):
     return np.array(v), np.array(c), f
 
 
-def stage(path, out, size, samples):
+def stage(path, out, size, samples, yaw=35, pitch=16):
     import bpy
     import mathutils
 
@@ -83,7 +83,7 @@ def stage(path, out, size, samples):
     cam.lens = 50
     o = bpy.data.objects.new("cam", cam)
     s.collection.objects.link(o)
-    yaw, pitch = math.radians(35), math.radians(16)
+    yaw, pitch = math.radians(yaw), math.radians(pitch)
     dist = radius * 3.0
     eye = centre + np.array([math.cos(yaw) * math.cos(pitch), math.sin(pitch), -math.sin(yaw) * math.cos(pitch)]) * dist
     o.location = mathutils.Vector(b.to_blender(np.array([eye]))[0])
@@ -103,6 +103,8 @@ def stage(path, out, size, samples):
 def main():
     args = sys.argv[1:]
     samples = int(args[args.index("--samples") + 1]) if "--samples" in args else 24
+    pitch = float(args[args.index("--pitch") + 1]) if "--pitch" in args else 16
+    yaw = float(args[args.index("--yaw") + 1]) if "--yaw" in args else 35
     size = tuple(int(x) for x in (args[args.index("--size") + 1] if "--size" in args else "420x320").split("x"))
     rows = [r.rstrip("\n").split("\t") for r in open(os.path.join(DIR, "lines.tsv"))][1:]
     # ``--line <name>`` and ``--stages 0,3,6``: a few, to look at quickly.
@@ -122,7 +124,15 @@ def main():
             if not os.path.exists(obj):
                 continue
             png = os.path.join(DIR, f"{name}_{k:02d}.png")
-            stage(obj, png, size, samples)
+            stage(obj, png, size, samples, yaw, pitch)
+            raw = obj.replace(".obj", "_raw.obj")
+            if os.path.exists(raw) and os.path.getmtime(raw) >= os.path.getmtime(obj) - 600:
+                rpng = png.replace(".png", "_raw.png")
+                stage(raw, rpng, size, samples, yaw, pitch)
+                for p, word in ((rpng, "raw"), (png, "hand")):
+                    subprocess.run(["convert", p, "-gravity", "northwest", "-fill", "#f0ece4", "-pointsize", "15",
+                                    "-annotate", "+8+6", word, p], check=True)
+                subprocess.run(["convert", rpng, png, "-append", png], check=True)
             said = r[6].split(": ", 1)[-1] if ": " in r[6] else r[6]
             said = said if said.strip() else "(sliders only)"
             label = f"gen {r[2]}  {float(r[3]):.1f} m\n{said}"

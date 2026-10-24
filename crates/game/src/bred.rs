@@ -45,13 +45,7 @@ fn f(x: sim::Fx) -> f32 {
 /// and the one the feather rule reads. Folded, a bred wing is rods and
 /// planes along the flank with its elbow ahead of the shoulder.
 pub fn anatomy(g: &Genome) -> Anatomy {
-    let q = sim::breed::posture::posture(g);
-    let body = if g.has_wings() {
-        build::body_flying(g, &q, sim::Fx::ZERO)
-    } else {
-        build::body_in(g, &q)
-    };
-    anatomy_of(g, &body)
+    crate::touch::touched(g, &[])
 }
 
 /// A built body of a genome, in whatever pose it was built in.
@@ -151,6 +145,8 @@ pub fn anatomy_of(g: &Genome, body: &Body) -> Anatomy {
     }
 }
 
+/// Which limb a bone is on, and which of its three segments: `fore.l`,
+/// `fore.l.lower`, `fore.l.foot`.
 /// Which limb a bone is on, and which of its three segments: `fore.l`,
 /// `fore.l.lower`, `fore.l.foot`.
 fn limb_of(name: &str) -> Option<(usize, usize)> {
@@ -516,13 +512,39 @@ mod tests {
     /// `GROWN_LINES=1 cargo test -p game --bin game grown_lines` (or a part
     /// of a line's name for that line alone): every stage of every line as `target/lines/<line>_<stage>.obj`, coloured,
     /// and `target/lines/lines.tsv` saying what each is.
+    /// A grown body as an OBJ whose vertices carry their colours.
+    fn obj(g: &crate::grown::Grown, a: &Anatomy) -> String {
+        use bevy::render::mesh::{Indices, VertexAttributeValues};
+        let colours = crate::grown::colours(g, |_| a.look.armour, a.look.weak.rgb);
+        let mut out = String::new();
+        let Some(VertexAttributeValues::Float32x3(p)) = g.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            return out;
+        };
+        let Some(Indices::U32(t)) = g.mesh.indices() else {
+            return out;
+        };
+        for (v, c) in p.iter().zip(&colours) {
+            out.push_str(&format!(
+                "v {} {} {} {} {} {}\n",
+                v[0], v[1], v[2], c[0], c[1], c[2]
+            ));
+        }
+        for tri in t.chunks_exact(3) {
+            out.push_str(&format!("f {} {} {}\n", tri[0] + 1, tri[1] + 1, tri[2] + 1));
+        }
+        out
+    }
+
     #[test]
     fn grown_lines() {
-        use bevy::render::mesh::{Indices, VertexAttributeValues};
         let Some(only) = crate::platform::env("GROWN_LINES") else {
             return;
         };
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/lines");
+        // `GROWN_STAGES=0,3,6`: those stages alone.
+        let stages: Option<Vec<usize>> = crate::platform::env("GROWN_STAGES")
+            .map(|s| s.split(',').filter_map(|k| k.trim().parse().ok()).collect());
         let mut tsv = String::from("line\tstage\tgeneration\tlength\tnearest\tdropped\tsaid\n");
         // `1` for every line, or a part of one's name.
         for l in lines()
@@ -530,34 +552,26 @@ mod tests {
             .filter(|l| only == "1" || l.name.contains(&only))
         {
             for (k, st) in l.stages.iter().enumerate() {
-                let a = anatomy(&st.genome);
-                let Some(g) = crate::grown::grow(&a) else {
-                    continue;
-                };
-                let colours = crate::grown::colours(&g, |_| a.look.armour, a.look.weak.rgb);
-                let Some(VertexAttributeValues::Float32x3(p)) =
-                    g.mesh.attribute(Mesh::ATTRIBUTE_POSITION)
-                else {
-                    continue;
-                };
-                let Some(Indices::U32(t)) = g.mesh.indices() else {
-                    continue;
-                };
-                let mut out = String::new();
-                for (v, c) in p.iter().zip(&colours) {
-                    out.push_str(&format!(
-                        "v {} {} {} {} {} {}\n",
-                        v[0], v[1], v[2], c[0], c[1], c[2]
-                    ));
+                let grow = stages.as_ref().is_none_or(|s| s.contains(&k));
+                let hand = crate::touch::touches(l.name, k);
+                let mut dropped = 0;
+                // The breeder's body, and where there are hand edits, the
+                // hand's beside it: `<line>_<k>_raw.obj` and `<line>_<k>.obj`.
+                for (suffix, edits) in [("_raw", &[][..]), ("", &hand[..])] {
+                    if !grow || suffix == "_raw" && hand.is_empty() {
+                        continue;
+                    }
+                    let a = crate::touch::touched(&st.genome, edits);
+                    let Some(g) = crate::grown::grow(&a) else {
+                        continue;
+                    };
+                    dropped = g.dropped;
+                    crate::platform::write_to(
+                        &dir.join(format!("{}_{k:02}{suffix}.obj", l.name)),
+                        &obj(&g, &a),
+                        "a line's stage",
+                    );
                 }
-                for tri in t.chunks_exact(3) {
-                    out.push_str(&format!("f {} {} {}\n", tri[0] + 1, tri[1] + 1, tri[2] + 1));
-                }
-                crate::platform::write_to(
-                    &dir.join(format!("{}_{k:02}.obj", l.name)),
-                    &out,
-                    "a line's stage",
-                );
                 let body = build::body(&st.genome);
                 tsv.push_str(&format!(
                     "{}\t{k}\t{}\t{:.2}\t{:?}\t{}\t{}\n",
@@ -565,7 +579,7 @@ mod tests {
                     st.generation,
                     f(body.length),
                     nearest(&st.genome),
-                    g.dropped,
+                    dropped,
                     st.said
                 ));
             }
@@ -576,18 +590,39 @@ mod tests {
 
 #[cfg(test)]
 mod dump {
-    /// `BRED_DUMP=1`: the bred Ridgeback's parts, for looking at.
+    /// `BRED_DUMP=1`: the bred archetypes' parts, for looking at;
+    /// `BRED_DUMP=<line>:<stage>` one stage of a line, with its hand edits.
     #[test]
     fn bred_dump() {
-        if crate::platform::env("BRED_DUMP").is_none() {
+        let Some(what) = crate::platform::env("BRED_DUMP") else {
             return;
+        };
+        let mut bodies = vec![
+            (
+                "ridgeback".to_string(),
+                sim::breed::archetypes::RIDGEBACK,
+                vec![],
+            ),
+            (
+                "galewing".to_string(),
+                sim::breed::archetypes::GALEWING,
+                vec![],
+            ),
+            ("mantis".to_string(), sim::breed::archetypes::MANTIS, vec![]),
+        ];
+        if let Some((line, k)) = what.split_once(':') {
+            let k: usize = k.parse().unwrap_or(0);
+            bodies = super::lines()
+                .into_iter()
+                .filter(|l| l.name == line)
+                .filter_map(|l| {
+                    let g = l.stages.get(k)?.genome;
+                    Some((format!("{line}:{k}"), g, crate::touch::touches(l.name, k)))
+                })
+                .collect();
         }
-        for (name, g) in [
-            ("ridgeback", sim::breed::archetypes::RIDGEBACK),
-            ("galewing", sim::breed::archetypes::GALEWING),
-            ("mantis", sim::breed::archetypes::MANTIS),
-        ] {
-            let a = super::anatomy(&g);
+        for (name, g, edits) in bodies {
+            let a = crate::touch::touched(&g, &edits);
             eprintln!(
                 "== {name}: {} bones {} parts {} legs",
                 a.bones.len(),

@@ -944,6 +944,11 @@ pub fn grow(sp: &Anatomy) -> Option<Grown> {
             let (flo, fhi) = boxes[leg.foot];
             let (uc, uh) = ((ulo + uhi) * 0.5, (uhi - ulo) * 0.5);
             let (fc, fh) = ((flo + fhi) * 0.5, (fhi - flo) * 0.5);
+            // How thick each segment is, from its own box: a leaning leg's
+            // world bounds are mostly its length (the bred bodies' pills).
+            let (ut, ft) = (sp.thickness(leg.upper), sp.thickness(leg.foot));
+            let uh = Vec3::new(ut.min(uh.x), uh.y, ut.min(uh.z));
+            let fh = Vec3::new(ft.min(fh.x), fh.y, ft.min(fh.z));
             let (side, r) = (leg.side as f32, uh.x.max(uh.z) * g);
             let (uy, fy) = (uhi.y - ulo.y, fhi.y - flo.y);
             let at = |c: Vec3, x: f32, y: f32, z: f32| Vec3::new(c.x + x, y, c.z + side * z);

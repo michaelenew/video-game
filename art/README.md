@@ -76,7 +76,9 @@ The Ridgeback's moved onto it too (2026-10-24, exploration 0031).
 **Crossbreed lines** (exploration 0031): `GROWN_LINES=1 cargo test -p game
 --bin game grown_lines` grows every stage of the lines in `game::bred::lines`
 to `target/lines/`, and `art/blender.sh art/lineage.py` renders each line as
-a strip of its stages (`--line <name> --stages 0,3,6` for a few).
+a strip of its stages (`--line <name> --stages 0,3,6` for a few, `--yaw`
+and `--pitch` to turn the camera). A stage with hand edits (`game::touch`,
+exploration 0032) is drawn as the breeder's body over the edited one.
 
 ## The rules
 

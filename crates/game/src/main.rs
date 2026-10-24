@@ -78,6 +78,8 @@ mod squeeze;
 mod still;
 mod stream;
 mod swing;
+#[allow(dead_code)]
+mod touch;
 mod town;
 mod trophies;
 mod tutorial;
