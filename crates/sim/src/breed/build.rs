@@ -370,6 +370,10 @@ pub struct Proportions {
     pub torso: Fx,
     pub half_w: Fx,
     pub half_h: Fx,
+    /// A tail's half-thickness at its root: what it was before the body
+    /// was deepened (exploration 0032), because a tail sweep is a fight's
+    /// to tune -- a jump clears it.
+    pub tail_th: Fx,
     pub head_half: Fx,
     pub neck_len: Fx,
     pub tail_len: Fx,
@@ -403,7 +407,23 @@ pub fn proportions(g: &Genome) -> Proportions {
     if g.stance == Stance::Lowslung {
         half_w = half_w.mul(if spindly { fx(7, 5) } else { Fx::from_int(4) });
     }
-    let half_h = half_w.mul(fx(9, 20));
+    // **Deeper than it is wide** (exploration 0032): an animal's body is
+    // carried on its legs and is as deep through the chest as it is broad.
+    // The hand-edited lines took every standing body to about this; at a
+    // half of its width it read as a slab. A low body stays flat.
+    // A flier's is less deep than a walker's: it stands on short legs.
+    let half_h = if g.stance == Stance::Lowslung {
+        half_w.mul(fx(9, 20))
+    } else if g.has_wings() {
+        half_w.mul(fx(3, 5))
+    } else {
+        half_w.mul(fx(9, 10))
+    };
+    let tail_th = half_w.mul(fx(9, 40));
+    // A flier's body carries its wings: a bird's breast is broad.
+    if g.has_wings() && g.stance != Stance::Lowslung {
+        half_w = half_w.mul(fx(6, 5));
+    }
     let torso = match g.stance {
         Stance::Level => len.mul(fx(3, 10)),
         Stance::Upright => len.mul(fx(1, 4)),
@@ -468,6 +488,9 @@ pub fn proportions(g: &Genome) -> Proportions {
         if p.build != Build::Spindle {
             gi = gi.add(half_w.mul(fx(1, 8)));
         }
+        if p.build == Build::Raptorial {
+            gi = gi.mul(fx(7, 10));
+        }
         girth[i] = gi.max(limb[i].mul(fx(1, 30)));
     }
     Proportions {
@@ -475,6 +498,7 @@ pub fn proportions(g: &Genome) -> Proportions {
         torso,
         half_w,
         half_h,
+        tail_th,
         head_half,
         neck_len,
         tail_len,
@@ -561,9 +585,11 @@ impl WingLook {
     /// five and a half.
     const fn chords(self) -> [(i32, i32); 3] {
         match self {
-            WingLook::Feathered => [(9, 20), (2, 5), (3, 10)],
-            WingLook::Membrane => [(1, 2), (3, 10), (3, 20)],
-            WingLook::Furred => [(2, 5), (7, 20), (1, 4)],
+            // Half as deep again as they were: a strap of a wing read as
+            // a strap (exploration 0032).
+            WingLook::Feathered => [(27, 40), (3, 5), (9, 20)],
+            WingLook::Membrane => [(3, 4), (9, 20), (9, 40)],
+            WingLook::Furred => [(3, 5), (21, 40), (3, 8)],
         }
     }
 
@@ -850,7 +876,12 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
         let n2 = r.bone("neck2", n, neck_dir.scale(neck_len.mul(fx(1, 2))), 0);
         let h = r.bone("head", n2, neck_dir.scale(head_half), 0);
         // The neck runs the whole way from the body to the head, in two
-        // overlapping pieces.
+        // overlapping pieces: a stalk on a body stood up.
+        let stalk = if g.stance == Stance::Upright {
+            fx(1, 3)
+        } else {
+            fx(3, 5)
+        };
         r.along(
             "neck",
             n,
@@ -858,8 +889,8 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
             neck_dir,
             v3(
                 neck_len.mul(fx(3, 10)),
-                head_half.mul(fx(3, 5)),
-                head_half.mul(fx(3, 5)),
+                head_half.mul(stalk),
+                head_half.mul(stalk),
             ),
         );
         r.along(
@@ -869,16 +900,29 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
             neck_dir,
             v3(
                 neck_len.mul(fx(3, 10)),
-                head_half.mul(fx(3, 5)),
-                head_half.mul(fx(3, 5)),
+                head_half.mul(stalk),
+                head_half.mul(stalk),
             ),
         );
+        // Stood up, the neck is a stalk and the head wider than it
+        // (exploration 0032). The head stays on the neck's line here, where
+        // a bite is aimed by it; the growing carries it level
+        // (`game::bred`).
+        let wide = if g.stance == Stance::Upright {
+            fx(13, 10)
+        } else {
+            Fx::ONE
+        };
         r.along(
             "head",
             h,
             V3::ZERO,
             neck_dir,
-            v3(head_half, head_half.mul(fx(4, 5)), head_half.mul(fx(4, 5))),
+            v3(
+                head_half,
+                head_half.mul(fx(4, 5)),
+                head_half.mul(fx(4, 5)).mul(wide),
+            ),
         );
         h
     };
@@ -987,7 +1031,7 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
         let t1 = r.bone("tail1", root, seg_at(0), 0);
         let t2 = r.bone("tail2", t1, seg_at(1), 0);
         let t3 = r.bone("tail3", t2, seg_at(2), 0);
-        let th = half_h.mul(fx(1, 2));
+        let th = p.tail_th.mul(swell);
         // Each piece runs from its joint to the next, a little past, so
         // the tail is one curve and not three sticks.
         let piece = tail_len.mul(fx(1, 6)).add(th.mul(fx(1, 2)));
@@ -1072,7 +1116,16 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                 .add(p.tail_len.mul(fx(4, 5)));
             if pair.role == Role::Wing && spread {
                 // A wing spread: three segments out to the side, swept
-                // back and rising a little, each a broad thin plane.
+                // back and rising a little, each a broad thin plane. The
+                // arm under it is shorter than the limb it balances as
+                // (exploration 0032): at its full length the body was a
+                // speck between two straps. Feathered, the feathers carry
+                // the rest of the span.
+                let limb = limb.mul(if look == WingLook::Feathered {
+                    fx(3, 4)
+                } else {
+                    fx(5, 6)
+                });
                 let seg = limb.mul(fx(1, 3));
                 let sweep = if aloft {
                     // In the air, a beat: the wing rises and falls.

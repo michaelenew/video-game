@@ -413,7 +413,8 @@ fn legs_are_held_to_the_weight_they_carry() {
     assert!(q.bellied && q.balanced, "{q:?}");
     let body = build::body(&g);
     assert!(
-        f(body.hips) <= f(body.half_width) * 0.45 + 0.01,
+        // Hips no higher than the body is half deep: resting on it.
+        f(body.hips) <= f(build::proportions(&g).half_h) + 0.01,
         "its belly is off the floor"
     );
     // Thirty generations of settling: the legs thicken.

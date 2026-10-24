@@ -227,6 +227,33 @@ pub fn edit_body(body: &mut Body, edits: &[Edit], grounded: bool) {
     }
 }
 
+/// **The head carried level** (exploration 0032): the breeder lays the head
+/// along the neck's line, where a bite is aimed by it, so a raised neck held
+/// its head up like a chimney -- the one edit every hand-edited stage made.
+/// Grown, the head and what hangs off it are turned level, nose a little
+/// down, and set ahead of the joint by half the head's length.
+pub fn carry_head(g: &Genome, body: &mut Body) {
+    if g.head == sim::breed::HeadKind::Merged {
+        return;
+    }
+    let Some(head) = (0..body.part_count).find(|&i| body.parts[i].name == "head") else {
+        return;
+    };
+    let s = body.parts[head].shape;
+    let ahead = (s.max.x.to_f32_for_render() - s.min.x.to_f32_for_render()) * 0.25;
+    let along = f3(body.axes[head]);
+    let flat = Vec3::new(along.x, 0.0, along.z).normalize_or(Vec3::X);
+    let level = (flat - Vec3::Y * 0.15).normalize();
+    for i in 0..body.part_count {
+        if ["head", "jaw", "crest", "horns"].contains(&body.parts[i].name) {
+            body.axes[i] = v(level.x, level.y, level.z);
+            let s = &mut body.parts[i].shape;
+            s.min.x = s.min.x.add(fx(ahead));
+            s.max.x = s.max.x.add(fx(ahead));
+        }
+    }
+}
+
 /// Apply the edits that are the growing's, not the body's.
 pub fn edit_anatomy(a: &mut Anatomy, edits: &[Edit]) {
     for e in edits {
@@ -253,6 +280,7 @@ pub fn touched(g: &Genome, edits: &[Edit]) -> Anatomy {
     } else {
         build::body_in(g, &q)
     };
+    carry_head(g, &mut body);
     edit_body(&mut body, edits, !flies);
     let mut a = crate::bred::anatomy_of(g, &body);
     edit_anatomy(&mut a, edits);
@@ -262,12 +290,17 @@ pub fn touched(g: &Genome, edits: &[Edit]) -> Anatomy {
 /// The torso's boxes, which a name of `"torso"` means.
 const TORSO: [&str; 5] = ["haunch", "barrel", "shoulders", "segment", "rump"];
 
-/// A heavy four-legged body: deeper than it is wide, on legs no longer than
-/// it is deep and under it, its head carried level ahead of the neck.
+// What is left of the hand edits now the breeder makes the rest of them
+// (exploration 0032). The first pass, against the breeder before it was
+// changed, was six groups -- the torso deepened, the wing's chord and arm,
+// the head carried level, the neck a stalk -- and is in this file's history
+// and the note's pictures; what the breeder and `carry_head` now do is gone
+// from here, and what stays is what they still get wrong.
+
+/// A heavy four-legged body: on legs no longer than it is deep, a leg's
+/// thickness rather than a post's, under it rather than splayed.
 const HEAVY: &[Edit] = &[
-    Edit::Size("torso", 1.2, 0.8, 1.7),
-    Edit::Size("ridge", 1.0, 0.75, 1.0),
-    Edit::Move("ridge", 0.0, 0.45, 0.0),
+    Edit::Size("torso", 1.0, 0.8, 1.0),
     Edit::Limb("fore", 0.85),
     Edit::Limb("hind", 0.85),
     Edit::Stance("hind", 0.6),
@@ -276,36 +309,10 @@ const HEAVY: &[Edit] = &[
     Edit::Size("hind.r", 1.0, 0.85, 0.85),
     Edit::Size("fore.l", 1.0, 0.85, 0.85),
     Edit::Size("fore.r", 1.0, 0.85, 0.85),
-    Edit::Size("neck", 1.0, 0.8, 0.85),
-    Edit::Aim("head", 1.0, -0.15, 0.0),
-    Edit::Aim("jaw", 1.0, -0.15, 0.0),
-    Edit::Aim("crest", 1.0, -0.15, 0.0),
-    Edit::Size("head", 1.15, 1.1, 1.1),
-    Edit::Move("head", 0.7, -0.1, 0.0),
-    Edit::Move("jaw", 0.7, -0.1, 0.0),
-    Edit::Move("crest", 0.7, -0.1, 0.0),
 ];
 
-/// A winged body grown as it flies: deep through the breast, a head carried
-/// level, a wing as deep as a wing rather than a strap.
-const FLIER: &[Edit] = &[
-    Edit::Size("torso", 1.35, 1.3, 2.0),
-    Edit::Size("haunch", 0.8, 0.85, 0.85),
-    Edit::Size("neck", 1.0, 0.85, 0.85),
-    Edit::Aim("head", 1.0, -0.1, 0.0),
-    Edit::Aim("jaw", 1.0, -0.1, 0.0),
-    Edit::Aim("crest", 1.0, -0.1, 0.0),
-    Edit::Move("head", 0.4, 0.0, 0.0),
-    Edit::Move("jaw", 0.4, 0.0, 0.0),
-    Edit::Move("crest", 0.4, 0.0, 0.0),
-    Edit::Chord("wing", 1.5),
-    Edit::Limb("fore", 0.85),
-];
-
-/// Feathered, the wing is its feathers: the arm under them shorter, the
-/// body and head a bird's share of it.
+/// Feathered, a bird's share of its own span in the body and head.
 const FEATHERED: &[Edit] = &[
-    Edit::Limb("fore", 0.85),
     Edit::Size("torso", 1.1, 1.1, 1.1),
     Edit::Size("head", 1.4, 1.3, 1.3),
     Edit::Size("jaw", 1.4, 1.3, 1.3),
@@ -313,31 +320,20 @@ const FEATHERED: &[Edit] = &[
 
 /// Raptorial arms a mantis's length, held folded in front of it: up from
 /// the shoulder, the forearm forward and down, the scythe folded back up
-/// under it; and a head that looks forward off the top of the neck.
+/// under it. The breeder keeps its arms long because their sweep is how its
+/// strikes are read (`tests/motion.rs`); this is the look that costs.
 const SCYTHES: &[Edit] = &[
     Edit::Limb("fore", 0.6),
-    Edit::Size("fore", 1.0, 0.7, 0.7),
     Edit::Fold(
         "fore",
         [0.45, 0.85, -0.2],
         [0.8, -0.6, -0.05],
         [-0.45, 0.89, 0.0],
     ),
-    Edit::Aim("head", 1.0, -0.35, 0.0),
-    Edit::Aim("jaw", 1.0, -0.35, 0.0),
-];
-
-/// Stood up, the neck is a stalk under a head wider than it, looking
-/// forward.
-const STALK: &[Edit] = &[
-    Edit::Size("neck", 1.0, 0.55, 0.55),
-    Edit::Size("head", 1.0, 1.3, 1.1),
-    Edit::Aim("head", 1.0, -0.35, 0.0),
-    Edit::Aim("jaw", 1.0, -0.35, 0.0),
 ];
 
 /// A level body hung with stilts and scythes: something to hang them from.
-const STILTS: &[Edit] = &[Edit::Size("torso", 1.3, 1.4, 2.2), Edit::Limb("hind", 0.8)];
+const STILTS: &[Edit] = &[Edit::Size("torso", 1.3, 1.4, 1.2), Edit::Limb("hind", 0.8)];
 
 /// Every stage's hand edits: a line's name, the stages they are true of,
 /// and the edits. A stage gets every entry that names it, in order; a stage
@@ -346,28 +342,19 @@ pub const TOUCHES: &[(&str, &[usize], &[Edit])] = &[
     ("ridgeback_to_galewing", &[0, 1], HEAVY),
     (
         "ridgeback_to_galewing",
-        &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-        FLIER,
-    ),
-    (
-        "ridgeback_to_galewing",
         &[5, 6, 7, 8, 9, 10, 11, 12],
         FEATHERED,
     ),
-    ("galewing_to_mantis", &[0, 1, 2], FLIER),
     ("galewing_to_mantis", &[0, 1], FEATHERED),
     (
         "galewing_to_mantis",
         &[3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
         SCYTHES,
     ),
-    ("galewing_to_mantis", &[5, 6, 7, 8, 9, 10, 11, 12], STALK),
     ("galewing_to_mantis", &[3, 4], STILTS),
     ("mantis_to_ridgeback", &[0, 1, 2, 3, 4], SCYTHES),
-    ("mantis_to_ridgeback", &[0, 1], STALK),
     ("mantis_to_ridgeback", &[5, 6, 7, 8, 9, 10, 11, 12], HEAVY),
     ("ridgeback_x_mantis", &[0], HEAVY),
-    ("ridgeback_x_mantis", &[1, 2, 3, 4, 5, 6, 7, 8], STALK),
     ("ridgeback_x_mantis", &[4, 5, 6, 7, 8], SCYTHES),
 ];
 

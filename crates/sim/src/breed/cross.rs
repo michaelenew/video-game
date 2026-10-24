@@ -554,10 +554,16 @@ pub fn feed(body: &Genome, trophy: &Trophy, _rng: &mut Rng) -> Outcome {
         g.sliders.set(s, v.add(d.sliders.get(s).sub(v).mul(share)));
     }
     for i in 0..STATIONS {
-        if let (Some(mine), Some(theirs)) = (g.limbs[i].as_mut(), d.limbs[i])
-            && mine.build == theirs.build
-        {
-            let share = pull.limbs.mul(fx(1, 2));
+        // Every pair the two share closes on the donor's proportions, a
+        // quarter as fast while it is still another kind of limb -- held
+        // back until the build matched, a wing that became a scythe kept a
+        // wing's thickness for ever (exploration 0032).
+        if let (Some(mine), Some(theirs)) = (g.limbs[i].as_mut(), d.limbs[i]) {
+            let share = if mine.build == theirs.build {
+                pull.limbs.mul(fx(1, 2))
+            } else {
+                pull.limbs.mul(fx(1, 8))
+            };
             mine.length = unit(mine.length.add(theirs.length.sub(mine.length).mul(share)));
             mine.girth = unit(mine.girth.add(theirs.girth.sub(mine.girth).mul(share)));
         }
@@ -729,6 +735,12 @@ fn step_toward(
             let i = (k - 7) as usize;
             match (g.limbs[i].as_mut(), d.limbs[i]) {
                 (Some(mine), Some(theirs)) => {
+                    // A limb that becomes another kind meets that kind
+                    // halfway in its proportions.
+                    if mine.build != theirs.build || mine.role != theirs.role {
+                        mine.length = mine.length.add(theirs.length).mul(fx(1, 2));
+                        mine.girth = mine.girth.add(theirs.girth).mul(fx(1, 2));
+                    }
                     mine.role = theirs.role;
                     mine.build = theirs.build;
                     mine.tip = theirs.tip;

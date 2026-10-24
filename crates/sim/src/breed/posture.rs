@@ -204,7 +204,7 @@ fn masses(g: &Genome, p: &Proportions) -> Masses {
     );
     // The tail, trailing level.
     if p.tail_len > Fx::ZERO {
-        let th = p.half_h.mul(fx(1, 2));
+        let th = p.tail_th;
         let seg = p
             .tail_len
             .mul(fx(1, 3))
