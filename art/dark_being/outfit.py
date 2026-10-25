@@ -49,9 +49,9 @@ def horns(body, r):
         for i in range(steps + 1):
             t = i / steps
             pts.append(root + np.array([
-                side * (0.16 * t + 0.05 * np.sin(t * np.pi)),
-                0.05 * t + 0.20 * t * t,
-                -0.07 * np.sin(t * np.pi) + 0.06 * t ** 3,
+                side * (0.20 * t + 0.03 * np.sin(t * np.pi)),
+                0.02 * t + 0.12 * t * t,
+                -0.06 * np.sin(t * np.pi) + 0.09 * t ** 3,
             ]))
         pts = np.array(pts)
         sections = []
@@ -62,7 +62,7 @@ def horns(body, r):
             a = np.cross(d, [0.0, 0.0, 1.0])
             a /= np.linalg.norm(a)
             b = np.cross(d, a)
-            rad = 0.034 * (1 - t) ** 1.1 + 0.0025
+            rad = 0.046 * (1 - t) ** 1.2 + 0.003
             ridge = 1 + 0.08 * np.sin(t * 40.0)
             sections.append(forge.ring(p, d, a, b, rad * ridge, rad * ridge * 0.85, sides=12))
         v, f = forge.loft(sections, cap_start=True, cap_end=True)

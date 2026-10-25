@@ -6,7 +6,7 @@ the upper arms bare, so their strength shows; steel vambraces and gauntlets;
 a gold belt; steel tassets over a white skirt; steel greaves. The angel is
 in a white half-cloak over the left shoulder only, falling down that side of
 the back -- part of a cloak, so the body is still seen from behind -- and a
-ring of light behind the head. Short hair, the face bare and calm.
+ring of light behind the head. Hair cropped close, the face bare and calm.
 """
 
 import bpy
@@ -14,7 +14,7 @@ import numpy as np
 
 import character
 import garment as g
-from wardrobe import (LEFT, belt, boots, cape, coat_tails, collar, covered, eyes, hair, hair_cards, jerkin,
+from wardrobe import (LEFT, belt, boots, cape, coat_tails, collar, covered, eyes, hair, jerkin,
                       mat, piece, rigid, trousers, vambraces, w, body_masks)
 
 
@@ -25,8 +25,8 @@ def glowing(ob):
 
 
 def cuirass(body, r):
-    return jerkin(body, r, material="steel", gap=0.024, low=0.02, collar=0.035, name="cuirass",
-                  faces=2600, close=0.09, sleeved=False, trim=0.025, smooth=12, inset=0.045)
+    return jerkin(body, r, material="steel", gap=0.015, low=0.02, collar=0.035, name="cuirass",
+                  faces=2600, close=0.08, sleeved=False, trim=0.025, smooth=12, inset=0.04)
 
 
 def pauldrons(body, r):
@@ -38,13 +38,13 @@ def pauldrons(body, r):
         arm, el = f"arm.{s}", f"forearm.{s}"
 
         def upper(c, fw, s=s, top=top):
-            return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.35) & (c[:, 1] > top - 0.10)
+            return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.45) & (c[:, 1] > top - 0.065)
 
-        out.append(piece(body, f"pauldron.{s}", 0.045, upper, smooth=8, close=0.04, material="steel",
+        out.append(piece(body, f"pauldron.{s}", 0.026, upper, smooth=8, close=0.03, material="steel",
                          thick=0.008, faces=700, trim=0.015))
         mid = r.along(arm, el, 0.28)
         down = r.dir(arm, el)
-        out.append(piece(body, f"lame.{s}", 0.034, lambda c, fw, arm=arm: w(fw, arm) > 0.4,
+        out.append(piece(body, f"lame.{s}", 0.022, lambda c, fw, arm=arm: w(fw, arm) > 0.4,
                          trims=[(mid + down * 0.05, down)], keeps=[(mid - down * 0.04, down)], smooth=5,
                          close=0.02, material="steel", thick=0.006, faces=400, trim=0.01))
     return out
@@ -82,10 +82,9 @@ def cloak(body, r):
 
 
 def head_hair(body, r):
-    scalp = hair(body, r, gap=0.004, front=0.05, nape=-0.07, side=-0.075, grooves=10, depth=0.003,
-                 faces=2200, lift=0.004, material="scalp")
-    return [scalp, hair_cards(scalp, r, style="back", length=0.05, width=0.022,
-                              layers=(0.003, 0.007, 0.011), counts=(45, 60, 70), seed=31)]
+    # Cropped close: the sculpted mass alone, no cards to stand out from it.
+    return [hair(body, r, gap=0.004, front=0.05, nape=-0.07, side=-0.075, grooves=10, depth=0.003,
+                 faces=2200, lift=0.002, material="hair")]
 
 
 def halo(body, r):
