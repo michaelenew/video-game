@@ -1132,6 +1132,10 @@ pub const SECTIONS: &[Section] = &[
                 "Print the bred Ridgeback's, Galewing's and Mantis's parts: each box's middle, half-size and axis, for comparing a bred body with its species table. BRED_DUMP=<line>:<stage> prints one stage of a crossbreed line instead, with its hand edits.",
             ),
             e(
+                "BRED_GAIT=<line>:<stage>,... cargo test -p game --bin game bred_gait",
+                "Write a crossbreed stage's body boxes at eight points of each gait it has to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
+            ),
+            e(
                 "GROWN_STAGES=0,3,6",
                 "With GROWN_LINES: grow those stages of the lines alone. A stage with hand edits (game::touch, exploration 0032) is written twice, the breeder's body as <line>_<stage>_raw.obj beside the edited one.",
             ),

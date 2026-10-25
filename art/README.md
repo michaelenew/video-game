@@ -79,6 +79,9 @@ to `target/lines/`, and `art/blender.sh art/lineage.py` renders each line as
 a strip of its stages (`--line <name> --stages 0,3,6` for a few, `--yaw`
 and `--pitch` to turn the camera). A stage with hand edits (`game::touch`,
 exploration 0032) is drawn as the breeder's body over the edited one.
+`BRED_GAIT=<line>:<stage> cargo test -p game --bin game bred_gait` and
+`art/blender.sh art/gait.py` show a stage's skeleton through each gait it
+has: eight frames, side on over a top view.
 
 ## The rules
 

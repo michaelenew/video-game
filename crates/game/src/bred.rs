@@ -659,3 +659,95 @@ mod dump {
         }
     }
 }
+
+#[cfg(test)]
+mod gait {
+    /// `BRED_GAIT=<line>:<stage>`: that stage's body boxes through a cycle
+    /// of each gait it has, `target/gait/<line>_<stage>_<gait>_<k>.obj`,
+    /// coloured by what each part is -- for watching it move.
+    #[test]
+    fn bred_gait() {
+        let Some(what) = crate::platform::env("BRED_GAIT") else {
+            return;
+        };
+        use sim::breed::{build, locomotion, posture};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/gait");
+        for item in what.split(',') {
+            let Some((line, k)) = item.split_once(':') else {
+                continue;
+            };
+            let k: usize = k.parse().unwrap_or(0);
+            let Some(g) = super::lines()
+                .into_iter()
+                .find(|l| l.name == line)
+                .and_then(|l| l.stages.get(k).map(|s| s.genome))
+            else {
+                continue;
+            };
+            let q = posture::posture(&g);
+            for gait in locomotion::repertoire(&g, &q).iter().flatten() {
+                for f in 0..8 {
+                    let phase = sim::Fx::ratio(f, 8);
+                    let d = locomotion::drive(&g, &q, gait, phase, sim::Fx::ZERO);
+                    let body = build::body_driven(&g, &q, &d);
+                    let mut out = String::new();
+                    let mut n = 0;
+                    for i in 0..body.part_count {
+                        let p = &body.parts[i];
+                        let bone = body.bones[p.shape.bone].name;
+                        let c = colour(p.name, bone, &g);
+                        for v in body.corners(i) {
+                            let v = super::fx3(v);
+                            out.push_str(&format!(
+                                "v {} {} {} {} {} {}\n",
+                                v.x, v.y, v.z, c[0], c[1], c[2]
+                            ));
+                        }
+                        // The box's six faces, corners numbered as `corners` does.
+                        for face in [
+                            [0, 1, 3, 2],
+                            [4, 6, 7, 5],
+                            [0, 4, 5, 1],
+                            [2, 3, 7, 6],
+                            [0, 2, 6, 4],
+                            [1, 5, 7, 3],
+                        ] {
+                            out.push_str(&format!(
+                                "f {} {} {} {}\n",
+                                n + face[0] + 1,
+                                n + face[1] + 1,
+                                n + face[2] + 1,
+                                n + face[3] + 1
+                            ));
+                        }
+                        n += 8;
+                    }
+                    crate::platform::write_to(
+                        &dir.join(format!("{line}_{k:02}_{}_{f}.obj", gait.kind.name())),
+                        &out,
+                        "a stage's gait",
+                    );
+                }
+            }
+        }
+    }
+
+    /// Torso grey, walking legs blue, wings violet, striking arms orange,
+    /// head red, tail green.
+    fn colour(name: &str, bone: &str, g: &sim::breed::Genome) -> [f32; 3] {
+        if let Some((station, _)) = super::limb_of(bone) {
+            return match g.limbs[station] {
+                Some(p) if p.role == sim::breed::Role::Wing => [0.55, 0.4, 0.8],
+                Some(p) if p.role.grounded() => [0.3, 0.5, 0.85],
+                _ => [0.95, 0.55, 0.15],
+            };
+        }
+        if name.starts_with("head") || name == "jaw" || name == "crest" || name == "horns" {
+            [0.85, 0.25, 0.2]
+        } else if name.starts_with("tail") {
+            [0.35, 0.7, 0.35]
+        } else {
+            [0.7, 0.68, 0.64]
+        }
+    }
+}
