@@ -16,6 +16,10 @@
 //! draws it (`game/src/being.wgsl`) is the same function written again on the
 //! GPU; `view/tests/being.rs` holds the order here.
 //!
+//! **They are not her** (the owner, 2026-10-25): two bodies of their own, a
+//! hulking demon and an angel-knight, each on a broader skeleton than hers
+//! ([`BODIES`]), each sized by [`scale`] from its own.
+//!
 //! **It is big, and it rises out of the seal.** Its hips are at her feet,
 //! where the seal on the floor is, and its chin at her forehead, so the
 //! whole of it above the seal is torso, arms and head, and below the seal
@@ -182,6 +186,39 @@ pub fn guarded(pose: &Pose) -> Pose {
     out
 }
 
+/// Whose skeleton each being is built on, dark then light: broader than
+/// hers, because they are not her (the owner, 2026-10-25). The demon has the
+/// Bulwark's -- the widest shoulders and the thickest build in the game --
+/// and the angel-knight the Champion's, the reference middleweight. A pose
+/// is angles, so hers retargets onto either for free (`pose.rs`).
+pub const BODIES: [sim::Class; 2] = [sim::Class::Bulwark, sim::Class::Champion];
+
+/// How far forward the demon hunches, in degrees: the spine and chest
+/// rolled over, the shoulders up round the neck and the head brought back
+/// up to look ahead -- a hulking thing's carriage.
+pub const HUNCH: f32 = 14.0;
+
+/// Being `k`'s pose (0 dark, 1 light): hers, [`guarded`], and for the demon
+/// hunched over by [`HUNCH`].
+pub fn stance(k: usize, pose: &Pose) -> Pose {
+    let mut out = guarded(pose);
+    if k == 0 {
+        let rad = core::f32::consts::PI / 180.0;
+        let mut add = |j: Joint, c: usize, degrees: f32| {
+            let mut a = out.angles(j);
+            a[c] += degrees * rad;
+            out.set_angles(j, a);
+        };
+        add(Joint::Spine, 0, HUNCH * 0.5);
+        add(Joint::Chest, 0, HUNCH);
+        add(Joint::Neck, 0, -HUNCH * 0.6);
+        add(Joint::Head, 0, -HUNCH * 0.6);
+        add(Joint::ClavicleL, 1, HUNCH * 0.7);
+        add(Joint::ClavicleR, 1, HUNCH * 0.7);
+    }
+    out
+}
+
 /// How far behind her it stands, in metres: enough that she is in front of
 /// its body rather than inside it.
 pub const BEHIND: f32 = 0.18;
@@ -190,13 +227,14 @@ pub const BEHIND: f32 = 0.18;
 /// forehead.
 pub const CHIN_AT: f32 = 0.93;
 
-/// How many times her size the being is, so that **its hips are at her feet
-/// and its chin at her forehead**. Its chin is where its head joint sits,
-/// standing at rest; both heights are read off her own skeleton.
-pub fn scale(skeleton: &Skeleton) -> f32 {
-    let rest = solve(skeleton, &crate::pose::Pose::rest());
+/// How many times its own size a being built on `body` is drawn at, so that
+/// **its hips are at her feet and its chin at her forehead** -- `her` is the
+/// Dual mage's skeleton. Its chin is where its head joint sits, standing at
+/// rest; every height is read off the two skeletons.
+pub fn scale(her: &Skeleton, body: &Skeleton) -> f32 {
+    let rest = solve(body, &crate::pose::Pose::rest());
     let chin = rest.origin[Joint::Head.index()][1];
-    (CHIN_AT * skeleton.total_height / (chin - skeleton.hip_height).max(0.05)).max(1.0)
+    (CHIN_AT * her.total_height / (chin - body.hip_height).max(0.05)).max(1.0)
 }
 
 /// The seal on the floor round her feet, where the being's hips are, as a
@@ -205,6 +243,6 @@ pub const SEAL_SHARE: f32 = 0.3;
 
 /// The seal's radius, in metres: wide enough that the being's waist and its
 /// hanging fists stand inside it, so it reads as what the being rises from.
-pub fn seal_radius(skeleton: &Skeleton) -> f32 {
-    SEAL_SHARE * scale(skeleton) * skeleton.total_height
+pub fn seal_radius(her: &Skeleton) -> f32 {
+    SEAL_SHARE * scale(her, her) * her.total_height
 }

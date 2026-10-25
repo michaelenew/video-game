@@ -105,26 +105,34 @@ fn the_shoulder_and_fist_first_then_the_arm_and_torso_then_the_head() {
 
 #[test]
 fn its_hips_are_at_her_feet_and_its_chin_at_her_forehead() {
-    let skeleton = skeleton_for(Class::DualMage);
-    let s = being::scale(&skeleton);
+    for class in being::BODIES {
+        hips_and_chin(class);
+    }
+}
+
+fn hips_and_chin(class: Class) {
+    let her = skeleton_for(Class::DualMage);
+    let skeleton = skeleton_for(class);
+    let s = being::scale(&her, &skeleton);
     let rest = solve(&skeleton, &view::pose::Pose::rest());
     let chin = rest.origin[Joint::Head.index()][1];
     // Placed with its hips on the floor she stands on, its chin is at her
     // forehead: within a few centimetres of nine tenths of her height.
     let at = s * (chin - skeleton.hip_height);
-    let forehead = being::CHIN_AT * skeleton.total_height;
+    let forehead = being::CHIN_AT * her.total_height;
     assert!(
         (at - forehead).abs() < 0.01,
         "chin at {at}, forehead at {forehead}"
     );
+    let her_rest = solve(&her, &view::pose::Pose::rest());
     assert!(
-        at > rest.origin[Joint::Neck.index()][1],
+        at > her_rest.origin[Joint::Neck.index()][1],
         "chin under her neck"
     );
-    assert!(at < skeleton.total_height, "chin over her head");
+    assert!(at < her.total_height, "chin over her head");
     // Big: more than twice her size, and the seal round it wider than she is.
     assert!(s > 2.0, "the being is only {s} of her");
-    assert!(being::seal_radius(&skeleton) > 1.0);
+    assert!(being::seal_radius(&her) > 1.0);
 }
 
 #[test]
@@ -132,14 +140,9 @@ fn its_fists_are_up_in_front_of_her_and_her_throws_still_reach() {
     // Placed as it is drawn -- hips at her feet, `scale` times her size -- a
     // being holding her standing pose has both fists above the floor and in
     // front of its chest, where the first of it can be seen.
-    let skeleton = skeleton_for(Class::DualMage);
-    let s = being::scale(&skeleton);
-    let skin = solve(&skeleton, &being::guarded(&view::pose::Pose::rest()));
-    for left in [true, false] {
-        let hand = skin.origin[view::hand_joint(left).index()];
-        let height = s * (hand[1] - skeleton.hip_height);
-        assert!(height > 0.6, "a fist is {height} m off the floor");
-        assert!(hand[2] > 0.2, "a fist is not in front of it");
+    let her = skeleton_for(Class::DualMage);
+    for (k, class) in being::BODIES.into_iter().enumerate() {
+        fists_up(&her, k, class);
     }
     // A throw that reaches higher than the guard is the being's throw too.
     let mut reach = view::pose::Pose::rest()
@@ -148,6 +151,21 @@ fn its_fists_are_up_in_front_of_her_and_her_throws_still_reach() {
     reach = being::guarded(&reach);
     assert!((reach.degrees(Joint::ArmL, 0) - 150.0).abs() < 1e-3);
     assert!((reach.degrees(Joint::ForearmL, 0) - being::GUARD_ELBOW).abs() < 1e-3);
+}
+
+fn fists_up(her: &view::skeleton::Skeleton, k: usize, class: Class) {
+    let skeleton = skeleton_for(class);
+    let s = being::scale(her, &skeleton);
+    let skin = solve(&skeleton, &being::stance(k, &view::pose::Pose::rest()));
+    for left in [true, false] {
+        let hand = skin.origin[view::hand_joint(left).index()];
+        let height = s * (hand[1] - skeleton.hip_height);
+        assert!(
+            height > 0.6,
+            "{class:?}: a fist is {height} m off the floor"
+        );
+        assert!(hand[2] > 0.2, "a fist is not in front of it");
+    }
 }
 
 #[test]

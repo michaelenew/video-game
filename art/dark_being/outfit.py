@@ -1,72 +1,93 @@
-"""What the dark being wears: nothing. It is obsidian.
+"""What the dark being wears: iron, and little else.
 
-A void titan (the owner's pick, 2026-10-25): a bare body of black volcanic
-glass, cut into facets -- broad flat planes that each catch the light whole,
-as knapped stone does, so it reads as carved and not as skin -- with no
-face, the head one smooth shape faceted like the rest, and violet light
-breaking out of it: a heart burning in the chest, and cracks running out
-from it across the body (``build.veins``), thick near the heart and thinning
-to hairlines at the hands.
+A hulking demon (the owner, 2026-10-25): bare to the waist so every mass of
+the torso and arms shows; iron bands riveted round each wrist -- a shackle's
+pair -- and round each upper arm; horns curling out and up from the temples
+and forward at the tips, a bull's; eyes that burn violet; an iron belt and a
+ragged loincloth of black hide, front and back.
 """
 
-import bpy
 import numpy as np
 
 import character
-from wardrobe import piece, stone, w
-
-# How many triangles the facets leave: few enough that each plane is a
-# hand's breadth, which is what reads as cut stone at the being's size.
-BODY_FACETS = 2800
-HEAD_FACETS = 260
+import forge
+import garment as g
+import stage
+from wardrobe import band, belt, coat_tails, eyes, mat, rigid
 
 
-def faceless(body, r):
-    # The head and neck inflated a little and smoothed hard: a skull with
-    # no face on it.
-    return [piece(body, "head_stone", 0.007, lambda c, fw: w(fw, "head", "neck") > 0.45,
-                  smooth=14, close=0.04, material="stone", thick=0.0, faces=1600, trim=0.0)]
+def glowing(ob):
+    grp = ob.vertex_groups.new(name="edge")
+    grp.add(list(range(len(ob.data.vertices))), 1.0, "REPLACE")
+    return ob
 
 
-def heart(body, r):
-    chest = r.o["chest"]
-    at = chest + np.array([0.0, 0.07, 0.125])
-    core = stone("heart", at, (0.06, 0.08, 0.03), "heart", "chest", seed=3, facets=0, rough=0.9)
-    grp = core.vertex_groups.new(name="edge")
-    grp.add(list(range(len(core.data.vertices))), 1.0, "REPLACE")
-    return [core]
+def irons(body, r):
+    out = []
+    for s in "lr":
+        fa, hd, ua, el = f"forearm.{s}", f"hand.{s}", f"arm.{s}", f"forearm.{s}"
+        # The shackle: two broad bands at the wrist, a narrow one between.
+        out.append(band(body, r, fa, hd, 0.80, 0.055, 0.016, f"shackle.{s}", "iron"))
+        out.append(band(body, r, fa, hd, 0.66, 0.03, 0.018, f"shackle_rim.{s}", "iron"))
+        # The armband, high on the biceps.
+        out.append(band(body, r, ua, el, 0.42, 0.07, 0.016, f"armband.{s}", "iron"))
+        out.append(band(body, r, ua, el, 0.30, 0.025, 0.02, f"armband_rim.{s}", "iron"))
+    return out
 
 
-GARMENTS = {"head": faceless, "heart": heart}
+def horns(body, r):
+    """A bull's horns: out from the temples, sweeping up and back, the tips
+    turning forward -- each a loft of shrinking rings along that curve,
+    ridged as horn is."""
+    e = r.eye
+    out = []
+    for s, side in (("l", -1.0), ("r", 1.0)):
+        # The temple: above and behind the eye, out at the side of the skull.
+        root = e + np.array([side * 0.062, 0.055, -0.035])
+        steps = 22
+        pts = []
+        for i in range(steps + 1):
+            t = i / steps
+            pts.append(root + np.array([
+                side * (0.16 * t + 0.05 * np.sin(t * np.pi)),
+                0.05 * t + 0.20 * t * t,
+                -0.07 * np.sin(t * np.pi) + 0.06 * t ** 3,
+            ]))
+        pts = np.array(pts)
+        sections = []
+        for i, p in enumerate(pts):
+            t = i / steps
+            d = pts[min(i + 1, steps)] - pts[max(i - 1, 0)]
+            d /= np.linalg.norm(d)
+            a = np.cross(d, [0.0, 0.0, 1.0])
+            a /= np.linalg.norm(a)
+            b = np.cross(d, a)
+            rad = 0.034 * (1 - t) ** 1.1 + 0.0025
+            ridge = 1 + 0.08 * np.sin(t * 40.0)
+            sections.append(forge.ring(p, d, a, b, rad * ridge, rad * ridge * 0.85, sides=12))
+        v, f = forge.loft(sections, cap_start=True, cap_end=True)
+        ob = stage.mesh_object(f"horn.{s}", g.g2b(v), f)
+        g.material(ob, mat("horn"))
+        out.append(rigid(ob, "head"))
+    return out
+
+
+def burning_eyes(body, r):
+    return [glowing(ob) for ob in eyes(body, r, iris="eye")]
+
+
+def waist(body, r):
+    return belt(body, r, material="iron", sashed=False, at=0.02)
+
+
+def loincloth(body, r):
+    return coat_tails(body, r, spans=[(-26, 26, 0.48), (154, 206, 0.44)], material="hide", flare=0.18,
+                      at=0.01, ripple=0.3)
+
+
+GARMENTS = {"irons": irons, "horns": horns, "eyes": burning_eyes, "waist": waist, "loincloth": loincloth}
 WARDROBE = list(GARMENTS)
 
 
-def hide(r, c, fw):
-    # The face under the smooth head, so nothing of it can show through.
-    return w(fw, "head") > 0.6
-
-
-def facet(ob, triangles):
-    """Cut ``ob`` into flat planes: collapse it to ``triangles`` and shade
-    every face flat. The joint weights survive the collapse."""
-    n = sum(len(p.vertices) - 2 for p in ob.data.polygons)
-    dec = ob.modifiers.new("facets", "DECIMATE")
-    dec.decimate_type = "COLLAPSE"
-    dec.ratio = min(1.0, triangles / max(n, 1))
-    with bpy.context.temp_override(object=ob, active_object=ob):
-        bpy.ops.object.modifier_apply(modifier=dec.name)
-    ob.data.shade_flat()
-
-
 def dress(body, r, only=None):
-    pieces = character.dress(body, r, WARDROBE, only, GARMENTS, hide=hide, skin_material="stone")
-    facet(body, BODY_FACETS)
-    for p in pieces:
-        if p.name == "head_stone":
-            facet(p, HEAD_FACETS)
-    # The smooth high piece would bake its roundness back over the facets
-    # as a normal map: there is none.
-    for o in list(bpy.context.scene.objects):
-        if o.get("hi"):
-            bpy.data.objects.remove(o)
-    return pieces
+    return character.dress(body, r, WARDROBE, only, GARMENTS, skin_material="skin")

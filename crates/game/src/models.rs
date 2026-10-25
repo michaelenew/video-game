@@ -243,11 +243,9 @@ fn spawn(
         }
         if m == dual && !loaded.being[owner] {
             loaded.being[owner] = true;
-            for (root, _) in beings.iter().filter(|(_, b)| b.0 == owner) {
-                for k in 0..BEINGS.len() {
-                    let scene = loaded.being(k, &server);
-                    add(&mut commands, scene, root, owner, Body::Being(k));
-                }
+            for (root, b) in beings.iter().filter(|(_, b)| b.0 == owner) {
+                let scene = loaded.being(b.1, &server);
+                add(&mut commands, scene, root, owner, Body::Being(b.1));
             }
         }
     }

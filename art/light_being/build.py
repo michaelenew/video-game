@@ -2,8 +2,10 @@
 
     art/blender.sh art/light_being/build.py [--look out.png] [--paint] [--size 2048]
 
-Posed on the Dual mage's skeleton (``CLASS``), because it throws what she
-throws; everything else about it is its own (``recipe.py``, ``outfit.py``).
+On the Champion's skeleton (``CLASS``): the being is posed with the Dual
+mage's own pose, which is angles and so fits any skeleton
+(``view::being::BODIES``). Everything else is its own (``recipe.py``,
+``outfit.py``).
 """
 
 import os
@@ -14,30 +16,35 @@ sys.path[:0] = [os.path.join(HERE, "..", "lib"), HERE]
 
 import character  # noqa: E402
 import outfit  # noqa: E402,F401
-from recipe import BODY, BUST, FLAT, GIRTH, HEAD_SCALE  # noqa: E402,F401
+from recipe import BODY, GIRTH, HEAD_SCALE  # noqa: E402,F401
 
 NAME = "light_being"
-CLASS = "Dual mage"
+CLASS = "Champion"
 
-# Linear albedo, judged lit: a white robe, a bright warm gold, a paler gold
-# mask. The gold is only half metal: fully metal it mirrors the dark of
-# the world round it and reads bronze (the first build).
+# Linear albedo, judged lit. Bright polished steel, only partly metal so its
+# own light colour shows rather than the dark of the world it mirrors (the
+# seraph's gold read bronze); warm gold trim; a white cloak and skirt.
 COLOURS = {
-    "knit": (0.36, 0.24, 0.16),        # skin, warm brown
-    "robe": (0.92, 0.88, 0.78),
+    "knit": (0.30, 0.20, 0.14),
+    "knit/2": (0.36, 0.24, 0.16),      # skin, warm brown
+    "knit/3": (0.80, 0.80, 0.84),      # gauntlets: steel
+    "knit/4": (0.10, 0.06, 0.04),      # brows
+    "steel": (0.82, 0.83, 0.88),
     "gold": (1.0, 0.72, 0.28),
-    "gold_dark": (0.62, 0.40, 0.12),
-    "mask": (1.0, 0.86, 0.52),
-    "halo": (1.0, 0.9, 0.55),
-    "hair": (0.80, 0.62, 0.30),
-    "scalp": (0.36, 0.28, 0.13),
-    "hair/2": (0.98, 0.90, 0.62),
+    "cloak": (0.95, 0.93, 0.88),
+    "skirt": (0.90, 0.88, 0.82),
+    "halo": (1.0, 0.9, 0.6),
+    "hair": (0.55, 0.40, 0.22),
+    "scalp": (0.25, 0.18, 0.10),
+    "eye": (0.70, 0.68, 0.66),
+    "eye/2": (0.45, 0.62, 0.85),
+    "eye/3": (0.01, 0.01, 0.015),
 }
-GLOW = (1.0, 0.82, 0.42)
-METAL = {"gold": (0.55, 0.3), "gold_dark": (0.55, 0.38), "mask": (0.5, 0.22), "halo": (0.3, 0.3)}
-# It is light, not lit: everything it wears gives off some of its colour,
-# the gold more than the robe, the sun behind its head the most.
-LUMINOUS = {"robe": 0.03, "gold": 0.06, "gold_dark": 0.04, "mask": 0.08, "hair": 0.04, "halo": 1.0}
-ART = {"shade_tint": (0.95, 0.75, 0.55)}
+GLOW = (1.0, 0.86, 0.5)
+METAL = {"steel": (0.6, 0.22), "gold": (0.6, 0.3), "knit": (0.0, 0.6)}
+ART = {"shade_tint": (0.7, 0.75, 1.0)}
+# It is light: the plate and cloth give off a little of their own colour,
+# the ring behind its head all of it.
+LUMINOUS = {"steel": 0.03, "gold": 0.05, "cloak": 0.05, "skirt": 0.03, "halo": 1.0}
 
 character.build(sys.modules[__name__])

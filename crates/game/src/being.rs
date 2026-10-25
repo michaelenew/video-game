@@ -87,10 +87,11 @@ impl Material for Spirit {
     }
 }
 
-/// The root a seat's being hangs off: placed behind her, scaled, and shown
-/// while she has a bar to show.
+/// The root one of a seat's beings hangs off (the seat, then 0 dark or 1
+/// light): placed behind her, scaled to its own skeleton, and shown while
+/// she has a bar to show.
 #[derive(Component)]
-pub struct BeingRoot(pub usize);
+pub struct BeingRoot(pub usize, pub usize);
 
 /// A seat's seal, on the floor round her feet.
 #[derive(Component)]
@@ -103,8 +104,10 @@ pub struct Beings {
     /// Each seat's two beings' material, dark then light.
     pub body: [[Handle<Spirit>; MAX_PLAYERS]; 2],
     pub seal: [Handle<Spirit>; MAX_PLAYERS],
-    skeleton: Skeleton,
-    scale: f32,
+    /// Each being's own skeleton (`view::being::BODIES`) and how many times
+    /// its size it is drawn.
+    skeletons: [Skeleton; 2],
+    scales: [f32; 2],
     seal_radius: f32,
 }
 
@@ -167,9 +170,10 @@ impl Plugin for BeingPlugin {
 }
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<Spirit>>) {
-    let skeleton = skeleton_for(sim::Class::DualMage);
-    let scale = view::being::scale(&skeleton);
-    let seal_radius = view::being::seal_radius(&skeleton);
+    let her = skeleton_for(sim::Class::DualMage);
+    let skeletons = view::being::BODIES.map(skeleton_for);
+    let scales = [0, 1].map(|k| view::being::scale(&her, &skeletons[k]));
+    let seal_radius = view::being::seal_radius(&her);
     let mut made = |mode: f32| {
         materials.add(Spirit {
             look: SpiritLook {
@@ -186,8 +190,8 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<Spirit>>) {
     commands.insert_resource(Beings {
         body,
         seal,
-        skeleton,
-        scale,
+        skeletons,
+        scales,
         seal_radius,
     });
 }
@@ -198,7 +202,13 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<Spirit>>) {
 fn spawn(mut commands: Commands, beings: Res<Beings>, mut meshes: ResMut<Assets<Mesh>>) {
     let disc = meshes.add(Plane3d::new(Vec3::Y, Vec2::ONE).mesh().subdivisions(0));
     for owner in 0..MAX_PLAYERS {
-        commands.spawn((BeingRoot(owner), Transform::default(), Visibility::Hidden));
+        for k in 0..2 {
+            commands.spawn((
+                BeingRoot(owner, k),
+                Transform::default(),
+                Visibility::Hidden,
+            ));
+        }
         commands.spawn((
             Seal(owner),
             Mesh3d(disc.clone()),
@@ -266,10 +276,10 @@ pub fn place(
 ) {
     let now = time.elapsed_secs();
     let frame = view::interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    let s = beings.scale;
-    let skeleton = &beings.skeleton;
-    let mut looks: [Option<SpiritLook>; MAX_PLAYERS] = [None; MAX_PLAYERS];
-    let mut stands: [Option<(Vec3, Quat)>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    // Per seat and per being: its look (what its veil is told) and where its
+    // root stands.
+    let mut looks: [[Option<SpiritLook>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
+    let mut stands: [[Option<(Vec3, Quat)>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
     let whole = looked_at();
     for owner in 0..MAX_PLAYERS {
         let p = &sim.cur.players[owner];
@@ -283,51 +293,54 @@ pub fn place(
         let late = echo
             .behind(owner, now, view::being::LAG_SECONDS)
             .unwrap_or(drawn);
-        let skin = view::skeleton::solve(skeleton, &view::being::guarded(&late));
-        for rig in rigs.being[owner] {
-            crate::models::pose(rig, Some(&skin), &mut bones);
-        }
-
         let v = frame.players[owner];
         let feet = Vec3::from_array(v.pos);
         let q = view::body_turn([v.facing[0], v.facing[2]]).0;
         let turn = Quat::from_xyzw(q[0], q[1], q[2], q[3]);
         // Character space has the facing at +Z, and a drawn body's left at
         // +X (`view::hand_joint` says why).
-        // Hips at her feet; or, looked at whole, standing on her floor.
-        let sink = if whole > 0.0 {
-            0.0
-        } else {
-            s * skeleton.hip_height
-        };
-        let root = feet + turn * Vec3::new(0.0, 0.0, -view::being::BEHIND) - Vec3::Y * sink;
-        stands[owner] = Some((root, turn));
-        let at = |local: [f32; 3]| root + turn * (Vec3::from_array(local) * s);
-        let joint = |j: Joint| at(skin.origin[j.index()]);
-        let fist = |left: bool| at(skin.box_of(skeleton, view::hand_joint(left)).0);
         let left = turn * Vec3::X;
-        let o = view::being::ORDER;
-        looks[owner] = Some(SpiritLook {
-            fill: Vec4::new(
-                if whole > 0.0 { 1.0 } else { being.dark },
-                if whole > 0.0 { 1.0 } else { being.light },
-                if being.ascending { 1.0 } else { 0.0 },
-                0.0,
-            ),
-            left: left.extend(s),
-            feet: feet.extend(beings.seal_radius),
-            dark_shoulder: joint(view::drawn_joint(Joint::ArmL)).extend(0.0),
-            dark_fist: fist(true).extend(0.0),
-            light_shoulder: joint(view::drawn_joint(Joint::ArmR)).extend(0.0),
-            light_fist: fist(false).extend(0.0),
-            head: at(skin.box_of(skeleton, Joint::Head).0).extend(0.0),
-            order: Vec4::new(o.first, o.body, o.head, o.soft),
-            reach: Vec4::new(view::being::REACH, whole, 0.0, 0.0),
-        });
+        for k in 0..2 {
+            let skeleton = &beings.skeletons[k];
+            let s = beings.scales[k];
+            let skin = view::skeleton::solve(skeleton, &view::being::stance(k, &late));
+            crate::models::pose(rigs.being[owner][k], Some(&skin), &mut bones);
+            // Hips at her feet; or, looked at whole, standing on her floor.
+            let sink = if whole > 0.0 {
+                0.0
+            } else {
+                s * skeleton.hip_height
+            };
+            let root = feet + turn * Vec3::new(0.0, 0.0, -view::being::BEHIND) - Vec3::Y * sink;
+            stands[owner][k] = Some((root, turn));
+            let at = |local: [f32; 3]| root + turn * (Vec3::from_array(local) * s);
+            let joint = |j: Joint| at(skin.origin[j.index()]);
+            let fist = |left: bool| at(skin.box_of(skeleton, view::hand_joint(left)).0);
+            let o = view::being::ORDER;
+            looks[owner][k] = Some(SpiritLook {
+                fill: Vec4::new(
+                    if whole > 0.0 { 1.0 } else { being.dark },
+                    if whole > 0.0 { 1.0 } else { being.light },
+                    if being.ascending { 1.0 } else { 0.0 },
+                    0.0,
+                ),
+                left: left.extend(s),
+                feet: feet.extend(beings.seal_radius),
+                dark_shoulder: joint(view::drawn_joint(Joint::ArmL)).extend(0.0),
+                dark_fist: fist(true).extend(0.0),
+                light_shoulder: joint(view::drawn_joint(Joint::ArmR)).extend(0.0),
+                light_fist: fist(false).extend(0.0),
+                head: at(skin.box_of(skeleton, Joint::Head).0).extend(0.0),
+                order: Vec4::new(o.first, o.body, o.head, o.soft),
+                // Each being keeps only its own half: 1 dark, 2 light.
+                reach: Vec4::new(view::being::REACH, whole, (k + 1) as f32, 0.0),
+            });
+        }
     }
 
     for (root, mut tf, mut seen) in roots.iter_mut() {
-        let shown = looks[root.0].is_some_and(|l| l.fill.x > 0.0 || l.fill.y > 0.0);
+        let (owner, k) = (root.0, root.1);
+        let shown = looks[owner][k].is_some_and(|l| l.fill.x > 0.0 || l.fill.y > 0.0);
         let want = if shown {
             Visibility::Inherited
         } else {
@@ -336,14 +349,15 @@ pub fn place(
         if *seen != want {
             *seen = want;
         }
-        if let Some((at, turn)) = stands[root.0] {
+        if let Some((at, turn)) = stands[owner][k] {
             tf.translation = at;
             tf.rotation = turn;
-            tf.scale = Vec3::splat(s);
+            tf.scale = Vec3::splat(beings.scales[k]);
         }
     }
     for (seal, mut tf, mut seen) in seals.iter_mut() {
-        let want = if looks[seal.0].is_some() {
+        let look = looks[seal.0][0];
+        let want = if look.is_some() {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -351,27 +365,27 @@ pub fn place(
         if *seen != want {
             *seen = want;
         }
-        if let Some(look) = looks[seal.0] {
+        if let Some(look) = look {
             tf.translation = look.feet.truncate() + Vec3::Y * SEAL_LIFT;
             tf.scale = Vec3::new(beings.seal_radius, 1.0, beings.seal_radius);
         }
     }
-    for (owner, look) in looks.iter().enumerate() {
-        let Some(look) = *look else {
-            continue;
-        };
-        // Each being keeps only its own half (`reach.z`: 1 dark, 2 light).
-        for (handle, mode, half) in [
-            (&beings.body[0][owner], 0.0, 1.0),
-            (&beings.body[1][owner], 0.0, 2.0),
-            (&beings.seal[owner], 1.0, 0.0),
-        ] {
-            if let Some(m) = materials.get_mut(handle) {
-                m.look = SpiritLook {
-                    fill: look.fill.truncate().extend(mode),
-                    reach: Vec4::new(look.reach.x, look.reach.y, half, 0.0),
-                    ..look
-                };
+    for (owner, pair) in looks.iter().enumerate() {
+        for (k, look) in pair.iter().enumerate() {
+            let Some(look) = *look else {
+                continue;
+            };
+            if let Some(m) = materials.get_mut(&beings.body[k][owner]) {
+                m.look = look;
+            }
+            if k == 0 {
+                if let Some(m) = materials.get_mut(&beings.seal[owner]) {
+                    m.look = SpiritLook {
+                        fill: look.fill.truncate().extend(1.0),
+                        reach: Vec4::new(look.reach.x, look.reach.y, 0.0, 0.0),
+                        ..look
+                    };
+                }
             }
         }
     }

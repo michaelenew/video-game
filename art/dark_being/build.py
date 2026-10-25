@@ -2,8 +2,10 @@
 
     art/blender.sh art/dark_being/build.py [--look out.png] [--paint] [--size 2048]
 
-Posed on the Dual mage's skeleton (``CLASS``), because it throws what she
-throws; everything else about it is its own (``recipe.py``, ``outfit.py``).
+On the Bulwark's skeleton (``CLASS``), the broadest in the game: the being is
+posed with the Dual mage's own pose, which is angles and so fits any
+skeleton (``view::being::BODIES``). Everything else is its own
+(``recipe.py``, ``outfit.py``).
 """
 
 import os
@@ -20,34 +22,33 @@ import paint  # noqa: E402
 from recipe import BODY, GIRTH, HEAD_SCALE  # noqa: E402,F401
 
 NAME = "dark_being"
-CLASS = "Dual mage"
+CLASS = "Bulwark"
 
-# Linear albedo, judged lit: glass black with violet in it, glossy enough
-# that each facet throws a clean highlight.
+# Linear albedo, judged lit. Skin of a dark charcoal with violet in its
+# black, so the muscle's light and shade read on it; dark iron; black horn,
+# paler toward the tip; violet eyes.
 COLOURS = {
-    "stone": (0.012, 0.008, 0.022),
-    "heart": (0.75, 0.5, 1.0),
+    "skin": (0.05, 0.035, 0.06),
+    "iron": (0.12, 0.11, 0.11),
+    "horn": (0.04, 0.03, 0.035),
+    "hide": (0.035, 0.022, 0.02),
+    "eye": (0.7, 0.4, 1.0),
+    "eye/2": (0.85, 0.6, 1.0),
+    "eye/3": (1.0, 0.9, 1.0),
 }
 GLOW = (0.7, 0.35, 1.0)
-METAL = {"stone": (0.0, 0.12)}
-ART = {"shade_tint": (0.5, 0.4, 1.0)}
-
-# The heart, in the object space ``veins`` is given (Blender's frame:
-# +z up, -y forward), metres.
-HEART = np.array([0.0, -0.17, 1.42])
+METAL = {"iron": (0.9, 0.55), "horn": (0.0, 0.3), "skin": (0.0, 0.55)}
+ART = {"shade_tint": (0.5, 0.4, 0.9)}
 
 
 def veins(pos):
-    """Cracks of light, running out from the heart: two noises crossing
-    their middle make a network of lines; near the heart they are wide and
-    bright and many, and they thin to hairlines and die out down the limbs."""
-    a = paint._hash_noise(pos, 4.0, 1.0)
-    b = paint._hash_noise(pos, 9.0, 4.0)
-    d = np.linalg.norm(pos - HEART, axis=-1)
-    near = np.exp(-d / 0.35)
-    width = 0.004 + 0.016 * near
-    line = np.exp(-((a - 0.5) / width) ** 2) + np.exp(-((b - 0.5) / (width * 0.8)) ** 2) * near
-    return np.clip(line * (0.25 + 0.75 * near) * 1.4, 0, 1)
+    """Faint violet seams in the skin, as if the dark showed through where it
+    is stretched over the muscle: thin, and only on the trunk and arms."""
+    a = paint._hash_noise(pos, 6.0, 1.0)
+    line = np.exp(-((a - 0.5) / 0.006) ** 2)
+    height = pos[..., 2]
+    upper = np.clip((height - 1.05) / 0.25, 0, 1)
+    return np.clip(line * upper * 0.55, 0, 1)
 
 
 character.build(sys.modules[__name__])
