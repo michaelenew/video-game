@@ -33,6 +33,7 @@ use bevy::render::mesh::skinning::SkinnedMesh;
 use bevy::render::view::NoFrustumCulling;
 
 use crate::beast::MarkMaterial;
+use crate::being::Spirit;
 use crate::brushwork::Brushwork;
 use crate::ink::InkMaterial;
 use crate::paint::Paint;
@@ -58,6 +59,7 @@ impl Plugin for WarmPlugin {
                 prime::<MarkMaterial>,
                 prime::<SkinMaterial>,
                 prime::<InkMaterial>,
+                prime::<Spirit>,
                 prime::<SwingMaterial>,
                 prime::<Brushwork>,
                 retire,
@@ -162,6 +164,11 @@ impl Warm for InkMaterial {
     fn key(&self, h: &mut DefaultHasher) {
         self.base.key(h);
     }
+}
+
+/// One form: blended, front faces, nothing else to choose.
+impl Warm for Spirit {
+    fn key(&self, _h: &mut DefaultHasher) {}
 }
 
 /// One form: blended, both sides, nothing else to choose.

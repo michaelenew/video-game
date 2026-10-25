@@ -1200,17 +1200,6 @@ pub fn sigil_texture() -> Image {
     })
 }
 
-/// **Feathers**: barbs running off a shaft, out and back -- the texture
-/// of the Dual mage's vanes.
-pub fn feather_texture() -> Image {
-    paint(|u, v| {
-        let barbs = ((u * 60.0 + (v - 0.5).abs() * 90.0).sin() * 0.5 + 0.5).powf(0.6);
-        let shaft = (1.0 - ((v - 0.5).abs() / 0.02)).clamp(0.0, 1.0);
-        let g = 0.65 + 0.35 * barbs.max(shaft);
-        [g, g, g, (0.55 + 0.45 * barbs).max(shaft)]
-    })
-}
-
 /// The materials whose textures flow, and how: `(handle, units a second
 /// along u, along v)`.
 #[derive(Resource, Default)]

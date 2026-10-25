@@ -365,8 +365,8 @@ pub const SECTIONS: &[Section] = &[
                 "The **lower** bar is what your body can do. At a third the dodge is a blink. At two thirds you have a second jump and you fall slower -- which is also why your takeoffs are from the floor only: in the air, space is that jump. Both full and you ascend, and every spell climbs you, so near the top you choose the moment: the wings erupt in Apotheosis, a nova of both forces round you that purges every curse in it at full power -- ascend beside a cursed body, not alone in a corner. Then a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and both bars empty and a stagger.",
             ),
             e(
-                "On your back",
-                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
+                "Behind you",
+                "The two bars are a being taking shape behind you, dark on your left and light on your right, rising out of the seal at your feet. Each half thickens as its bar fills: shoulder and fist first, then arm and torso, then the head. It casts what you cast, a beat behind. A lopsided being is a mage about to burn; a whole one is a mage about to ascend.",
             ),
         ],
     },

@@ -22,6 +22,7 @@ mod arenas;
 mod bag;
 mod bake;
 mod beast;
+mod being;
 mod blades;
 mod brushwork;
 mod cairns;
@@ -314,6 +315,7 @@ fn main() {
         .add_plugins(swing::SwingPlugin)
         .add_plugins(warm::WarmPlugin)
         .add_plugins(ink::InkPlugin)
+        .add_plugins(being::BeingPlugin)
         .add_plugins(brushwork::BrushworkPlugin)
         .add_plugins(models::ModelsPlugin)
         .add_plugins(impact::ImpactPlugin)
@@ -390,6 +392,7 @@ fn main() {
                     pose_balls,
                     place_copies,
                     pose_models,
+                    being::place,
                     swing_coats,
                     scrape::place,
                 )
@@ -407,7 +410,6 @@ fn main() {
                     place_gusts,
                     place_discs,
                     fx::flow,
-                    place_wingspans,
                     place_marks,
                     place_scythes,
                     place_champion_arms,
@@ -911,6 +913,9 @@ fn ball_width(skeleton: &Skeleton, joint: view::skeleton::Joint) -> f32 {
 #[derive(Resource, Default)]
 struct Joints {
     body: [Option<view::skeleton::Skin>; MAX_PLAYERS],
+    /// The pose each body was solved from: what the Dual mage's being is
+    /// posed from, a beat late (`being`).
+    pose: [Option<view::pose::Pose>; MAX_PLAYERS],
     shadow: [Option<view::skeleton::Skin>; MAX_PLAYERS],
     copies: [[Option<view::skeleton::Skin>; REAP_COPIES]; MAX_PLAYERS],
     copy_solid: [[f32; REAP_COPIES]; MAX_PLAYERS],
@@ -1196,7 +1201,7 @@ fn shot_reap(w: &mut World) {
 }
 
 /// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
-/// headless capture can look at the wings without playing up to them. A
+/// headless capture can look at the being behind her without playing up to it. A
 /// sibling of `SHOT_FRAME`: a way of landing a screenshot on a state rather
 /// than a moment. Ignored for any other class, and read once at start.
 fn shot_bars(w: &mut World) {
@@ -2208,70 +2213,6 @@ struct GustMesh(usize);
 #[derive(Component)]
 struct DiscMesh(usize);
 
-/// One of the six wings on the Dual mage's **back**: her two bars, drawn.
-///
-/// Not the swept blade above, which is an attack. These are the meter: three
-/// a side, dark on her left and light on her right, one materialising at each
-/// third of its bar, so the gap between the two is readable across the arena
-/// by both players and six is ascension. `view::wings` decides the root, the
-/// axes and the count, and `view/tests/wings.rs` holds the count to the bar.
-#[derive(Component)]
-struct WingSpanMesh {
-    owner: usize,
-    force: sim::class::Force,
-    slot: view::wings::Slot,
-    /// Seconds since it appeared, while it is unfolding -- a wing
-    /// materialises over a few frames rather than popping. Presentation only.
-    unfolding: f32,
-}
-
-/// How long a wing takes to unfold once its third of the bar is reached.
-const WING_UNFOLD_SECONDS: f32 = 0.22;
-
-/// The wing `view::wings` describes, as one two-sided mesh in the wing's own
-/// plane at unit span: `x` out along the wing, `y` across it. The coverts and
-/// every feather are convex, so each is fanned from its own middle and the
-/// wing is their overlap -- translucent, so the overlaps read as depth.
-/// Scaled to each wing's own length when it is placed.
-fn wing_mesh() -> Mesh {
-    use bevy::asset::RenderAssetUsages;
-    use bevy::render::mesh::{Indices, PrimitiveTopology};
-    let mut positions: Vec<[f32; 3]> = Vec::new();
-    let mut indices: Vec<u32> = Vec::new();
-    let mut fan = |outline: &[[f32; 2]]| {
-        let n = outline.len();
-        let centre = outline.iter().fold([0.0f32, 0.0f32], |c, p| {
-            [c[0] + p[0] / n as f32, c[1] + p[1] / n as f32]
-        });
-        let first = positions.len() as u32;
-        positions.push([centre[0], centre[1], 0.0]);
-        for p in outline {
-            positions.push([p[0], p[1], 0.0]);
-        }
-        for i in 0..n as u32 {
-            let a = first + 1 + i;
-            let b = first + 1 + (i + 1) % n as u32;
-            // Both faces, so it reads from the front and from behind: the two
-            // places the two players are.
-            indices.extend_from_slice(&[first, a, b, first, b, a]);
-        }
-    };
-    fan(&view::wings::COVERTS);
-    for f in view::wings::FEATHERS.iter() {
-        fan(&view::wings::feather_outline(f));
-    }
-    let uvs: Vec<[f32; 2]> = positions.iter().map(|p| [p[0], 0.5 - p[1]]).collect();
-    let normals: Vec<[f32; 3]> = positions.iter().map(|_| [0.0, 0.0, 1.0]).collect();
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-    .with_inserted_indices(Indices::U32(indices))
-}
-
 /// The aim marker a channelled move is wound out along.
 ///
 /// One per fighter: a channel is an action, and nobody is in two at once. It is
@@ -2416,12 +2357,6 @@ struct EffectLook {
     /// two you are holding.
     light: Handle<StandardMaterial>,
     dark: Handle<StandardMaterial>,
-    /// The wings on the Dual mage's back, one per force. Translucent and
-    /// two-sided where the tether and the burst are not: they hang off the
-    /// body the player is looking at, and a solid vane the size of her would
-    /// hide the fight behind it.
-    wing_light: Handle<StandardMaterial>,
-    wing_dark: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
     /// A stone with fire on it. See `sim::class::Structure::lit`.
     stone_lit: Handle<StandardMaterial>,
@@ -2748,7 +2683,6 @@ fn setup(
     let dark_tex = images.add(fx::dark_texture());
     let smoke_tex = images.add(fx::smoke_texture());
     let sigil_tex = images.add(fx::sigil_texture());
-    let feather_tex = images.add(fx::feather_texture());
     let look = EffectLook {
         // Translucent, not solid -- it is flame, and a wall of solid orange
         // plastic reads as a structure rather than a hazard you could
@@ -2851,26 +2785,6 @@ fn setup(
         // has to be visible along its whole length against anything it crosses,
         // and the one thing it must not do is wash out the body on the end of
         // it, which is what the player is actually looking at.
-        wing_light: materials.add(StandardMaterial {
-            base_color_texture: Some(feather_tex.clone()),
-            base_color: Color::srgba(1.0, 0.95, 0.78, 0.34),
-            emissive: LinearRgba::rgb(1.8, 1.5, 0.9),
-            alpha_mode: AlphaMode::Blend,
-            unlit: true,
-            double_sided: true,
-            cull_mode: None,
-            ..default()
-        }),
-        wing_dark: materials.add(StandardMaterial {
-            base_color_texture: Some(feather_tex.clone()),
-            base_color: Color::srgba(0.38, 0.14, 0.62, 0.34),
-            emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
-            alpha_mode: AlphaMode::Blend,
-            unlit: true,
-            double_sided: true,
-            cull_mode: None,
-            ..default()
-        }),
         dark: materials.add(StandardMaterial {
             base_color: Color::srgba(0.16, 0.06, 0.26, 0.92),
             base_color_texture: Some(dark_tex.clone()),
@@ -3088,7 +3002,6 @@ fn setup(
         ));
     }
     let pellet = meshes.add(Sphere::new(0.5));
-    let wing = meshes.add(wing_mesh());
     for slot in 0..sim::bolt::MAX_BOLTS {
         commands.spawn((
             Mesh3d(look.comet.clone()),
@@ -3129,31 +3042,6 @@ fn setup(
             Visibility::Hidden,
             DiscMesh(slot),
         ));
-    }
-    // The six wings on the Dual mage's back. Spawned for every fighter rather
-    // than for her alone, because the class is picked at runtime and can
-    // change mid-match with Tab.
-    for owner in 0..MAX_PLAYERS {
-        // The six on her back, in the colour of the force each one is.
-        for (force, material) in [
-            (sim::class::Force::Dark, look.wing_dark.clone()),
-            (sim::class::Force::Light, look.wing_light.clone()),
-        ] {
-            for slot in view::wings::ORDER {
-                commands.spawn((
-                    Mesh3d(wing.clone()),
-                    MeshMaterial3d(material.clone()),
-                    Transform::default(),
-                    Visibility::Hidden,
-                    WingSpanMesh {
-                        owner,
-                        force,
-                        slot,
-                        unfolding: 0.0,
-                    },
-                ));
-            }
-        }
     }
     // The Reaver's marks, over every body that can carry them.
     for body in 0..=PIP_QUARRY {
@@ -3923,66 +3811,6 @@ fn orb_out(p: &sim::state::Player) -> bool {
         && p.action
             .attack_kind()
             .is_some_and(sim::moves::dual::is_an_auto)
-}
-
-/// The six wings on the Dual mage's back: three a side, one per third of its
-/// bar, each a wing-shaped vane in a fixed place that is there or is not.
-///
-/// Drawn from the *interpolated* frame like the body rather than from the
-/// latest snapshot like the attack volumes, because they hang off her and a
-/// wing that lagged the back it grows from by half a frame would visibly
-/// detach every time she turned.
-fn place_wingspans(
-    sim: Res<Sim>,
-    time: Res<Time>,
-    mut meshes: Query<(&mut WingSpanMesh, &mut Transform, &mut Visibility)>,
-) {
-    let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    for (mut tag, mut tf, mut vis) in meshes.iter_mut() {
-        // The bars are read off the current snapshot -- they are the meter,
-        // and a meter is not a thing to blend -- and the body they hang off is
-        // read off the blended frame, which is where the body is drawn.
-        let mut p = sim.cur.players[tag.owner];
-        let drawn = frame.players[tag.owner];
-        p.pos = sim::V3::new(
-            sim::Fx::from_raw((drawn.pos[0] * 65536.0) as i32),
-            sim::Fx::from_raw((drawn.pos[1] * 65536.0) as i32),
-            sim::Fx::from_raw((drawn.pos[2] * 65536.0) as i32),
-        );
-        p.facing = sim::V3::new(
-            sim::Fx::from_raw((drawn.facing[0] * 65536.0) as i32),
-            sim::Fx::ZERO,
-            sim::Fx::from_raw((drawn.facing[2] * 65536.0) as i32),
-        );
-        let Some(wings) = view::wings::wings(&p) else {
-            *vis = Visibility::Hidden;
-            tag.unfolding = 0.0;
-            continue;
-        };
-        let wing = wings
-            .iter()
-            .find(|w| w.force == tag.force && w.slot == tag.slot)
-            .copied()
-            .expect("all six wings are always answered for");
-        if !wing.shown {
-            *vis = Visibility::Hidden;
-            tag.unfolding = 0.0;
-            continue;
-        }
-        *vis = Visibility::Inherited;
-        // Materialise: unfold from the root over a few frames, then hold. The
-        // shape never changes with the bar; only whether it is there.
-        tag.unfolding = (tag.unfolding + time.delta_secs()).min(WING_UNFOLD_SECONDS);
-        let t = tag.unfolding / WING_UNFOLD_SECONDS;
-        let unfold = t * t * (3.0 - 2.0 * t);
-        let along = Vec3::from_array(wing.along);
-        let across = Vec3::from_array(wing.across);
-        let normal = along.cross(across);
-        tf.translation = Vec3::from_array(wing.root);
-        tf.rotation = Quat::from_mat3(&Mat3::from_cols(along, across, normal));
-        // The mesh is unit length; the slot says how long this wing is.
-        tf.scale = Vec3::new(unfold.max(0.01) * wing.length, wing.length, 1.0);
-    }
 }
 
 /// Put each channelling fighter's aim marker where their aim currently lands.
@@ -7979,6 +7807,7 @@ fn apply_poses(
                 pose = preview;
             }
         }
+        joints.pose[owner] = Some(pose);
         skins.push(view::skeleton::solve(skeleton, &pose));
     }
     for (owner, skin) in skins.iter().enumerate() {

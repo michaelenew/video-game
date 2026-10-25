@@ -9,6 +9,7 @@
 
 pub mod arms;
 pub mod baked;
+pub mod being;
 pub mod camera;
 pub mod clips;
 pub mod dodge;
@@ -21,7 +22,6 @@ pub mod pose;
 pub mod scythe;
 pub mod skeleton;
 pub mod trail;
-pub mod wings;
 
 pub use camera::{CameraRig, Framing, Surroundings};
 pub use clips::Clip;

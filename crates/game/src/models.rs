@@ -23,7 +23,8 @@
 //! that was. They wear the fighters' skin (`still::SkinMaterial`), so the
 //! still world's shade falls on them as on everybody else, with the piece
 //! the exporter names `team` dyed the seat's colour; the shadow and the
-//! copies are in ink (`crate::ink`).
+//! copies are in ink (`crate::ink`). For the Dual mage one more: the being
+//! behind her (`crate::being`), her model again under its own root, in light.
 
 use bevy::gltf::GltfMaterialName;
 use bevy::pbr::NotShadowCaster;
@@ -81,6 +82,8 @@ pub enum Body {
     Her(usize),
     Shadow,
     Copy(usize),
+    /// The being behind the Dual mage.
+    Being,
 }
 
 /// One of a seat's models.
@@ -96,6 +99,7 @@ impl Model {
         match self.body {
             Body::Her(m) => MODELS[m].0 == class,
             Body::Shadow | Body::Copy(_) => class == sim::Class::ShadowReaver,
+            Body::Being => class == sim::Class::DualMage,
         }
     }
 }
@@ -110,6 +114,7 @@ pub struct Rigs {
     pub her: [[Option<Joints>; MODELLED]; MAX_PLAYERS],
     pub shadow: [Option<Joints>; MAX_PLAYERS],
     pub copies: [[Option<Joints>; REAP_COPIES]; MAX_PLAYERS],
+    pub being: [Option<Joints>; MAX_PLAYERS],
     pub looks: [Vec<Handle<still::SkinMaterial>>; MAX_PLAYERS],
     pub inks: [[Vec<Handle<InkMaterial>>; REAP_COPIES]; MAX_PLAYERS],
     /// Each model's coat joints (`coat`), and the Reaver's blades' tips and
@@ -124,6 +129,7 @@ impl Rigs {
             Body::Her(m) => &mut self.her[owner][m],
             Body::Shadow => &mut self.shadow[owner],
             Body::Copy(c) => &mut self.copies[owner][c],
+            Body::Being => &mut self.being[owner],
         }
     }
 
@@ -150,6 +156,7 @@ pub struct Loaded {
     scenes: [Option<Handle<Scene>>; MODELLED],
     her: [[bool; MODELLED]; MAX_PLAYERS],
     shadow: [bool; MAX_PLAYERS],
+    being: [bool; MAX_PLAYERS],
 }
 
 impl Loaded {
@@ -167,7 +174,8 @@ impl Loaded {
 
 /// Make the model of every class a present seat is playing, for that seat,
 /// the first time it plays it -- and with the Reaver's, her shadow and her
-/// copies.
+/// copies; with the Dual mage's, the being behind her.
+#[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are what it reads
 fn spawn(
     mut commands: Commands,
     server: Res<AssetServer>,
@@ -176,8 +184,10 @@ fn spawn(
     fighters: Query<(Entity, &crate::Fighter)>,
     shadows: Query<(Entity, &crate::ShadowRoot)>,
     copies: Query<(Entity, &crate::CopyRoot)>,
+    beings: Query<(Entity, &crate::being::BeingRoot)>,
 ) {
     let reaver = model_of(sim::Class::ShadowReaver).expect("the Reaver has a model");
+    let dual = model_of(sim::Class::DualMage).expect("the Dual mage has a model");
     let add = |commands: &mut Commands, scene: Handle<Scene>, root: Entity, owner, body| {
         let model = commands
             .spawn((
@@ -218,6 +228,13 @@ fn spawn(
                 );
             }
         }
+        if m == dual && !loaded.being[owner] {
+            loaded.being[owner] = true;
+            let scene = loaded.scene(dual, &server);
+            for (root, _) in beings.iter().filter(|(_, b)| b.0 == owner) {
+                add(&mut commands, scene.clone(), root, owner, Body::Being);
+            }
+        }
     }
 }
 
@@ -236,6 +253,7 @@ fn ready(
     mut inks: ResMut<Assets<InkMaterial>>,
     mut rigs: ResMut<Rigs>,
     mut squeeze: ResMut<crate::squeeze::Squeeze>,
+    beings: Res<crate::being::Beings>,
     mut commands: Commands,
 ) {
     let root = trigger.target();
@@ -272,6 +290,11 @@ fn ready(
         let Ok((look, material)) = looks.get(entity) else {
             continue;
         };
+        // The being wears none of her costume: one veil of light.
+        if body == Body::Being {
+            crate::being::dress(&mut commands, entity, &beings, owner);
+            continue;
+        }
         let Some(base) = standard.get(&look.0) else {
             continue;
         };
@@ -325,10 +348,10 @@ pub fn drawn(class: sim::Class) -> bool {
 }
 
 /// Put a model's joints where a solve put the skeleton.
-pub fn pose(
+pub fn pose<F: bevy::ecs::query::QueryFilter>(
     rig: Option<Joints>,
     skin: Option<&Skin>,
-    joints: &mut Query<&mut Transform, Without<crate::Fighter>>,
+    joints: &mut Query<&mut Transform, F>,
 ) {
     let (Some(rig), Some(skin)) = (rig, skin) else {
         return;

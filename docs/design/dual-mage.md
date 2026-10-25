@@ -223,44 +223,39 @@ cannot dodge out, and by blocking, which eats the damage and denies the refund. 
 ascension's hard counter. You win with it by timing it for when your opponent is already
 vulnerable, not by reaching it as fast as possible.
 
-### On her back
+### Behind her: the being and the seal (2026-10-25; was six wings)
 
-**The two bars are six wings**, three a side, dark on the left and light on the right — the
-same sides as the arms that goad them. A wing does not grow: it **materialises**, whole, and
-**a wing is a tier** — a side's first wing arrives when that bar reaches the blink's threshold,
-its second at the second jump's, its third at the top the wings read. Those are the three marks
-the HUD's track already carries, so a wing appearing on her back and a tick passing on the bar
-are one moment, the moment something about what her body can do changes. (The first cut put
-them at thirds of the bar, a fourth set of marks nothing else used, and it read as wings
-arriving in the middle of nowhere.) So a bar is read as a count, one, two or three, which is
-what can be read from across the arena; a wing half a metre long is a line, not a wing.
-Lopsided wings are the gap, readable by both players; three and three is a mage about to
-ascend, and ascension is all six. The HUD carries the two bars too, growing away from each
-other from a shared middle, but the wings are the display, and the thing the tiers unlock is
-the thing everyone is already looking at. That answers the old open question about colour on
-the body by making the body the meter.
+**The two bars are a being breaking out.** One incorporeal body takes shape behind her, **dark
+on her left and light on her right** -- the same sides as the arms that goad them -- each half
+condensing as its own bar fills. It is a **gradient, not a count**: a quarter of a bar is a
+quarter of a body, faint, and a full bar is the whole half, solid at its outline. Lopsided is the
+gap, readable by both players; ascension is all of it, burning brighter.
 
-**Three sizes, and the biggest comes first.** The great wing rises up and out from the
-shoulder blade, the middle-sized one hangs below it with its primaries down, and the smallest
-**floats** level between the two, out off the shoulder with its quills sunk into their feathers,
-bound to nothing — it is the highest presence of that being, not a limb, and a binding that is
-not physical is the point of it. They arrive biggest first: the blink puts the great wing out,
-the second jump the lower one, the top the small one between. So a mage at half already has a
-wing you can see across the arena, and the last one fills the spread rather than being the
-thing you are waiting for. None crosses her centre line. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
-wrist well short of the tip, seven primaries fanning from that wrist like fingers — the
-outermost reaching the full span, each next one shorter and hung lower, the last hanging down
-— and secondaries hanging from the arm behind them, every feather a rounded slat and the wing
-the translucent overlap of them. That bend at the wrist is the whole difference between an
-eagle's wing and a butterfly's; the first cut was one sheet with a sawtoothed edge, and it read
-as an insect's. Each wing stands in the vertical plane through its own length so that from the
-front and from behind, where the two players are, it is seen face-on. The
-great wing is 2.3 m, the lower 1.7, the small one 1.1; they are translucent, so they never hide
-the fight behind them. `view::wings` decides the count, each wing's root, axes and length and
-the silhouette, and `view/tests/wings.rs` holds the count, the order and the sizes to the bar
-the way `kinematics.rs` holds the blade to the fist. Looked at in a headless capture
-(`SHOT_BARS=70,100 ./scripts/screenshot.sh`) from both seats on 2026-09-23. The wings are drawn
-and not tested against.
+**It arrives limb first.** The shoulder and the fist come first, then the arm between them and
+the torso, then the head last -- a presence that is mostly a blow to begin with, and only at
+the top of the bar has a face. `view::being::presence` is that order and `being.wgsl` is the
+same function on the GPU; its edge drifts like smoke, and the part still condensing glows.
+
+**It is big, and it rises out of the seal.** Its hips are at her feet and its chin at her
+forehead (about 2.7 times her size, worked out from her skeleton by `view::being::scale`), so
+above the floor it is torso, arms and head, and at the waist it goes into the seal. Its arms
+never hang lower than a guard (`view::being::guarded`), fists raised in front of her -- hanging,
+the fists that are the first of it would be under the floor.
+
+**It casts.** It is technically the thing doing the casting, so it holds her own pose from
+`view::being::LAG_SECONDS` (0.12 s) ago: the same throw, larger, a beat behind hers. A reach of
+hers past the guard is its reach too.
+
+**The seal** is a disc of rings and runes on the floor round her feet, split down the same line:
+dark half on her left, light on her right. It is faintly there whatever the bars; each half's
+runes light round from behind her toward the front as its bar fills, and its floor is washed in
+its force. The HUD carries the two bars too, but the being and the seal are the display.
+
+Why the wings went (the owner, 2026-10-25): they did not read as a powerful celestial being
+getting closer to breaking out. Drawn by `crate::being` (her model again, under its own root, in
+the `Spirit` material); `view/tests/being.rs` holds each half to its bar, the order, the size
+and the guard. Drawn and never tested against; it is not a hurtbox. Looked at headless with
+`SHOT_BARS=15,15` through `90,90` and a demo reel, 2026-10-25.
 
 ## The last auto is the force you are carrying — revised 2026-09-13
 
