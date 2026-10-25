@@ -1701,6 +1701,12 @@ pub struct World {
     /// changes -- a fighter's health -- is. Against a person both seats are
     /// played and it is two on both machines.
     pub seats: u8,
+    /// **The knobs of the Oven a match has moved** (`crate::oven::Edits`),
+    /// laid over the Oven it began with before every frame. Asked for on the
+    /// wire (`Input::tune`), so both machines change a rule on the same
+    /// frame and a rollback puts it back where it was. Kept through a trip:
+    /// a fresh fight is the same match. Hashed while there are any.
+    pub edits: crate::oven::Edits,
     /// **The valley's journey** (`crate::valley`): whether this world is the
     /// valley, which creatures have been beaten on the way, which seam you
     /// came in by, each fighter's last cairn. All zero, and not hashed,
@@ -1793,6 +1799,7 @@ impl World {
             course: [crate::course::Run::default(); MAX_PLAYERS],
             paused: false,
             seats: MAX_PLAYERS as u8,
+            edits: crate::oven::Edits::NONE,
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
             starting: Fighters::EMPTY,
@@ -2915,6 +2922,9 @@ impl World {
         const { assert!(N >= 1 && N <= MAX_PLAYERS, "one to four inputs") };
         let mut all = [Input::default(); MAX_PLAYERS];
         all[..N].copy_from_slice(&wire);
+        // This world's rules, before anything reads a knob: after a
+        // rollback's load the live store is another world's.
+        crate::oven::adopt(&self.edits);
         self.follow_the_crowd();
         self.crowd.feed(due);
         // Nobody in a seat, nothing from it: not a press, not a trip. A seat
@@ -2942,7 +2952,18 @@ impl World {
                 away.unset(seat);
             }
         }
+        // **A knob moved**: taken now, in seat order, and the rules laid
+        // over the Oven before anything reads one. A knob the match has no
+        // room for is not taken anywhere.
+        for input in &all {
+            if let Some((cell, raw)) = input.tune.edit() {
+                self.edits.set(cell, raw);
+            }
+        }
+        crate::oven::adopt(&self.edits);
+        let edits = self.edits;
         self.step(all);
+        self.edits = edits;
         self.away = away;
         self.park_absent();
     }
@@ -4541,7 +4562,11 @@ impl World {
     }
 
     pub fn checksum(&self) -> u64 {
-        self.digest(crate::oven::hash())
+        // The Oven as the match began: what this world's edits are laid
+        // over, which every machine of the match agrees on. The live store
+        // is whichever world was last advanced -- not this one, straight
+        // after a rollback's load.
+        self.digest(crate::oven::base_hash())
     }
 
     /// The snapshot hash alone, with the tuning left out.
@@ -4557,6 +4582,14 @@ impl World {
         let mut h = Fnv::new();
         h.write_u64(tuning);
         h.write_u32(self.frame);
+        // Only while there are any, so every pinned checksum stays pinned.
+        if !self.edits.is_empty() {
+            h.write_u32(0x7475_6e65);
+            for (cell, raw) in self.edits.iter() {
+                h.write_u32(cell as u32);
+                h.write_u32(raw as u32);
+            }
+        }
         // Only while set, so a world that is not paused hashes as it always
         // has and every pinned checksum stays pinned.
         if self.paused {

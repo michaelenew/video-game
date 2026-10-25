@@ -599,6 +599,9 @@ pub struct Sim {
     /// [`picker`]. On the wire rather than a fresh `World` built here, so a
     /// peer changes arena on the same frame.
     travel: sim::input::Travel,
+    /// Knobs of the Oven moved in a match, on their way onto the wire: one a
+    /// tick, on this machine's input ([`palette::Moved`]).
+    tunes: palette::Moved,
     /// **The fight so far, as a replay** (`sim::replay`): where it started
     /// and every frame's inputs, kept from the first frame so that "that felt
     /// wrong" can be saved after the fact (`Y`, or the Esc menu) and put
@@ -851,6 +854,7 @@ impl Default for Sim {
             regions_said: 0,
             rehearsing: None,
             travel: sim::input::Travel::NONE,
+            tunes: palette::Moved::default(),
             tape: sim::replay::Tape::begin(&seed, build()),
             playing,
             saved: None,
@@ -7449,7 +7453,8 @@ fn tick_sim(
             let mut pair = [SimInput::default(); MAX_PLAYERS];
             pair[0] = rehearsed
                 .unwrap_or_else(|| scripted_or(scripted, held))
-                .travelling(travel);
+                .travelling(travel)
+                .tuning(sim.tunes.next());
             pair[1] = two;
             // **One keyboard readies both seats**: player two, or the dummy,
             // is in this room, and a dummy cannot press Enter.
@@ -7507,6 +7512,8 @@ fn tick_sim(
                 let Sim { cur, ledger, .. } = &mut *sim;
                 ledger.confirm_through(cur.frame, cur);
             }
+            let frame = sim.cur.frame;
+            sim.tunes.went(frame);
             scape.observe(&sim.prev, &sim.cur);
             tutorial::observe(&mut coach, &sim.prev, &sim.cur);
             // What was picked up and fed, for this game's bag and morphs.
@@ -7528,12 +7535,23 @@ fn tick_sim(
         for _ in 0..ticks {
             let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
             let travel = std::mem::take(&mut sim.travel);
-            let local = scripted_or(scripted, held).travelling(travel);
+            let local = scripted_or(scripted, held)
+                .travelling(travel)
+                .tuning(sim.tunes.next());
+            let was = sim.cur.frame;
             online::step(&mut sim, local, &mut scape, &mut keeping);
+            // A knob asked for goes off the queue once a frame was made with
+            // it; a tick the line held back carries it again.
+            if sim.cur.frame != was {
+                let frame = sim.cur.frame;
+                sim.tunes.went(frame);
+            }
         }
         record_round_end(&mut sim);
         say_region_findings(&mut sim);
     }
+    let Sim { tunes, cur, .. } = &mut *sim;
+    tunes.settle(cur);
 }
 
 /// Every new finding of the region watchdog, said once, where a developer

@@ -1035,6 +1035,27 @@ saves nor restores them. But two peers running different rules would diverge sil
 exactly like a netcode bug. The tuning hash is folded into `World::checksum`, so a mismatched
 Oven is a desync on the first frame — an error message instead of a mystery.
 
+### The Oven moves in a match (2026-10-25)
+
+That made moving a slider in a match a desync: the knob changed on one machine on the frame
+its player let go, and nowhere else. **A knob moved in a match is asked for on the wire**:
+`Input::tune` names it (`oven::Knob::cell`, every knob in one flat numbering) and its value,
+`NetInput`'s second word carries it, and the frame that carries it puts it in the world
+(`World::edits`, `oven::Edits`, at most `oven::MATCH_EDITS` knobs). Before every frame,
+`oven::adopt` lays the world's edits over the Oven the match began with -- which both
+machines agreed on to start it -- so the rule changes on the same frame everywhere, and a
+rollback to before the edit runs those frames on the old rule again. The checksum hashes the
+edits with the world and the Oven *under* them (`oven::base_hash`): straight after a
+rollback's load the live store is another world's. A tape writes an edit as
+`@frame tune seat cell value` (format four), so a replay plays it too.
+
+The palette sends rather than sets whenever the world is a match's or carries one's edits
+(`palette::Moved`), one edit a tick, the slider showing where it was let go while the edit
+is on its way. Training sets the store directly, as before, with no limit on how many knobs
+move. *Revert* is off in a match (every knob at once is more than a match holds; each one's
+↺ still works). `sim/tests/match_edits.rs` and `net/tests/synctest_edits.rs` hold it, each
+alone in its file because the store is the process's.
+
 ### Class pickers
 
 A click-to-cycle button beside your health bar, showing your class. **F8**, and on
