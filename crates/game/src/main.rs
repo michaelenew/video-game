@@ -7429,11 +7429,6 @@ fn tick_sim(
                 }
             });
             let two = match sim.dummy {
-                // A tutorial hall's dummy is the room's (`tutorial`), unless
-                // a person has the second keys.
-                mode if mode != Dummy::Human && tutorial::dummy_input(&sim.cur).is_some() => {
-                    tutorial::dummy_input(&sim.cur).unwrap_or_default()
-                }
                 // Not in a hunt: the bot fights a fighter, and in a hunt
                 // player two is out of it (see `seated`).
                 Dummy::Bot(level) if !sim.cur.hunting() => spar(
@@ -7515,7 +7510,7 @@ fn tick_sim(
             let frame = sim.cur.frame;
             sim.tunes.went(frame);
             scape.observe(&sim.prev, &sim.cur);
-            tutorial::observe(&mut coach, &sim.prev, &sim.cur);
+            tutorial::observe(&mut coach, &sim.prev, &sim.cur, sim.local_player());
             // What was picked up and fed, for this game's bag and morphs.
             let me = sim.local_player();
             keeping.record(&sim.prev, &pair, &sim.cur, me);
@@ -7539,7 +7534,7 @@ fn tick_sim(
                 .travelling(travel)
                 .tuning(sim.tunes.next());
             let was = sim.cur.frame;
-            online::step(&mut sim, local, &mut scape, &mut keeping);
+            online::step(&mut sim, local, &mut scape, &mut keeping, &mut coach);
             // A knob asked for goes off the queue once a frame was made with
             // it; a tick the line held back carries it again.
             if sim.cur.frame != was {

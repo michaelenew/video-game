@@ -1707,6 +1707,13 @@ pub struct World {
     /// frame and a rollback puts it back where it was. Kept through a trip:
     /// a fresh fight is the same match. Hashed while there are any.
     pub edits: crate::oven::Edits,
+    /// **The tutorial halls' dummies** (2026-10-25): for each seat, the hall
+    /// it stands in as that hall's dummy -- its place in `tutorial::ALL`,
+    /// plus one -- or nought for a seat that is nobody's dummy. A hall with
+    /// somebody learning in it takes the first seat nobody plays
+    /// (`World::step_hall`); everybody in the hall shares it. Hashed while
+    /// there are any.
+    pub dummies: [u8; MAX_PLAYERS],
     /// **The valley's journey** (`crate::valley`): whether this world is the
     /// valley, which creatures have been beaten on the way, which seam you
     /// came in by, each fighter's last cairn. All zero, and not hashed,
@@ -1800,6 +1807,7 @@ impl World {
             paused: false,
             seats: MAX_PLAYERS as u8,
             edits: crate::oven::Edits::NONE,
+            dummies: [0; MAX_PLAYERS],
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
             starting: Fighters::EMPTY,
@@ -2048,17 +2056,62 @@ impl World {
     /// ([`World::park_absent`]) and plays no part in anything.
     pub fn present(&self) -> usize {
         let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
-        if self.hunting() || self.valley.on && self.peaceful() {
+        let played = if self.hunting() || self.valley.on && self.peaceful() {
             seats
         } else {
             seats.max(2)
-        }
+        };
+        // A hall's dummy stands in a seat past the played ones.
+        let dummies = (0..MAX_PLAYERS)
+            .rev()
+            .find(|&i| self.dummies[i] != 0)
+            .map_or(0, |i| i + 1);
+        played.max(dummies)
     }
 
     /// Is fighter `i` in the fight at all? Not if their seat is empty, and
     /// not if their player has left ([`World::away`]).
     pub fn is_present(&self, i: usize) -> bool {
         i < self.present() && !self.away.has(i)
+    }
+
+    /// **Is seat `i` a tutorial hall's dummy** ([`World::dummies`]): a body
+    /// nobody plays, there to be hit.
+    pub fn is_dummy(&self, i: usize) -> bool {
+        self.dummies.get(i).is_some_and(|&d| d != 0)
+    }
+
+    /// **The place of the valley fighter `i` stands in, and where they stand
+    /// in its own coordinates**: the world's own place and position outside
+    /// the valley, where there is no other.
+    pub fn place_of(&self, i: usize) -> Option<(ArenaId, V3)> {
+        let pos = self.players.get(i)?.pos;
+        if !self.valley.on {
+            return Some((self.arena, pos));
+        }
+        let feet = pos.add(self.map_origin());
+        let p = crate::atlas::valley().place_for(feet)?;
+        Some((p.arena, feet.sub(p.at)))
+    }
+
+    /// **The tutorial hall fighter `i` is learning in**, if they stand in
+    /// one, and where in its own coordinates. Never a dummy's.
+    pub fn hall_of(&self, i: usize) -> Option<(&'static crate::tutorial::Tutorial, V3)> {
+        if self.is_dummy(i) {
+            return None;
+        }
+        let (at, local) = self.place_of(i)?;
+        Some((crate::tutorial::of(at)?, local))
+    }
+
+    /// **The dummy of the hall fighter `i` is learning in**, by seat.
+    pub fn dummy_for(&self, i: usize) -> Option<usize> {
+        let (t, _) = self.hall_of(i)?;
+        let k = crate::tutorial::ALL
+            .iter()
+            .position(|u| u.arena == t.arena)? as u8
+            + 1;
+        (0..MAX_PLAYERS).find(|&d| self.dummies[d] == k)
     }
 
     /// **Has everybody in the fight pressed "Start match"?** Two at least:
@@ -2099,7 +2152,7 @@ impl World {
     pub fn open_seat(&self, coin: bool) -> Option<usize> {
         let mut on = [0usize; crate::versus::SIDES];
         for i in 0..MAX_PLAYERS {
-            if self.is_present(i) {
+            if self.is_present(i) && !self.is_dummy(i) {
                 on[crate::versus::side(i) as usize] += 1;
             }
         }
@@ -2108,7 +2161,8 @@ impl World {
         } else {
             (on[1] < on[0]) as u8
         };
-        let free = |i: &usize| !self.is_present(*i);
+        // A hall's dummy gives its seat to anybody who comes.
+        let free = |i: &usize| !self.is_present(*i) || self.is_dummy(*i);
         (0..MAX_PLAYERS)
             .filter(free)
             .find(|&i| crate::versus::side(i) == side)
@@ -2125,6 +2179,9 @@ impl World {
             return;
         }
         let seats = self.seats.max(seat as u8 + 1);
+        // A hall's dummy in the seat stands down for them; the next frame
+        // finds the hall another.
+        self.dummies[seat] = 0;
         let mut classes = self.players.map(|p| p.class);
         classes[seat] = class;
         let mut grown = self.clone();
@@ -2348,30 +2405,85 @@ impl World {
     /// room puts it back. Fighter zero is topped up whenever she runs low,
     /// so nobody is knocked out of a lesson. A no-op anywhere else.
     fn step_hall(&mut self) {
-        let Some(tut) = crate::tutorial::of(self.arena) else {
-            return;
-        };
-        let me = &mut self.players[0];
-        if me.health < me.full_health() / 3 {
-            me.health = me.full_health() - me.grey;
-        }
-        if !self.is_present(1) {
-            return;
-        }
-        let room = crate::tutorial::room_at(tut, self.players[0].pos.x);
-        let (lo, hi) = crate::tutorial::span(room);
-        let d = &mut self.players[1];
-        d.health = d.full_health() - d.grey;
-        if d.pos.x.raw() < lo.raw() || d.pos.x.raw() >= hi.raw() {
-            let mark = crate::arena::hall::dummy_mark(tut.rooms, room);
-            let class = d.class;
-            *d = Player {
-                pos: mark.at,
-                facing: mark.facing,
-                ..Player::new(class)
+        // **Who is learning where** (2026-10-25): every played seat on its
+        // feet in a hall, the first of them in each hall the one its dummy
+        // attends to. The halls are on the valley's map, and anybody may be
+        // in any of them, alone or together.
+        let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+        let mut first = [None::<usize>; crate::tutorial::ALL.len()];
+        for i in 0..seats {
+            if !self.is_present(i) {
+                continue;
+            }
+            let Some((t, _)) = self.hall_of(i) else {
+                continue;
             };
-            if let Mechanic::Shadow(_) = d.mechanic {
-                d.mechanic = Mechanic::Shadow(class::Shadow::attending(d.pos, d.facing));
+            // Nobody is knocked out of a lesson.
+            let me = &mut self.players[i];
+            if me.health < me.full_health() / 3 {
+                me.health = me.full_health() - me.grey;
+            }
+            let k = crate::tutorial::ALL
+                .iter()
+                .position(|u| u.arena == t.arena)
+                .unwrap_or(0);
+            first[k] = first[k].or(Some(i));
+        }
+        // **A dummy for every hall somebody is in**, in the seats past the
+        // played ones, hall by hall: the same seat while the same halls are
+        // in use, and none for a hall when every seat is somebody's.
+        let mut want = [0u8; MAX_PLAYERS];
+        let mut free = (seats..MAX_PLAYERS).filter(|&d| !self.away.has(d));
+        for (k, learner) in first.iter().enumerate() {
+            if learner.is_some()
+                && let Some(d) = free.next()
+            {
+                want[d] = k as u8 + 1;
+            }
+        }
+        let was = self.dummies;
+        self.dummies = want;
+        for d in 0..MAX_PLAYERS {
+            let k = want[d];
+            if k == 0 {
+                continue;
+            }
+            let t = crate::tutorial::ALL[k as usize - 1];
+            let Some(learner) = first[k as usize - 1] else {
+                continue;
+            };
+            let Some((_, local)) = self.hall_of(learner) else {
+                continue;
+            };
+            let room = crate::tutorial::room_at(t, local.x);
+            let (lo, hi) = crate::tutorial::span(room);
+            // Where the hall is in the world's coordinates.
+            let hall = crate::atlas::valley()
+                .placed(t.arena)
+                .map_or(V3::ZERO, |p| p.at)
+                .sub(self.map_origin());
+            let dummy = &mut self.players[d];
+            dummy.health = dummy.full_health() - dummy.grey;
+            let x = dummy.pos.x.sub(hall.x);
+            let z = dummy.pos.z.sub(hall.z);
+            // Out of the room, or out of the hall altogether.
+            let outside = x.raw() < lo.raw()
+                || x.raw() >= hi.raw()
+                || z.abs().raw() > crate::arena::cm(2000).raw();
+            if was[d] != k || outside {
+                let mark = crate::arena::hall::dummy_mark(t.rooms, room);
+                // The hall's own class: a dummy is somebody to practise on,
+                // and the clash room's thrusts a spear.
+                let class = Class::Champion;
+                let pos = mark.at.add(hall);
+                *dummy = Player {
+                    pos,
+                    facing: mark.facing,
+                    ..Player::new(class)
+                };
+                if let Mechanic::Shadow(_) = dummy.mechanic {
+                    dummy.mechanic = Mechanic::Shadow(class::Shadow::attending(pos, mark.facing));
+                }
             }
         }
     }
@@ -2507,6 +2619,33 @@ impl World {
     /// Stand fighter `i` back up after a death in a peaceful place: on the
     /// last cairn they touched, or where they came in, fresh -- as a fall on
     /// a jump course stands you on your checkpoint.
+    /// **Fighter `i`, and nobody else, to place `to` of the valley's map**:
+    /// on its arrival mark for their seat, fresh, as after a fall, wherever
+    /// the world's frame is -- the mark is the place's own, moved onto the
+    /// map and into the frame's coordinates. The frame follows the first
+    /// fighter on their feet next frame (`reframe`). Nothing at all for a
+    /// place that is not on the map.
+    pub(crate) fn go_alone(&mut self, i: usize, to: ArenaId) {
+        let Some(there) = crate::atlas::valley().placed(to) else {
+            return;
+        };
+        let mark = Mark::seat(&to.get().spawns.versus, i);
+        let at = mark.at.add(there.at).sub(self.map_origin());
+        let up = V3::new(at.x, Fx::from_int(1000), at.z);
+        let floor = self.terrain().floor_below(up);
+        let p = &mut self.players[i];
+        let (wins, class) = (p.rounds_won, p.class);
+        *p = Player {
+            pos: V3::new(at.x, floor, at.z),
+            facing: mark.facing,
+            rounds_won: wins,
+            ..Player::new(class)
+        };
+        if let Mechanic::Shadow(_) = p.mechanic {
+            p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+        }
+    }
+
     fn stand_back(&mut self, i: usize, place: &crate::valley::Place) {
         let here = self.terrain();
         let on_mark = |m: &arena::Mark| {
@@ -2568,11 +2707,18 @@ impl World {
             && crate::valley::place(self.arena).is_none_or(|p| p.peaceful())
     }
 
-    /// **May the fighters hurt each other?** In versus, yes; in a hunt and in
+    /// **May any fighters hurt each other?** In versus, yes; in a hunt and in
     /// the valley's peaceful places, no -- nor in the pick before a versus
     /// round, which is for trying a class rather than fighting with it. The
     /// one question every blow between fighters asks.
     pub fn pvp(&self) -> bool {
+        self.fights() || self.dummies != [0; MAX_PLAYERS]
+    }
+
+    /// [`World::pvp`] as the place the world is in says it: true in versus,
+    /// false in a hunt, a peaceful place or a pick. Whether a pair may is
+    /// [`World::foes`]; a hall's dummy may be struck wherever the frame is.
+    fn fights(&self) -> bool {
         !self.hunting() && !self.peaceful() && !matches!(self.phase, Phase::Picking { .. })
     }
 
@@ -2688,7 +2834,11 @@ impl World {
     pub fn allies(&self, i: usize) -> u8 {
         let mut bits = 0;
         for j in 0..MAX_PLAYERS {
-            if j != i && self.hill.on && crate::versus::side(i) == crate::versus::side(j) {
+            let side = self.hill.on && crate::versus::side(i) == crate::versus::side(j);
+            // Anybody it may not hurt, where some may be hurt: nobody but a
+            // hall's dummy and those learning beside it (`World::foes`).
+            let spared = self.pvp() && !self.foes(i, j);
+            if j != i && (side || spared) {
                 bits |= 1 << j;
             }
         }
@@ -2700,7 +2850,22 @@ impl World {
     /// own side (`crate::versus::side`). A duel stage is everybody against
     /// everybody, as versus always was.
     pub fn foes(&self, a: usize, b: usize) -> bool {
-        a != b && self.pvp() && !(self.hill.on && crate::versus::side(a) == crate::versus::side(b))
+        if a == b {
+            return false;
+        }
+        // **A hall's dummy**, and only it, is fair game in a hall: to the
+        // people learning in that hall, and it to them. Two people in a hall
+        // never hurt each other, nor anybody outside it (2026-10-25).
+        match (self.is_dummy(a), self.is_dummy(b)) {
+            (true, true) => return false,
+            (true, false) => return self.dummy_for(b) == Some(a),
+            (false, true) => return self.dummy_for(a) == Some(b),
+            (false, false) => {}
+        }
+        if self.hall_of(a).is_some() || self.hall_of(b).is_some() {
+            return false;
+        }
+        self.fights() && !(self.hill.on && crate::versus::side(a) == crate::versus::side(b))
     }
 
     /// The first creature, for the code and tools that are about one: the
@@ -2952,6 +3117,13 @@ impl World {
                 away.unset(seat);
             }
         }
+        // **A hall's dummy is nobody's to drive**: its buttons are the
+        // hall's, made here from the world (`tutorial::dummy_input`).
+        for (d, input) in all.iter_mut().enumerate() {
+            if let Some(dummy) = crate::tutorial::dummy_input(self, d) {
+                *input = dummy;
+            }
+        }
         // **A knob moved**: taken now, in seat order, and the rules laid
         // over the Oven before anything reads one. A knob the match has no
         // room for is not taken anywhere.
@@ -3000,6 +3172,7 @@ impl World {
     }
 
     fn step(&mut self, wire: [Input; MAX_PLAYERS]) {
+        let mut wire = wire;
         self.frame = self.frame.wrapping_add(1);
         self.picked = [None; MAX_PLAYERS];
 
@@ -3021,25 +3194,40 @@ impl World {
                     _ => {}
                 }
             }
-            // **Fast travel**, out of a fight: everybody on the cairn,
-            // stood up on it as after a fall, and the frame follows them
-            // there this frame (`reframe`). The last seat to ask wins.
-            let to = wire
-                .iter()
-                .rev()
-                .find_map(|input| match input.travel.destination() {
-                    Some(Destination::Cairn(k)) => Some(k),
-                    _ => None,
-                });
-            if let Some(k) = to
-                && self.peaceful()
-                && let Some(&box_) = crate::valley::cairns().get(k as usize)
-                && let Some(place) = crate::valley::place(self.arena)
-            {
-                let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
-                for i in 0..seats {
+            // **Fast travel**, out of a fight: whoever asked, on the cairn,
+            // stood up on it as after a fall -- and nobody else (2026-10-25:
+            // "everyone can choose where they go"). The frame follows the
+            // first of them on their feet (`reframe`).
+            let seats = (self.seats as usize).clamp(1, MAX_PLAYERS);
+            for (i, input) in wire.iter().enumerate().take(seats) {
+                if let Some(Destination::Cairn(k)) = input.travel.destination()
+                    && self.peaceful()
+                    && let Some(&box_) = crate::valley::cairns().get(k as usize)
+                    && let Some(place) = crate::valley::place(self.arena)
+                {
                     self.valley.cairn[i] = box_ as u16 + 1;
                     self.stand_back(i, place);
+                }
+            }
+            // **Going alone** (2026-10-25): in the valley, a trip back to the
+            // town (V) or into a tutorial hall takes only the seat that asked
+            // for it. Every hall is on the map (`valley::layout::hall_at`),
+            // so it is a walk to another place in the same world, not a new
+            // one: two people who each go to a hall are in it together, and
+            // somebody going is not taking anybody else.
+            // In a hunt too: whoever leaves leaves, and the hunt goes on
+            // with whoever stays (`valley::open`).
+            for (i, input) in wire.iter_mut().enumerate().take(seats) {
+                let to = match input.travel.destination() {
+                    Some(Destination::Valley) => Some(crate::valley::START),
+                    Some(Destination::Arena(a)) if crate::tutorial::of(a).is_some() => Some(a),
+                    _ => None,
+                };
+                if let Some(to) = to {
+                    input.travel = Travel::NONE;
+                    if self.is_present(i) {
+                        self.go_alone(i, to);
+                    }
                 }
             }
         }
@@ -3920,7 +4108,7 @@ impl World {
         // blows meeting on one frame, at least one of them a Champion's heavy
         // one. The heavier wins outright and the lighter is cancelled into a
         // short stagger; two of a weight bounce both apart.
-        let cancelled = if self.pvp() {
+        let cancelled = if self.foes(0, 1) {
             self.clash(&snapshot)
         } else {
             [false; MAX_PLAYERS]
@@ -4138,7 +4326,7 @@ impl World {
             let reached = (0..present).find(|&i| {
                 let victim = &self.players[i];
                 let d = victim.pos.sub(pos);
-                i != owner
+                self.foes(owner, i)
                     && victim.health > 0
                     && d.y.abs().raw() < t::body_height().raw()
                     && d.flat_len().raw() < hit_range.raw()
@@ -4582,6 +4770,12 @@ impl World {
         let mut h = Fnv::new();
         h.write_u64(tuning);
         h.write_u32(self.frame);
+        if self.dummies != [0; MAX_PLAYERS] {
+            h.write_u32(0x6475_6d79);
+            for d in self.dummies {
+                h.write_u32(d as u32);
+            }
+        }
         // Only while there are any, so every pinned checksum stays pinned.
         if !self.edits.is_empty() {
             h.write_u32(0x7475_6e65);
@@ -19071,7 +19265,8 @@ impl World {
             };
             let cloud = aim::overhead(p.pos);
             let (mut from, mut near, mut reach) = (cloud, p.aim_at(), t::chain_first());
-            let mut spent = 0u32;
+            // Never somebody it may not hurt.
+            let mut spent = self.allies(i) as u32;
             for link in links.iter_mut().take(t::chain_links()) {
                 let Some((bit, at)) = aim::chain_next(from, near, reach, i, spent, versus, &scene)
                 else {

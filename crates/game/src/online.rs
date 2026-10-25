@@ -679,6 +679,7 @@ pub fn step(
     local: SimInput,
     scape: &mut crate::sound::Soundscape,
     keeping: &mut crate::bag::Keeping,
+    coach: &mut crate::tutorial::Coach,
 ) {
     let crate::Sim {
         driver,
@@ -695,6 +696,7 @@ pub fn step(
         ledger,
         scape,
         keeping,
+        coach,
     };
     match driver {
         Driver::Online {
@@ -792,6 +794,7 @@ struct Frame<'a> {
     ledger: &'a mut regions::Ledger,
     scape: &'a mut crate::sound::Soundscape,
     keeping: &'a mut crate::bag::Keeping,
+    coach: &'a mut crate::tutorial::Coach,
 }
 
 /// Who plays where in a session.
@@ -833,6 +836,7 @@ fn tick(
         ledger,
         scape,
         keeping,
+        coach,
     } = world;
     let Line {
         desynced,
@@ -951,6 +955,8 @@ fn tick(
                     // And kept: what was picked up and fed, by frame, so a
                     // re-advance corrects what a prediction got wrong.
                     keeping.record(before, &inputs, after, me);
+                    // And tallied, in a tutorial hall: this seat's own checks.
+                    crate::tutorial::observe(coach, before, after, me);
                 };
             if seating.lineup {
                 net::handle_requests_seated(cur, requests, ledger, seating.seats, watch);

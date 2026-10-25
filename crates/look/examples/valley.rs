@@ -156,6 +156,7 @@ fn draw(a: &'static Arena) -> (usize, usize, Vec<[u8; 3]>) {
             Kind::Ring => "ring",
             Kind::Reach => "reach",
             Kind::Room(_) => "room",
+            Kind::Hall => "hall",
         };
         text(
             &mut px,

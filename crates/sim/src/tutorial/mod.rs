@@ -120,11 +120,17 @@ pub struct Task {
 /// A task's question: did she do it, between these two frames?
 pub type Check = fn(&Seen) -> bool;
 
-/// Two frames of the world, as a task reads them: fighter zero's.
+/// Two frames of the world, as a task reads them: fighter `me`'s, learning
+/// in a hall beside its `dummy` (both seats).
 #[derive(Clone, Copy)]
 pub struct Seen<'a> {
     pub before: &'a World,
     pub after: &'a World,
+    pub me: usize,
+    pub dummy: usize,
+    /// How high the hall's floor is in the world's coordinates: what a
+    /// height is read from.
+    pub floor: Fx,
 }
 
 /// Which move an action is part of, if any.
@@ -141,12 +147,12 @@ pub const fn kind_of(a: Action) -> Option<u8> {
 impl Seen<'_> {
     /// Her, before.
     pub fn was(&self) -> &Player {
-        &self.before.players[0]
+        &self.before.players[self.me]
     }
 
     /// Her, after.
     pub fn now(&self) -> &Player {
-        &self.after.players[0]
+        &self.after.players[self.me]
     }
 
     /// **Did move `kind` begin this frame?** Its windup began: every move
@@ -185,7 +191,7 @@ impl Seen<'_> {
             w.effects
                 .iter()
                 .flatten()
-                .filter(|e| e.owner == 0 && e.kind == kind)
+                .filter(|e| e.owner as usize == self.me && e.kind == kind)
                 .count()
         };
         (count(self.before), count(self.after))
@@ -235,14 +241,22 @@ impl Seen<'_> {
             && !matches!(self.was().action, Action::Dodge { .. })
     }
 
-    /// How high her feet are, in metres.
+    /// How high her feet are over the hall's floor, in metres.
     pub fn height(&self) -> Fx {
-        self.now().pos.y
+        self.now().pos.y.sub(self.floor)
+    }
+
+    /// How high they were, the frame before.
+    pub fn was_high(&self) -> Fx {
+        self.was().pos.y.sub(self.floor)
     }
 
     /// The dummy, before and after.
     pub fn dummy(&self) -> (&Player, &Player) {
-        (&self.before.players[1], &self.after.players[1])
+        (
+            &self.before.players[self.dummy],
+            &self.after.players[self.dummy],
+        )
     }
 }
 
@@ -327,21 +341,28 @@ pub fn span(k: usize) -> (Fx, Fx) {
 /// **How often a swinging dummy swings**, in frames: a count the panel shows.
 pub const SWING_EVERY: u32 = 150;
 
-/// **The dummy's buttons in a hall**, or `None` anywhere else: still, or --
-/// in a room that wants it -- a spear thrust at fighter zero every
-/// [`SWING_EVERY`] frames. A spear rather than a sword because a clash is
-/// her finisher live as the blow arrives, and a quick sword up close is a
-/// blow her finisher reaches first: the dummy is simply hit, its swing taken
-/// back, and the clash a frame wide. The spear reaches her from further than
-/// the hammer reaches back, which opens it to a few frames.
-pub fn dummy_input(w: &World) -> Option<crate::Input> {
-    let t = of(w.arena)?;
-    let room = &t.rooms[room_at(t, w.players[0].pos.x)];
+/// **The buttons of dummy `d`**, or `None` for a seat that is no hall's
+/// dummy: still, or -- in a room that wants it -- a spear thrust every
+/// [`SWING_EVERY`] frames at the first person learning in its hall, whose
+/// room it stands in (`World::step_hall`). A spear rather than a sword
+/// because a clash is her finisher live as the blow arrives, and a quick
+/// sword up close is a blow her finisher reaches first: the dummy is simply
+/// hit, its swing taken back, and the clash a frame wide. The spear reaches
+/// her from further than the hammer reaches back, which opens it to a few
+/// frames. Made by the simulation, for every machine alike: a dummy is
+/// nobody's to drive.
+pub fn dummy_input(w: &World, d: usize) -> Option<crate::Input> {
+    let k = *w.dummies.get(d)?;
+    let t = ALL.get((k as usize).checked_sub(1)?)?;
+    let seats = (w.seats as usize).clamp(1, crate::state::MAX_PLAYERS);
+    let learner = (0..seats).find(|&i| w.is_present(i) && w.dummy_for(i) == Some(d))?;
+    let (_, local) = w.hall_of(learner)?;
+    let room = &t.rooms[room_at(t, local.x)];
     if room.dummy != Dummy::Swings {
         return Some(crate::Input::default());
     }
-    let d = w.players[0].pos.sub(w.players[1].pos);
-    let aim = (crate::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
+    let to = w.players[learner].pos.sub(w.players[d].pos);
+    let aim = (crate::math::atan2_turns(to.z, to.x).raw() & 0xFFFF) as u16;
     let bits = if w.frame % SWING_EVERY < 2 {
         crate::Input::RIGHT
     } else {
@@ -442,17 +463,43 @@ impl Progress {
         self.waiting = [None; WAITING];
     }
 
-    /// **One tick of the hall**: what she did between these two frames, in
-    /// the room she is standing in. Returns what is worth saying, which is
-    /// also kept as [`Progress::said`].
-    pub fn observe(&mut self, before: &World, after: &World) -> Option<Word> {
-        let t = of(after.arena)?;
-        if before.arena != after.arena || after.players[0].class != t.class {
+    /// **One tick of the hall**: what fighter `me` did between these two
+    /// frames, in the room they stand in, with their hall's dummy. Returns
+    /// what is worth saying, which is also kept as [`Progress::said`]. A
+    /// player's own tally, whoever else is in the hall with them
+    /// (2026-10-25).
+    pub fn observe(&mut self, before: &World, after: &World, me: usize) -> Option<Word> {
+        let Some((t, local)) = after.hall_of(me) else {
+            self.waiting = [None; WAITING];
+            return None;
+        };
+        if before.hall_of(me).is_none_or(|(u, _)| u.arena != t.arena)
+            || after.players[me].class != t.class
+        {
             self.waiting = [None; WAITING];
             return None;
         }
-        let seen = Seen { before, after };
-        let room = room_at(t, after.players[0].pos.x);
+        // The frame moved to another place's coordinates (somebody walked
+        // somewhere): nothing in it reads as a move of hers.
+        if before.map_origin() != after.map_origin() {
+            return None;
+        }
+        // Every seat somebody's, and no dummy for the hall: whatever does
+        // not have to strike one still counts.
+        let dummy = after.dummy_for(me);
+        let floor = crate::atlas::valley()
+            .placed(t.arena)
+            .map_or(Fx::ZERO, |p| p.at.y)
+            .sub(after.map_origin().y);
+        let floor = if after.valley.on { floor } else { Fx::ZERO };
+        let seen = Seen {
+            before,
+            after,
+            me,
+            dummy: dummy.unwrap_or(me),
+            floor,
+        };
+        let room = room_at(t, local.x);
         let mut word = None;
         let class = slot(t.class);
 
@@ -500,7 +547,8 @@ impl Progress {
         }
         // The dummy struck: the newest task waiting to land, landed -- one
         // begun this very frame too, since a blow can land on its first.
-        if struck(&before.players[1], &after.players[1])
+        if let Some(dummy) = dummy
+            && struck(&before.players[dummy], &after.players[dummy])
             && let Some(k) = (0..WAITING)
                 .filter(|&k| self.waiting[k].is_some())
                 .max_by_key(|&k| self.waiting[k].map_or(0, |w| w.since))
