@@ -110,6 +110,12 @@ fn body(in: VertexOutput) -> FragmentOutput {
     var a = mix(al, ad, dark);
     // Into the seal at the waist: nothing of it below the floor she stands on.
     a = a * smoothstep(-0.02 * s, 0.08 * s, rel.y + drift * 0.06 * s);
+    // Each being keeps its own half: the dark one her left, the light her
+    // right (`reach.z`).
+    let half = spirit.reach.z;
+    if (half > 0.5) {
+        a = a * select(1.0 - dark, dark, half < 1.5);
+    }
     // `SHOT_BEING`: the whole of it, in one force.
     let whole = spirit.reach.y;
     if (whole > 0.5) {

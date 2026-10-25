@@ -100,7 +100,8 @@ pub struct Seal(pub usize);
 /// skeleton.
 #[derive(Resource)]
 pub struct Beings {
-    pub body: [Handle<Spirit>; MAX_PLAYERS],
+    /// Each seat's two beings' material, dark then light.
+    pub body: [[Handle<Spirit>; MAX_PLAYERS]; 2],
     pub seal: [Handle<Spirit>; MAX_PLAYERS],
     skeleton: Skeleton,
     scale: f32,
@@ -177,7 +178,10 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<Spirit>>) {
             },
         })
     };
-    let body = std::array::from_fn(|_| made(0.0));
+    let body = [
+        std::array::from_fn(|_| made(0.0)),
+        std::array::from_fn(|_| made(0.0)),
+    ];
     let seal = std::array::from_fn(|_| made(1.0));
     commands.insert_resource(Beings {
         body,
@@ -207,11 +211,10 @@ fn spawn(mut commands: Commands, beings: Res<Beings>, mut meshes: ResMut<Assets<
     }
 }
 
-/// `SHOT_BEING=dark` or `SHOT_BEING=light`: the being drawn whole, in one
-/// force, every part of it there and standing on her floor rather than
-/// rising out of the seal -- how each of its two bodies is looked at on its
-/// own before they are halved. Read once.
-fn whole() -> f32 {
+/// `SHOT_BEING=dark` or `SHOT_BEING=light`: one of the two beings on its
+/// own, whole, painted and standing on her floor rather than rising out of
+/// the seal -- how each is looked at before they are halved. Read once.
+fn looked_at() -> f32 {
     static WHOLE: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
     *WHOLE.get_or_init(|| match crate::platform::env("SHOT_BEING").as_deref() {
         Some("dark") => 1.0,
@@ -219,6 +222,24 @@ fn whole() -> f32 {
         _ => 0.0,
     })
 }
+
+/// Whether one being is being looked at on its own (`SHOT_BEING`).
+pub fn whole() -> bool {
+    looked_at() > 0.0
+}
+
+/// Whether being `k` (0 dark, 1 light) is drawn: both, unless the other is
+/// being looked at on its own.
+pub fn shows(k: usize) -> bool {
+    let w = looked_at();
+    w == 0.0 || w == (k + 1) as f32
+}
+
+/// How bright each being's painted glow is, in the emissive's units, dark
+/// then light: the titan's cracks and heart, the seraph's sun and the light
+/// it gives off. Bright enough to read as light, short of where the
+/// tonemapper takes a colour to white.
+pub const GLOW: [f32; 2] = [70.0, 110.0];
 
 /// How high off the floor the seal is laid, so it never fights the floor
 /// for the same depth.
@@ -249,7 +270,7 @@ pub fn place(
     let skeleton = &beings.skeleton;
     let mut looks: [Option<SpiritLook>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     let mut stands: [Option<(Vec3, Quat)>; MAX_PLAYERS] = [None; MAX_PLAYERS];
-    let whole = whole();
+    let whole = looked_at();
     for owner in 0..MAX_PLAYERS {
         let p = &sim.cur.players[owner];
         let Some(being) = view::being::being(p).filter(|_| sim.cur.is_present(owner)) else {
@@ -263,7 +284,9 @@ pub fn place(
             .behind(owner, now, view::being::LAG_SECONDS)
             .unwrap_or(drawn);
         let skin = view::skeleton::solve(skeleton, &view::being::guarded(&late));
-        crate::models::pose(rigs.being[owner], Some(&skin), &mut bones);
+        for rig in rigs.being[owner] {
+            crate::models::pose(rig, Some(&skin), &mut bones);
+        }
 
         let v = frame.players[owner];
         let feet = Vec3::from_array(v.pos);
@@ -337,10 +360,16 @@ pub fn place(
         let Some(look) = *look else {
             continue;
         };
-        for (handle, mode) in [(&beings.body[owner], 0.0), (&beings.seal[owner], 1.0)] {
+        // Each being keeps only its own half (`reach.z`: 1 dark, 2 light).
+        for (handle, mode, half) in [
+            (&beings.body[0][owner], 0.0, 1.0),
+            (&beings.body[1][owner], 0.0, 2.0),
+            (&beings.seal[owner], 1.0, 0.0),
+        ] {
             if let Some(m) = materials.get_mut(handle) {
                 m.look = SpiritLook {
                     fill: look.fill.truncate().extend(mode),
+                    reach: Vec4::new(look.reach.x, look.reach.y, half, 0.0),
                     ..look
                 };
             }
@@ -348,15 +377,29 @@ pub fn place(
     }
 }
 
-/// Give a being's model its material in place of the costume's, and keep it
-/// out of the shadows: it is light, not a body.
-pub fn dress(commands: &mut Commands, entity: Entity, beings: &Beings, owner: usize) {
-    commands
-        .entity(entity)
-        .remove::<MeshMaterial3d<StandardMaterial>>()
-        .insert((
-            MeshMaterial3d(beings.body[owner].clone()),
-            NotShadowCaster,
-            NotShadowReceiver,
-        ));
+/// Give a being's model its material in place of what the file came with:
+/// its veil of light, kept out of the shadows because it is light, not a
+/// body -- or, looked at on its own (`SHOT_BEING`), its `painted` self.
+pub fn dress(
+    commands: &mut Commands,
+    entity: Entity,
+    beings: &Beings,
+    owner: usize,
+    being: usize,
+    painted: Option<Handle<crate::still::SkinMaterial>>,
+) {
+    let mut e = commands.entity(entity);
+    e.remove::<MeshMaterial3d<StandardMaterial>>();
+    match painted {
+        Some(skin) => {
+            e.insert(MeshMaterial3d(skin));
+        }
+        None => {
+            e.insert((
+                MeshMaterial3d(beings.body[being][owner].clone()),
+                NotShadowCaster,
+                NotShadowReceiver,
+            ));
+        }
+    }
 }

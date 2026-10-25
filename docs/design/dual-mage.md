@@ -251,6 +251,14 @@ dark half on her left, light on her right. It is faintly there whatever the bars
 runes light round from behind her toward the front as its bar fills, and its floor is washed in
 its force. The HUD carries the two bars too, but the being and the seal are the display.
 
+**Two beings, two bodies** (the owner, 2026-10-25: "they are 3 different beings"). The dark
+half is a **void titan** -- a bare, faceted body of black volcanic glass, faceless, violet light
+breaking out of a heart in its chest and cracks running from it (`art/dark_being`) -- and the
+light half a **solar seraph** -- tall, in a white-gold cuirass and shoulder plates over a long
+white robe, a gold mask for a face, a burning sunburst behind its head (`art/light_being`). Both
+are built on her skeleton so they throw what she throws. `SHOT_BEING=dark` or `light` draws one
+whole and painted, standing on her floor, for judging each before they are halved.
+
 Why the wings went (the owner, 2026-10-25): they did not read as a powerful celestial being
 getting closer to breaking out. Drawn by `crate::being` (her model again, under its own root, in
 the `Spirit` material); `view/tests/being.rs` holds each half to its bar, the order, the size

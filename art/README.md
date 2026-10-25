@@ -12,6 +12,8 @@ art/blender.sh art/champion/build.py          # the Champion -> champion.glb
 art/blender.sh art/elementalist/build.py      # the Elementalist -> elementalist.glb
 art/blender.sh art/blood_mage/build.py        # the Blood mage -> blood_mage.glb
 art/blender.sh art/dual_mage/build.py         # the Dual mage -> dual_mage.glb
+art/blender.sh art/dark_being/build.py        # the void titan behind her -> dark_being.glb
+art/blender.sh art/light_being/build.py       # the solar seraph behind her -> light_being.glb
 art/blender.sh art/reaver/build.py --look target/art/look.png   # and a turnaround
 art/blender.sh art/reaver/build.py --paint    # only repaint and export the last dressed model
 art/blender.sh art/reaver/build.py --only hood,eyes --no-export --look x.png   # try a few pieces

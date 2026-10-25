@@ -10,6 +10,12 @@ painted, exported. What differs is a class's *spec*, a module with:
 - ``COLOURS``: the painter's colour for every material (and ``name/2`` to
   ``name/4`` for its masks); ``GLOW`` the colour of whatever shines;
   ``METAL`` which materials are metal, and how rough;
+- ``veins`` (optional): a function from object-space positions (Blender's
+  frame, metres) to 0..1, painted into the glow at the texture's own
+  resolution -- light showing through cracks, sharp where a mask on the
+  vertices would be soft;
+- ``LUMINOUS`` (optional): material -> how much of its own painted colour
+  it gives off as light, for a body that is light rather than lit;
 - ``outfit``: a module with ``dress(body, rig, only)``.
 
     art/blender.sh art/<class>/build.py [--look out.png] [--paint] [--size 2048]
@@ -116,9 +122,36 @@ def finish(spec, bo, br, size):
                                        quality=95))
             entry["normal"] = len(images) - 1
         shine = paint.glow(p, spec.GLOW)
+        veins = getattr(spec, "veins", None)
+        if veins is not None:
+            v = np.clip(veins(p["pos"]), 0, 1)[..., None] * p["covered"][..., None]
+            lit = v * np.array(spec.GLOW) * 4.0
+            shine = lit if shine is None else np.maximum(shine, lit)
+            # The crack is lit from inside: its own colour, not the stone's.
+            col = col * (1 - v) + v * np.array(spec.GLOW)
+            images[entry["color"]] = paint.to_png(col, os.path.join(tex, f"{name}.jpg"), quality=92)
+        lum = getattr(spec, "LUMINOUS", {})
+        if lum:
+            names = sorted(spec.COLOURS.keys())
+            mid = (p["id"] * 64).astype(int)
+            own = np.zeros(col.shape[:2])
+            for n, k in lum.items():
+                if n in names:
+                    own[mid == names.index(n)] = k
+            lit = col[..., :3] * own[..., None] * p["covered"][..., None]
+            shine = lit if shine is None else np.maximum(shine, lit)
         if shine is not None and shine.max() > 0:
-            images.append(paint.to_png(_half(np.clip(shine, 0, 1)), os.path.join(tex, f"{name}_glow.jpg"),
-                                       quality=90))
+            # A body whose light is drawing (``veins``, ``LUMINOUS``) keeps
+            # its glow whole and lossless: the game multiplies it many times
+            # over, and a JPEG's noise multiplied is coloured speckle.
+            if veins is not None or lum:
+                # Scaled, not clipped, so a violet stays violet rather than
+                # going white where it is brightest.
+                over = np.maximum(shine.max(axis=-1, keepdims=True), 1.0)
+                images.append(paint.to_png(shine / over, os.path.join(tex, f"{name}_glow.png")))
+            else:
+                images.append(paint.to_png(_half(np.clip(shine, 0, 1)), os.path.join(tex, f"{name}_glow.jpg"),
+                                           quality=90))
             entry["emissive"] = len(images) - 1
         if any(n in spec.METAL for n in slot_names):
             names = sorted(spec.COLOURS.keys())

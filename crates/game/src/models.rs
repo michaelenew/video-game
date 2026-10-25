@@ -23,8 +23,9 @@
 //! that was. They wear the fighters' skin (`still::SkinMaterial`), so the
 //! still world's shade falls on them as on everybody else, with the piece
 //! the exporter names `team` dyed the seat's colour; the shadow and the
-//! copies are in ink (`crate::ink`). For the Dual mage one more: the being
-//! behind her (`crate::being`), her model again under its own root, in light.
+//! copies are in ink (`crate::ink`). For the Dual mage two more: the dark and
+//! the light being behind her (`crate::being`), each a body of its own
+//! ([`BEINGS`]), under one root.
 
 use bevy::gltf::GltfMaterialName;
 use bevy::pbr::NotShadowCaster;
@@ -50,6 +51,10 @@ pub const MODELS: [(sim::Class, &str); MODELLED] = [
 ];
 /// How many classes have a model.
 pub const MODELLED: usize = 5;
+
+/// The two beings behind the Dual mage, dark then light: bodies of their
+/// own, built by `art/dark_being` and `art/light_being` on her skeleton.
+pub const BEINGS: [&str; 2] = ["dark_being.glb", "light_being.glb"];
 
 /// Which entry of [`MODELS`] a class is, if it has a model.
 pub fn model_of(class: sim::Class) -> Option<usize> {
@@ -82,8 +87,8 @@ pub enum Body {
     Her(usize),
     Shadow,
     Copy(usize),
-    /// The being behind the Dual mage.
-    Being,
+    /// One of the beings behind the Dual mage: 0 the dark, 1 the light.
+    Being(usize),
 }
 
 /// One of a seat's models.
@@ -99,7 +104,7 @@ impl Model {
         match self.body {
             Body::Her(m) => MODELS[m].0 == class,
             Body::Shadow | Body::Copy(_) => class == sim::Class::ShadowReaver,
-            Body::Being => class == sim::Class::DualMage,
+            Body::Being(k) => class == sim::Class::DualMage && crate::being::shows(k),
         }
     }
 }
@@ -114,7 +119,7 @@ pub struct Rigs {
     pub her: [[Option<Joints>; MODELLED]; MAX_PLAYERS],
     pub shadow: [Option<Joints>; MAX_PLAYERS],
     pub copies: [[Option<Joints>; REAP_COPIES]; MAX_PLAYERS],
-    pub being: [Option<Joints>; MAX_PLAYERS],
+    pub being: [[Option<Joints>; 2]; MAX_PLAYERS],
     pub looks: [Vec<Handle<still::SkinMaterial>>; MAX_PLAYERS],
     pub inks: [[Vec<Handle<InkMaterial>>; REAP_COPIES]; MAX_PLAYERS],
     /// Each model's coat joints (`coat`), and the Reaver's blades' tips and
@@ -129,7 +134,7 @@ impl Rigs {
             Body::Her(m) => &mut self.her[owner][m],
             Body::Shadow => &mut self.shadow[owner],
             Body::Copy(c) => &mut self.copies[owner][c],
-            Body::Being => &mut self.being[owner],
+            Body::Being(k) => &mut self.being[owner][k],
         }
     }
 
@@ -154,6 +159,7 @@ impl Rigs {
 #[derive(Resource, Default)]
 pub struct Loaded {
     scenes: [Option<Handle<Scene>>; MODELLED],
+    beings: [Option<Handle<Scene>>; 2],
     her: [[bool; MODELLED]; MAX_PLAYERS],
     shadow: [bool; MAX_PLAYERS],
     being: [bool; MAX_PLAYERS],
@@ -168,6 +174,13 @@ impl Loaded {
     fn scene(&mut self, m: usize, server: &AssetServer) -> Handle<Scene> {
         self.scenes[m]
             .get_or_insert_with(|| server.load(GltfAssetLabel::Scene(0).from_asset(MODELS[m].1)))
+            .clone()
+    }
+
+    /// A being's scene, the same way.
+    fn being(&mut self, k: usize, server: &AssetServer) -> Handle<Scene> {
+        self.beings[k]
+            .get_or_insert_with(|| server.load(GltfAssetLabel::Scene(0).from_asset(BEINGS[k])))
             .clone()
     }
 }
@@ -230,9 +243,11 @@ fn spawn(
         }
         if m == dual && !loaded.being[owner] {
             loaded.being[owner] = true;
-            let scene = loaded.scene(dual, &server);
             for (root, _) in beings.iter().filter(|(_, b)| b.0 == owner) {
-                add(&mut commands, scene.clone(), root, owner, Body::Being);
+                for k in 0..BEINGS.len() {
+                    let scene = loaded.being(k, &server);
+                    add(&mut commands, scene, root, owner, Body::Being(k));
+                }
             }
         }
     }
@@ -290,16 +305,24 @@ fn ready(
         let Ok((look, material)) = looks.get(entity) else {
             continue;
         };
-        // The being wears none of her costume: one veil of light.
-        if body == Body::Being {
-            crate::being::dress(&mut commands, entity, &beings, owner);
-            continue;
-        }
         let Some(base) = standard.get(&look.0) else {
             continue;
         };
         let mut base = base.clone();
         squeeze.take(&base);
+        // A being is a veil of light in its force (`being::dress`), or,
+        // looked at on its own, its painted self.
+        if let Body::Being(k) = body {
+            let painted = crate::being::whole().then(|| {
+                base.reflectance = 0.12;
+                // Its glow is light, in the camera's exposure: at the
+                // file's factor of one it would not show.
+                base.emissive = LinearRgba::rgb(1.0, 1.0, 1.0) * crate::being::GLOW[k];
+                skins.add(still::skin(base))
+            });
+            crate::being::dress(&mut commands, entity, &beings, owner, k, painted);
+            continue;
+        }
         let mut swap = commands.entity(entity);
         swap.remove::<MeshMaterial3d<StandardMaterial>>();
         if let Body::Her(_) = body {
