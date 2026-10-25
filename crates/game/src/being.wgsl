@@ -97,7 +97,7 @@ fn body(in: VertexOutput) -> FragmentOutput {
     let rel = p - spirit.feet.xyz;
     // Her metres, from her midline: positive on her left, the dark side.
     let side = dot(rel, spirit.left.xyz) / s;
-    let dark = smoothstep(-0.012, 0.012, side);
+    var dark = smoothstep(-0.012, 0.012, side);
     let t = globals.time;
     // A slow drift through it, so the condensing edge is smoke, not a line.
     let drift = noise3(p * (2.2 / s) + vec3<f32>(0.0, -t * 0.6, t * 0.2)) - 0.5;
@@ -110,6 +110,12 @@ fn body(in: VertexOutput) -> FragmentOutput {
     var a = mix(al, ad, dark);
     // Into the seal at the waist: nothing of it below the floor she stands on.
     a = a * smoothstep(-0.02 * s, 0.08 * s, rel.y + drift * 0.06 * s);
+    // `SHOT_BEING`: the whole of it, in one force.
+    let whole = spirit.reach.y;
+    if (whole > 0.5) {
+        dark = select(0.0, 1.0, whole < 1.5);
+        a = 1.0;
+    }
     if (a <= 0.004) {
         discard;
     }

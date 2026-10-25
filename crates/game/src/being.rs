@@ -61,7 +61,8 @@ mod look {
         pub head: Vec4,
         /// `view::being::ORDER`: first, body, head, soft.
         pub order: Vec4,
-        /// `view::being::REACH`, and nothing else yet.
+        /// `view::being::REACH`; and 0, or the being drawn whole in one
+        /// force, 1 dark and 2 light (`SHOT_BEING`).
         pub reach: Vec4,
     }
 }
@@ -206,6 +207,19 @@ fn spawn(mut commands: Commands, beings: Res<Beings>, mut meshes: ResMut<Assets<
     }
 }
 
+/// `SHOT_BEING=dark` or `SHOT_BEING=light`: the being drawn whole, in one
+/// force, every part of it there and standing on her floor rather than
+/// rising out of the seal -- how each of its two bodies is looked at on its
+/// own before they are halved. Read once.
+fn whole() -> f32 {
+    static WHOLE: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    *WHOLE.get_or_init(|| match crate::platform::env("SHOT_BEING").as_deref() {
+        Some("dark") => 1.0,
+        Some("light") => 2.0,
+        _ => 0.0,
+    })
+}
+
 /// How high off the floor the seal is laid, so it never fights the floor
 /// for the same depth.
 const SEAL_LIFT: f32 = 0.025;
@@ -235,6 +249,7 @@ pub fn place(
     let skeleton = &beings.skeleton;
     let mut looks: [Option<SpiritLook>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     let mut stands: [Option<(Vec3, Quat)>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    let whole = whole();
     for owner in 0..MAX_PLAYERS {
         let p = &sim.cur.players[owner];
         let Some(being) = view::being::being(p).filter(|_| sim.cur.is_present(owner)) else {
@@ -256,8 +271,13 @@ pub fn place(
         let turn = Quat::from_xyzw(q[0], q[1], q[2], q[3]);
         // Character space has the facing at +Z, and a drawn body's left at
         // +X (`view::hand_joint` says why).
-        let root = feet + turn * Vec3::new(0.0, 0.0, -view::being::BEHIND)
-            - Vec3::Y * s * skeleton.hip_height;
+        // Hips at her feet; or, looked at whole, standing on her floor.
+        let sink = if whole > 0.0 {
+            0.0
+        } else {
+            s * skeleton.hip_height
+        };
+        let root = feet + turn * Vec3::new(0.0, 0.0, -view::being::BEHIND) - Vec3::Y * sink;
         stands[owner] = Some((root, turn));
         let at = |local: [f32; 3]| root + turn * (Vec3::from_array(local) * s);
         let joint = |j: Joint| at(skin.origin[j.index()]);
@@ -266,8 +286,8 @@ pub fn place(
         let o = view::being::ORDER;
         looks[owner] = Some(SpiritLook {
             fill: Vec4::new(
-                being.dark,
-                being.light,
+                if whole > 0.0 { 1.0 } else { being.dark },
+                if whole > 0.0 { 1.0 } else { being.light },
                 if being.ascending { 1.0 } else { 0.0 },
                 0.0,
             ),
@@ -279,7 +299,7 @@ pub fn place(
             light_fist: fist(false).extend(0.0),
             head: at(skin.box_of(skeleton, Joint::Head).0).extend(0.0),
             order: Vec4::new(o.first, o.body, o.head, o.soft),
-            reach: Vec4::new(view::being::REACH, 0.0, 0.0, 0.0),
+            reach: Vec4::new(view::being::REACH, whole, 0.0, 0.0),
         });
     }
 
