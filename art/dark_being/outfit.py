@@ -121,8 +121,9 @@ def waist(body, r):
 
 
 def kilt(body, r):
-    """A kilt of black hide in eight strips, to the knee."""
-    return coat_tails(body, r, spans=[(a - 20, a + 20, 0.50) for a in range(0, 360, 45)],
+    """A kilt of black hide in four broad panels, to the knee (the coat's rig
+    swings four)."""
+    return coat_tails(body, r, spans=[(-40, 40, 0.50), (48, 132, 0.52), (140, 220, 0.50), (228, 312, 0.52)],
                       material="kilt", flare=0.24, at=0.0, ripple=0.12)
 
 
