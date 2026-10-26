@@ -1,4 +1,4 @@
-//! **Groups: a world changes hands** (`sim::group`, exploration 0029 §13).
+//! **Groups: a world changes hands** (`sim::group`, exploration 0029 §12).
 //!
 //! - A merge keeps every fighter where they were on the map, with their ids,
 //!   what they own and what they say of each other, and the merged world

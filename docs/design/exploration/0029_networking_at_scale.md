@@ -353,7 +353,57 @@ Next, **G2**: the network half -- each peer's group, a lockstep session
 among its members, heartbeats (where each player is) to everybody else,
 and the merge and split agreed on the wire.
 
-## 13 · Open
+## 13 · Groups on the wire (2026-10-26, G2)
+
+`net::group::Session` is one peer's group. Within it, nothing new: every
+member's input every frame, the last eight resent in every packet, a wrong
+guess corrected by playing again -- what a match has always been. To
+everybody outside it a peer sends only a **heartbeat** every six frames:
+where its fighter is on the map, its group's leader (the lowest id in it),
+the members, and whether the group is hunting. A fight far off is nobody
+else's to wait on, send to or roll back for.
+
+- **A split needs no word.** Every 60 frames, at a frame every member has
+  confirmed, each member cuts the members' fighters into groups by 200 m
+  steps; whoever is not joined to it is fed `Travel::LEFT` from the next
+  frame. Every member cuts the same world the same way, so all of them
+  agree without a packet. A group in a hunt never splits.
+- **A merge is agreed**, when two groups' fighters come within 120 m (the
+  gap between the two distances keeps a pair standing at the edge from
+  merging and splitting every second). The base is the group in a hunt,
+  else the one with the lower leader; its leader calls the other's. That
+  leader names a frame, in the inputs its members already exchange; at it
+  they stop, and it sends its world there to the base's members in
+  kilobyte chunks, resent until it arrives. The base's leader names a frame
+  of its own; at it every base member makes the same merged world
+  (`sim::group::merge`), plays on from it, and the leader sends it to the
+  newcomers, who take it and play on as members.
+- **Frames are the base's** from the merge on: the newcomers drop what
+  they had heard and pressed by their old count, which would otherwise be
+  read as the new one.
+
+What `tests/groups.rs` (in `net`) holds: four peers on lines that lose one
+packet in twenty, two in the town and two on the High Plane half a
+kilometre off. Apart, each pair agrees within itself, and each is a group
+of its own. The plane's pair fast-travels to a cairn by the town:
+**all four are one group 27 frames later**, holding one world. The pair
+travels to the furthest cairn: **two groups again**, each agreeing within
+itself, with no stall anywhere.
+
+**What the test found**: the first cairn it
+met at was beside a gnawer den, whose pack comes out about five hundred
+frames after anybody arrives -- for a group alone just the same. The
+merged group was then in a hunt, and fast travel is refused in a hunt
+(`World::peaceful`), so the pair that pressed for the far cairn never
+left. That is the existing rule doing its job -- a fight is everybody's in
+it until it ends -- and it means a group in a hunt cannot be pulled apart
+by a trip either. The test meets at the nearest cairn that stays quiet as
+long as it plays there.
+
+Next, **G3**: the game plays on group sessions instead of GGRS, and the
+load harness gets a groups mode to measure them beside the other two.
+
+## 14 · Open
 
 - **NET-3** The See tier's distance and rate: how far should another player
   be drawn, and how smoothly?
