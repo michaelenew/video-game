@@ -563,6 +563,15 @@ impl Tape {
         if let Some((seat, delay)) = self.online {
             out.push_str(&format!("online seat={} delay={delay}\n", seat + 1));
         }
+        // **As many seats a line as the tape ever used**, two at the least:
+        // eight slots of which two are played wrote six groups of noughts a
+        // frame. A reader fills the rest with nothing pressed.
+        let width = self
+            .frames
+            .iter()
+            .filter_map(|f| f.iter().rposition(|i| *i != Input::default()))
+            .max()
+            .map_or(2, |k| (k + 1).max(2));
         let mut events = self.events.iter().peekable();
         let mut i = 0;
         while i < self.frames.len() {
@@ -598,7 +607,7 @@ impl Tape {
             while !tuned && i + n < stop && self.frames[i + n] == self.frames[i] {
                 n += 1;
             }
-            write_frame(&mut out, &self.frames[i]);
+            write_frame(&mut out, &self.frames[i], width);
             if n > 1 {
                 out.push_str(&format!(" x{n}"));
             }
@@ -758,8 +767,8 @@ impl Tape {
     }
 }
 
-fn write_frame(out: &mut String, inputs: &[Input; MAX_PLAYERS]) {
-    for (i, input) in inputs.iter().enumerate() {
+fn write_frame(out: &mut String, inputs: &[Input; MAX_PLAYERS], width: usize) {
+    for (i, input) in inputs.iter().take(width).enumerate() {
         if i > 0 {
             out.push(' ');
         }

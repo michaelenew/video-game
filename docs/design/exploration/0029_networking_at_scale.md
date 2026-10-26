@@ -281,7 +281,33 @@ would halve it or better. That, and §9's third change (an outcome that
 changes nothing taken without a rollback, which the session already does
 -- what rolled back apart was outcomes that were not needed), are next.
 
-## 11 · Open
+## 11 · Eight fighter slots (2026-10-26, step 2 begun)
+
+`MAX_PLAYERS` is eight, NET-2's fight. The pools fighters fill -- 128
+effects, eight bolts, eight gusts, four blasts of shards -- stay at four
+fighters' worth (`state::POOLED_FOR`), each giving up its oldest when full,
+rather than doubling with the slots: the snapshot is 25,520 bytes and its
+cap 26 KiB (architecture.md). The masks that count fighters were already as
+wide as the seats; the creatures' per-fighter memory was already laid out
+by the seat count. Every pinned hunt's *hash* moved -- eight slots hashed
+where four were -- and every one was compared frame by frame against the
+code before (fighters, creature, phase, effects) and was identical. A
+replay writes only as many seats a line as the tape used. `allies` counts
+only fighters in the fight.
+
+The harness to eight, 600 frames, apart on a 450 m grid:
+
+| n | GGRS up KB/s | GGRS rollbacks/s | regions apart up KB/s | regions apart rollbacks/s | regions apart tick p50 µs |
+| --- | --- | --- | --- | --- | --- |
+| 2 | 3.5 | 1.2 | 1.0 | 0 | 38 |
+| 4 | 12.4 | 4.8 | 1.5 | 0 | 218 |
+| 8 | 37.7 | 9.1 | 3.7 | 0 | 253 |
+
+(450 m is just over the far line, so some pairs are still near.) What is
+left growing is the tick: every peer still simulates every fighter in the
+world -- step 3's local work.
+
+## 12 · Open
 
 - **NET-3** The See tier's distance and rate: how far should another player
   be drawn, and how smoothly?

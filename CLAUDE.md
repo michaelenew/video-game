@@ -248,7 +248,7 @@ is already struggling. One rollback burst gets a quarter of the frame, one
 **Add to the `no floats, no deps, no I/O` list: no allocation.** A simulation
 frame, and the whole path from snapshot to screen in `view`, must not touch the
 heap — an allocator is a lock with a tail, and it is what turns one frame in a
-thousand into a millisecond. That check and the 22 KiB cap on `World` are the
+thousand into a millisecond. That check and the 26 KiB cap on `World` are the
 ones that matter: they give the same answer on every machine, whereas the three
 timing budgets run at 5–40x the measured cost and will only catch a change of
 *kind* — an accidental quadratic, an unbounded scan, a blocking call.

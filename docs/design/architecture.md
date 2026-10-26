@@ -95,7 +95,7 @@ What catches drift is the pair of checks that give the same answer on every mach
   allocator is shared mutable state with a lock and a tail, and it is the classic source of
   the one frame in a thousand that takes a millisecond. The path from snapshot to screen in
   `view` is held to the same rule.
-- **A `World` stays under 22 KiB.** Rollback copies one every frame and keeps a ring of nine,
+- **A `World` stays under 26 KiB.** Rollback copies one every frame and keeps a ring of nine,
   so the snapshot is the one structure whose *size* is a running cost rather than a one-off.
   The cap keeps the ring inside L2. Raising it means every frame and every rollback got
   heavier, so it wants a reason the way an Oven exemption does. It was 4 KiB until four
@@ -107,7 +107,12 @@ What catches drift is the pair of checks that give the same answer on every mach
   190 KiB. **22 KiB since 2026-10-19**, the owner's call again: her territory's table went
   from 48 patches to 128 (1,280 bytes), because 48 was full within a minute of play and a
   long fight traded old ground for new on every touch. None of the snapshot is sent to a
-  peer -- only inputs are -- so its cost is the copy; nine are under 200 KiB.
+  peer -- only inputs are -- so its cost is the copy; nine are under 200 KiB. **26 KiB since
+  2026-10-26**, the owner's call (exploration 0029, NET-2: eight to a fight): eight fighter
+  slots where there were four, 2,608 bytes, with the pools fighters fill -- effects, bolts,
+  gusts, shards -- held at what four measured out at (`state::POOLED_FOR`) rather than
+  doubling with the slots. Thirteen copies (the twelve-frame window and the one in hand) are
+  about 330 KiB.
 
 ### Where the 20 KiB goes (measured 2026-10-14, with `size_of`)
 

@@ -49,7 +49,7 @@ fn options() -> Options {
         frames: value("--frames", 1200) as u32,
         delay: value("--delay", 3) as u32,
         loss: value("--loss", 30) as usize,
-        apart: value("--apart", 600) as i32,
+        apart: value("--apart", 450) as i32,
         peers: (value("--peers", MAX_PLAYERS as i64) as usize).clamp(2, MAX_PLAYERS),
     }
 }
@@ -76,24 +76,28 @@ impl Bill {
     }
 }
 
-/// The valley, `n` fighters: `gap` metres apart, on the corners of a square
-/// of that side from the town (four fit on the map up to about 900 m).
+/// The valley, `n` fighters: `gap` metres apart, on a grid of three by
+/// three from the town (nine fit on the map up to about 450 m).
 fn town(n: usize, gap: i32) -> World {
     let classes = [
         Class::Champion,
         Class::ShadowReaver,
         Class::Elementalist,
         Class::DualMage,
+        Class::BloodMage,
+        Class::Champion,
+        Class::ShadowReaver,
+        Class::Elementalist,
     ];
     let mut w = World::versus_in(classes, sim::valley::START).seated(n as u8);
     let ground = w.terrain();
     let origin = w.players[0].pos;
-    // Together, a row; apart, the corners of a square, from the town's
-    // south-west so every corner is on the map.
+    // Together, a row; apart, a grid of three by three, from the town's
+    // south-west so every point is on the map at up to 450 m.
     let (x0, z0) = if gap > 50 { (-300, -450) } else { (0, 0) };
     for i in 0..n {
         let (cx, cz) = if gap > 50 {
-            ((i % 2) as i32 * gap, (i / 2) as i32 * gap)
+            ((i % 3) as i32 * gap, (i / 3) as i32 * gap)
         } else {
             (i as i32 * gap, 0)
         };

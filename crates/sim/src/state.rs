@@ -42,7 +42,16 @@ use crate::species::SpeciesId;
 use crate::stones::{self, Field};
 use crate::tuning as t;
 
-pub const MAX_PLAYERS: usize = 4;
+/// **Fighter slots in a world** (2026-10-26): eight, the fight the open
+/// world is sized for (exploration 0029, NET-2: tens in a world, eight to a
+/// fight). Four until then, the match it was built as.
+pub const MAX_PLAYERS: usize = 8;
+
+/// What the pools of things fighters leave in the world -- effects, bolts,
+/// gusts, shards -- were measured against: four fighters' worth of
+/// spectacle, which is a fight's, however many slots the world has. Full,
+/// the oldest gives way (each pool's own rule).
+pub const POOLED_FOR: usize = 4;
 
 // A fighter's index travels as a byte in a hundred places -- who threw this,
 // who is held by whom -- beside sentinels that are not anybody: the creature
@@ -2838,7 +2847,8 @@ impl World {
             // Anybody it may not hurt, where some may be hurt: nobody but a
             // hall's dummy and those learning beside it (`World::foes`).
             let spared = self.pvp() && !self.foes(i, j);
-            if j != i && (side || spared) {
+            // Only somebody in the fight: an empty slot is nobody's ally.
+            if j != i && self.is_present(j) && (side || spared) {
                 bits |= 1 << j;
             }
         }
