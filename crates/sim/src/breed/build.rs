@@ -1524,15 +1524,23 @@ type Key = ((i32, i32), (i32, i32));
 
 /// A wing's arm: the humerus and forearm, as shares of the wing. The hand
 /// Whether a standing pair's joint bends forward rather than back: when a
-/// pair behind it stands closer than its own upper segment is long -- an
-/// insect's legs off one short thorax -- the front one leads with its knee,
-/// away from the legs behind, as an insect's do (exploration 0033).
+/// pair behind it stands closer than two fifths of its leg -- an insect's
+/// legs off one short thorax -- or than twice how far its bent knee stands
+/// off the leg's line -- a long pair crouched deep -- the front one leads
+/// with its knee, away from the legs behind, as an insect's do
+/// (exploration 0033).
 fn knee_ahead(g: &Genome, q: &super::posture::Posture, p: &Proportions, i: usize) -> bool {
     let at = q.stations[i].attach;
+    // How far its knee stands off the line from hip to foot, bent as it
+    // stands: a long pair crouched deep reaches back a long way.
+    let ext = q.stations[i].extension.min(Fx::ONE);
+    let off = p.limb[i]
+        .mul(fx(1, 2))
+        .mul(Fx::ONE.sub(ext.mul(ext)).max(Fx::ZERO).sqrt());
     (i + 1..super::STATIONS).any(|j| {
         q.stations[j].grounded
             && g.limbs[j].is_some()
-            && at.sub(q.stations[j].attach) < p.limb[i].mul(fx(2, 5))
+            && at.sub(q.stations[j].attach) < p.limb[i].mul(fx(2, 5)).max(off.mul(Fx::from_int(2)))
     })
 }
 

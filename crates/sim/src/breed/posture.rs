@@ -902,11 +902,20 @@ impl Solver<'_> {
         };
         let mut rise = base;
         if matches!(self.g.head, HeadKind::Forward | HeadKind::Raised) {
+            // A little above the spine, not clear of the back: on a body as
+            // deep as it is wide that drove every neck up to vertical
+            // (exploration 0033). A horse's neck at most, a raised head's a
+            // little more.
             let arm = self.p.neck_len.add(self.p.head_half);
+            let most = if self.g.head == HeadKind::Raised {
+                fx(1, 6)
+            } else {
+                fx(1, 8)
+            };
             for _ in 0..25 {
                 let lift = arm.mul(sin_turns(self.pose.pitch.add(rise)));
-                let front_top = self.p.half_h.mul(fx(3, 5));
-                if lift >= front_top || rise >= fx(1, 4) {
+                let above = self.p.half_h.mul(fx(3, 10));
+                if lift >= above || self.pose.pitch.add(rise) >= most {
                     break;
                 }
                 rise = rise.add(fx(1, 100));
@@ -914,6 +923,15 @@ impl Solver<'_> {
         }
         self.pose.neck_rise = rise;
     }
+}
+
+/// The most a level body is pitched nose up, in turns: a bird stands
+/// tilted on its two legs; on more, a hyena's back at most. A pitch slider
+/// bred in from an upright body stood a four-legged one at sixty degrees
+/// (exploration 0033).
+fn level_pitch_most(g: &Genome) -> Fx {
+    let standing = g.pairs().filter(|(_, p)| p.role.grounded()).count();
+    if standing <= 1 { fx(1, 9) } else { fx(1, 20) }
 }
 
 /// How the genome stands. Deterministic: the same genome always gets the
@@ -960,6 +978,8 @@ pub fn posture(g: &Genome) -> Posture {
             // the floor and its legs are short.
             pitch: if g.stance == Stance::Lowslung {
                 g.sliders.pitch.mul(fx(1, 4)).min(fx(1, 50))
+            } else if g.stance == Stance::Level {
+                g.sliders.pitch.mul(fx(1, 4)).min(level_pitch_most(g))
             } else {
                 g.sliders.pitch.mul(fx(1, 4))
             },
@@ -980,6 +1000,10 @@ pub fn posture(g: &Genome) -> Posture {
         solver.balance();
     }
     solver.vertical();
+    if g.stance == Stance::Level {
+        let most = level_pitch_most(g);
+        solver.pose.pitch = solver.pose.pitch.min(most);
+    }
     // The vertical may have pitched it to get every foot down; the feet
     // follow the weight once more.
     solver.feet();

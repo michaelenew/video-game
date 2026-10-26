@@ -79,16 +79,33 @@ target (it is aimed at standing height now).
 
 ![The cast's walks after](../gallery/0033_cast_walks.jpg)
 
+## Carried like an animal
+
+`every_body_is_carried_like_an_animal` asks the standing body two more
+things: a level body tilted no more than a hyena's back on four legs (20
+degrees) or a standing bird's on two (45), and a neck no steeper than a
+horse's (55 degrees; 65 where the genome says the head is raised; an
+upright body's head is on top of it, as a mantis's is). Necks went up to
+vertical because the head was raised until it cleared the top of the back,
+and a body as deep as it is wide put the top of the back high: a head now
+rises a little above the spine and no further than a horse's
+(`Solver::head`). Bodies stood at sixty degrees because a pitch slider bred
+in from an upright body was taken whole by a level one: a level body's pitch
+is held to its limit (`level_pitch_most`). `tests/posture.rs`'s "head above
+the back" measures the back from the body's real depth now, not from a
+depth half its width.
+
+![After: crossbreeds](../gallery/0033_lines_walks.jpg)
+
 ## Still not plausible
 
 The walk strips show what the checks do not yet ask:
 
-- a two-legged body whose fore pair became wings (Ridgeback to Galewing,
-  stages 2 and 3) stands pitched nose-up with its wings folded down to the
-  floor like crutches;
-- heads are carried up on vertical necks;
-- the Mantis-like bodies stand an upright torso on short legs with scythes
-  longer than the legs;
+- folded wings are drawn as slabs as deep as the body, and a wing walked on
+  (Ridgeback to Galewing, stages 2 and 3) shows its folded panels as a big N
+  beside the legs;
+- the Mantis-like bodies stand on legs short for them, with scythes longer
+  than the legs;
 - the Ridgeback's torso is short for legs as long as its.
 
 The hand edits of 0032 are retired (`game::touch::TOUCHES` is empty): they

@@ -110,7 +110,10 @@ fn heads_are_carried_above_the_back() {
             .or(body.bone_named("thorax"))
             .unwrap();
         let head_y = f(body.at(head).y);
-        let back_y = f(body.at(chest).y) + f(body.half_width) * 0.45 * 0.6;
+        // Above the spine by most of a third of the body's half-depth: a
+        // head carried, not hung -- and no higher, or a body as deep as it
+        // is wide stood its neck up straight (exploration 0033).
+        let back_y = f(body.at(chest).y) + f(build::proportions(g).half_h) * 0.3;
         assert!(
             head_y >= back_y - 0.05,
             "{name}: head at {head_y:.2}, back at {back_y:.2}"

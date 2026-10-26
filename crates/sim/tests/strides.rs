@@ -324,3 +324,59 @@ fn every_body_can_move() {
         bad.join("\n")
     );
 }
+
+/// How a body carries itself standing: its torso's pitch and its neck's
+/// rise from level, in degrees.
+fn carriage(g: &Genome) -> (f32, f32) {
+    let q = posture::posture(g);
+    let body = build::body_in(g, &q);
+    let pitch = f(q.pitch) * 360.0;
+    let neck = match (at(&body, "neck"), at(&body, "head")) {
+        (Some(n), Some(h)) => {
+            let d = sub(h, n);
+            let flat = (d[0] * d[0] + d[2] * d[2]).sqrt();
+            d[1].atan2(flat).to_degrees()
+        }
+        _ => 0.0,
+    };
+    (pitch, neck)
+}
+
+/// **Carried like an animal**: a level body no more than about a quarter
+/// of the way to upright, and a neck no steeper than a horse's unless the
+/// genome says the head is raised.
+#[test]
+fn every_body_is_carried_like_an_animal() {
+    let mut bad = vec![];
+    let mut check = |name: String, g: &Genome| {
+        let (pitch, neck) = carriage(g);
+        let level = g.stance == sim::breed::Stance::Level;
+        let neck_max = if g.head == sim::breed::HeadKind::Raised {
+            65.0
+        } else {
+            55.0
+        };
+        // A bird stands tilted on its two legs; a four-legged body, a
+        // hyena's back at most.
+        // Its legs, not wings it leans on: a pterosaur on its wrists is
+        // a biped's tilt.
+        let legs = g.pairs().filter(|(_, p)| p.role.grounded()).count();
+        let pitch_max = if legs <= 1 { 45.0 } else { 20.0 };
+        if level && pitch.abs() > pitch_max {
+            bad.push(format!("{name}: a level body pitched {pitch:.0} degrees"));
+        }
+        // An upright body's head is on top of it, as a mantis's is.
+        if g.stance != sim::breed::Stance::Upright && neck > neck_max {
+            bad.push(format!("{name}: neck up {neck:.0} degrees"));
+        }
+    };
+    for (_, name, g, _) in CAST {
+        check(name.to_string(), g);
+    }
+    for (line, stages) in lines() {
+        for (k, g) in stages.iter().enumerate() {
+            check(format!("{line} {k}"), g);
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
