@@ -65,9 +65,9 @@ def pauldrons(body, r):
         def cap(c, fw, s=s, top=top):
             return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.4) & (c[:, 1] > top - 0.035)
 
-        out += hard.plate(body, f"pauldron.{s}", 0.03, cap, "iron", thick=0.007, rim=0.007, smooth=10,
-                          close=0.03, faces=900)
-        for k, (at, gap) in enumerate(((0.13, 0.024), (0.24, 0.018))):
+        out += hard.plate(body, f"pauldron.{s}", 0.018, cap, "iron", thick=0.007, rim=0.007, smooth=10,
+                          close=0.02, faces=900)
+        for k, (at, gap) in enumerate(((0.13, 0.016), (0.24, 0.012))):
             mid = r.along(arm, el, at)
             out += hard.plate(body, f"lame{k}.{s}", gap, lambda c, fw, arm=arm: w(fw, arm) > 0.4, "iron",
                               trims=[(mid + down * 0.04, down)], keeps=[(mid - down * 0.035, down)],

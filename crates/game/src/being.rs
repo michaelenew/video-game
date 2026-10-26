@@ -274,7 +274,7 @@ pub fn shows(k: usize) -> bool {
 /// then light: the titan's cracks and heart, the seraph's sun and the light
 /// it gives off. Bright enough to read as light, short of where the
 /// tonemapper takes a colour to white.
-pub const GLOW: [f32; 2] = [30.0, 14.0];
+pub const GLOW: [f32; 2] = [30.0, 5.0];
 
 /// How bright a rift's shaft of light is at the crack, in the unlit
 /// colour's units.
@@ -334,8 +334,8 @@ pub fn beam(commands: &mut Commands, beings: &Beings, from: (Entity, Vec3), to: 
 /// plate polished steel. The world has nothing for them to reflect.
 pub const LUSTRE: [crate::still::Lustre; 2] = [
     crate::still::Lustre {
-        gloss: Vec4::new(9000.0, 6.0, 0.0, 0.0),
-        sheen: Vec4::new(500.0, 160.0, 1400.0, 3.0),
+        gloss: Vec4::new(2200.0, 7.0, 0.0, 0.0),
+        sheen: Vec4::new(70.0, 25.0, 200.0, 4.5),
     },
     crate::still::Lustre {
         gloss: Vec4::new(7000.0, 4.0, 0.0, 0.0),

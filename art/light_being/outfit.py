@@ -67,9 +67,12 @@ def cuirass(body, r):
     # the armpits, the neck cut in a shallow curve; a keel down its middle.
     us = np.linspace(-98, 98, 45)
     rad = np.stack([np.interp(us, us_all, row) for row in R]) + 0.03
-    keel = 0.014 * np.exp(-(us / 9.0) ** 2)[None, :] * plate.smoothstep(waist, arm - 0.1, vs)[:, None]
-    swell = 0.012 * np.exp(-((vs - (arm - 0.12)) / 0.12) ** 2)[:, None] * np.cos(np.radians(us))[None, :] ** 2
-    rad = rad + keel + swell
+    keel = 0.022 * np.exp(-(us / 11.0) ** 2)[None, :] * plate.smoothstep(waist, arm - 0.12, vs)[:, None]
+    swell = 0.03 * np.exp(-((vs - (arm - 0.14)) / 0.14) ** 2)[:, None] * np.cos(np.radians(us))[None, :] ** 2
+    # In at the waist, as a breastplate is shaped: the body's own waist is
+    # soft, and plate laid over it reads as a barrel.
+    pinch = -0.022 * np.exp(-((vs - (waist + 0.04)) / 0.08) ** 2)[:, None] * np.abs(np.sin(np.radians(us)))[None, :]
+    rad = rad + keel + swell + pinch
     a = np.abs(us)
     hi = (neck - 0.035 - 0.05 * (a / 40.0) ** 2).clip(arm - 0.06, None)
     hi = np.where(a > 58, arm - 0.06 - 0.12 * plate.smoothstep(58, 98, a), hi)

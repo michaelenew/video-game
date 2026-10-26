@@ -137,7 +137,7 @@ def finish(ob, borders, material, thick, rim, rim_material=None, joint=None, rim
     for k, b in enumerate(borders):
         if rim:
             t = hard.tube(f"{ob.name}_rim{k}", b, rim, rim_material or material, closed=rim_closed, flatten=0.85,
-                          step=0.008)
+                          step=0.014, sides=6)
             out.append(t)
     if joint:
         out = [rigid(o, joint) for o in out]

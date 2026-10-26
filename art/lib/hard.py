@@ -120,7 +120,8 @@ def rolled_edge(ob, radius, material, name=None, flatten=0.7):
     out = []
     for i, loop in enumerate(boundary_loops(ob)):
         closed = np.linalg.norm(loop[0] - loop[-1]) < 0.05
-        out.append(tube(f"{name or ob.name}_rim{i}", loop, radius, material, closed=closed, flatten=flatten))
+        out.append(tube(f"{name or ob.name}_rim{i}", loop, radius, material, closed=closed, flatten=flatten,
+                        step=0.012, sides=6))
     return out
 
 
@@ -128,7 +129,7 @@ def rivets(name, pts, normals, radius, material, joint=None):
     """Domed rivet heads at ``pts``, facing out along ``normals``."""
     obs = []
     for i, (p, n) in enumerate(zip(pts, normals)):
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=10, ring_count=6, radius=radius,
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=5, radius=radius,
                                              location=tuple(g.g2b(np.asarray(p))))
         ob = bpy.context.active_object
         ob.name = f"{name}{i}"
@@ -189,8 +190,9 @@ def band(body, r, a, b, at, width, gap, name, material, thick=0.008, bevel=0.003
     four corners bevelled by ``bevel``; a raised rim at each edge; and
     ``studs`` rivets round its middle. Carried whole by joint ``a``."""
     centre, axis, front, side, radius = section(body, r, a, b, at, gap)
-    n = 72
+    n = 48
     ang = np.linspace(-np.pi, np.pi, n, endpoint=False) + np.pi / n
+    radius = np.interp(np.linspace(0, 72, n, endpoint=False), np.arange(72), radius, period=72)
     # The profile across the band, (along, out), a rounded rectangle.
     w, t, c = width / 2, thick, bevel
     prof = [(-w, 0.0), (-w, t - c), (-w + c * 0.3, t - c * 0.3), (-w + c, t), (w - c, t),
@@ -216,7 +218,7 @@ def band(body, r, a, b, at, width, gap, name, material, thick=0.008, bevel=0.003
             pts = [centre + axis * x * 0.92 + (np.cos(q) * front + np.sin(q) * side) * (radius[i] + t)
                    for i, q in enumerate(ang)]
             out.append(rigid(tube(f"{name}_rim{k}", np.array(pts), thick * 0.45, material, closed=True,
-                                  flatten=0.8), a))
+                                  flatten=0.8, sides=6, step=0.012), a))
     if studs:
         pick = np.linspace(0, n, studs, endpoint=False).astype(int)
         pts = [centre + (np.cos(ang[i]) * front + np.sin(ang[i]) * side) * (radius[i] + t) for i in pick]
