@@ -290,73 +290,15 @@ pub fn touched(g: &Genome, edits: &[Edit]) -> Anatomy {
 /// The torso's boxes, which a name of `"torso"` means.
 const TORSO: [&str; 5] = ["haunch", "barrel", "shoulders", "segment", "rump"];
 
-// What is left of the hand edits now the breeder makes the rest of them
-// (exploration 0032). The first pass, against the breeder before it was
-// changed, was six groups -- the torso deepened, the wing's chord and arm,
-// the head carried level, the neck a stalk -- and is in this file's history
-// and the note's pictures; what the breeder and `carry_head` now do is gone
-// from here, and what stays is what they still get wrong.
-
-/// A heavy four-legged body: on legs no longer than it is deep, a leg's
-/// thickness rather than a post's, under it rather than splayed.
-const HEAVY: &[Edit] = &[
-    Edit::Size("torso", 1.0, 0.8, 1.0),
-    Edit::Limb("fore", 0.85),
-    Edit::Limb("hind", 0.85),
-    Edit::Stance("hind", 0.6),
-    Edit::Stance("fore", 0.7),
-    Edit::Size("hind.l", 1.0, 0.85, 0.85),
-    Edit::Size("hind.r", 1.0, 0.85, 0.85),
-    Edit::Size("fore.l", 1.0, 0.85, 0.85),
-    Edit::Size("fore.r", 1.0, 0.85, 0.85),
-];
-
-/// Feathered, a bird's share of its own span in the body and head.
-const FEATHERED: &[Edit] = &[
-    Edit::Size("torso", 1.1, 1.1, 1.1),
-    Edit::Size("head", 1.4, 1.3, 1.3),
-    Edit::Size("jaw", 1.4, 1.3, 1.3),
-];
-
-/// Raptorial arms a mantis's length, held folded in front of it: up from
-/// the shoulder, the forearm forward and down, the scythe folded back up
-/// under it. The breeder keeps its arms long because their sweep is how its
-/// strikes are read (`tests/motion.rs`); this is the look that costs.
-const SCYTHES: &[Edit] = &[
-    Edit::Limb("fore", 0.6),
-    Edit::Fold(
-        "fore",
-        [0.45, 0.85, -0.2],
-        [0.8, -0.6, -0.05],
-        [-0.45, 0.89, 0.0],
-    ),
-];
-
-/// A level body hung with stilts and scythes: something to hang them from.
-const STILTS: &[Edit] = &[Edit::Size("torso", 1.3, 1.4, 1.2), Edit::Limb("hind", 0.8)];
-
 /// Every stage's hand edits: a line's name, the stages they are true of,
 /// and the edits. A stage gets every entry that names it, in order; a stage
 /// none names is the breeder's body as it stands.
-pub const TOUCHES: &[(&str, &[usize], &[Edit])] = &[
-    ("ridgeback_to_galewing", &[0, 1], HEAVY),
-    (
-        "ridgeback_to_galewing",
-        &[5, 6, 7, 8, 9, 10, 11, 12],
-        FEATHERED,
-    ),
-    ("galewing_to_mantis", &[0, 1], FEATHERED),
-    (
-        "galewing_to_mantis",
-        &[3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-        SCYTHES,
-    ),
-    ("galewing_to_mantis", &[3, 4], STILTS),
-    ("mantis_to_ridgeback", &[0, 1, 2, 3, 4], SCYTHES),
-    ("mantis_to_ridgeback", &[5, 6, 7, 8, 9, 10, 11, 12], HEAVY),
-    ("ridgeback_x_mantis", &[0], HEAVY),
-    ("ridgeback_x_mantis", &[4, 5, 6, 7, 8], SCYTHES),
-];
+///
+/// Empty since exploration 0033. The edits of 0032 reshaped boxes on bodies
+/// that could not walk -- legs crossing, scythes on the floor -- and were
+/// judged from one still; the breeder's legs are fixed instead, and the
+/// first pass is in this file's history and 0032's pictures.
+pub const TOUCHES: &[(&str, &[usize], &[Edit])] = &[];
 
 /// The hand edits of one stage of one line.
 pub fn touches(line: &str, stage: usize) -> Vec<Edit> {

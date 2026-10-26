@@ -1133,7 +1133,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "BRED_GAIT=<line>:<stage>,... cargo test -p game --bin game bred_gait",
-                "Write a crossbreed stage's body boxes at eight points of each gait it has to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
+                "Write a crossbreed stage's (or cast:<Name>, one of the cast's genomes) body boxes at eight points of its slowest gait to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
             ),
             e(
                 "GROWN_STAGES=0,3,6",

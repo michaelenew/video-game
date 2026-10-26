@@ -662,8 +662,8 @@ mod dump {
 
 #[cfg(test)]
 mod gait {
-    /// `BRED_GAIT=<line>:<stage>`: that stage's body boxes through a cycle
-    /// of each gait it has, `target/gait/<line>_<stage>_<gait>_<k>.obj`,
+    /// `BRED_GAIT=<line>:<stage>` (or `cast:<Name>`): that stage's body boxes
+    /// through a cycle of its slowest gait, `target/gait/<line>_<stage>_<gait>_<k>.obj`,
     /// coloured by what each part is -- for watching it move.
     #[test]
     fn bred_gait() {
@@ -676,16 +676,28 @@ mod gait {
             let Some((line, k)) = item.split_once(':') else {
                 continue;
             };
+            // `cast:<Name>` is one of the cast's own genomes.
+            let cast = sim::breed::archetypes::CAST
+                .iter()
+                .find(|c| line == "cast" && c.1 == k)
+                .map(|c| *c.2);
+            let tag = if cast.is_some() {
+                format!("cast_{k}")
+            } else {
+                format!("{line}_{:02}", k.parse::<usize>().unwrap_or(0))
+            };
             let k: usize = k.parse().unwrap_or(0);
-            let Some(g) = super::lines()
-                .into_iter()
-                .find(|l| l.name == line)
-                .and_then(|l| l.stages.get(k).map(|s| s.genome))
-            else {
+            let Some(g) = cast.or_else(|| {
+                super::lines()
+                    .into_iter()
+                    .find(|l| l.name == line)
+                    .and_then(|l| l.stages.get(k).map(|s| s.genome))
+            }) else {
                 continue;
             };
             let q = posture::posture(&g);
-            for gait in locomotion::repertoire(&g, &q).iter().flatten() {
+            // Its slowest gait: how it walks.
+            for gait in locomotion::repertoire(&g, &q).iter().flatten().take(1) {
                 for f in 0..8 {
                     let phase = sim::Fx::ratio(f, 8);
                     let d = locomotion::drive(&g, &q, gait, phase, sim::Fx::ZERO);
@@ -723,7 +735,7 @@ mod gait {
                         n += 8;
                     }
                     crate::platform::write_to(
-                        &dir.join(format!("{line}_{k:02}_{}_{f}.obj", gait.kind.name())),
+                        &dir.join(format!("{tag}_{}_{f}.obj", gait.kind.name())),
                         &out,
                         "a stage's gait",
                     );

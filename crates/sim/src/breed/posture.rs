@@ -616,17 +616,25 @@ impl Solver<'_> {
                 break;
             }
             let c = cos_turns(self.pose.pitch).max(fx(1, 2));
-            let step = e.div(c);
-            let mut moved = Fx::ZERO;
+            // The grounded pairs move as one, as far as the frontmost (or
+            // hindmost) may: clamped one by one, several pairs ran into the
+            // torso's end and stood on one spot, their legs through each
+            // other (exploration 0033).
+            let mut step = e.div(c);
+            for s in self.pose.stations.iter().filter(|s| s.grounded) {
+                step = if step > Fx::ZERO {
+                    step.min(self.p.front.sub(s.attach).max(Fx::ZERO))
+                } else {
+                    step.max(self.p.rear_attach.sub(s.attach).min(Fx::ZERO))
+                };
+            }
+            if step == Fx::ZERO {
+                break;
+            }
             for s in self.pose.stations.iter_mut() {
                 if s.grounded {
-                    let to = s.attach.add(step).clamp(self.p.rear_attach, self.p.front);
-                    moved = moved.add(to.sub(s.attach));
-                    s.attach = to;
+                    s.attach = s.attach.add(step);
                 }
-            }
-            if moved == Fx::ZERO {
-                break;
             }
             self.pose.applied.shift = self.pose.applied.shift.add(step);
         }
@@ -676,6 +684,38 @@ impl Solver<'_> {
         if self.g.stance == Stance::Limbless {
             self.pose.root = self.p.half_w;
             return;
+        }
+        // **Pitched to its legs** (exploration 0033): where the front pair
+        // stands taller than the hind (or shorter), the body tips so each
+        // stands near its own natural bend -- a hyena's back -- rather than
+        // the long pair folding deep under a level one, its knee out
+        // through the next pair's.
+        let mut tall = [Fx::ZERO; STATIONS];
+        let mut at = [Fx::ZERO; STATIONS];
+        let mut ends: Option<(usize, usize)> = None;
+        for (i, s) in self.grounded() {
+            let pair = self.g.limbs[i].unwrap();
+            let standing = standing_length(self.g.stance, pair.build, s.wing_walks, self.p.limb[i]);
+            tall[i] = standing.mul(natural_extension(self.g.stance, pair.build, s.wing_walks));
+            at[i] = s.attach;
+            ends = Some(match ends {
+                None => (i, i),
+                Some((f, h)) => (f.min(i), h.max(i)),
+            });
+        }
+        if let Some((f, h)) = ends
+            && f != h
+            && !self.pose.bellied
+            && self.g.stance == Stance::Level
+        {
+            let run = at[f].sub(at[h]);
+            if run > fx(1, 10) {
+                // Small angles: a radian is a sixth of a turn.
+                let want = tall[f].sub(tall[h]).div(run).mul(fx(159, 1000));
+                let cap = pitch_cap(self.g.stance);
+                let base = self.pose.pitch;
+                self.pose.pitch = base.add(want.clamp(cap.neg(), cap));
+            }
         }
         let base = self.pose.pitch;
         let (mut lo, mut hi, mut want) = self.vertical_at(base);
@@ -781,6 +821,66 @@ impl Solver<'_> {
         }
     }
 
+    /// **Feet apart** (exploration 0033): neighbouring pairs whose feet
+    /// stand closer than a foot and a step apart -- an insect's legs from
+    /// one short thorax, a long-legged body's from a short one -- fan
+    /// them: the front pair's foot forward, the hind's back, each as far as
+    /// its leg allows. An animal's hips may be close; its feet are not.
+    fn spread(&mut self) {
+        for _ in 0..3 {
+            let mut changed = false;
+            for i in 0..STATIONS {
+                if !self.pose.stations[i].grounded {
+                    continue;
+                }
+                let Some(j) = (i + 1..STATIONS).find(|&j| self.pose.stations[j].grounded) else {
+                    continue;
+                };
+                let standing = |k: usize| {
+                    let pair = self.g.limbs[k].unwrap();
+                    standing_length(
+                        self.g.stance,
+                        pair.build,
+                        self.pose.stations[k].wing_walks,
+                        self.p.limb[k],
+                    )
+                };
+                let (si, sj) = (standing(i), standing(j));
+                // A foot each, and a step for each between them.
+                let need = self.p.limb[i]
+                    .add(self.p.limb[j])
+                    .mul(fx(3, 20))
+                    .add(si.add(sj).mul(fx(3, 20)));
+                let gap = self.foot_x(i).sub(self.foot_x(j));
+                if gap >= need {
+                    continue;
+                }
+                let short = need.sub(gap).mul(fx(1, 2));
+                let root = self.pose.root;
+                let pitch = self.pose.pitch;
+                let cap = |k: usize, st: Fx| {
+                    let hip = self.hip_height(k, root, pitch);
+                    st.mul(st)
+                        .sub(hip.mul(hip))
+                        .max(Fx::ZERO)
+                        .sqrt()
+                        .min(st.mul(fx(3, 5)))
+                };
+                let (ci, cj) = (cap(i, si), cap(j, sj));
+                let ri = self.pose.stations[i].reach.add(short).min(ci);
+                let rj = self.pose.stations[j].reach.sub(short).max(cj.neg());
+                if ri != self.pose.stations[i].reach || rj != self.pose.stations[j].reach {
+                    self.pose.stations[i].reach = ri;
+                    self.pose.stations[j].reach = rj;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+    }
+
     /// A hopper: hind limbs longer than the fore on a level body.
     fn hop(&mut self) {
         let fore = self.p.limb[0].max(self.p.limb[1]);
@@ -836,6 +936,19 @@ pub fn posture(g: &Genome) -> Posture {
         }
     }
     let masses = masses(g, &p);
+    // Every pair a pair's room from the next, from the hindmost forward:
+    // where two stations' natural places are closer than their legs are
+    // thick (an upright body's), they stood in one another.
+    for k in (1..STATIONS).rev() {
+        let (behind, ahead) = (stations[k], stations[k - 1]);
+        if g.limbs[k].is_none() || g.limbs[k - 1].is_none() {
+            continue;
+        }
+        let gap = p.girth[k].add(p.girth[k - 1]).mul(Fx::from_int(2));
+        if ahead.attach < behind.attach.add(gap) {
+            stations[k - 1].attach = behind.attach.add(gap);
+        }
+    }
     let mut solver = Solver {
         g,
         p,
@@ -886,6 +999,9 @@ pub fn posture(g: &Genome) -> Posture {
         solver.pose.root = solver.pose.root.min(solver.p.half_h);
         solver.pose.pitch = Fx::ZERO;
         solver.feet();
+    }
+    if g.stance != Stance::Limbless {
+        solver.spread();
     }
     solver.hop();
     solver.head();

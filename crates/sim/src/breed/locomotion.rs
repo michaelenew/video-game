@@ -260,7 +260,46 @@ pub fn at(g: &Genome, q: &Posture, share: Fx) -> Gait {
         .fold(Fx::from_int(1000), |a, b| a.min(b));
     let stride = if n > 0 && !matches!(kind, GaitKind::Slither | GaitKind::Crawl) {
         let duty = kind.duty();
-        stride.min(MAX_REACH.mul(Fx::from_int(2)).mul(shortest).div(duty))
+        let mut stride = stride.min(MAX_REACH.mul(Fx::from_int(2)).mul(shortest).div(duty));
+        // **And no further than the room between one pair's feet and the
+        // next's** (exploration 0033): a planted foot travels back half the
+        // stride's share of the duty and a swinging one forward as far, so
+        // two feet on one side never meet if each keeps within about half
+        // the clear ground between them. Past that the fore foot swept
+        // back through the hind one every step.
+        for w in pairs[..n].windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let foot = |i: usize| {
+                q.stations[i]
+                    .attach
+                    .mul(cos_turns(q.pitch))
+                    .add(q.stations[i].reach)
+            };
+            let clear = foot(a)
+                .sub(foot(b))
+                .sub(p.limb[a].add(p.limb[b]).mul(fx(3, 20)))
+                .max(fx(1, 100));
+            stride = stride.min(clear.div(duty));
+        }
+        stride
+    } else if kind == GaitKind::Crawl {
+        // A crawl's paddles keep to the same room.
+        let mut stride = stride;
+        for w in pairs[..n].windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let foot = |i: usize| {
+                q.stations[i]
+                    .attach
+                    .mul(cos_turns(q.pitch))
+                    .add(q.stations[i].reach)
+            };
+            let clear = foot(a)
+                .sub(foot(b))
+                .sub(p.limb[a].add(p.limb[b]).mul(fx(3, 20)))
+                .max(fx(1, 100));
+            stride = stride.min(clear.div(kind.duty()));
+        }
+        stride
     } else {
         stride
     };

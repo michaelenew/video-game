@@ -396,11 +396,18 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             s.neck_pitch = fx(1, 10);
             s.neck_reach = fx(1, 4);
             s.surge = len.mul(fx(1, 6));
+            // Tossed up through somebody standing, not over them: a tall
+            // body's horns went through the air above a head (exploration
+            // 0033).
+            aim = Some(Aim::Head(fx(6, 5)));
             strikers = ["horns", "head", "", ""];
             delivery = Delivery::Swept;
         }
         Charge => {
-            c.neck_pitch = fx(-1, 10);
+            // Head down before it goes (exploration 0033): wound up with
+            // the head high, a big body's head only came down once it was
+            // past somebody standing close, and the charge went over them.
+            c.neck_pitch = fx(-1, 6);
             c.tail_pitch = fx(1, 12);
             c.pitch = fx(-1, 80);
             for side in 0..2 {
