@@ -2,8 +2,8 @@
 
     art/blender.sh art/dark_being/build.py [--look out.png] [--paint] [--size 2048]
 
-On the Bulwark's skeleton (``CLASS``), the broadest in the game: the being is posed with the Dual
-mage's own pose when she casts, which is angles and so fits any skeleton
+On the Champion's skeleton (``CLASS``), as the knight is (``recipe``): the being is posed with the
+Dual mage's own pose when she casts, which is angles and so fits any skeleton
 (``view::being::BODIES``). Everything else is its own (``recipe.py``,
 ``outfit.py``).
 """
@@ -20,7 +20,7 @@ import outfit  # noqa: E402,F401
 from recipe import BODY, FIT, GIRTH, HEAD_SCALE  # noqa: E402,F401
 
 NAME = "dark_being"
-CLASS = "Bulwark"
+CLASS = "Champion"
 
 # Linear albedo, judged lit. **Obsidian**: near-black glass, glossy, so the
 # muscle's shapes are drawn by its highlights; and a little violet on its
@@ -42,7 +42,7 @@ EDGE_GLOW = False
 GLOW = (0.72, 0.42, 1.0)
 # Muscle carved into the body (``anatomy``): the masses into the game's mesh,
 # the grooves into its normal map.
-SCULPT = 1.9
+SCULPT = 1.0
 SCULPT_SHARE = 1.0
 METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.48)}
 # Violet light painted on: in the shade, and on every ridge of the muscle.

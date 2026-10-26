@@ -81,7 +81,8 @@ def _inset(grid, frame):
 
 
 def plate(name, ctrl, frame=0.012, per=3, raise_frame=0.0025, thick=0.006, bevel=0.0025, crease=24,
-          material="plate", trim="trim", joint=None, edges=(True, True, True, True), shape=None, inside=None):
+          material="plate", trim="trim", joint=None, edges=(True, True, True, True), shape=None, inside=None,
+          weld=False):
     """A faceted plate from control points ``ctrl`` (rows x columns x 3, in
     the game's frame -- or, with ``shape``, in whatever coordinates
     ``shape`` maps to it, refined there first: a plate laid on a ``Shell``
@@ -128,6 +129,13 @@ def plate(name, ctrl, frame=0.012, per=3, raise_frame=0.0025, thick=0.006, bevel
     ob.data.materials.append(mat(material))
     ob.data.materials.append(mat(trim))
     ob.data.polygons.foreach_set("material_index", kinds)
+    if weld:
+        import bmesh
+        bm = bmesh.new()
+        bm.from_mesh(ob.data)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+        bm.to_mesh(ob.data)
+        bm.free()
     _thicken_bevel(ob, thick, bevel, crease)
     return rigid(ob, joint) if joint else ob
 

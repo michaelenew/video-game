@@ -28,7 +28,7 @@ look = args[2] if len(args) > 2 else "clay"
 base = mh.Base(os.path.join(ROOT, "target/art/mh"))
 rig = mh.Rig(os.path.join(ROOT, "target/art/mh"))
 v = mh.shaped(base, BODY)
-sk = fit.Skeleton(os.path.join(ROOT, "target/art/anim.json"), "Bulwark")
+sk = fit.Skeleton(os.path.join(ROOT, "target/art/anim.json"), os.environ.get("SKELETON", "Champion"))
 verts, faces, face_uvs, uvs, W, bo, br, marks = fit.fit(base, rig, v, sk, GIRTH, HEAD_SCALE,
                                                         carried=mh.grip(base, rig, v), trunk=FIT)
 import garment as g  # noqa: E402

@@ -50,42 +50,57 @@ LIMB_R = {"upper": 0.055, "fore": 0.045, "thigh": 0.085, "shin": 0.055}
 # Masses: (name, angle, half-width deg, height, half-height, metres out,
 # squareness -- 2 is an ellipse, 4 a rounded rectangle).
 TRUNK = [
-    ("pectoral", 34.0, 40.0, 0.81, 0.19, 0.040, 2.6),
-    ("pectoral_outer", 58.0, 14.0, 0.86, 0.10, 0.012, 2.5),
-    ("abs_1", 17.0, 15.0, 0.655, 0.06, 0.011, 4.0),
-    ("abs_2", 17.0, 16.0, 0.53, 0.06, 0.012, 4.0),
-    ("abs_3", 17.0, 16.5, 0.405, 0.06, 0.012, 4.0),
-    ("abs_low", 15.0, 15.0, 0.25, 0.09, 0.007, 3.0),
-    ("oblique", 62.0, 26.0, 0.32, 0.17, 0.012, 3.0),
+    # Fading up into the collarbone rather than stopping: squarer, its
+    # top edge stood as a ledge across the chest.
+    ("pectoral", 36.0, 42.0, 0.78, 0.25, 0.028, 2.0),
+    ("pectoral_outer", 58.0, 14.0, 0.84, 0.10, 0.006, 2.2),
+    ("abs_1", 20.0, 19.0, 0.655, 0.06, 0.010, 4.0),
+    ("abs_2", 20.0, 20.0, 0.53, 0.06, 0.011, 4.0),
+    ("abs_3", 20.0, 20.0, 0.405, 0.06, 0.011, 4.0),
+    ("abs_low", 18.0, 18.0, 0.25, 0.09, 0.007, 3.0),
+    ("oblique", 64.0, 26.0, 0.26, 0.15, 0.016, 2.6),
     ("serratus", 72.0, 12.0, 0.65, 0.12, 0.006, 3.0),
     ("lat", 112.0, 34.0, 0.66, 0.26, 0.022, 3.0),
-    ("trap_upper", 135.0, 50.0, 1.06, 0.11, 0.036, 2.2),
-    ("trap_front", 80.0, 34.0, 1.06, 0.09, 0.028, 2.2),
+    # Modest: big traps, but a man's -- at more they rose into a hump that
+    # read as nothing human (the owner, 2026-10-26).
+    ("trap_upper", 140.0, 46.0, 1.04, 0.1, 0.015, 2.2),
+    ("trap_front", 85.0, 30.0, 1.04, 0.08, 0.008, 2.2),
     ("trap_mid", 168.0, 14.0, 0.84, 0.16, 0.009, 3.0),
     ("scapula", 138.0, 20.0, 0.84, 0.11, 0.010, 3.0),
     ("erector", 166.0, 10.0, 0.36, 0.26, 0.011, 3.0),
     ("glute", 150.0, 32.0, -0.10, 0.20, 0.016, 2.5),
 ]
 
+# The traps' rise at the base of the neck, metres, and how far out from the
+# middle the neck is: from there the slope falls to the point of the
+# shoulder (``sculpt``).
+TRAP_RISE = 0.034
+TRAP_NECK = 0.06
+
 # Separations: (polyline of (angle, height), half-width in metres, depth).
 TRUNK_GROOVES = [
     # Down the middle of the abdomen, and its three bands.
     ([(0, 0.16), (0, 0.76)], 0.006, 0.006),
-    ([(0, 0.592), (16, 0.586), (31, 0.60)], 0.005, 0.005),
-    ([(0, 0.468), (17, 0.462), (32, 0.475)], 0.005, 0.005),
-    ([(0, 0.342), (16, 0.338), (31, 0.35)], 0.005, 0.0045),
+    ([(0, 0.592), (19, 0.586), (37, 0.60)], 0.005, 0.005),
+    ([(0, 0.468), (20, 0.462), (38, 0.475)], 0.005, 0.005),
+    ([(0, 0.342), (19, 0.338), (37, 0.35)], 0.005, 0.0045),
     # The abdomen's outer edge.
-    ([(30, 0.72), (34, 0.50), (30, 0.30), (20, 0.14)], 0.006, 0.0045),
+    ([(37, 0.72), (41, 0.50), (36, 0.30), (24, 0.14)], 0.006, 0.0045),
     # The lower border of the chest, sweeping up into the armpit.
-    ([(3, 0.645), (22, 0.62), (42, 0.63), (58, 0.69), (68, 0.86)], 0.010, 0.016),
+    # Soft, as the classical chest is: deeper, it read as a shelf.
+    ([(3, 0.645), (22, 0.62), (42, 0.63), (58, 0.69), (68, 0.86)], 0.014, 0.008),
     # The collarbone's line, and the groove between chest and shoulder.
-    ([(10, 1.02), (30, 1.03), (48, 1.02)], 0.006, 0.0035),
+    ([(10, 1.02), (30, 1.03), (48, 1.02)], 0.008, 0.002),
     ([(50, 1.02), (60, 0.92), (66, 0.84)], 0.006, 0.006),
     # The serratus' slits, and the obliques' upper border.
     ([(64, 0.70), (78, 0.73)], 0.004, 0.004),
     ([(63, 0.62), (77, 0.65)], 0.004, 0.004),
     ([(62, 0.54), (75, 0.57)], 0.004, 0.0035),
-    ([(34, 0.46), (60, 0.50), (80, 0.48), (98, 0.42)], 0.006, 0.004),
+    ([(41, 0.46), (62, 0.50), (80, 0.48), (98, 0.42)], 0.006, 0.004),
+    # The groove from the hip bone down to the groin, under the obliques'
+    # swell, and down the sternum between the pectorals.
+    ([(66, 0.16), (48, 0.06), (22, -0.04)], 0.008, 0.006),
+    ([(0, 0.66), (0, 0.98)], 0.008, 0.004),
     # The back: the spine, the lats' edge, the shoulder blade, the traps'.
     ([(180, 0.10), (180, 1.02)], 0.011, 0.005),
     ([(96, 0.86), (106, 0.62), (124, 0.40), (150, 0.26), (176, 0.20)], 0.007, 0.0055),
@@ -200,6 +215,19 @@ def sculpt(p, W, origin, strength=1.0):
         best = np.zeros(len(q))
         for _, a, wa, hh, wh, amp, sq in TRUNK:
             best = np.maximum(best, amp * _mass(_angle(ang, a) / wa, (h - hh) / wh, sq))
+        # The traps' slope: highest at the base of the neck and falling to
+        # nothing at the point of the shoulder, so the line from neck to
+        # shoulder runs down as a man's does rather than level, a yoke (the
+        # owner, 2026-10-26: "the shoulders and traps are super weird").
+        # It is across the trunk, not round it, which the masses above
+        # cannot say.
+        reach = abs(o["arm.l"][0]) - 0.03
+        lateral = np.abs(q[:, 0])
+        k = (lateral - TRAP_NECK) / max(reach - TRAP_NECK, 1e-6)
+        k = np.clip(k, 0.0, 1.0)
+        slope = TRAP_RISE * (1 - k * k * (3 - 2 * k))
+        hk = np.clip((h - 0.82) / 0.16, 0.0, 1.0) * np.clip((1.3 - h) / 0.1, 0.0, 1.0)
+        best = np.maximum(best, slope * hk * hk * (3 - 2 * hk))
         for line, half, depth in TRUNK_GROOVES:
             pts = [(np.radians(a) * TRUNK_R, b * span) for a, b in line]
             best -= depth * _groove(u, v, pts, half)

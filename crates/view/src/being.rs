@@ -159,13 +159,14 @@ fn smoothstep(from: f32, to: f32, x: f32) -> f32 {
 pub const LAG_SECONDS: f32 = 0.12;
 
 /// Whose skeleton each being is built on, dark then light: broader than
-/// hers, because they are not her (the owner, 2026-10-25). The dark warrior
-/// has the Bulwark's -- the widest shoulders in the game, which a
-/// bodybuilder's frame needs: on the Champion's, MakeHuman's strongest man
-/// still came out slim, because the arms hang from the skeleton's shoulders
-/// however thick the body is made -- and the knight the Champion's. A pose
-/// is angles, so hers retargets onto either for free (`pose.rs`).
-pub const BODIES: [sim::Class; 2] = [sim::Class::Bulwark, sim::Class::Champion];
+/// hers, because they are not her (the owner, 2026-10-25). Both the
+/// Champion's. The dark warrior had the Bulwark's, the widest shoulders in
+/// the game, for a bodybuilder's frame; but its shoulders are far wider
+/// than any man's, and the body stretched to reach them read as "not a
+/// body but body-ish" (the owner, 2026-10-26). On the Champion's the bulk
+/// is the muscle's. A pose is angles, so hers retargets onto either for
+/// free (`pose.rs`).
+pub const BODIES: [sim::Class; 2] = [sim::Class::Champion, sim::Class::Champion];
 
 /// How far out from the body the being's arms hang at rest, in degrees:
 /// enough to clear the mass of the lats, which is what keeps a heavily built
