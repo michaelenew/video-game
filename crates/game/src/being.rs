@@ -274,11 +274,11 @@ pub fn shows(k: usize) -> bool {
 /// then light: the titan's cracks and heart, the seraph's sun and the light
 /// it gives off. Bright enough to read as light, short of where the
 /// tonemapper takes a colour to white.
-pub const GLOW: [f32; 2] = [70.0, 110.0];
+pub const GLOW: [f32; 2] = [30.0, 22.0];
 
 /// How bright a rift's shaft of light is at the crack, in the unlit
 /// colour's units.
-const BEAM_LIGHT: f32 = 2.2;
+const BEAM_LIGHT: f32 = 0.45;
 
 /// A shaft of light: a frustum along `+y` from the origin to one, a fifth
 /// as wide at the crack as at its end, fading to nothing along its length
@@ -317,7 +317,7 @@ pub fn beam(commands: &mut Commands, beings: &Beings, from: (Entity, Vec3), to: 
     let along = to - from.1;
     let length = along.length().max(0.01);
     let turn = Quat::from_rotation_arc(Vec3::Y, along / length);
-    let wide = length * 0.22;
+    let wide = length * 0.1;
     commands.entity(from.0).with_children(|c| {
         c.spawn((
             Mesh3d(beings.beam_mesh.clone()),

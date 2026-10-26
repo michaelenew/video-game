@@ -150,7 +150,7 @@ def rifts(body, r):
         t1 = np.cross(n, [0.0, 1.0, 0.0])
         t1 /= max(np.linalg.norm(t1), 1e-6)
         t2 = np.cross(n, t1)
-        for b in range(3 + i % 2):
+        for b in range(2 + i % 2):
             a = rnd.uniform(0, 2 * np.pi)
             spread = rnd.uniform(0.25, 0.6)
             d = n + spread * (np.cos(a) * t1 + np.sin(a) * t2)

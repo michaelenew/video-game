@@ -31,17 +31,17 @@ CLASS = "Champion"
 COLOURS = {
     "knit": (0.36, 0.24, 0.16),
     "knit/2": (0.36, 0.24, 0.16),
-    "knit/3": (0.80, 0.82, 0.88),      # gauntlets: plate
+    "knit/3": (0.70, 0.72, 0.78),      # gauntlets: plate
     "knit/4": (0.36, 0.24, 0.16),
-    "plate": (0.80, 0.82, 0.88),
+    "plate": (0.70, 0.72, 0.78),
     "gold": (0.90, 0.70, 0.36),
     "cloak": (0.82, 0.84, 0.88),
     "skirt": (0.70, 0.72, 0.76),
 }
 GLOW = (1.0, 0.93, 0.76)
-METAL = {"plate": (0.72, 0.2), "gold": (0.8, 0.3), "knit": (0.6, 0.25)}
+METAL = {"plate": (0.8, 0.18), "gold": (0.8, 0.3), "knit": (0.6, 0.25)}
 ART = {"shade_tint": (0.75, 0.8, 1.0), "warm": (1.12, 1.06, 0.98)}
-LUMINOUS = {"plate": 0.008, "cloak": 0.02}
+LUMINOUS = {"cloak": 0.015}
 
 
 def veins(pos):

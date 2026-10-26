@@ -38,18 +38,18 @@ COLOURS = {
     "eye/3": (0.01, 0.01, 0.015),
 }
 GLOW = (0.72, 0.42, 1.0)
-METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.22)}
+METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.3)}
 # Violet light painted on: in the shade, and on every ridge of the muscle.
 ART = {
-    "shade_tint": (1.4, 0.7, 2.6),
+    "shade_tint": (1.2, 0.8, 2.0),
     "ao_strength": 0.6,
-    "warm": (1.25, 0.9, 1.9),
-    "edge_light": 0.9,
-    "curv_gain": 9.0,
-    "top_warm": 0.3,
-    "crease_dark": 0.25,
+    "warm": (1.06, 0.9, 1.45),
+    "edge_light": 0.3,
+    "curv_gain": 8.0,
+    "top_warm": 0.1,
+    "crease_dark": 0.35,
     "trim": (1.9, 1.85, 1.8),
-    "stroke_value": 0.06,
+    "stroke_value": 0.05,
 }
 
 
@@ -89,16 +89,16 @@ def veins(pos):
             continue
         q, dn = flat[near], d[near] / radius
         # Shards: finer toward the impact.
-        gap = np.minimum(_cells(q, 70.0, 1.0), _cells(q, 34.0, 5.0) * 1.3)
-        width = 0.0022 * (1.0 - dn) + 0.0006
+        gap = np.minimum(_cells(q, 30.0, 1.0), _cells(q, 15.0, 5.0) * 1.2)
+        width = 0.0016 * (1.0 - dn) + 0.0004
         crack = np.exp(-(gap / width) ** 2)
         # A few long cracks running out from the impact: lines in angle.
         rel = q - c
         ang = np.arctan2(rel[:, 2], rel[:, 0]) + np.arctan2(rel[:, 1], np.linalg.norm(rel[:, [0, 2]], axis=1))
         rays = np.exp(-((np.sin(ang * 4.5) * dn * radius) / 0.0018) ** 2) * (dn < 0.95)
-        core = np.exp(-(dn / 0.12) ** 2)
+        core = np.exp(-(dn / 0.06) ** 2)
         fade = (1.0 - dn) ** 1.2
-        o[near] = np.maximum(o[near], np.clip(np.maximum(crack, rays * 0.9) * fade + core, 0, 1))
+        o[near] = np.maximum(o[near], np.clip(np.maximum(crack, rays * 0.7) * fade * 0.85 + core, 0, 1))
     return out
 
 
