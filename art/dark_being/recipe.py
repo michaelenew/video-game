@@ -16,27 +16,36 @@ import mh
 
 BODY = mh.macro(gender="male", age="young", muscle=1.0, weight=0.45, proportions=1.0,
                 races={"caucasian": 0.6, "african": 0.2, "asian": 0.2}) + [
-    ("torso/torso-vshape-incr.target", 0.6),
+    ("torso/torso-vshape-incr.target", 1.0),
     ("torso/torso-muscle-pectoral-incr.target", 0.5),
     ("torso/torso-muscle-dorsi-incr.target", 0.5),
     ("stomach/stomach-tone-incr.target", 1.0),
-    ("measure/measure-waist-circ-decr.target", 0.0),
+    ("measure/measure-waist-circ-decr.target", 0.7),
     ("measure/measure-hips-circ-decr.target", 0.9),
     # A statue's chest: no nipples to speak of.
     ("breast/nipple-size-decr.target", 1.0),
     ("breast/nipple-point-decr.target", 1.0),
+    # A man's neck: thick and short, the traps rising into it. A thin
+    # column on a big body read as a monster's (2026-10-26).
+    ("neck/neck-scale-horiz-incr.target", 0.8),
+    ("neck/neck-scale-depth-incr.target", 0.6),
+    ("neck/neck-scale-vert-decr.target", 0.5),
 ] + [(f"armslegs/{s}-{part}-incr.target", w) for s in "lr" for part, w in (
-    ("upperarm-muscle", 1.0), ("upperarm-shoulder-muscle", 1.0), ("lowerarm-muscle", 0.8),
+    ("upperarm-muscle", 0.7), ("upperarm-shoulder-muscle", 0.4), ("lowerarm-muscle", 0.6),
     ("upperleg-muscle", 0.5), ("lowerleg-muscle", 0.6))]
 
 # Built up evenly, one value down the whole trunk and one down each limb:
 # girths that differ step at the joint between them.
-GIRTH = {"root": 1.06, "spine": 1.08, "chest": 1.1, "arm.l": 1.22, "arm.r": 1.22,
-         "forearm.l": 1.15, "forearm.r": 1.15, "thigh.l": 1.03, "thigh.r": 1.03,
+# The trunk's taper is MakeHuman's (``BODY``: the V, the waist), not the
+# girth's: built up evenly it read as a box (2026-10-26, beside a scan of
+# the Lincoln Mars).
+GIRTH = {"root": 1.0, "spine": 1.0, "chest": 1.02, "arm.l": 1.06, "arm.r": 1.06,
+         "forearm.l": 1.06, "forearm.r": 1.06, "thigh.l": 1.03, "thigh.r": 1.03,
          "shin.l": 1.04, "shin.r": 1.04}
 
 # The trunk fitted plainly, as the knight's is: smoothing, widening and
 # relaxing it (``fit.fit``'s ``trunk``) were for the Bulwark's shoulders, and
 # on the Champion's they pressed a crease across the top of the chest.
 FIT = None
-HEAD_SCALE = 0.94
+# Full size: a small head on a big body is a monster's, not a man's.
+HEAD_SCALE = 1.0

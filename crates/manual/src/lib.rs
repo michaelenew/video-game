@@ -1068,6 +1068,10 @@ pub const SECTIONS: &[Section] = &[
                 "Draw one of the Dual mage's two beings on its own, whole and painted, standing on her floor rather than rising out of the seal -- how each is looked at before they are halved. Pair it with SHOT_PORTRAIT to walk round it.",
             ),
             e(
+                "SHOT_CLAY=1",
+                "With SHOT_BEING, draw the being in plain grey clay -- no colour, glow or gloss -- so its form can be judged alone, beside a scan of a statue in the same light.",
+            ),
+            e(
                 "SHOT_WEIGHT=<n>",
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
             ),

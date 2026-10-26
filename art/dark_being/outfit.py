@@ -171,7 +171,7 @@ def kilt(body, r):
     reference's hangs (the coat's rig
     swings four)."""
     return coat_tails(body, r, spans=[(-40, 40, 0.62), (48, 132, 0.60), (140, 220, 0.62), (228, 312, 0.60)],
-                      material="kilt", flare=0.24, at=0.0, ripple=0.12)
+                      material="kilt", flare=0.1, at=0.0, ripple=0.12)
 
 
 def eyes_dark(body, r):

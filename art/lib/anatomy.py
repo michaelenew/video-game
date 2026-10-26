@@ -74,8 +74,8 @@ TRUNK = [
 # The traps' rise at the base of the neck, metres, and how far out from the
 # middle the neck is: from there the slope falls to the point of the
 # shoulder (``sculpt``).
-TRAP_RISE = 0.034
-TRAP_NECK = 0.06
+TRAP_RISE = 0.05
+TRAP_NECK = 0.05
 
 # Separations: (polyline of (angle, height), half-width in metres, depth).
 TRUNK_GROOVES = [
@@ -117,7 +117,7 @@ TRUNK_GROOVES = [
 # out, squareness). Limbs: upper (shoulder to elbow), fore (elbow to wrist),
 # thigh, shin.
 LIMB = [
-    ("deltoid", "upper", 60.0, 125.0, 0.18, 0.3, 0.022, 2.2),
+    ("deltoid", "upper", 60.0, 125.0, 0.18, 0.3, 0.016, 2.2),
     ("biceps", "upper", -5.0, 52.0, 0.56, 0.34, 0.026, 2.3),
     ("triceps", "upper", 175.0, 60.0, 0.46, 0.36, 0.024, 2.3),
     ("brachioradialis", "fore", 55.0, 42.0, 0.20, 0.34, 0.018, 2.3),

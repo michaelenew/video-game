@@ -326,8 +326,19 @@ fn ready(
                 if base.emissive_texture.is_some() {
                     base.emissive = LinearRgba::rgb(1.0, 1.0, 1.0) * crate::being::GLOW[k];
                 }
+                if crate::being::clay() {
+                    base.base_color = Color::srgb(0.72, 0.7, 0.67);
+                    base.base_color_texture = None;
+                    base.emissive = LinearRgba::BLACK;
+                    base.emissive_texture = None;
+                    base.metallic = 0.0;
+                    base.metallic_roughness_texture = None;
+                    base.perceptual_roughness = 0.7;
+                }
                 let mut skin = still::skin(base);
-                skin.extension.lustre = crate::being::LUSTRE[k];
+                if !crate::being::clay() {
+                    skin.extension.lustre = crate::being::LUSTRE[k];
+                }
                 skins.add(skin)
             });
             crate::being::dress(&mut commands, entity, &beings, owner, k, painted);

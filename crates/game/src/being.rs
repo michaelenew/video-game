@@ -263,6 +263,14 @@ pub fn whole() -> bool {
     looked_at() > 0.0
 }
 
+/// `SHOT_CLAY=1`, with `SHOT_BEING`: the being drawn in plain grey clay,
+/// no colour, glow or gloss -- its form alone, to set beside a scan of a
+/// statue in the same light. Read once.
+pub fn clay() -> bool {
+    static CLAY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *CLAY.get_or_init(|| crate::platform::env("SHOT_CLAY").is_some())
+}
+
 /// Whether being `k` (0 dark, 1 light) is drawn: both, unless the other is
 /// being looked at on its own.
 pub fn shows(k: usize) -> bool {
