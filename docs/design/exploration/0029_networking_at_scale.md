@@ -307,7 +307,53 @@ The harness to eight, 600 frames, apart on a 450 m grid:
 left growing is the tick: every peer still simulates every fighter in the
 world -- step 3's local work.
 
-## 12 · Open
+## 12 · Groups, not one world (2026-10-26, the owner's call)
+
+Many fights at once had two roads. **One world of regions**: a pool of hunt
+slots in the snapshot, each peer working only its regions -- no seams, but
+the creature and hunt code assumes one hunt in about 21,000 lines
+(`self.lore` alone 547 times). **Groups**: the players near enough to
+touch share a world, which is exactly the world a match has always been --
+eight fighters, one hunt, one frame of reference -- run in lockstep among
+its members; far groups share nothing, so a fight each runs at once with
+no new simulation of fights at all. The cost is the seam: groups **merge**
+when they come near, at an agreed frame, and **split** when they part;
+until a merge, two groups near each other see one another but cannot
+touch. The owner chose groups.
+
+**G1, the simulation's half** (`sim::group`, `tests/groups.rs`):
+
+- **A split needs nothing new**: each side goes on with a copy of the
+  world, the other side's fighters fed `Travel::LEFT` from then on -- what
+  a seat whose player has gone has always been.
+- **A merge** (`group::merge`) makes two groups' worlds one: the base is
+  the one in a hunt if either is; the other's fighters go into its free
+  slots in its coordinates (`World::shift` by the difference of the two
+  frames' origins), with their effects, bolts, gusts, shards and ground,
+  and what they say of each other (who holds, whose bleed, whose curse)
+  said of their new slots. **Two hunts are refused**, as are two places
+  with no map in common and more fighters than slots.
+- **`World::ids`**: who each slot is, beyond the world -- what a merge
+  keeps a fighter by when it moves them.
+
+What the tests hold: a group of two in the town and one on the High Plane,
+300 m up, half a kilometre off and fifty frames ahead, merge with everybody
+exactly where they were on the map; and **the moved fighters then play on
+for 300 frames exactly as their own world would have played them**, frame
+difference and all. Split four into two pairs, play them apart 200 frames,
+merge again: everybody back where their own group had them, by id.
+
+**What the first version of the split test found**, and why groups are
+right: in *one* world, two fighters a hundred metres off walked into a
+creature's range, which started its hunt and moved the frame of reference
+for everybody -- and a fighter who was nowhere near moved a centimetre
+differently for it. A world is everybody's; a group's is only its own.
+
+Next, **G2**: the network half -- each peer's group, a lockstep session
+among its members, heartbeats (where each player is) to everybody else,
+and the merge and split agreed on the wire.
+
+## 13 · Open
 
 - **NET-3** The See tier's distance and rate: how far should another player
   be drawn, and how smoothly?

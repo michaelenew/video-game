@@ -1723,6 +1723,12 @@ pub struct World {
     /// (`World::step_hall`); everybody in the hall shares it. Hashed while
     /// there are any.
     pub dummies: [u8; MAX_PLAYERS],
+    /// **Who each slot is**, beyond this world (2026-10-26): a player's id,
+    /// the same in every group's world they are ever in, or nought for a
+    /// slot nobody has been given. What a merge of two groups' worlds keeps
+    /// a fighter by when it moves them into a free slot (`crate::group`).
+    /// Hashed while any is set.
+    pub ids: [u16; MAX_PLAYERS],
     /// **The valley's journey** (`crate::valley`): whether this world is the
     /// valley, which creatures have been beaten on the way, which seam you
     /// came in by, each fighter's last cairn. All zero, and not hashed,
@@ -1817,6 +1823,7 @@ impl World {
             seats: MAX_PLAYERS as u8,
             edits: crate::oven::Edits::NONE,
             dummies: [0; MAX_PLAYERS],
+            ids: [0; MAX_PLAYERS],
             valley: crate::valley::Journey::default(),
             away: Fighters::EMPTY,
             starting: Fighters::EMPTY,
@@ -4780,6 +4787,12 @@ impl World {
         let mut h = Fnv::new();
         h.write_u64(tuning);
         h.write_u32(self.frame);
+        if self.ids != [0; MAX_PLAYERS] {
+            h.write_u32(0x6964_7321);
+            for id in self.ids {
+                h.write_u32(id as u32);
+            }
+        }
         if self.dummies != [0; MAX_PLAYERS] {
             h.write_u32(0x6475_6d79);
             for d in self.dummies {
