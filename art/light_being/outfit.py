@@ -75,7 +75,7 @@ def cuirass(body, r):
     """The trunk's plate, shaped as an armourer shapes it rather than as the
     body is -- an hourglass, in hard at the navel -- and built up as the
     reference's is (the module's list); behind, a backplate with a ridge
-    down the spine; below, the fauld's three lames over the hips; a sun at
+    down the spine; below, the fauld's four lames round the hips; a sun at
     the breast (``build.veins``)."""
     ax = trunk_axis(r)
     hip = r.o["thigh.l"][1]
@@ -178,12 +178,14 @@ def cuirass(body, r):
     hi = (neck - 0.02 - 0.04 * (a / 40.0) ** 2).clip(H - 0.06, None)
     hi = np.where(a > 60, H - 0.06 - 0.11 * plate.smoothstep(60, 100, a), hi)
     out += armour("backplate", ax, us, vs, rad, np.full(len(us), waist), hi, thick=0.007, rim=0.0075, sharp=24)
-    # The fauld: three lames from the waist down over the hips, each lapping
+    # The fauld: lames from the waist down over the hips, each lapping
     # the one below and flaring past it.
-    for k in range(3):
+    # Four, all the way round: stopping at the sides, the hose showed over
+    # the seat (2026-10-26).
+    for k in range(4):
         top = waist + 0.01 - k * 0.075
         bot = top - 0.085
-        us = np.linspace(-120, 120, 49)
+        us = np.linspace(-180, 180, 73)[:-1]
         vv = np.linspace(bot, top, 8)
         hh = vv / H
         wd = np.interp(hh, keys[:, 0], keys[:, 1]) + 0.006 + 0.004 * k + 0.03 * (top - vv)
@@ -192,7 +194,7 @@ def cuirass(body, r):
         dr = plate.designed(us, vv, wd, fr, bk)
         br = plate.radii(body, ax, vv, us, keep=None, smooth_u=6, smooth_v=2, stiff=8)
         out += armour(f"fauld{k}", ax, us, vv, np.maximum(dr, br + 0.02), np.full(len(us), bot),
-                      np.full(len(us), top), thick=0.005, rim=0.006)
+                      np.full(len(us), top), closed=True, thick=0.005, rim=0.006)
     EXTRAS["sun"] = shell(np.array([0.0, 0.8 * H, 0.024])).tolist()
     return out
 
@@ -299,10 +301,12 @@ def legs(body, r):
             out.append(facet.plate(f"tasset{k}.{s}", facet.round_limb(thigh, rows), frame=0.008, joint=th,
                                    inside=thigh.o))
         q = facet.limb_radius(body, r, th, sh, 0.55, 0.016) / 0.92
-        ring = (-60.0, -15.0, 30.0, 75.0, 120.0, 165.0, 210.0)
+        # All the way round: open at the back, the hose under it showed.
+        ring = tuple(float(p) for p in range(0, 361, 45))
         rows = [[(p, h, q) for p in ring] for h in (-0.3 * T, -0.86 * T)]
         out.append(facet.plate(f"cuisse.{s}", facet.round_limb(thigh, rows), frame=0.007, joint=th,
-                               inside=thigh.o - thigh.m[1] * 0.6 * T))
+                               edges=(True, True, False, False), inside=thigh.o - thigh.m[1] * 0.6 * T,
+                               weld=True))
         shin = facet.bone_frame(r, sh, ft, lateral)
         S = float(np.linalg.norm(r.o[ft] - r.o[sh]))
         knee = facet.limb_radius(body, r, sh, ft, 0.05, 0.022) / 0.92
@@ -384,7 +388,9 @@ def cloak(body, r):
 GARMENTS = {
     "legs": legs, "cuirass": cuirass, "pauldrons": pauldrons, "arms": arms, "helm": helm, "cloak": cloak,
 }
-WARDROBE = list(GARMENTS)
+# Not the cloak, for now: cut from the inflated body it hung as a lumpy
+# brown sack down the back (2026-10-26), and it comes back made properly.
+WARDROBE = [n for n in GARMENTS if n != "cloak"]
 
 
 def masks(body, r):
