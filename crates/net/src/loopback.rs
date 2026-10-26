@@ -331,3 +331,157 @@ impl<L: Line> Line for Lossy<L> {
         self.line.recv()
     }
 }
+
+/// **What crossed a line**, counted: bytes and packets each way. Shared, so
+/// the load harness (`bin/load.rs`) reads a peer's totals while its lines
+/// are inside the session.
+#[derive(Default, Debug)]
+pub struct Meter {
+    pub sent_bytes: std::sync::atomic::AtomicU64,
+    pub sent_packets: std::sync::atomic::AtomicU64,
+    pub got_bytes: std::sync::atomic::AtomicU64,
+    pub got_packets: std::sync::atomic::AtomicU64,
+    /// Bytes sent, by the packet's first byte (its kind, in `net::region`'s
+    /// packets), the first eight kinds.
+    pub sent_by_kind: [std::sync::atomic::AtomicU64; 8],
+}
+
+impl Meter {
+    /// Bytes sent and received, so far.
+    pub fn bytes(&self) -> (u64, u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.sent_bytes.load(Relaxed), self.got_bytes.load(Relaxed))
+    }
+
+    /// Packets sent and received, so far.
+    pub fn packets(&self) -> (u64, u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (
+            self.sent_packets.load(Relaxed),
+            self.got_packets.load(Relaxed),
+        )
+    }
+}
+
+/// **A line that counts what crosses it** into a [`Meter`].
+pub struct Metered<L: Line> {
+    pub line: L,
+    meter: Arc<Meter>,
+}
+
+impl<L: Line> Metered<L> {
+    pub fn new(line: L, meter: Arc<Meter>) -> Metered<L> {
+        Metered { line, meter }
+    }
+}
+
+impl<L: Line> Line for Metered<L> {
+    fn offer(&mut self) {
+        self.line.offer();
+    }
+    fn answer(&mut self, offer: &str) {
+        self.line.answer(offer);
+    }
+    fn accept(&mut self, answer: &str) {
+        self.line.accept(answer);
+    }
+    fn description(&mut self, now_ms: u64) -> Option<String> {
+        self.line.description(now_ms)
+    }
+    fn state(&mut self) -> LineState {
+        self.line.state()
+    }
+    fn send(&mut self, packet: &[u8]) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.meter
+            .sent_bytes
+            .fetch_add(packet.len() as u64, Relaxed);
+        self.meter.sent_packets.fetch_add(1, Relaxed);
+        if let Some(k) = packet
+            .first()
+            .and_then(|&k| self.meter.sent_by_kind.get(k as usize))
+        {
+            k.fetch_add(packet.len() as u64, Relaxed);
+        }
+        self.line.send(packet);
+    }
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        use std::sync::atomic::Ordering::Relaxed;
+        let got = self.line.recv()?;
+        self.meter.got_bytes.fetch_add(got.len() as u64, Relaxed);
+        self.meter.got_packets.fetch_add(1, Relaxed);
+        Some(got)
+    }
+}
+
+/// **A clock of ticks** that [`Delayed`] lines read: the load harness moves
+/// it on once a round, so a delay is in frames whatever the machine's speed.
+#[derive(Clone, Default)]
+pub struct Ticks(Arc<std::sync::atomic::AtomicU32>);
+
+impl Ticks {
+    pub fn now(&self) -> u32 {
+        self.0.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn tick(&self) {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// **A line with a trip time**: what is sent is held `delay` ticks of a
+/// [`Ticks`] clock before it goes, the way a real line takes half a ping.
+pub struct Delayed<L: Line> {
+    pub line: L,
+    clock: Ticks,
+    delay: u32,
+    held: VecDeque<(u32, Vec<u8>)>,
+}
+
+impl<L: Line> Delayed<L> {
+    pub fn new(line: L, clock: Ticks, delay: u32) -> Delayed<L> {
+        Delayed {
+            line,
+            clock,
+            delay,
+            held: VecDeque::new(),
+        }
+    }
+
+    /// Everything whose time has come, onto the line.
+    fn release(&mut self) {
+        let now = self.clock.now();
+        while self.held.front().is_some_and(|(at, _)| *at <= now) {
+            if let Some((_, p)) = self.held.pop_front() {
+                self.line.send(&p);
+            }
+        }
+    }
+}
+
+impl<L: Line> Line for Delayed<L> {
+    fn offer(&mut self) {
+        self.line.offer();
+    }
+    fn answer(&mut self, offer: &str) {
+        self.line.answer(offer);
+    }
+    fn accept(&mut self, answer: &str) {
+        self.line.accept(answer);
+    }
+    fn description(&mut self, now_ms: u64) -> Option<String> {
+        self.line.description(now_ms)
+    }
+    fn state(&mut self) -> LineState {
+        self.line.state()
+    }
+    fn send(&mut self, packet: &[u8]) {
+        self.held
+            .push_back((self.clock.now() + self.delay, packet.to_vec()));
+        self.release();
+    }
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        self.release();
+        self.line.recv()
+    }
+}

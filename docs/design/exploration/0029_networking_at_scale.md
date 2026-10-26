@@ -1,5 +1,5 @@
 ---
-status: exploration — diagnosis measured, plan proposed, NET-1 to NET-4 open
+status: exploration — diagnosis measured, plan proposed; NET-1 and NET-2 answered 2026-10-26 (peer-to-peer only; tens in a world, eight to a fight); step 1, the load harness, next
 started: 2026-10-25
 ---
 
@@ -189,15 +189,52 @@ Two players today would notice nothing until step 3, and then only a little
 less waiting; the gain is in what becomes possible, and in numbers the
 harness can show.
 
-## 8 · Open
+## 8 · Answered (2026-10-26)
 
-- **NET-1** Is there a server of ours -- a relay that forwards, stores and
-  settles, simulating nothing -- or is the world peer-to-peer to the end?
-- **NET-2** The target: how many players in one world, and how many in one
-  fight? (Tens in a fight is a design problem -- a hundred people who can
-  all hit each other cannot be cheap however it is networked; EVE slows the
-  clock in such a place. Hundreds in a world is the networking problem this
-  note is about.)
+- **NET-1: peer-to-peer only.** No server of ours, not even a relay. Empty
+  regions, disputes and discovery each need a peer-to-peer answer (§6), and
+  step 6 is those answers.
+- **NET-2: tens of players in a world, eight in a fight.** Eight is the size
+  every per-region budget is set for: a region's rollback must fit eight
+  fighters and its fight, and the harness measures up to it.
+- **Next: the load harness** (§7, step 1).
+
+## 9 · The load harness, first run (2026-10-26)
+
+`cargo run --release -p net --bin load` (`crates/net/src/bin/load.rs`): bot
+peers in the valley's town on simulated lines -- each packet held three
+frames each way (a 100 ms ping), one in thirty lost -- a bot's input held a
+quarter to two-thirds of a second and then changed. Fighters **together**
+(3 m apart) or **apart** (300 m, different regions). Per peer, 900 frames:
+
+| netcode | layout | n | up KB/s | rollbacks/s | tick p50 / p99 µs |
+| --- | --- | --- | --- | --- | --- |
+| GGRS | together | 2 / 3 / 4 | 3.5 / 7.7 / 12.2 | 1.1 / 2.9 / 4.8 | ~100 / ~400 |
+| GGRS | apart | 2 / 3 / 4 | 3.5 / 7.7 / 12.2 | 1.1 / 2.9 / 4.8 | ~180 / ~900 |
+| regions | together | 2 / 3 / 4 | 5.7 / 11.5 / 17.4 | 2.2 / 4.3 / 6.3 | ~40 / ~200 |
+| regions | apart | 2 / 3 / 4 | 13.1 / 34.4 / 30.3 | 9.5 / 16.4 / 9.5 | ~130 / ~1,100 |
+
+What it says:
+
+- **GGRS is exactly §3**: about 4 KB/s up per other player, and rollbacks
+  in proportion to them, whether they are 3 m away or 300.
+- **The region session, as built, does not yet use distance at all -- and
+  apart is worse.** By packet kind, apart at n = 3: inputs 10.2 KB/s (the
+  same as together: **every peer's inputs go to every line, every frame**),
+  outcomes 22.9 KB/s (**outcomes reach peers 300 m off**, two hexagons
+  away, who are no neighbour of anything they stand in), books 1.3. And
+  taking an outcome is a rollback, which is why apart rolls back more.
+- Four is all the snapshot seats (`MAX_PLAYERS`), so the curves stop there;
+  that is step 2's to lift.
+
+So before the game can move onto it, the region session needs three
+changes, each measured by this table: inputs only to peers who share a
+region (and a slow heartbeat to the rest, which is also where the See
+tier's ghost goes); outcomes only to a peer standing next to the region;
+and an outcome that changes nothing taken without a rollback.
+
+## 10 · Open
+
 - **NET-3** The See tier's distance and rate: how far should another player
   be drawn, and how smoothly?
 - **NET-4** Is the region size right for the world as it is now (96 m
