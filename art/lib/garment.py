@@ -158,7 +158,44 @@ def thicken(ob, thickness, rim=True):
     m.use_rim = rim
     m.use_even_offset = True
     m.use_quality_normals = True
+    # Even offset divides by the angle between faces; at a pinched corner
+    # that flung a cloak's vertex nine metres (2026-10-26). Clamped to
+    # twice the edges' length, a corner cannot outrun its neighbours.
+    m.thickness_clamp = 2.0
     return apply(ob, m)
+
+
+def tame(ob, rounds=4):
+    """Pull back any vertex flung far from every one of its neighbours --
+    the odd spike a decimation's collapse or a solidify's corner leaves (a
+    cloak's vertex nine metres off, 2026-10-26) -- to their middle."""
+    me = ob.data
+    n = len(me.vertices)
+    if not n or not len(me.edges):
+        return ob
+    co = np.zeros(n * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    ed = np.zeros(len(me.edges) * 2, int)
+    me.edges.foreach_get("vertices", ed)
+    ed = ed.reshape(-1, 2)
+    for _ in range(rounds):
+        length = np.linalg.norm(co[ed[:, 0]] - co[ed[:, 1]], axis=1)
+        typical = np.median(length)
+        total = np.zeros_like(co)
+        count = np.zeros(n)
+        np.add.at(total, ed[:, 0], co[ed[:, 1]])
+        np.add.at(total, ed[:, 1], co[ed[:, 0]])
+        np.add.at(count, ed[:, 0], 1)
+        np.add.at(count, ed[:, 1], 1)
+        mid = total / np.maximum(count, 1)[:, None]
+        far = (count > 0) & (np.linalg.norm(co - mid, axis=1) > 8 * typical + 0.02)
+        if not far.any():
+            break
+        co[far] = mid[far]
+    me.vertices.foreach_set("co", co.ravel())
+    me.update()
+    return ob
 
 
 def subdivide(ob, levels=1):

@@ -15,6 +15,7 @@ painted, exported. What differs is a class's *spec*, a module with:
   frame, metres) to 0..1, painted into the glow at the texture's own
   resolution -- light showing through cracks, sharp where a mask on the
   vertices would be soft;
+- ``EDGE_GLOW`` (optional, default True): whether honed edges shine.
 - ``LUMINOUS`` (optional): material -> how much of its own painted colour
   it gives off as light, for a body that is light rather than lit;
 - ``SCULPT`` (optional): how much muscle to carve into the body
@@ -22,7 +23,7 @@ painted, exported. What differs is a class's *spec*, a module with:
   it into a dense copy the body's normal map is baked from (``sculpt``);
 - ``outfit``: a module with ``dress(body, rig, only)``.
 
-    art/blender.sh art/<class>/build.py [--look out.png] [--paint] [--size 2048]
+    art/blender.sh art/<class>/build.py [--look out.png [--view h,d,lens,at;angle;...]] [--paint] [--size 2048]
 """
 
 import json
@@ -90,6 +91,7 @@ def sculpt(ob, bo, amount, game_share=0.65):
         o.data.vertices.foreach_get("normal", nb)
         n = g.b2g(nb.reshape(-1, 3))
         d = anatomy.sculpt(p, g.weights_of(o), bo, amount * share)
+        d = anatomy.relax(d, anatomy.mesh_edges(o.data), rounds=3 if o is hi else 2)
         o.data.vertices.foreach_set("co", g.g2b(p + n * d[:, None]).ravel())
         o.data.update()
 
@@ -162,7 +164,10 @@ def finish(spec, bo, br, size):
             images.append(paint.to_png(p["normal"], os.path.join(tex, f"{name}_normal.jpg"), srgb=False,
                                        quality=95))
             entry["normal"] = len(images) - 1
-        shine = paint.glow(p, spec.GLOW)
+        # Honed edges shine (``paint.glow``) unless the spec says not:
+        # on a being every plate's rim is an edge, and lit they read as
+        # white wire (2026-10-26).
+        shine = paint.glow(p, spec.GLOW) if getattr(spec, "EDGE_GLOW", True) else None
         veins = getattr(spec, "veins", None)
         if veins is not None:
             v = np.clip(veins(p["pos"]), 0, 1)[..., None] * p["covered"][..., None]
@@ -273,7 +278,16 @@ def build(spec):
                 if m.name in spec.COLOURS:
                     b.inputs["Base Color"].default_value = (*spec.COLOURS[m.name], 1)
         stage.lights()
-        stage.turnaround(os.path.join(ROOT, look[0]))
+        # ``--view height,distance,lens,look_at,angle;angle...``: a close
+        # look at one piece, framed as its reference is.
+        view = _opt("--view")
+        if view:
+            nums, _, angles = view[0].partition(";")
+            h, d, lens, at = (float(x) for x in nums.split(","))
+            stage.turnaround(os.path.join(ROOT, look[0]), angles=tuple(int(a) for a in angles.split(";")),
+                             size=(560, 640), height=h, distance=d, lens=lens, look_at=at)
+        else:
+            stage.turnaround(os.path.join(ROOT, look[0]))
     if "--no-export" not in _args():
         size = int((_opt("--size") or ["2048"])[0])
         finish(spec, bo, br, size)

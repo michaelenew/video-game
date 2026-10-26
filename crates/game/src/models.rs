@@ -321,8 +321,11 @@ fn ready(
             let painted = crate::being::whole().then(|| {
                 base.reflectance = 0.12;
                 // Its glow is light, in the camera's exposure: at the
-                // file's factor of one it would not show.
-                base.emissive = LinearRgba::rgb(1.0, 1.0, 1.0) * crate::being::GLOW[k];
+                // file's factor of one it would not show. Only what a glow
+                // texture says glows: with none, the factor lights it all.
+                if base.emissive_texture.is_some() {
+                    base.emissive = LinearRgba::rgb(1.0, 1.0, 1.0) * crate::being::GLOW[k];
+                }
                 let mut skin = still::skin(base);
                 skin.extension.lustre = crate::being::LUSTRE[k];
                 skins.add(skin)

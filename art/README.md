@@ -12,11 +12,13 @@ art/blender.sh art/champion/build.py          # the Champion -> champion.glb
 art/blender.sh art/elementalist/build.py      # the Elementalist -> elementalist.glb
 art/blender.sh art/blood_mage/build.py        # the Blood mage -> blood_mage.glb
 art/blender.sh art/dual_mage/build.py         # the Dual mage -> dual_mage.glb
-art/blender.sh art/dark_being/build.py        # the void titan behind her -> dark_being.glb
-art/blender.sh art/light_being/build.py       # the solar seraph behind her -> light_being.glb
+art/blender.sh art/dark_being/build.py        # the obsidian titan behind her -> dark_being.glb
+art/blender.sh art/light_being/build.py       # the knight of light behind her -> light_being.glb
 art/blender.sh art/reaver/build.py --look target/art/look.png   # and a turnaround
 art/blender.sh art/reaver/build.py --paint    # only repaint and export the last dressed model
 art/blender.sh art/reaver/build.py --only hood,eyes --no-export --look x.png   # try a few pieces
+art/blender.sh art/light_being/build.py --only pauldrons --no-export --look x.png --view "1.55,1.5,50,1.4;0;35"
+                                              # one piece up close: camera height, distance, lens, aim; angles
 art/blender.sh art/reaver/body_check.py target/art/body.png run_forward 6   # the bare body, posed
 ```
 
@@ -30,6 +32,18 @@ strap, a band, a cape, a collar, boots, sleeves, a jerkin, coat tails, hair,
 eyes, the body's skin and glove masks and the skin nothing sees. The
 material the exporter names `team` is the one the game dyes a seat's
 colour.
+
+Armour has three tools, by what it is. `lib/hard.py` is forged metal on a
+limb (a band, rivets, a rolled rim). `lib/plate.py` is a smooth plate laid
+round the body at its own radius (a vambrace, a helm's egg). `lib/facet.py`
+is **faceted** plate, the kind a game's knight is made of: a coarse grid of
+control points written by hand, every quad a flat face, a frame of trim round
+its border, bevelled where it folds -- on a limb (`round_limb`, in the frame
+the limb is seen in, `rest_frame`) or on a faceted trunk (`Shell`).
+"Angular" in a reference means a few broad flat planes with crisp edges and
+points at the silhouette, not ridges added to a rounded shape (the owner,
+2026-10-26): match a reference piece by piece, each piece in its own close
+render (`--view`), before putting them together.
 
 `build.py` needs the game's skeleton, which the animation exporter writes:
 `cargo run -p anim --bin export -- target/art/anim.json`. A full build is

@@ -50,17 +50,17 @@ LIMB_R = {"upper": 0.055, "fore": 0.045, "thigh": 0.085, "shin": 0.055}
 # Masses: (name, angle, half-width deg, height, half-height, metres out,
 # squareness -- 2 is an ellipse, 4 a rounded rectangle).
 TRUNK = [
-    ("pectoral", 34.0, 38.0, 0.82, 0.18, 0.030, 3.0),
+    ("pectoral", 34.0, 40.0, 0.81, 0.19, 0.040, 2.6),
     ("pectoral_outer", 58.0, 14.0, 0.86, 0.10, 0.012, 2.5),
-    ("abs_1", 17.0, 15.0, 0.655, 0.06, 0.008, 4.0),
-    ("abs_2", 17.0, 16.0, 0.53, 0.06, 0.009, 4.0),
-    ("abs_3", 17.0, 16.5, 0.405, 0.06, 0.009, 4.0),
+    ("abs_1", 17.0, 15.0, 0.655, 0.06, 0.011, 4.0),
+    ("abs_2", 17.0, 16.0, 0.53, 0.06, 0.012, 4.0),
+    ("abs_3", 17.0, 16.5, 0.405, 0.06, 0.012, 4.0),
     ("abs_low", 15.0, 15.0, 0.25, 0.09, 0.007, 3.0),
     ("oblique", 62.0, 26.0, 0.32, 0.17, 0.012, 3.0),
     ("serratus", 72.0, 12.0, 0.65, 0.12, 0.006, 3.0),
     ("lat", 112.0, 34.0, 0.66, 0.26, 0.022, 3.0),
-    ("trap_upper", 135.0, 50.0, 1.13, 0.13, 0.040, 2.2),
-    ("trap_front", 80.0, 34.0, 1.14, 0.10, 0.032, 2.2),
+    ("trap_upper", 135.0, 50.0, 1.06, 0.11, 0.036, 2.2),
+    ("trap_front", 80.0, 34.0, 1.06, 0.09, 0.028, 2.2),
     ("trap_mid", 168.0, 14.0, 0.84, 0.16, 0.009, 3.0),
     ("scapula", 138.0, 20.0, 0.84, 0.11, 0.010, 3.0),
     ("erector", 166.0, 10.0, 0.36, 0.26, 0.011, 3.0),
@@ -77,7 +77,7 @@ TRUNK_GROOVES = [
     # The abdomen's outer edge.
     ([(30, 0.72), (34, 0.50), (30, 0.30), (20, 0.14)], 0.006, 0.0045),
     # The lower border of the chest, sweeping up into the armpit.
-    ([(3, 0.66), (22, 0.635), (42, 0.645), (58, 0.70), (68, 0.86)], 0.009, 0.013),
+    ([(3, 0.645), (22, 0.62), (42, 0.63), (58, 0.69), (68, 0.86)], 0.010, 0.016),
     # The collarbone's line, and the groove between chest and shoulder.
     ([(10, 1.02), (30, 1.03), (48, 1.02)], 0.006, 0.0035),
     ([(50, 1.02), (60, 0.92), (66, 0.84)], 0.006, 0.006),
@@ -87,7 +87,7 @@ TRUNK_GROOVES = [
     ([(62, 0.54), (75, 0.57)], 0.004, 0.0035),
     ([(34, 0.46), (60, 0.50), (80, 0.48), (98, 0.42)], 0.006, 0.004),
     # The back: the spine, the lats' edge, the shoulder blade, the traps'.
-    ([(180, 0.10), (180, 1.02)], 0.007, 0.007),
+    ([(180, 0.10), (180, 1.02)], 0.011, 0.005),
     ([(96, 0.86), (106, 0.62), (124, 0.40), (150, 0.26), (176, 0.20)], 0.007, 0.0055),
     ([(124, 0.92), (120, 0.80), (132, 0.70), (152, 0.72), (162, 0.84), (156, 0.96)], 0.005, 0.0045),
     ([(180, 0.62), (160, 0.80), (140, 0.97)], 0.006, 0.004),
@@ -102,12 +102,12 @@ TRUNK_GROOVES = [
 # out, squareness). Limbs: upper (shoulder to elbow), fore (elbow to wrist),
 # thigh, shin.
 LIMB = [
-    ("deltoid", "upper", 60.0, 125.0, 0.16, 0.28, 0.026, 2.2),
-    ("biceps", "upper", -5.0, 48.0, 0.56, 0.32, 0.016, 2.5),
-    ("triceps", "upper", 175.0, 55.0, 0.46, 0.34, 0.014, 2.5),
-    ("brachioradialis", "fore", 55.0, 38.0, 0.20, 0.32, 0.012, 2.5),
-    ("flexors", "fore", -45.0, 55.0, 0.28, 0.32, 0.009, 2.5),
-    ("extensors", "fore", 150.0, 45.0, 0.28, 0.32, 0.008, 2.5),
+    ("deltoid", "upper", 60.0, 125.0, 0.18, 0.3, 0.022, 2.2),
+    ("biceps", "upper", -5.0, 52.0, 0.56, 0.34, 0.026, 2.3),
+    ("triceps", "upper", 175.0, 60.0, 0.46, 0.36, 0.024, 2.3),
+    ("brachioradialis", "fore", 55.0, 42.0, 0.20, 0.34, 0.018, 2.3),
+    ("flexors", "fore", -45.0, 60.0, 0.28, 0.34, 0.015, 2.3),
+    ("extensors", "fore", 150.0, 50.0, 0.28, 0.34, 0.013, 2.3),
     ("quads", "thigh", 15.0, 85.0, 0.50, 0.40, 0.014, 2.5),
     ("hamstrings", "thigh", 180.0, 55.0, 0.50, 0.40, 0.011, 2.5),
     ("calf", "shin", 180.0, 70.0, 0.28, 0.24, 0.014, 2.5),
@@ -119,7 +119,8 @@ LIMB_GROOVES = [
     # Between the deltoid's three heads, and its lower edge.
     ("upper", [(15, -0.05), (20, 0.30)], 0.005, 0.005),
     ("upper", [(115, -0.05), (110, 0.30)], 0.005, 0.0045),
-    ("upper", [(-30, 0.30), (60, 0.42), (150, 0.30)], 0.007, 0.006),
+    # Soft: a hard edge here read as a ball stuck on the arm (2026-10-26).
+    ("upper", [(-30, 0.30), (60, 0.42), (150, 0.30)], 0.011, 0.0035),
     # Between biceps and triceps, outside and in.
     ("upper", [(85, 0.40), (90, 0.90)], 0.006, 0.006),
     ("upper", [(-95, 0.35), (-90, 0.90)], 0.006, 0.005),
@@ -242,5 +243,27 @@ def sculpt(p, W, origin, strength=1.0):
     total = sum(wt for wt, _ in parts)
     push = sum(wt * f for wt, f in parts) / np.maximum(total, 1e-6)
     # Nothing on the head, the hands or the feet.
-    push *= np.clip(total * 1.5, 0.0, 1.0)
+    # Faded out smoothly toward them: a push cut off as steeply as the
+    # weights change at the neck spiked there.
+    fade = np.clip(total, 0.0, 1.0)
+    push *= fade * fade * (3.0 - 2.0 * fade)
     return push * strength
+
+
+def relax(push, edges, rounds=3):
+    """Even a push out over a mesh's edges (``edges``: an ``(m, 2)`` array):
+    where the trunk's masses meet the neck the push changes faster than
+    the mesh can follow, and it spikes."""
+    n = len(push)
+    a, b = edges[:, 0], edges[:, 1]
+    deg = np.bincount(a, minlength=n) + np.bincount(b, minlength=n)
+    for _ in range(rounds):
+        acc = np.bincount(a, weights=push[b], minlength=n) + np.bincount(b, weights=push[a], minlength=n)
+        push = 0.5 * push + 0.5 * acc / np.maximum(deg, 1)
+    return push
+
+
+def mesh_edges(me):
+    e = np.zeros(len(me.edges) * 2, dtype=np.int64)
+    me.edges.foreach_get("vertices", e)
+    return e.reshape(-1, 2)

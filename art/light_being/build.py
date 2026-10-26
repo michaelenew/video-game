@@ -30,21 +30,28 @@ CLASS = "Champion"
 # gunmetal, and matte white as plastic; gold
 # only at the belt; a pale skirt and cloak with a cool grey in them.
 COLOURS = {
-    "knit": (0.36, 0.24, 0.16),
-    "knit/2": (0.36, 0.24, 0.16),
+    # What shows between the plates, and the hands: steel, a shade under the
+    # plate, never the cloth-brown the cast's knit defaults to.
+    "knit": (0.60, 0.62, 0.68),
+    "knit/2": (0.60, 0.62, 0.68),
     "knit/3": (0.78, 0.80, 0.84),      # gauntlets: plate
-    "knit/4": (0.36, 0.24, 0.16),
-    "plate": (0.82, 0.84, 0.88),
-    "trim": (0.95, 0.78, 0.45),
+    "knit/4": (0.60, 0.62, 0.68),
+    "plate": (0.9, 0.91, 0.94),
+    "trim": (0.92, 0.66, 0.26),
     "cloak": (0.84, 0.86, 0.90),
     "skirt": (0.70, 0.72, 0.78),
 }
+# Its rims are plate, not honed blades: they do not shine.
+EDGE_GLOW = False
 GLOW = (1.0, 0.92, 0.72)
-METAL = {"plate": (0.6, 0.18), "trim": (0.8, 0.25), "knit": (0.6, 0.22)}
+METAL = {"plate": (0.15, 0.22), "trim": (0.8, 0.25), "knit": (0.6, 0.22)}
 # No painted trim: the plate's rims are real (``hard``), in gold.
 ART = {"shade_tint": (0.75, 0.8, 1.0), "warm": (1.1, 1.05, 0.98), "trim": (1.0, 1.0, 1.0),
        "stitch_dark": 0.0, "edge_light": 0.14}
-LUMINOUS = {"cloak": 0.015}
+# A being of light: its plate gives a little light of its own, its gold
+# frame a little more, so under any sky it reads white and gold rather than
+# as steel taking the sky's colour (2026-10-26).
+LUMINOUS = {"cloak": 0.015, "plate": 0.04, "trim": 0.09}
 
 
 def veins(pos):

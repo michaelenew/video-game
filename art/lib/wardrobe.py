@@ -103,6 +103,7 @@ def piece(body, name, gap, keep, trims=(), keeps=(), thick=0.004, smooth=2, face
     for o in (hi, ob):
         if thick:
             g.thicken(o, thick)
+        g.tame(o)
         o.data.shade_smooth()
         g.material(o, mat(material))
     hi["hi"] = True
@@ -546,10 +547,12 @@ def side_mask(ob, r, right=1.0, soft=0.012):
     return ob
 
 
-def cape(body, r, side=None, name="team_cape", material="team", low=0.32, gap=0.03, faces=1600):
+def cape(body, r, side=None, name="team_cape", material="team", low=0.32, gap=0.03, faces=1600, back_only=False):
     """A short cape over one shoulder (``side``: a slot, ``LEFT`` is her
     left) or both (None): the trunk and the upper arm inflated well clear,
-    from the collar to ``low`` below the shoulder, hanging down the back."""
+    from the collar to ``low`` below the shoulder, hanging down the back.
+    ``back_only``: none of it over the top of the shoulder, where a
+    pauldron is."""
     sh = r.o["arm.l"][1]
     neck = r.o["head"][1]
     sign = None if side is None else np.sign(r.o[f"arm.{side}"][0])
@@ -559,7 +562,7 @@ def cape(body, r, side=None, name="team_cape", material="team", low=0.32, gap=0.
         if sign is not None:
             k &= c[:, 0] * sign > -0.02
         # Down the back; in front, only over the top of the shoulder.
-        k &= (c[:, 2] < 0.02) | (c[:, 1] > sh - 0.02)
+        k &= (c[:, 2] < -0.03) if back_only else ((c[:, 2] < 0.02) | (c[:, 1] > sh - 0.02))
         return k
 
     trims = [([0, sh - low, 0], [0, -1, -0.25]), ([0, neck - 0.06, 0], [0, 1, 0])]

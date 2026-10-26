@@ -127,12 +127,16 @@ def surface(name, ax, us, vs, radius, v_lo=None, v_hi=None, closed=False):
     return ob, borders
 
 
-def finish(ob, borders, material, thick, rim, rim_material=None, joint=None, rim_closed=False):
+def finish(ob, borders, material, thick, rim, rim_material=None, joint=None, rim_closed=False, sharp=None):
     """Give a plate its thickness and a rolled rim along each border, carried
-    by ``joint`` if given (otherwise bound to the body like a garment)."""
+    by ``joint`` if given (otherwise bound to the body like a garment).
+    ``sharp`` (degrees): edges folded more than this are hard creases, as an
+    angular plate's ridges are; otherwise it is smooth all over."""
     g.material(ob, mat(material))
     g.thicken(ob, thick)
     ob.data.shade_smooth()
+    if sharp:
+        ob.data.set_sharp_from_angle(angle=float(np.radians(sharp)))
     out = [ob]
     for k, b in enumerate(borders):
         if rim:

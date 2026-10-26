@@ -1061,7 +1061,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_BARS=<dark>,<light>",
-                "Start a Dual mage with her two bars there, so a capture can look at the wings without playing up to them. Ignored for any other class.",
+                "Start a Dual mage with her two bars there, so a capture can look at the being behind her without playing up to it. Ignored for any other class.",
+            ),
+            e(
+                "SHOT_BEING=dark|light",
+                "Draw one of the Dual mage's two beings on its own, whole and painted, standing on her floor rather than rising out of the seal -- how each is looked at before they are halved. Pair it with SHOT_PORTRAIT to walk round it.",
             ),
             e(
                 "SHOT_WEIGHT=<n>",
