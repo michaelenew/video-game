@@ -49,7 +49,7 @@ fn options() -> Options {
         frames: value("--frames", 1200) as u32,
         delay: value("--delay", 3) as u32,
         loss: value("--loss", 30) as usize,
-        apart: value("--apart", 300) as i32,
+        apart: value("--apart", 600) as i32,
         peers: (value("--peers", MAX_PLAYERS as i64) as usize).clamp(2, MAX_PLAYERS),
     }
 }
@@ -76,7 +76,8 @@ impl Bill {
     }
 }
 
-/// The town, `n` fighters, each `gap` metres east of the last.
+/// The valley, `n` fighters: `gap` metres apart, on the corners of a square
+/// of that side from the town (four fit on the map up to about 900 m).
 fn town(n: usize, gap: i32) -> World {
     let classes = [
         Class::Champion,
@@ -87,10 +88,19 @@ fn town(n: usize, gap: i32) -> World {
     let mut w = World::versus_in(classes, sim::valley::START).seated(n as u8);
     let ground = w.terrain();
     let origin = w.players[0].pos;
+    // Together, a row; apart, the corners of a square, from the town's
+    // south-west so every corner is on the map.
+    let (x0, z0) = if gap > 50 { (-300, -450) } else { (0, 0) };
     for i in 0..n {
-        let x = origin.x.add(Fx::from_int(gap * i as i32));
-        let up = V3::new(x, Fx::from_int(1000), origin.z);
-        w.players[i].pos = V3::new(x, ground.floor_below(up), origin.z);
+        let (cx, cz) = if gap > 50 {
+            ((i % 2) as i32 * gap, (i / 2) as i32 * gap)
+        } else {
+            (i as i32 * gap, 0)
+        };
+        let x = origin.x.add(Fx::from_int(x0 + cx));
+        let z = origin.z.add(Fx::from_int(z0 + cz));
+        let up = V3::new(x, Fx::from_int(1000), z);
+        w.players[i].pos = V3::new(x, ground.floor_below(up), z);
     }
     w
 }

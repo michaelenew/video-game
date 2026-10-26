@@ -233,7 +233,55 @@ region (and a slow heartbeat to the rest, which is also where the See
 tier's ghost goes); outcomes only to a peer standing next to the region;
 and an outcome that changes nothing taken without a rollback.
 
-## 10 · Open
+## 10 · Distance in the region session (2026-10-26)
+
+The first two of §9's three changes, built in `net::region`:
+
+- **A peer too far to matter hears a heartbeat.** Every `HEARTBEAT` (6)
+  frames: where I am, no inputs, and a promise that it holds through
+  `PROMISE` (12) frames ahead (`Packet::Inputs::until`). The receiver counts
+  my declaration as good that far (`Known::through`) when it confirms a
+  frame. **Who is far is the speed of light** (`region::far`): the peer
+  stands within membership of every region it declared, so it is at least
+  the farthest of those gaps less membership from me; two bodies can share
+  a region only within two memberships and a hexagon's width; and over the
+  promise and a trip (`LATENCY`, 18 frames) each of us closes at most the
+  grid's speed. Near -- or never heard from -- hears every input, every
+  frame, as before.
+- **An outcome goes only to a peer whose regions its fighters could
+  reach**: within membership and a horizon of one of them. Before, a peer
+  two hexagons off had them at 544 bytes a fighter four times a second.
+
+**With the tuned grid the far line is about 420 m** (two memberships of
+46 m and two hexagon radii of 96 m are 284 m; the promise and a trip at
+90 m/s both ways add the rest). That is the regions' geometry, not the
+heartbeat's: two bodies 284 m apart can stand in one hexagon's
+membership. NET-4 is where it would change.
+
+`net/tests/region.rs` (`far_peers_beat_and_are_exact_when_they_meet`):
+two peers 80 m apart on the small test grid, far past its line; 507 bytes
+in the first second where every input would have been about 5 KB, and
+every zone either is in agrees with the truth through the walk, the
+meeting and the shove (3,796 zone-frames).
+
+The harness, apart now on a 600 m square:
+
+| netcode | layout | n | up KB/s | rollbacks/s | tick p50 / p99 µs |
+| --- | --- | --- | --- | --- | --- |
+| GGRS | apart | 2 / 3 / 4 | 3.5 / 7.7 / 12.2 | 1.1 / 2.9 / 4.8 | ~100 / ~400 |
+| regions | apart | 2 / 3 / 4 | **0.25 / 0.51 / 0.76** | **0 / 0 / 0** | ~40 / ~70 |
+| regions | together | 2 / 3 / 4 | 5.8 / 11.6 / 17.5 | 2.2 / 4.3 / 6.3 | ~40 / ~200 |
+
+**Apart, a player costs a quarter of a kilobyte a second to everybody
+else, and nobody rolls back for anybody.** Together the region session
+still sends more than GGRS (84 bytes a frame against GGRS's compressed
+inputs): an input repeated eight times for redundancy, uncompressed --
+GGRS sends each input as its difference from the last, and the same
+would halve it or better. That, and §9's third change (an outcome that
+changes nothing taken without a rollback, which the session already does
+-- what rolled back apart was outcomes that were not needed), are next.
+
+## 11 · Open
 
 - **NET-3** The See tier's distance and rate: how far should another player
   be drawn, and how smoothly?
