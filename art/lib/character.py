@@ -18,8 +18,8 @@ painted, exported. What differs is a class's *spec*, a module with:
 - ``LUMINOUS`` (optional): material -> how much of its own painted colour
   it gives off as light, for a body that is light rather than lit;
 - ``SCULPT`` (optional): how much muscle to carve into the body
-  (``anatomy.sculpt``): a share of it into the game's mesh, all of it into a
-  dense copy the body's normal map is baked from (``sculpt``);
+  (``anatomy.sculpt``): ``SCULPT_SHARE`` of it into the game's mesh, all of
+  it into a dense copy the body's normal map is baked from (``sculpt``);
 - ``outfit``: a module with ``dress(body, rig, only)``.
 
     art/blender.sh art/<class>/build.py [--look out.png] [--paint] [--size 2048]
@@ -249,7 +249,7 @@ def build(spec):
         stage.reset()
         ob, sk, bo, br, marks = body(spec)
         if getattr(spec, "SCULPT", 0.0):
-            sculpt(ob, bo, spec.SCULPT)
+            sculpt(ob, bo, spec.SCULPT, getattr(spec, "SCULPT_SHARE", 0.65))
         rig = wardrobe.Rig(sk, bo, br, marks)
         only = _opt("--only")
         spec.outfit.dress(ob, rig, only[0].split(",") if only else None)
@@ -261,6 +261,17 @@ def build(spec):
         bpy.ops.wm.save_as_mainfile(filepath=dressed)
     look = _opt("--look")
     if look:
+        # The materials as they will be: metal where the spec says so, at
+        # its roughness, so a plate's form reads in the turnaround as it
+        # will in the game.
+        for m in bpy.data.materials:
+            if m.name in getattr(spec, "METAL", {}) and m.use_nodes and "Principled BSDF" in m.node_tree.nodes:
+                metal, rough = spec.METAL[m.name]
+                b = m.node_tree.nodes["Principled BSDF"]
+                b.inputs["Metallic"].default_value = metal
+                b.inputs["Roughness"].default_value = rough
+                if m.name in spec.COLOURS:
+                    b.inputs["Base Color"].default_value = (*spec.COLOURS[m.name], 1)
         stage.lights()
         stage.turnaround(os.path.join(ROOT, look[0]))
     if "--no-export" not in _args():

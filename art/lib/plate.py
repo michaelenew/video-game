@@ -147,3 +147,15 @@ def finish(ob, borders, material, thick, rim, rim_material=None, joint=None, rim
 def smoothstep(e0, e1, x):
     t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
     return t * t * (3 - 2 * t)
+
+
+def designed(us, vs, half_width, front, back, power=2.4):
+    """A designed section round the trunk at each height: a rounded box
+    (a superellipse of ``power``) ``half_width`` to each side, ``front``
+    ahead of the axis and ``back`` behind it -- each a function of ``vs``
+    -- as a radius at each angle ``us`` (degrees from the front)."""
+    u = np.radians(us)[None, :]
+    w = np.asarray(half_width, float)[:, None]
+    d = np.where(np.cos(u) >= 0, np.asarray(front, float)[:, None], np.asarray(back, float)[:, None])
+    c, s = np.abs(np.cos(u)), np.abs(np.sin(u))
+    return 1.0 / ((c / d) ** power + (s / w) ** power) ** (1.0 / power)

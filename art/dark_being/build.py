@@ -43,7 +43,8 @@ COLOURS = {
 GLOW = (0.72, 0.42, 1.0)
 # Muscle carved into the body (``anatomy``): the masses into the game's mesh,
 # the grooves into its normal map.
-SCULPT = 1.0
+SCULPT = 1.35
+SCULPT_SHARE = 0.9
 METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.3)}
 # Violet light painted on: in the shade, and on every ridge of the muscle.
 ART = {

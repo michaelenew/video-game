@@ -20,7 +20,8 @@ import numpy as np
 import character
 import garment as g
 import hard
-from wardrobe import EXTRAS, belt, coat_tails, mat, rigid, stone, w
+import plate
+from wardrobe import EXTRAS, J, belt, coat_tails, mat, rigid, stone, w
 
 # Where the obsidian has broken, as (joint, offset from it in the game's
 # frame, metres, radius): the left breast, the right shoulder, the left
@@ -53,25 +54,39 @@ def irons(body, r):
 
 
 def pauldrons(body, r):
-    """Three plates over each shoulder, each lapping the one below: a cap
-    over the top of the shoulder and two lames down the arm, each with a
-    rolled rim and a rivet at its front and back."""
+    """Over each shoulder a dome of iron, laid close (``plate``), open toward
+    the neck, with two lames below it down the arm; every edge rolled, a
+    rivet at the front and back of each."""
     out = []
+    W = g.weights_of(body)
     for s in "lr":
         arm, el = f"arm.{s}", f"forearm.{s}"
-        top = r.o[arm][1]
+        sh = r.o[arm]
         down = r.dir(arm, el)
-
-        def cap(c, fw, s=s, top=top):
-            return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.4) & (c[:, 1] > top - 0.035)
-
-        out += hard.plate(body, f"pauldron.{s}", 0.018, cap, "iron", thick=0.007, rim=0.007, smooth=10,
-                          close=0.02, faces=900)
-        for k, (at, gap) in enumerate(((0.13, 0.016), (0.24, 0.012))):
-            mid = r.along(arm, el, at)
-            out += hard.plate(body, f"lame{k}.{s}", gap, lambda c, fw, arm=arm: w(fw, arm) > 0.4, "iron",
-                              trims=[(mid + down * 0.04, down)], keeps=[(mid - down * 0.035, down)],
-                              thick=0.006, rim=0.005, smooth=6, close=0.02, faces=500)
+        ax = plate.Axis(sh + np.array([0.0, 0.015, 0.0]), down, [0, 1, 0], [0, 0, 1])
+        near = (W[:, J[arm]] + W[:, J[f"clavicle.{s}"]]) > 0.3
+        us = np.linspace(-140, 140, 47)
+        vs = np.linspace(-0.08, 0.12, 22)
+        R = plate.radii(body, ax, vs, us, keep=near, smooth_u=5, smooth_v=3, stiff=8)
+        a = np.abs(us)
+        lo = -0.075 + 0.045 * plate.smoothstep(90, 140, a)
+        hi = np.full(len(us), 0.06) - 0.015 * (a / 140.0) ** 2
+        cap, borders = plate.surface(f"pauldron.{s}", ax, us, vs, R + 0.03, lo, hi)
+        out += plate.finish(cap, borders, "iron", 0.008, 0.008, joint=arm)
+        for k in range(2):
+            top, bot = 0.05 + k * 0.04, 0.095 + k * 0.04
+            vv = np.linspace(top - 0.01, bot + 0.01, 8)
+            rk = plate.radii(body, ax, vv, us, keep=near, smooth_u=5, smooth_v=2, stiff=8)
+            lame, lb = plate.surface(f"lame{k}.{s}", ax, us, vv, rk + 0.026 - 0.004 * k, np.full(len(us), top),
+                                     np.full(len(us), bot))
+            out += plate.finish(lame, lb, "iron", 0.006, 0.006, joint=arm)
+        for u in (-70.0, 70.0):
+            v = 0.0
+            row = int(np.searchsorted(vs, v))
+            j = int(np.argmin(np.abs(us - u)))
+            pt = ax.point(np.array(u), np.array(v), np.array(R[row, j] + 0.038))
+            out += hard.rivets(f"pauldron_rivet{int(u)}.{s}", [pt], [ax.dir(np.array(u))], 0.009, "iron",
+                               joint=arm)
     return out
 
 
