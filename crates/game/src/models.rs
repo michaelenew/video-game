@@ -276,6 +276,8 @@ fn ready(
     let mut joints = [Entity::PLACEHOLDER; JOINT_COUNT];
     let mut tails = [None; TAIL_JOINTS];
     let mut blades = [[Entity::PLACEHOLDER; 2]; 2];
+    // A being's rifts: each shaft's two markers, `beam.<n>.from` and `.to`.
+    let mut beams: Vec<(String, Entity, Vec3)> = Vec::new();
     for entity in children.iter_descendants(root) {
         if let Ok(name) = names.get(entity) {
             let name = name.as_str();
@@ -291,6 +293,11 @@ fn ready(
                     entity,
                     bind: *bind,
                 });
+            }
+            if name.starts_with("beam.") {
+                if let Ok(t) = binds.get(entity) {
+                    beams.push((name.to_string(), entity, t.translation));
+                }
             }
             for (hand, side) in ["l", "r"].iter().enumerate() {
                 if name == format!("blade.{side}.tip") {
@@ -342,6 +349,14 @@ fn ready(
                 rigs.inks[owner][c].push(made.clone());
             }
             swap.insert((MeshMaterial3d(made), NotShadowCaster));
+        }
+    }
+    if let Body::Being(_) = body {
+        for (name, from, at) in beams.iter().filter(|(n, ..)| n.ends_with(".from")) {
+            let to = name.replace(".from", ".to");
+            if let Some((_, _, end)) = beams.iter().find(|(n, ..)| *n == to) {
+                crate::being::beam(&mut commands, &beings, (*from, *at), *end);
+            }
         }
     }
     if joints.iter().all(|e| *e != Entity::PLACEHOLDER) {

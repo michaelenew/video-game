@@ -1,22 +1,19 @@
-"""Who the light being is, as numbers: an angel-knight.
+"""Who the light being is, as numbers: a celestial knight.
 
 The Dual mage's light half, drawn as a body of its own (the owner,
-2026-10-25): "between a classic angel and a knight in shining armor ...
-strong arms". On the Champion's skeleton (``build.CLASS``), the reference
-middleweight and broader than hers: a man's frame, powerful but not
-hulking -- the demon is the brute -- with the arms built up, because they
-are bare from the shoulder plate to the vambrace.
+2026-10-26): "a celestial knight. Not holy ... but light". Plate covers it,
+so the body under it only has to carry the plate broadly: a strong man's
+frame on the Champion's skeleton (``build.CLASS``), the same as the dark
+being's, so the halves meet.
 """
 
 import mh
 
 BODY = mh.macro(gender="male", age="young", muscle=0.85, weight=0.5, proportions=1.0,
                 races={"caucasian": 0.3, "african": 0.35, "asian": 0.35}) + [
-    ("torso/torso-vshape-incr.target", 0.6),
-    ("torso/torso-muscle-pectoral-incr.target", 0.6),
-    ("measure/measure-upperarm-circ-incr.target", 0.8),
+    ("torso/torso-vshape-incr.target", 0.5),
 ] + [(f"armslegs/{s}-{part}-incr.target", w) for s in "lr" for part, w in (
-    ("upperarm-muscle", 1.0), ("upperarm-shoulder-muscle", 0.9), ("lowerarm-muscle", 0.8))]
+    ("upperarm-muscle", 0.8), ("upperarm-shoulder-muscle", 0.8), ("lowerarm-muscle", 0.6))]
 
 GIRTH = {}
 HEAD_SCALE = 0.95

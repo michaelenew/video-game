@@ -136,36 +136,40 @@ fn hips_and_chin(class: Class) {
 }
 
 #[test]
-fn its_fists_are_up_in_front_of_her_and_her_throws_still_reach() {
-    // Placed as it is drawn -- hips at her feet, `scale` times her size -- a
-    // being holding her standing pose has both fists above the floor and in
-    // front of its chest, where the first of it can be seen.
-    let her = skeleton_for(Class::DualMage);
-    for (k, class) in being::BODIES.into_iter().enumerate() {
-        fists_up(&her, k, class);
+fn at_rest_its_arms_hang_and_casting_it_throws_what_she_throws() {
+    // Its own stance between her casts: arms down beside it, the fists at
+    // its hips and clear of its sides, never raised (the owner, 2026-10-26).
+    let skeleton = skeleton_for(being::BODIES[0]);
+    let rest = solve(&skeleton, &being::stance(0, &view::pose::Pose::rest(), 0.0));
+    for left in [true, false] {
+        let hand = rest.origin[view::hand_joint(left).index()];
+        let shoulder =
+            rest.origin[view::drawn_joint(if left { Joint::ArmL } else { Joint::ArmR }).index()];
+        assert!(
+            hand[1] < skeleton.hip_height + 0.1,
+            "a fist is up at {} with the hips at {}",
+            hand[1],
+            skeleton.hip_height
+        );
+        assert!(
+            hand[0].abs() > shoulder[0].abs() * 0.9,
+            "an arm hangs against the body"
+        );
+        assert!(
+            hand[2].abs() < 0.15,
+            "a fist is held out in front or behind"
+        );
     }
-    // A throw that reaches higher than the guard is the being's throw too.
-    let mut reach = view::pose::Pose::rest()
+    // Casting, it is her pose, whatever that is.
+    let hers = view::pose::Pose::rest()
         .shoulder_l(150.0, 0.0, 0.0)
         .elbow_l(5.0);
-    reach = being::guarded(&reach);
-    assert!((reach.degrees(Joint::ArmL, 0) - 150.0).abs() < 1e-3);
-    assert!((reach.degrees(Joint::ForearmL, 0) - being::GUARD_ELBOW).abs() < 1e-3);
-}
-
-fn fists_up(her: &view::skeleton::Skeleton, k: usize, class: Class) {
-    let skeleton = skeleton_for(class);
-    let s = being::scale(her, &skeleton);
-    let skin = solve(&skeleton, &being::stance(k, &view::pose::Pose::rest()));
-    for left in [true, false] {
-        let hand = skin.origin[view::hand_joint(left).index()];
-        let height = s * (hand[1] - skeleton.hip_height);
-        assert!(
-            height > 0.6,
-            "{class:?}: a fist is {height} m off the floor"
-        );
-        assert!(hand[2] > 0.2, "a fist is not in front of it");
-    }
+    let cast = being::stance(0, &hers, 1.0);
+    assert!((cast.degrees(Joint::ArmL, 0) - 150.0).abs() < 1e-3);
+    assert!((cast.degrees(Joint::ForearmL, 0) - 5.0).abs() < 1e-3);
+    // And on the way, between the two.
+    let half = being::stance(0, &hers, 0.5);
+    assert!(half.degrees(Joint::ArmL, 0) > 50.0 && half.degrees(Joint::ArmL, 0) < 100.0);
 }
 
 #[test]

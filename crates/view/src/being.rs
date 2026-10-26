@@ -17,8 +17,8 @@
 //! GPU; `view/tests/being.rs` holds the order here.
 //!
 //! **They are not her** (the owner, 2026-10-25): two bodies of their own, a
-//! hulking demon and an angel-knight, each on a broader skeleton than hers
-//! ([`BODIES`]), each sized by [`scale`] from its own.
+//! dark warrior of obsidian and a celestial knight, on a broader skeleton
+//! than hers ([`BODIES`]), sized by [`scale`].
 //!
 //! **It is big, and it rises out of the seal.** Its hips are at her feet,
 //! where the seal on the floor is, and its chin at her forehead, so the
@@ -30,10 +30,8 @@
 //! **It casts with her, a beat behind** (2026-10-25). It is technically the
 //! thing doing the casting, so it is posed with her own pose from
 //! [`LAG_SECONDS`] ago: the same throw, larger, landing a moment after hers.
-//! **Its fists are up** ([`guarded`]): its shoulders are at her chest, so an
-//! arm hanging at rest would put the fist -- the first thing there is of it
-//! -- under the floor. Its arms never drop below a guard, fists raised in
-//! front of her; what she throws higher than that, it throws too.
+//! Between her casts it stands as itself ([`rest`]): arms down, shoulders
+//! broad.
 //!
 //! The rule the overlay lives by holds here in the other direction: what is
 //! drawn *is* the bar, by construction, and `view/tests/being.rs` says so.
@@ -160,63 +158,44 @@ fn smoothstep(from: f32, to: f32, x: f32) -> f32 {
 /// short enough that it is still the same throw.
 pub const LAG_SECONDS: f32 = 0.12;
 
-/// The lowest its upper arms hang, in degrees forward of straight down.
-pub const GUARD_SWING: f32 = 55.0;
+/// Whose skeleton each being is built on, dark then light: the Champion's,
+/// the reference middleweight, broader than hers -- they are not her (the
+/// owner, 2026-10-25) -- and the same for both, so the two halves meet at
+/// the middle when they are halved. A pose is angles, so hers retargets onto
+/// it for free (`pose.rs`).
+pub const BODIES: [sim::Class; 2] = [sim::Class::Champion, sim::Class::Champion];
 
-/// The least its elbows are bent, in degrees.
-pub const GUARD_ELBOW: f32 = 80.0;
+/// How far out from the body the being's arms hang at rest, in degrees:
+/// enough to clear the mass of the lats, which is what keeps a heavily built
+/// figure's arms off its sides.
+pub const REST_SPREAD: f32 = 11.0;
 
-/// Her pose, as the being holds it: everything hers, except that neither
-/// upper arm hangs lower than [`GUARD_SWING`] and neither elbow is straighter
-/// than [`GUARD_ELBOW`]. A larger reach of hers is kept, so a throw that
-/// raises an arm past the guard raises the being's too.
-pub fn guarded(pose: &Pose) -> Pose {
-    let mut out = *pose;
-    let rad = core::f32::consts::PI / 180.0;
-    for (arm, floor) in [
-        (Joint::ArmL, GUARD_SWING),
-        (Joint::ArmR, GUARD_SWING),
-        (Joint::ForearmL, GUARD_ELBOW),
-        (Joint::ForearmR, GUARD_ELBOW),
-    ] {
-        let mut a = out.angles(arm);
-        a[0] = a[0].max(floor * rad);
-        out.set_angles(arm, a);
-    }
-    out
+/// How bent its elbows are at rest, in degrees: soft, not straight.
+pub const REST_ELBOW: f32 = 12.0;
+
+/// **Its own resting stance** (the owner, 2026-10-26: "arms down, shoulders
+/// broad. That's the general resting stance"): standing straight, the
+/// shoulders drawn back and open, the arms hanging just off the body. Not
+/// hers: her idle is a caster's, and on a body this size it read as a cat
+/// pretending to stand.
+pub fn rest() -> Pose {
+    Pose::rest()
+        .shoulders(0.0, REST_SPREAD, 0.0)
+        .elbows(REST_ELBOW)
+        .clavicle_l(-6.0, 0.0)
+        .clavicle_r(-6.0, 0.0)
+        .chest(-3.0, 0.0, 0.0)
 }
 
-/// Whose skeleton each being is built on, dark then light: broader than
-/// hers, because they are not her (the owner, 2026-10-25). The demon has the
-/// Bulwark's -- the widest shoulders and the thickest build in the game --
-/// and the angel-knight the Champion's, the reference middleweight. A pose
-/// is angles, so hers retargets onto either for free (`pose.rs`).
-pub const BODIES: [sim::Class; 2] = [sim::Class::Bulwark, sim::Class::Champion];
+/// How quickly it takes up her pose when she starts to cast, and lets it go
+/// when she stops, as a share a second.
+pub const CAST_IN: f32 = 9.0;
+pub const CAST_OUT: f32 = 3.0;
 
-/// How far forward the demon hunches, in degrees: the spine and chest
-/// rolled over, the shoulders up round the neck and the head brought back
-/// up to look ahead -- a hulking thing's carriage.
-pub const HUNCH: f32 = 14.0;
-
-/// Being `k`'s pose (0 dark, 1 light): hers, [`guarded`], and for the demon
-/// hunched over by [`HUNCH`].
-pub fn stance(k: usize, pose: &Pose) -> Pose {
-    let mut out = guarded(pose);
-    if k == 0 {
-        let rad = core::f32::consts::PI / 180.0;
-        let mut add = |j: Joint, c: usize, degrees: f32| {
-            let mut a = out.angles(j);
-            a[c] += degrees * rad;
-            out.set_angles(j, a);
-        };
-        add(Joint::Spine, 0, HUNCH * 0.5);
-        add(Joint::Chest, 0, HUNCH);
-        add(Joint::Neck, 0, -HUNCH * 0.6);
-        add(Joint::Head, 0, -HUNCH * 0.6);
-        add(Joint::ClavicleL, 1, HUNCH * 0.7);
-        add(Joint::ClavicleR, 1, HUNCH * 0.7);
-    }
-    out
+/// Being `k`'s pose (0 dark, 1 light): [`rest`], turned toward `hers` -- her
+/// pose, a beat late -- by `casting`, 0 at rest and 1 throwing with her.
+pub fn stance(_k: usize, hers: &Pose, casting: f32) -> Pose {
+    rest().blend(hers, casting.clamp(0.0, 1.0))
 }
 
 /// How far behind her it stands, in metres: enough that she is in front of

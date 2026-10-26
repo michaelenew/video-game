@@ -1,61 +1,136 @@
-"""What the light being wears.
+"""What the light being wears: plate, made of light.
 
-An angel-knight (the owner, 2026-10-25): a polished steel cuirass, sculpted
-and standing off the body as plate does; layered plates over each shoulder;
-the upper arms bare, so their strength shows; steel vambraces and gauntlets;
-a gold belt; steel tassets over a white skirt; steel greaves. The angel is
-in a white half-cloak over the left shoulder only, falling down that side of
-the back -- part of a cloak, so the body is still seen from behind -- and a
-ring of light behind the head. Hair cropped close, the face bare and calm.
+A celestial knight (the owner, 2026-10-26, from a reference "not far off,
+but probably too heavy on the gold and a little too ornate -- this should be
+a cool visual but not so dominant visually"): full plate in pale silver,
+cut in planes like cut crystal rather than smoothed, light running along the
+edges of every plate (``glowing_edges``); a closed helm with a crest and a
+slit of light for its eyes; broad pointed plates over the shoulders; plate
+down the arms to gauntlets; tassets over a pale skirt; greaves. Gold only at
+the belt. A short half-cloak over the left shoulder. Nothing holy: no halo.
 """
 
 import bpy
 import numpy as np
 
 import character
+import forge
 import garment as g
-from wardrobe import (LEFT, belt, boots, cape, coat_tails, collar, covered, eyes, hair, jerkin,
-                      mat, piece, rigid, trousers, vambraces, w, body_masks)
+import stage
+from wardrobe import (EXTRAS, LEFT, belt, body_masks, boots, cape, coat_tails, covered, jerkin, mat, piece,
+                      rigid, sleeves, trousers, vambraces, w)
 
 
-def glowing(ob):
-    grp = ob.vertex_groups.new(name="edge")
-    grp.add(list(range(len(ob.data.vertices))), 1.0, "REPLACE")
+def facet(ob, triangles):
+    """Cut a plate into planes: collapse it to ``triangles`` and shade every
+    face flat, so it catches the light as cut crystal does."""
+    n = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+    dec = ob.modifiers.new("facets", "DECIMATE")
+    dec.decimate_type = "COLLAPSE"
+    dec.ratio = min(1.0, triangles / max(n, 1))
+    with bpy.context.temp_override(object=ob, active_object=ob):
+        bpy.ops.object.modifier_apply(modifier=dec.name)
+    ob.data.shade_flat()
     return ob
 
 
+def glowing_edges(ob, power=3.0):
+    """Light along a plate's edge: its ``hem`` (the open edge, falling off
+    inward) copied to ``edge``, which is what glows, tightened to the rim."""
+    hem = ob.vertex_groups.get("hem")
+    if hem is None:
+        return ob
+    edge = ob.vertex_groups.get("edge") or ob.vertex_groups.new(name="edge")
+    for v in ob.data.vertices:
+        for ge in v.groups:
+            if ge.group == hem.index:
+                edge.add([v.index], ge.weight ** power, "REPLACE")
+    return ob
+
+
+def plate(pieces, triangles=None):
+    for p in pieces:
+        if triangles:
+            facet(p, triangles)
+            # Its smooth high piece would bake the roundness back over the
+            # planes as a normal map.
+            hi = bpy.data.objects.get(p.name + "~hi")
+            if hi is not None:
+                bpy.data.objects.remove(hi)
+        glowing_edges(p)
+    return pieces
+
+
 def cuirass(body, r):
-    return jerkin(body, r, material="steel", gap=0.015, low=0.02, collar=0.035, name="cuirass",
-                  faces=2600, close=0.08, sleeved=False, trim=0.025, smooth=12, inset=0.04)
+    return plate(jerkin(body, r, material="plate", gap=0.018, low=0.03, collar=0.04, name="cuirass",
+                        faces=2400, close=0.08, sleeved=False, trim=0.03, smooth=10, inset=0.04), 900)
 
 
 def pauldrons(body, r):
-    """Two lames a shoulder: a great round plate over the top of the
-    shoulder standing well off it, and a narrower one below it on the arm."""
     out = []
     for s in "lr":
         top = r.o[f"arm.{s}"][1]
         arm, el = f"arm.{s}", f"forearm.{s}"
 
         def upper(c, fw, s=s, top=top):
-            return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.45) & (c[:, 1] > top - 0.065)
+            return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.4) & (c[:, 1] > top - 0.08)
 
-        out.append(piece(body, f"pauldron.{s}", 0.026, upper, smooth=8, close=0.03, material="steel",
-                         thick=0.008, faces=700, trim=0.015))
-        mid = r.along(arm, el, 0.28)
+        out += plate([piece(body, f"pauldron.{s}", 0.034, upper, smooth=8, close=0.03, material="plate",
+                            thick=0.008, faces=800, trim=0.02)], 160)
+        mid = r.along(arm, el, 0.30)
         down = r.dir(arm, el)
-        out.append(piece(body, f"lame.{s}", 0.022, lambda c, fw, arm=arm: w(fw, arm) > 0.4,
-                         trims=[(mid + down * 0.05, down)], keeps=[(mid - down * 0.04, down)], smooth=5,
-                         close=0.02, material="steel", thick=0.006, faces=400, trim=0.01))
+        out += plate([piece(body, f"lame.{s}", 0.026, lambda c, fw, arm=arm: w(fw, arm) > 0.4,
+                            trims=[(mid + down * 0.045, down)], keeps=[(mid - down * 0.04, down)], smooth=5,
+                            close=0.02, material="plate", thick=0.006, faces=400, trim=0.012)], 90)
+        # The point: a blade of plate swept up off the shoulder.
+        sh = r.o[arm]
+        side = np.sign(sh[0])
+        root = sh + np.array([side * 0.03, 0.08, -0.01])
+        sections = []
+        steps = 8
+        for i in range(steps + 1):
+            t = i / steps
+            c = root + np.array([side * 0.07 * t, 0.10 * t, -0.03 * t * t])
+            wdt = 0.05 * (1 - t) + 0.002
+            sections.append(forge.ring(c, np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]),
+                                       np.array([1.0, 0.0, 0.0]), wdt, 0.006, sides=6))
+        v, f = forge.loft(sections)
+        fin = stage.mesh_object(f"fin.{s}", g.g2b(v), f, smooth=False)
+        g.material(fin, mat("plate"))
+        out.append(rigid(fin, f"clavicle.{s}"))
     return out
 
 
 def arms(body, r):
-    return vambraces(body, r, material="steel", strap="gold", reach=0.12, straps_at=(0.25, 0.9))
+    return (plate(sleeves(body, r, material="plate", to=0.08, gap=0.014, close=0.014, name="rerebrace",
+                          faces=700), 220)
+            + plate(vambraces(body, r, material="plate", strap="plate", reach=0.1, straps_at=()), 160))
 
 
-def gorget(body, r):
-    return collar(body, r, material="steel", height=0.06, gap=0.02)
+def helm(body, r):
+    """A closed helm over the head and neck, cut in planes, and a crest of
+    plate from the brow back over the crown."""
+    out = plate([piece(body, "helm", 0.022, lambda c, fw: w(fw, "head", "neck") > 0.45, smooth=12,
+                       close=0.05, material="plate", thick=0.006, faces=1800, trim=0.0)], 420)
+    e = r.eye
+    head = r.o["head"]
+    sections = []
+    steps = 14
+    for i in range(steps + 1):
+        t = i / steps
+        a = -0.5 + 2.2 * t
+        c = head + np.array([0.0, 0.10, -0.01]) + np.array([0.0, np.cos(a) * 0.14, np.sin(a) * 0.13])
+        tall = 0.035 * np.sin(np.pi * min(1.0, t * 1.3)) + 0.004
+        out_dir = np.array([0.0, np.cos(a), np.sin(a)])
+        along = np.array([0.0, -np.sin(a), np.cos(a)])
+        sections.append(forge.ring(c + out_dir * tall * 0.5, along, out_dir, np.array([1.0, 0.0, 0.0]),
+                                   tall * 0.6, 0.004, sides=6))
+    v, f = forge.loft(sections)
+    crest = stage.mesh_object("crest", g.g2b(v), f, smooth=False)
+    g.material(crest, mat("plate"))
+    out.append(rigid(crest, "head"))
+    EXTRAS["visor"] = (e + np.array([0.0, 0.0, 0.02])).tolist()
+    return out
 
 
 def waist(body, r):
@@ -63,9 +138,8 @@ def waist(body, r):
 
 
 def tassets(body, r):
-    # Steel plates over the hips to mid-thigh, open at the front and back.
-    return coat_tails(body, r, spans=[(20, 88, 0.62), (92, 160, 0.64), (200, 268, 0.64), (272, 340, 0.62)],
-                      material="steel", flare=0.22, at=0.0, ripple=0.04)
+    return plate(coat_tails(body, r, spans=[(18, 86, 0.66), (94, 160, 0.68), (200, 266, 0.68), (274, 342, 0.66)],
+                            material="plate", flare=0.2, at=0.0, ripple=0.03))
 
 
 def legs(body, r):
@@ -73,48 +147,27 @@ def legs(body, r):
 
 
 def greaves(body, r):
-    return boots(body, r, material="steel", cuff="gold", strap="gold", top=0.0, straps_at=(), cuffed=True,
-                 gap=0.011)
+    return plate(boots(body, r, material="plate", cuff="plate", strap="plate", top=0.0, straps_at=(), cuffed=True,
+                       gap=0.012), 300)
 
 
 def cloak(body, r):
-    return cape(body, r, side=LEFT, name="cloak", material="cloak", low=0.72, gap=0.05, faces=1800)
-
-
-def head_hair(body, r):
-    # Cropped close: the sculpted mass alone, no cards to stand out from it.
-    return [hair(body, r, gap=0.004, front=0.05, nape=-0.07, side=-0.075, grooves=10, depth=0.003,
-                 faces=2200, lift=0.002, material="hair")]
-
-
-def halo(body, r):
-    e = r.eye
-    centre = e + np.array([0.0, 0.10, -0.14])
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.16, minor_radius=0.012, major_segments=64,
-                                     minor_segments=10, location=tuple(g.g2b(centre)),
-                                     rotation=(np.pi / 2, 0.0, 0.0))
-    ob = bpy.context.active_object
-    ob.name = "halo"
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    bpy.ops.object.shade_smooth()
-    g.material(ob, mat("halo"))
-    return [glowing(rigid(ob, "head"))]
+    return cape(body, r, side=LEFT, name="cloak", material="cloak", low=0.55, gap=0.06, faces=1600)
 
 
 GARMENTS = {
     "greaves": greaves, "legs": legs, "tassets": tassets, "cuirass": cuirass, "pauldrons": pauldrons,
-    "arms": arms, "waist": waist, "neck": gorget, "cloak": cloak, "hair": head_hair, "eyes": eyes,
-    "halo": halo,
+    "arms": arms, "waist": waist, "helm": helm, "cloak": cloak,
 }
 WARDROBE = list(GARMENTS)
 
 
 def masks(body, r):
-    body_masks(body, r, gloved_to=1.05, brow=0.6)
+    body_masks(body, r, gloved_to=1.05, brow=0.0)
 
 
 def hide(r, c, fw):
-    return covered(r, c, fw, boots_to=0.0, sleeves=False)
+    return covered(r, c, fw, boots_to=0.0) | (w(fw, "head") > 0.5)
 
 
 def dress(body, r, only=None):

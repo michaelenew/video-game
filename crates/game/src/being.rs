@@ -4,9 +4,9 @@
 //! The being is her own model a second time, under a root of its own
 //! ([`BeingRoot`]) that stands it behind her at [`view::being::scale`] times
 //! her size with its hips at her feet, posed with her pose from
-//! [`view::being::LAG_SECONDS`] ago ([`Echo`]), its fists held up in a guard
-//! (`view::being::guarded`) -- so it throws what she throws, larger and a
-//! beat behind. It is drawn in [`Spirit`], which is nothing of
+//! [`view::being::LAG_SECONDS`] ago ([`Echo`]) while she casts, and in its
+//! own stance, arms down, between her casts (`view::being::stance`) -- so it
+//! throws what she throws, larger and a beat behind. It is drawn in [`Spirit`], which is nothing of
 //! her costume: a translucent body, dark on her left and light on her right,
 //! each half there as far as its bar has filled, in the order
 //! `view::being::presence` gives (the shoulder and fist, the arm and torso,
@@ -109,7 +109,17 @@ pub struct Beings {
     skeletons: [Skeleton; 2],
     scales: [f32; 2],
     seal_radius: f32,
+    /// A shaft of light out of one of the dark being's rifts (`beam`): a
+    /// unit frustum, narrow at the crack, and the light it is drawn in.
+    pub beam_mesh: Handle<Mesh>,
+    pub beam_light: Handle<StandardMaterial>,
 }
+
+/// How far each seat's being has taken up her pose: 0 standing as itself,
+/// 1 throwing with her (`view::being::stance`). Eased, on the renderer's
+/// clock: it is how a body moves, never a rule.
+#[derive(Resource, Default)]
+pub struct Casting(pub [f32; MAX_PLAYERS]);
 
 /// How many of her drawn poses are kept: a tenth of a second at the
 /// fastest refresh anybody has, and then some.
@@ -164,12 +174,18 @@ impl Plugin for BeingPlugin {
         );
         app.add_plugins(MaterialPlugin::<Spirit>::default())
             .init_resource::<Echo>()
+            .init_resource::<Casting>()
             .add_systems(PreStartup, setup)
             .add_systems(Startup, spawn);
     }
 }
 
-fn setup(mut commands: Commands, mut materials: ResMut<Assets<Spirit>>) {
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<Spirit>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut lights: ResMut<Assets<StandardMaterial>>,
+) {
     let her = skeleton_for(sim::Class::DualMage);
     let skeletons = view::being::BODIES.map(skeleton_for);
     let scales = [0, 1].map(|k| view::being::scale(&her, &skeletons[k]));
@@ -193,6 +209,15 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<Spirit>>) {
         skeletons,
         scales,
         seal_radius,
+        beam_mesh: meshes.add(beam_mesh()),
+        beam_light: lights.add(StandardMaterial {
+            base_color: Color::LinearRgba(LinearRgba::rgb(0.7, 0.35, 1.0) * BEAM_LIGHT),
+            unlit: true,
+            alpha_mode: AlphaMode::Add,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
     });
 }
 
@@ -251,6 +276,59 @@ pub fn shows(k: usize) -> bool {
 /// tonemapper takes a colour to white.
 pub const GLOW: [f32; 2] = [70.0, 110.0];
 
+/// How bright a rift's shaft of light is at the crack, in the unlit
+/// colour's units.
+const BEAM_LIGHT: f32 = 2.2;
+
+/// A shaft of light: a frustum along `+y` from the origin to one, a fifth
+/// as wide at the crack as at its end, fading to nothing along its length
+/// (in its colour, which an additive light reads as its strength).
+fn beam_mesh() -> Mesh {
+    let mut mesh = Mesh::from(ConicalFrustum {
+        radius_top: 1.0,
+        radius_bottom: 0.2,
+        height: 1.0,
+    });
+    if let Some(bevy::render::mesh::VertexAttributeValues::Float32x3(at)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for p in at.iter_mut() {
+            p[1] += 0.5;
+        }
+    }
+    let fades: Vec<[f32; 4]> = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
+        Some(bevy::render::mesh::VertexAttributeValues::Float32x3(at)) => at
+            .iter()
+            .map(|p| {
+                let f = (1.0 - p[1]).clamp(0.0, 1.0).powf(1.6);
+                [f, f, f, f]
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, fades);
+    mesh
+}
+
+/// Put a shaft of light on a rift: a child of the marker at the crack
+/// (`from`), pointing at the marker the shaft reaches (`to`, both in the
+/// joint's space, as the model's file places them).
+pub fn beam(commands: &mut Commands, beings: &Beings, from: (Entity, Vec3), to: Vec3) {
+    let along = to - from.1;
+    let length = along.length().max(0.01);
+    let turn = Quat::from_rotation_arc(Vec3::Y, along / length);
+    let wide = length * 0.22;
+    commands.entity(from.0).with_children(|c| {
+        c.spawn((
+            Mesh3d(beings.beam_mesh.clone()),
+            MeshMaterial3d(beings.beam_light.clone()),
+            Transform::from_rotation(turn).with_scale(Vec3::new(wide, length, wide)),
+            NotShadowCaster,
+            NotShadowReceiver,
+        ));
+    });
+}
+
 /// How high off the floor the seal is laid, so it never fights the floor
 /// for the same depth.
 const SEAL_LIFT: f32 = 0.025;
@@ -269,6 +347,7 @@ pub fn place(
     rigs: Res<crate::models::Rigs>,
     beings: Res<Beings>,
     mut echo: ResMut<Echo>,
+    mut casting: ResMut<Casting>,
     mut materials: ResMut<Assets<Spirit>>,
     mut roots: Query<(&BeingRoot, &mut Transform, &mut Visibility), Without<Seal>>,
     mut seals: Query<(&Seal, &mut Transform, &mut Visibility), Without<BeingRoot>>,
@@ -293,6 +372,17 @@ pub fn place(
         let late = echo
             .behind(owner, now, view::being::LAG_SECONDS)
             .unwrap_or(drawn);
+        // Into her pose while she throws something, back to its own after.
+        let throwing = p.action.attack_kind().is_some();
+        let w = &mut casting.0[owner];
+        let rate = if throwing {
+            view::being::CAST_IN
+        } else {
+            view::being::CAST_OUT
+        };
+        let target = if throwing { 1.0 } else { 0.0 };
+        *w += (target - *w) * (1.0 - (-rate * time.delta_secs()).exp());
+        let w = *w;
         let v = frame.players[owner];
         let feet = Vec3::from_array(v.pos);
         let q = view::body_turn([v.facing[0], v.facing[2]]).0;
@@ -303,7 +393,7 @@ pub fn place(
         for k in 0..2 {
             let skeleton = &beings.skeletons[k];
             let s = beings.scales[k];
-            let skin = view::skeleton::solve(skeleton, &view::being::stance(k, &late));
+            let skin = view::skeleton::solve(skeleton, &view::being::stance(k, &late, w));
             crate::models::pose(rigs.being[owner][k], Some(&skin), &mut bones);
             // Hips at her feet; or, looked at whole, standing on her floor.
             let sink = if whole > 0.0 {
