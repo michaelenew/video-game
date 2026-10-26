@@ -97,16 +97,91 @@ depth half its width.
 
 ![After: crossbreeds](../gallery/0033_lines_walks.jpg)
 
+## Wings, scythes and the rest of the body
+
+The owner, after the walks: *"Proceed on all fronts. Attacks, wings, etc. All
+plausible at all stages."*
+
+- **A folded wing lies along the body** (`build`, the held wing): the humerus
+  back and a little down the flank, the forearm forward along it to a wrist
+  at the front of the breast, the hand back along the flank -- in the body's
+  own frame. It was placed in the world's, so a body tipped up wore its
+  folded wing as a plank across it. Its band is no deeper than two fifths of
+  the body (`fold_planes`).
+- **A flier is deep through the keel**: as deep as it is wide and more (a
+  bird's wing muscles hang from it); a thin one was dwarfed by its wings.
+- **Armour is weight a wing must lift** (`plan::flight_margin`): a plated
+  beast that has just grown wings does not fly, and so gets no stoop or
+  talon pass.
+- **Scythes three fifths as long** as a leg of the same share: a crossbreed's
+  inherited from a wing reached two thirds of its body. What the arm's sweep
+  did for readability the whole body does now (below).
+- **A pair too short to reach the floor is held up**, not stood on: a limb
+  just budding hung in the air and the weight was over nothing.
+- **A toad's head weighs what it is**: a head that is the front of the body
+  is built as deep and wide as the body, and was weighed as a small cube; its
+  forelegs may stand under it, and the balance keeps the weight a quarter in
+  from the ends of the feet (it was a fifth).
+- **A body on its belly** rests on its deepest segment, and a paddling leg's
+  knee bends up rather than through the floor.
+
+## Attacks a body could make, and reads off its whole body
+
+The owner: *"Attacks should include a whole body indicator for the most part
+to keep them readable. An artificial indicator, like a specific bellow, can
+be used in edge cases where that's hard."*
+
+- **The whole body winds up** (`strike::gather`). A move whose windup moves
+  only a limb, a head or a tail gathers the other way from where its strike
+  goes -- drawn back before a lunge, sunk before a blow upward, turned away
+  before a sweep -- rocking over feet that stay planted, until the trunk has
+  moved a sixteenth of the body's length (`BODY_TELL`). The verdict's
+  *legible* now asks for that as well as a silhouette's change
+  (`Reading::body`).
+- **A cry where it cannot** (`strike::Cry`): a move begun under the floor
+  rumbles; a move the body cannot gather for, or two windups the eye cannot
+  tell apart, cries -- the body's own voice first (a beak screeches, an
+  insect chitters, a plated hide rattles, a maw bellows), each cried move of
+  one body a different cry, and two moves that cry differently are not
+  alike. 36 of the 379 damaging moves across the cast and the lines cry; the
+  rest are told by the body.
+- **A windup is stood on** (`strike::steady`): where a held windup puts the
+  weight past the feet, the body rocks back over them first. A kick back
+  throws the weight onto the forefeet before the hind feet leave the floor,
+  and is not given to a body with no other legs to stand on.
+- **Nothing through the floor but what strikes** (`strike::settle`): a move
+  whose crouch takes a belly, a thigh or a jaw under the ground at any frame
+  is lifted, its windup and strike together, and aimed again by what it
+  reaches with.
+- Moves fixed on the way: a charge's head is at its target height from the
+  windup (it passed over somebody close) and high enough that a big jaw does
+  not plough the floor; a stomp lifts one forefoot and keeps the other three
+  down; a gore is aimed at standing height; an inflating toad swells where it
+  stands.
+
+`tests/strides.rs` holds all of it, for the cast and every stage of the
+lines: `every_attack_is_one_the_body_could_make` (nothing but what strikes
+and the feet into the floor; the weight over the feet through a held windup,
+except a leap, a rush or a throw of the whole body) and
+`attacks_are_read_off_the_whole_body` (nothing unreadable or alike, and no
+more than a fifth told by a cry). `BRED_ATTACK=<line>:<stage>` exports a
+stage's moves for `art/gait.py`.
+
+![The Ridgeback's moves, rest to strike: striking parts yellow](../gallery/0033_ridgeback_moves.jpg)
+![A crossbred mantis's moves (Galewing to Mantis, stage 9)](../gallery/0033_crossbreed_moves.jpg)
+![Wings folded along the body](../gallery/0033_wings.jpg)
+![Walks, the cast and the lines, at the end](../gallery/0033_walks_final.jpg)
+
 ## Still not plausible
 
-The walk strips show what the checks do not yet ask:
-
-- folded wings are drawn as slabs as deep as the body, and a wing walked on
-  (Ridgeback to Galewing, stages 2 and 3) shows its folded panels as a big N
-  beside the legs;
-- the Mantis-like bodies stand on legs short for them, with scythes longer
-  than the legs;
-- the Ridgeback's torso is short for legs as long as its.
+- A crossbreed that walks on its wrists (Ridgeback to Galewing, stage 3)
+  plants them well ahead with its elbows out: a big pterosaur's stance, and
+  the ugliest of the lines.
+- Some crossbred Mantis-like stages carry long hind legs and short budding
+  middle ones, and stand on the hind pair alone.
+- The Ridgeback's torso is short for legs as long as its.
+- A cry is a field on the move; nothing in the game plays or shows it yet,
+  because bred bodies do not fight in the game yet.
 
 The hand edits of 0032 are retired (`game::touch::TOUCHES` is empty): they
 reshaped boxes on bodies that could not walk.

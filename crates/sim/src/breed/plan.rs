@@ -655,11 +655,18 @@ pub fn flight_margin(g: &Genome) -> Fx {
     let Some((_, wing)) = g.pairs().find(|(_, p)| p.role == Role::Wing) else {
         return Fx::from_int(-1);
     };
+    // Armour is weight a wing has to lift: a plated beast that has just
+    // grown wings does not take off on them (exploration 0033).
+    let armour = match (g.minors.hide, g.minors.back) {
+        (Hide::Plates | Hide::Shell, _) | (_, Back::Burden) => fx(2, 5),
+        _ => Fx::ZERO,
+    };
     wing.length
         .mul(fx(3, 2))
         .add(Fx::ONE.sub(g.sliders.mass).mul(fx(4, 5)))
         .sub(g.sliders.size.mul(fx(3, 5)))
         .sub(fx(9, 10))
+        .sub(armour)
 }
 
 pub fn assess(g: &Genome) -> Assessment {

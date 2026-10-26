@@ -744,6 +744,105 @@ mod gait {
         }
     }
 
+    /// `BRED_ATTACK=<line>:<stage>` (or `cast:<Name>`): each damaging move's
+    /// body boxes at six points from rest through its windup and strike,
+    /// `target/gait/<tag>_<move>_<k>.obj`, the striking parts in yellow --
+    /// for judging whether a body could make it, and whether it shows it.
+    #[test]
+    fn bred_attack() {
+        let Some(what) = crate::platform::env("BRED_ATTACK") else {
+            return;
+        };
+        use sim::breed::{posture, strike};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/gait");
+        for item in what.split(',') {
+            let Some((line, k)) = item.split_once(':') else {
+                continue;
+            };
+            let cast = sim::breed::archetypes::CAST
+                .iter()
+                .find(|c| line == "cast" && c.1 == k)
+                .map(|c| *c.2);
+            let tag = if cast.is_some() {
+                format!("cast_{k}")
+            } else {
+                format!("{line}_{:02}", k.parse::<usize>().unwrap_or(0))
+            };
+            let k: usize = k.parse().unwrap_or(0);
+            let Some(g) = cast.or_else(|| {
+                super::lines()
+                    .into_iter()
+                    .find(|l| l.name == line)
+                    .and_then(|l| l.stages.get(k).map(|s| s.genome))
+            }) else {
+                continue;
+            };
+            let q = posture::posture(&g);
+            let (kit, n) = strike::kit(&g, &q);
+            for (spec, m) in kit[..n].iter().flatten() {
+                if spec.damage == 0 {
+                    continue;
+                }
+                let frames = [
+                    0,
+                    spec.startup / 2,
+                    spec.startup - 1,
+                    spec.startup + spec.active / 2,
+                    spec.startup + spec.active - 1,
+                ];
+                let cry = m.cry.map_or(String::new(), |c| format!("-{}", c.name()));
+                for (f, &frame) in frames.iter().enumerate() {
+                    let body = strike::body_at(&g, &q, m, spec, frame);
+                    let mut out = String::new();
+                    let mut v0 = 0;
+                    for i in 0..body.part_count {
+                        let part = &body.parts[i];
+                        let bone = body.bones[part.shape.bone].name;
+                        let c = if m
+                            .strikers
+                            .iter()
+                            .any(|s| !s.is_empty() && part.name.starts_with(s))
+                        {
+                            [0.95, 0.85, 0.2]
+                        } else {
+                            colour(part.name, bone, &g)
+                        };
+                        for v in body.corners(i) {
+                            let v = super::fx3(v);
+                            out.push_str(&format!(
+                                "v {} {} {} {} {} {}\n",
+                                v.x, v.y, v.z, c[0], c[1], c[2]
+                            ));
+                        }
+                        for face in [
+                            [0, 1, 3, 2],
+                            [4, 6, 7, 5],
+                            [0, 4, 5, 1],
+                            [2, 3, 7, 6],
+                            [0, 2, 6, 4],
+                            [1, 5, 7, 3],
+                        ] {
+                            out.push_str(&format!(
+                                "f {} {} {} {}\n",
+                                v0 + face[0] + 1,
+                                v0 + face[1] + 1,
+                                v0 + face[2] + 1,
+                                v0 + face[3] + 1
+                            ));
+                        }
+                        v0 += 8;
+                    }
+                    let name = spec.kind.name().replace(' ', "-");
+                    crate::platform::write_to(
+                        &dir.join(format!("{tag}_{name}{cry}_{f}.obj")),
+                        &out,
+                        "a move's frame",
+                    );
+                }
+            }
+        }
+    }
+
     /// Torso grey, walking legs blue, wings violet, striking arms orange,
     /// head red, tail green.
     fn colour(name: &str, bone: &str, g: &sim::breed::Genome) -> [f32; 3] {

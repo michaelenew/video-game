@@ -1136,6 +1136,10 @@ pub const SECTIONS: &[Section] = &[
                 "Write a crossbreed stage's (or cast:<Name>, one of the cast's genomes) body boxes at eight points of its slowest gait to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
             ),
             e(
+                "BRED_ATTACK=<line>:<stage>,... cargo test -p game --bin game bred_attack",
+                "Write each damaging move of a crossbreed stage (or cast:<Name>) as its body boxes at five points from rest through windup and strike to target/gait/, the striking parts yellow and a cried move's cry in the name; art/blender.sh art/gait.py renders them as strips.",
+            ),
+            e(
                 "GROWN_STAGES=0,3,6",
                 "With GROWN_LINES: grow those stages of the lines alone. A stage with hand edits (game::touch, exploration 0032) is written twice, the breeder's body as <line>_<stage>_raw.obj beside the edited one.",
             ),

@@ -183,7 +183,12 @@ fn faults(g: &Genome) -> Vec<String> {
                     continue;
                 }
             }
-            if q.bellied || part.shape.hollow {
+            // A body on its belly rests its trunk on the floor; its legs,
+            // head and wings are held off it all the same.
+            let trunk = sim::breed::verdict::TRUNK
+                .iter()
+                .any(|t| part.name.starts_with(t));
+            if (q.bellied && trunk) || part.shape.hollow {
                 continue;
             }
             if q.drags && matches!(part.name, "rump" | "haunch" | "abdomen") {
@@ -197,7 +202,10 @@ fn faults(g: &Genome) -> Vec<String> {
             // it need only be off the floor.
             let sprawl = station
                 .is_some_and(|st| g.limbs[st].is_some_and(|l| posture::splayed(g.stance, l.build)));
-            let clear = if sprawl { 0.0 } else { height * 0.08 };
+            // So may a standing leg's knee in a deep crouch: the margin is
+            // for the body, the head and the wings.
+            let leg = station.is_some_and(|st| q.stations[st].grounded);
+            let clear = if sprawl || leg { 0.0 } else { height * 0.08 };
             if clear - low > worst_floor.0 {
                 worst_floor = (clear - low, part.name.to_string());
             }
@@ -379,4 +387,210 @@ fn every_body_is_carried_like_an_animal() {
         }
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// **Attacks a body could make** (exploration 0033): through each damaging
+/// move's windup and strike, nothing but what strikes and the feet goes
+/// into the floor, and -- except where the move is a leap, a rush or a
+/// throw of the whole body -- the mass stays over the feet on the floor
+/// while the windup is held.
+fn attack_faults(g: &Genome) -> Vec<String> {
+    use sim::breed::build::MoveKind::*;
+    use sim::breed::strike;
+    let mut out = vec![];
+    if g.stance == sim::breed::Stance::Limbless {
+        return out;
+    }
+    let q = posture::posture(g);
+    let p = build::proportions(g);
+    let (kit, n) = strike::kit(g, &q);
+    for (spec, m) in kit[..n].iter().flatten() {
+        if spec.damage == 0 {
+            continue;
+        }
+        // Begun under the floor, it is meant to come up through it.
+        if m.from.lift < Fx::ZERO {
+            continue;
+        }
+        let whole_body = matches!(
+            spec.kind,
+            Charge
+                | Rush
+                | Pounce
+                | Leap
+                | Lunge
+                | Ambush
+                | Stoop
+                | TalonPass
+                | BellyFlop
+                | RearSlam
+                | Shoulder
+                | Plough
+                | SacSlam
+                | Erupt
+                | BreachDive
+                | Buffet
+                | Downwash
+                | FeatherVolley
+        );
+        let frames = [
+            spec.startup / 2,
+            spec.startup - 1,
+            spec.startup + spec.active / 2,
+        ];
+        for frame in frames {
+            let body = strike::body_at(g, &q, m, spec, frame);
+            // Into the floor.
+            for i in 0..body.part_count {
+                let part = &body.parts[i];
+                if part.shape.hollow
+                    || m.strikers
+                        .iter()
+                        .any(|s| !s.is_empty() && part.name.starts_with(s))
+                {
+                    continue;
+                }
+                let bone = body.bones[part.shape.bone].name;
+                if bone.ends_with(".foot")
+                    || bone.ends_with(".lower")
+                    || part.name.starts_with("tail")
+                {
+                    continue;
+                }
+                let low = f(body.lowest(i));
+                if low < -0.1 {
+                    out.push(format!(
+                        "{}: {} {:.2} m into the floor",
+                        spec.kind.name(),
+                        part.name,
+                        -low
+                    ));
+                    break;
+                }
+            }
+            // A windup is held, and is stood on; the strike is quick, and
+            // its momentum carries it a little past the feet.
+            if whole_body || q.bellied || frame >= spec.startup {
+                continue;
+            }
+            // Carried: the mass over the feet on the floor.
+            let (mut mass, mut cx, mut cz) = (0.0f32, 0.0f32, 0.0f32);
+            let (mut lo, mut hi, mut zlo, mut zhi) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+            for i in 0..body.part_count {
+                let part = &body.parts[i];
+                if part.shape.hollow {
+                    continue;
+                }
+                let h = part.shape.max.sub(part.shape.min);
+                let v = (f(h.x) * f(h.y) * f(h.z)).abs();
+                let c = body.centre(i);
+                mass += v;
+                cx += f(c.x) * v;
+                cz += f(c.z) * v;
+                let bone = body.bones[part.shape.bone].name;
+                if (bone.ends_with(".foot") || bone.ends_with(".lower")) && f(body.lowest(i)) < 0.15
+                {
+                    for k in body.corners(i) {
+                        if f(k.y) < 0.3 {
+                            lo = lo.min(f(k.x));
+                            hi = hi.max(f(k.x));
+                            zlo = zlo.min(f(k.z));
+                            zhi = zhi.max(f(k.z));
+                        }
+                    }
+                }
+            }
+            if mass <= 0.0 || lo > hi {
+                continue;
+            }
+            let (cx, cz) = (cx / mass, cz / mass);
+            // A biped balances over one foot as it strikes, as a bird or a
+            // raptor does: a foot's length more.
+            let legs = g.pairs().filter(|(_, l)| l.role.grounded()).count();
+            let foot = if legs <= 1 { f(p.len) * 0.08 } else { 0.0 };
+            // And a little more for any body: a strike shifts the weight
+            // over the feet as it goes, and a hair past them is caught.
+            let slack = (f(p.torso) * 0.1).max(f(p.len) * 0.03) + foot;
+            let off = (lo - slack - cx)
+                .max(cx - hi - slack)
+                .max(zlo - slack - cz)
+                .max(cz - zhi - slack);
+            if off > 0.0 {
+                out.push(format!("{}: {:.2} m off its feet", spec.kind.name(), off));
+                break;
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// **Read off the whole body, for the most part** (the owner: *"attacks
+/// should include a whole body indicator for the most part to keep them
+/// readable. An artificial indicator, like a specific bellow, can be used
+/// in edge cases"*): no stage's move unreadable or alike another, and no
+/// more than a fifth of all of them told by a cry.
+#[test]
+fn attacks_are_read_off_the_whole_body() {
+    use sim::breed::{strike, verdict};
+    let (mut moves, mut cried) = (0, 0);
+    let mut bad = vec![];
+    let mut all: Vec<(String, Genome)> = CAST.iter().map(|c| (c.1.to_string(), *c.2)).collect();
+    for (line, stages) in lines() {
+        for (k, g) in stages.into_iter().enumerate() {
+            all.push((format!("{line} {k}"), g));
+        }
+    }
+    for (name, g) in &all {
+        let q = posture::posture(g);
+        let v = verdict::judge(g, &q);
+        if v.unanswerable > 0 || v.lookalikes > 0 {
+            bad.push(format!(
+                "{name}: {} unreadable, {} alike ({:?})",
+                v.unanswerable, v.lookalikes, v.lookalike[0]
+            ));
+        }
+        let (kit, n) = strike::kit(g, &q);
+        for (spec, m) in kit[..n].iter().flatten() {
+            if spec.damage > 0 {
+                moves += 1;
+                cried += m.cry.is_some() as usize;
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+    eprintln!("{cried} of {moves} damaging moves cry");
+    assert!(
+        cried * 5 <= moves,
+        "{cried} of {moves} moves are told by a cry, not the body"
+    );
+}
+
+#[test]
+fn every_attack_is_one_the_body_could_make() {
+    let mut bad = vec![];
+    let mut total = 0;
+    for (_, name, g, _) in CAST {
+        total += 1;
+        let e = attack_faults(g);
+        if !e.is_empty() {
+            bad.push(format!("{name}: {}", e.join("; ")));
+        }
+    }
+    for (line, stages) in lines() {
+        for (k, g) in stages.iter().enumerate() {
+            total += 1;
+            let e = attack_faults(g);
+            if !e.is_empty() {
+                bad.push(format!("{line} {k}: {}", e.join("; ")));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "{} of {total} bodies:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }

@@ -107,9 +107,10 @@ pub struct Posture {
 /// tables has them.
 pub const ATTACH_DOWN: Fx = fx(3, 4);
 
-/// The band of the support the mass must sit inside: a fifth in from each
-/// end.
-const BAND: Fx = fx(1, 5);
+/// The band of the support the mass must sit inside: a quarter in from
+/// each end -- at a fifth, a body stood with its weight so near its
+/// forefeet that any blow forward tipped it over them (exploration 0033).
+const BAND: Fx = fx(1, 4);
 
 /// A part with mass, at a point along the torso's axis (x) and above it (y).
 #[derive(Clone, Copy)]
@@ -191,7 +192,14 @@ fn masses(g: &Genome, p: &Proportions) -> Masses {
     }
     // The head, out on its neck.
     let hh = p.head_half;
-    let head_m = hh.mul(hh).mul(hh).mul(Fx::from_int(6)).mul(rho);
+    // A head that is the front of the body is built as deep and as wide
+    // as the body (`build`): weighed as a small one, a toad's stood its
+    // weight far ahead of its forelegs (exploration 0033).
+    let head_m = if g.head == HeadKind::Merged {
+        hh.mul(p.half_h).mul(p.half_w).mul(Fx::from_int(8)).mul(rho)
+    } else {
+        hh.mul(hh).mul(hh).mul(Fx::from_int(6)).mul(rho)
+    };
     out.push(
         p.front.add(p.neck_len).add(hh),
         p.neck_len.mul(fx(1, 4)),
@@ -329,6 +337,17 @@ impl Solver<'_> {
             .filter(|(_, s)| s.grounded)
     }
 
+    /// The furthest forward a pair may stand along the body: the torso's
+    /// front, or, where the head is the front of the body, under the head
+    /// -- a toad's forelegs are (exploration 0033).
+    fn front_most(&self) -> Fx {
+        if self.g.head == HeadKind::Merged {
+            self.p.front.add(self.p.head_half)
+        } else {
+            self.p.front
+        }
+    }
+
     /// A foot's world x: the hip's, plus the reach.
     fn foot_x(&self, i: usize) -> Fx {
         let s = &self.pose.stations[i];
@@ -399,7 +418,7 @@ impl Solver<'_> {
             }
             let at = self.pose.stations[i].attach;
             let limit = if want > Fx::ZERO {
-                self.p.front.sub(at)
+                self.front_most().sub(at)
             } else {
                 at.sub(self.p.rear_attach)
             };
@@ -623,7 +642,7 @@ impl Solver<'_> {
             let mut step = e.div(c);
             for s in self.pose.stations.iter().filter(|s| s.grounded) {
                 step = if step > Fx::ZERO {
-                    step.min(self.p.front.sub(s.attach).max(Fx::ZERO))
+                    step.min(self.front_most().sub(s.attach).max(Fx::ZERO))
                 } else {
                     step.max(self.p.rear_attach.sub(s.attach).min(Fx::ZERO))
                 };
@@ -920,6 +939,9 @@ impl Solver<'_> {
                 }
                 rise = rise.add(fx(1, 100));
             }
+            // A raised head's own rise counts against the same limit: on a
+            // body already tilted it stood the neck past vertical.
+            rise = rise.min(most.sub(self.pose.pitch));
         }
         self.pose.neck_rise = rise;
     }
@@ -1020,9 +1042,31 @@ pub fn posture(g: &Genome) -> Posture {
     // the sides as paddles, bent as far as the floor makes them.
     if g.stance != Stance::Limbless && super::plan::leg_strength(g) < super::plan::WEAK_LEGS {
         solver.pose.bellied = true;
-        solver.pose.root = solver.pose.root.min(solver.p.half_h);
+        // On the deepest of its trunk: a thorax stands half as deep again
+        // as the torso, and lay half under the floor (exploration 0033).
+        let deep = if solver.p.thorax {
+            fx(3, 2)
+        } else if solver.p.abdomen {
+            fx(6, 5)
+        } else {
+            Fx::ONE
+        };
+        solver.pose.root = solver.pose.root.min(solver.p.half_h.mul(deep));
         solver.pose.pitch = Fx::ZERO;
         solver.feet();
+    }
+    // A pair too short to reach the floor from where the others hold the
+    // body -- a limb just budding -- is held up, not walked on: counted as
+    // standing, it hung in the air and the weight was over nothing
+    // (exploration 0033).
+    let standing = solver.pose.stations.iter().filter(|s| s.grounded).count();
+    if standing > 1 {
+        for s in solver.pose.stations.iter_mut() {
+            if s.grounded && s.dangles && !s.wing_walks {
+                s.grounded = false;
+                s.extension = Fx::ZERO;
+            }
+        }
     }
     if g.stance != Stance::Limbless {
         solver.spread();
