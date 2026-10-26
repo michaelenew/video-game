@@ -40,7 +40,7 @@ COLOURS = {
     "skirt": (0.70, 0.72, 0.76),
 }
 GLOW = (1.0, 0.93, 0.76)
-METAL = {"plate": (0.5, 0.14), "gold": (0.8, 0.3), "knit": (0.6, 0.25)}
+METAL = {"plate": (0.5, 0.24), "gold": (0.8, 0.3), "knit": (0.6, 0.25)}
 # No painted trim: on plate cut in planes it spread over whole facets as
 # white blotches. Its edges are its light (``outfit.glowing_edges``).
 ART = {"shade_tint": (0.75, 0.8, 1.0), "warm": (1.12, 1.06, 0.98), "trim": (1.0, 1.0, 1.0),

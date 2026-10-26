@@ -3,8 +3,7 @@
 A celestial knight (the owner, 2026-10-26, from a reference "not far off,
 but probably too heavy on the gold and a little too ornate -- this should be
 a cool visual but not so dominant visually"): full plate in pale silver,
-cut in planes like cut crystal rather than smoothed, light running along the
-edges of every plate (``glowing_edges``); a closed helm with a crest and a
+light running along the edges of every plate (``glowing_edges``); a closed helm with a crest and a
 slit of light for its eyes; broad pointed plates over the shoulders; plate
 down the arms to gauntlets; tassets over a pale skirt; greaves. Gold only at
 the belt. A short half-cloak over the left shoulder. Nothing holy: no halo.
@@ -34,7 +33,7 @@ def facet(ob, triangles):
     return ob
 
 
-def glowing_edges(ob, power=3.0):
+def glowing_edges(ob, power=6.0):
     """Light along a plate's edge: its ``hem`` (the open edge, falling off
     inward) copied to ``edge``, which is what glows, tightened to the rim."""
     hem = ob.vertex_groups.get("hem")
@@ -48,9 +47,15 @@ def glowing_edges(ob, power=3.0):
     return ob
 
 
+# Plate is smooth: cut into big flat facets, each one either caught the light
+# whole or did not, and in the game that read as white blotches on grey
+# rather than as cut crystal (the first build).
+FACETED = False
+
+
 def plate(pieces, triangles=None):
     for p in pieces:
-        if triangles:
+        if triangles and FACETED:
             facet(p, triangles)
             # Its smooth high piece would bake the roundness back over the
             # planes as a normal map.

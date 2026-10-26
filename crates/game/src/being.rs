@@ -274,7 +274,7 @@ pub fn shows(k: usize) -> bool {
 /// then light: the titan's cracks and heart, the seraph's sun and the light
 /// it gives off. Bright enough to read as light, short of where the
 /// tonemapper takes a colour to white.
-pub const GLOW: [f32; 2] = [30.0, 22.0];
+pub const GLOW: [f32; 2] = [30.0, 14.0];
 
 /// How bright a rift's shaft of light is at the crack, in the unlit
 /// colour's units.
