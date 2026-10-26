@@ -5,8 +5,8 @@ The Dual mage's dark half, drawn as a body of its own. The owner,
 everywhere". So a clean classical build, not anatomy pushed until it bent
 (the demon before it read misshapen): a man at the top of MakeHuman's
 muscle and lean, so every muscle shows, a strong V, full chest and arms, the
-stomach cut. On the Champion's skeleton (``build.CLASS``), the reference
-proportions, so nothing is stretched or squat. Bald.
+stomach cut. On the Bulwark's skeleton (``build.CLASS``), whose shoulders are
+broad enough to carry it. Bald.
 """
 
 import mh
@@ -25,6 +25,6 @@ BODY = mh.macro(gender="male", age="young", muscle=1.0, weight=0.6, proportions=
 # Built up evenly, one value down the whole trunk and one down each limb,
 # so nothing steps at a joint: on her frame MakeHuman's strongest man still
 # came out slim (the first obsidian build).
-GIRTH = {"root": 1.12, "spine": 1.12, "chest": 1.12, "arm.l": 1.2, "arm.r": 1.2,
-         "forearm.l": 1.16, "forearm.r": 1.16, "thigh.l": 1.12, "thigh.r": 1.12}
+GIRTH = {"root": 1.08, "spine": 1.08, "chest": 1.08, "arm.l": 1.15, "arm.r": 1.15,
+         "forearm.l": 1.12, "forearm.r": 1.12, "thigh.l": 1.08, "thigh.r": 1.08}
 HEAD_SCALE = 0.94

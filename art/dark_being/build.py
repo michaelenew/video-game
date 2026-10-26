@@ -2,7 +2,7 @@
 
     art/blender.sh art/dark_being/build.py [--look out.png] [--paint] [--size 2048]
 
-On the Champion's skeleton (``CLASS``): the being is posed with the Dual
+On the Bulwark's skeleton (``CLASS``), the broadest in the game: the being is posed with the Dual
 mage's own pose when she casts, which is angles and so fits any skeleton
 (``view::being::BODIES``). Everything else is its own (``recipe.py``,
 ``outfit.py``).
@@ -23,14 +23,16 @@ import wardrobe  # noqa: E402
 from recipe import BODY, GIRTH, HEAD_SCALE  # noqa: E402,F401
 
 NAME = "dark_being"
-CLASS = "Champion"
+CLASS = "Bulwark"
 
 # Linear albedo, judged lit. **Obsidian**: near-black glass, glossy, so the
-# muscle's shapes are drawn by its highlights; and violet in its shade and on
-# its ridges (``ART``) so they still read in shadow. Iron that is iron:
+# muscle's shapes are drawn by its highlights; and a little violet on its
+# ridges (``ART``) so they still read in shadow -- a little: the painter adds
+# a ridge's light rather than multiplying it, so on black even a fifth of it
+# turned the whole body lavender (the first two builds). Iron that is iron:
 # grey, metal, its edges worn bright. A kilt of black wool.
 COLOURS = {
-    "skin": (0.022, 0.016, 0.032),
+    "skin": (0.009, 0.007, 0.013),
     "iron": (0.30, 0.29, 0.28),
     "kilt": (0.03, 0.022, 0.03),
     "eye": (0.05, 0.03, 0.06),
@@ -41,15 +43,15 @@ GLOW = (0.72, 0.42, 1.0)
 METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.3)}
 # Violet light painted on: in the shade, and on every ridge of the muscle.
 ART = {
-    "shade_tint": (1.2, 0.8, 2.0),
-    "ao_strength": 0.6,
-    "warm": (1.06, 0.9, 1.45),
-    "edge_light": 0.3,
+    "shade_tint": (1.2, 0.7, 2.2),
+    "ao_strength": 0.5,
+    "warm": (1.0, 0.6, 1.7),
+    "edge_light": 0.07,
     "curv_gain": 8.0,
-    "top_warm": 0.1,
-    "crease_dark": 0.35,
+    "top_warm": 0.05,
+    "crease_dark": 0.3,
     "trim": (1.9, 1.85, 1.8),
-    "stroke_value": 0.05,
+    "stroke_value": 0.04,
 }
 
 

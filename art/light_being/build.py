@@ -25,22 +25,26 @@ from recipe import BODY, GIRTH, HEAD_SCALE  # noqa: E402,F401
 NAME = "light_being"
 CLASS = "Champion"
 
-# Linear albedo, judged lit. Pale silver plate, bright and mostly metal (white
-# and half metal read as plastic, dark and fully metal as gunmetal); gold
+# Linear albedo, judged lit. Pale silver plate, half metal and glossy: the
+# game has no reflections for metal to show, so fully metal reads as
+# gunmetal, and matte white as plastic; gold
 # only at the belt; a pale skirt and cloak with a cool grey in them.
 COLOURS = {
     "knit": (0.36, 0.24, 0.16),
     "knit/2": (0.36, 0.24, 0.16),
-    "knit/3": (0.70, 0.72, 0.78),      # gauntlets: plate
+    "knit/3": (0.80, 0.82, 0.86),      # gauntlets: plate
     "knit/4": (0.36, 0.24, 0.16),
-    "plate": (0.70, 0.72, 0.78),
+    "plate": (0.80, 0.82, 0.86),
     "gold": (0.90, 0.70, 0.36),
     "cloak": (0.82, 0.84, 0.88),
     "skirt": (0.70, 0.72, 0.76),
 }
 GLOW = (1.0, 0.93, 0.76)
-METAL = {"plate": (0.8, 0.18), "gold": (0.8, 0.3), "knit": (0.6, 0.25)}
-ART = {"shade_tint": (0.75, 0.8, 1.0), "warm": (1.12, 1.06, 0.98)}
+METAL = {"plate": (0.5, 0.14), "gold": (0.8, 0.3), "knit": (0.6, 0.25)}
+# No painted trim: on plate cut in planes it spread over whole facets as
+# white blotches. Its edges are its light (``outfit.glowing_edges``).
+ART = {"shade_tint": (0.75, 0.8, 1.0), "warm": (1.12, 1.06, 0.98), "trim": (1.0, 1.0, 1.0),
+       "stitch_dark": 0.0, "edge_light": 0.12}
 LUMINOUS = {"cloak": 0.015}
 
 

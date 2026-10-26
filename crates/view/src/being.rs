@@ -158,12 +158,14 @@ fn smoothstep(from: f32, to: f32, x: f32) -> f32 {
 /// short enough that it is still the same throw.
 pub const LAG_SECONDS: f32 = 0.12;
 
-/// Whose skeleton each being is built on, dark then light: the Champion's,
-/// the reference middleweight, broader than hers -- they are not her (the
-/// owner, 2026-10-25) -- and the same for both, so the two halves meet at
-/// the middle when they are halved. A pose is angles, so hers retargets onto
-/// it for free (`pose.rs`).
-pub const BODIES: [sim::Class; 2] = [sim::Class::Champion, sim::Class::Champion];
+/// Whose skeleton each being is built on, dark then light: broader than
+/// hers, because they are not her (the owner, 2026-10-25). The dark warrior
+/// has the Bulwark's -- the widest shoulders in the game, which a
+/// bodybuilder's frame needs: on the Champion's, MakeHuman's strongest man
+/// still came out slim, because the arms hang from the skeleton's shoulders
+/// however thick the body is made -- and the knight the Champion's. A pose
+/// is angles, so hers retargets onto either for free (`pose.rs`).
+pub const BODIES: [sim::Class; 2] = [sim::Class::Bulwark, sim::Class::Champion];
 
 /// How far out from the body the being's arms hang at rest, in degrees:
 /// enough to clear the mass of the lats, which is what keeps a heavily built
