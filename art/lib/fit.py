@@ -237,7 +237,7 @@ def landmarks(base, rig, v):
     return lm
 
 
-def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
+def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None, trunk=None):
     """The body on the game's skeleton, in a bind pose chosen to suit it.
 
     Returns ``(verts, faces, face_uvs, uvs, weights, bind_origin, bind_rot)``
@@ -247,6 +247,17 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
     The joints are found on ``v``; the vertices moved are ``carried`` if
     given -- the same body with its fingers closed, say, which would
     otherwise drag the hand's bone toward the curled fingertips.
+
+    ``trunk`` (optional) changes how the trunk is fitted, for a body whose
+    skeleton is far from MakeHuman's own (the Bulwark's): ``smooth`` maps
+    every trunk vertex by one continuous curve in height instead of a
+    straight piece per bone, blended -- where the pieces' scales differ, the
+    blend kinks and the skin tears into a ledge under the chest; ``widen``
+    widens the chest toward the skeleton's shoulders, so the arms are not
+    hung from shoulders wider than the chest they come out of; ``relax``
+    (a number of rounds) evens out how far the fit moved each vertex across
+    the chest and shoulders, so the skin there moves as one sheet. The other
+    classes are fitted as they always were.
     """
     girth = girth or {}
     body = base.body_faces()
@@ -310,11 +321,38 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
     # the hip joints, the waist, the chest and the neck.
     hipmid_mh = (lm["thigh.l"] + lm["thigh.r"]) / 2
     hipmid_us = (origin[J["thigh.l"]] + origin[J["thigh.r"]]) / 2
-    trunk = {
+    trunk_map = {
         "root": (hipmid_mh, lm["spine"], hipmid_us, origin[J["spine"]]),
         "spine": (lm["spine"], lm["chest"], origin[J["spine"]], origin[J["chest"]]),
         "chest": (lm["chest"], lm["head"], origin[J["chest"]], origin[J["neck"]]),
     }
+
+    trunk = trunk or {}
+    knots_mh = np.array([hipmid_mh[1], lm["spine"][1], lm["chest"][1], lm["head"][1]])
+    knots_us = np.array([hipmid_us[1], origin[J["spine"]][1], origin[J["chest"]][1], origin[J["neck"]][1]])
+    widen_to = abs(origin[J["arm.r"]][0]) / max(abs(lm["arm.r"][0]), 1e-6)
+
+    def smooth_height(y):
+        """A monotone cubic through the trunk's joints' heights: the same
+        joints land in the same places, with no kink between them."""
+        x, f = knots_mh, knots_us
+        d = np.diff(f) / np.diff(x)
+        m = np.zeros(len(x))
+        m[0], m[-1] = d[0], d[-1]
+        for i in range(1, len(x) - 1):
+            m[i] = 0.0 if d[i - 1] * d[i] <= 0 else 2.0 / (1.0 / d[i - 1] + 1.0 / d[i])
+        out = np.empty_like(y)
+        below, above = y < x[0], y > x[-1]
+        out[below] = f[0] + (y[below] - x[0]) * d[0]
+        out[above] = f[-1] + (y[above] - x[-1]) * d[-1]
+        mid = ~below & ~above
+        i = np.clip(np.searchsorted(x, y[mid]) - 1, 0, len(x) - 2)
+        h = x[i + 1] - x[i]
+        t = (y[mid] - x[i]) / h
+        h00, h10 = 2 * t ** 3 - 3 * t ** 2 + 1, t ** 3 - 2 * t ** 2 + t
+        h01, h11 = -2 * t ** 3 + 3 * t ** 2, t ** 3 - t ** 2
+        out[mid] = h00 * f[i] + h10 * h * m[i] + h01 * f[i + 1] + h11 * h * m[i + 1]
+        return out
 
     def bone_map(name, p):
         # The collarbones are carried with the chest, the neck with the head
@@ -326,8 +364,20 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
         elif name.startswith("toe."):
             name = "foot." + name[-1]
         g = girth.get(name, 1.0)
-        if name in trunk:
-            a, b, A, B = trunk[name]
+        if name in ("root", "spine", "chest") and trunk.get("smooth"):
+            out = np.empty_like(p)
+            out[:, 1] = smooth_height(p[:, 1])
+            k = g
+            if trunk.get("widen"):
+                # Wider toward the shoulders, from nothing at the waist.
+                u = np.clip((out[:, 1] - hipmid_us[1])
+                            / max(origin[J["neck"]][1] - hipmid_us[1], 1e-6), 0.0, 1.0)
+                k = g * (1.0 + (widen_to - 1.0) * u * u * (3 - 2 * u))
+            out[:, 0] = hipmid_us[0] + (p[:, 0] - hipmid_mh[0]) * k
+            out[:, 2] = hipmid_us[2] + (p[:, 2] - hipmid_mh[2]) * g
+            return out
+        if name in trunk_map:
+            a, b, A, B = trunk_map[name]
             s = (B[1] - A[1]) / (b[1] - a[1])
             d = p - a
             out = np.empty_like(p)
@@ -369,6 +419,31 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None):
         m = W[:, j] > 0
         if m.any():
             out[m] += W[m, j:j + 1] * bone_map(name, pts[m])
+
+    if trunk.get("relax"):
+        # **Relax the fit across the chest and shoulders**: each vertex is
+        # moved by a blend of its bones' maps, and where a skeleton is far
+        # from MakeHuman's those maps disagree -- the chest's skin weighted
+        # to the arm is carried out to the arm's joint, the rest of it
+        # stays with the chest, and it tears into a ledge. Here how far each
+        # vertex was moved is evened out over its neighbours there, so the
+        # whole region moves as one sheet; the head, hands and feet keep
+        # their own.
+        nb = [set() for _ in range(len(pts))]
+        for f in faces:
+            for i in range(len(f)):
+                a, b = f[i], f[(i + 1) % len(f)]
+                nb[a].add(b)
+                nb[b].add(a)
+        nb = [list(x) for x in nb]
+        region = sum(W[:, J[n]] for n in ("root", "spine", "chest", "clavicle.l", "clavicle.r",
+                                           "arm.l", "arm.r"))
+        free = np.clip((region - 0.2) / 0.6, 0.0, 1.0)
+        delta = out - pts
+        for _ in range(int(trunk["relax"])):
+            mean = np.array([delta[x].mean(axis=0) if x else delta[i] for i, x in enumerate(nb)])
+            delta = delta + (mean - delta) * (0.5 * free)[:, None]
+        out = pts + delta
 
     # Points on the face the costume is cut round, carried as the head is.
     def head_point(mh_point):

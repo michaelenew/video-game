@@ -11,20 +11,25 @@ broad enough to carry it. Bald.
 
 import mh
 
-BODY = mh.macro(gender="male", age="young", muscle=1.0, weight=0.6, proportions=1.0,
+BODY = mh.macro(gender="male", age="young", muscle=1.0, weight=0.45, proportions=1.0,
                 races={"caucasian": 0.6, "african": 0.2, "asian": 0.2}) + [
     ("torso/torso-vshape-incr.target", 0.6),
-    ("torso/torso-muscle-pectoral-incr.target", 0.5),
+    ("torso/torso-muscle-pectoral-incr.target", 0.0),
     ("torso/torso-muscle-dorsi-incr.target", 0.5),
     ("stomach/stomach-tone-incr.target", 1.0),
-    ("measure/measure-waist-circ-decr.target", 0.3),
+    ("measure/measure-waist-circ-decr.target", 0.8),
+    ("measure/measure-hips-circ-decr.target", 0.5),
 ] + [(f"armslegs/{s}-{part}-incr.target", w) for s in "lr" for part, w in (
     ("upperarm-muscle", 1.0), ("upperarm-shoulder-muscle", 1.0), ("lowerarm-muscle", 0.8),
     ("upperleg-muscle", 0.7))]
 
-# Built up evenly, one value down the whole trunk and one down each limb,
-# so nothing steps at a joint: on her frame MakeHuman's strongest man still
-# came out slim (the first obsidian build).
-GIRTH = {"root": 1.08, "spine": 1.08, "chest": 1.08, "arm.l": 1.15, "arm.r": 1.15,
-         "forearm.l": 1.12, "forearm.r": 1.12, "thigh.l": 1.08, "thigh.r": 1.08}
+# Built up evenly, one value down the whole trunk and one down each limb:
+# girths that differ step at the joint between them.
+GIRTH = {"root": 1.04, "spine": 1.04, "chest": 1.04, "arm.l": 1.12, "arm.r": 1.12,
+         "forearm.l": 1.1, "forearm.r": 1.1, "thigh.l": 1.06, "thigh.r": 1.06}
+
+# The Bulwark's skeleton is far from MakeHuman's: fitted the usual way the
+# chest tore into a ledge and stretched into a flat yoke between shoulders
+# wider than it (``fit.fit``'s ``trunk``).
+FIT = {"smooth": True, "widen": True, "relax": 30}
 HEAD_SCALE = 0.94

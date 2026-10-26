@@ -87,7 +87,7 @@ fn map(which: usize) -> Handle<Image> {
 const SHADE_SHADER: Handle<Shader> = weak_handle!("c5a83e17-2d6f-4b9a-8e14-6f3c9b2d7a05");
 const SKIN_SHADER: Handle<Shader> = weak_handle!("e2f7b4a9-6c1d-4e38-9a52-8d4f1c7e3b60");
 
-pub use shade::Shade;
+pub use shade::{Lustre, Shade};
 
 /// The uniform on its own, because `ShaderType`'s derive writes a layout
 /// check per field beside it that nothing calls.
@@ -108,6 +108,23 @@ mod shade {
         pub right: Vec4,
         pub up: Vec4,
         pub along: Vec4,
+    }
+
+    /// **Lustre** (2026-10-26): reflections the world does not have, for a
+    /// surface that has to shine -- obsidian, polished plate. The game has
+    /// no environment map, so metal and glass reflect nothing and read grey
+    /// or plastic. This is a studio's lights, fixed to the camera as a
+    /// painter's would be: a sky gradient and three soft panels, seen in the
+    /// surface's mirror direction, weighted by its own Fresnel, metalness and
+    /// gloss; and a sheen at the silhouette in a colour of its own. `gloss.x`
+    /// is how bright the studio is, in the lights' units (0: none, the
+    /// default, so nothing that does not ask for it changes); `gloss.y`, how
+    /// much brighter the panels are than the sky; `sheen.rgb` the edge's
+    /// colour times its brightness, `sheen.w` how tight to the edge it is.
+    #[derive(ShaderType, Reflect, Clone, Copy, Debug, Default, PartialEq)]
+    pub struct Lustre {
+        pub gloss: Vec4,
+        pub sheen: Vec4,
     }
 
     impl Shade {
@@ -136,6 +153,8 @@ pub struct Shaded {
     pub map_a: Handle<Image>,
     #[texture(102)]
     pub map_b: Handle<Image>,
+    #[uniform(103)]
+    pub lustre: Lustre,
 }
 
 impl Default for Shaded {
@@ -144,6 +163,7 @@ impl Default for Shaded {
             shade: Shade::NONE,
             map_a: MAP_A,
             map_b: MAP_B,
+            lustre: Lustre::default(),
         }
     }
 }

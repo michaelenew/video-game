@@ -20,7 +20,7 @@ import character  # noqa: E402
 import garment as g  # noqa: E402
 import outfit  # noqa: E402,F401
 import wardrobe  # noqa: E402
-from recipe import BODY, GIRTH, HEAD_SCALE  # noqa: E402,F401
+from recipe import BODY, FIT, GIRTH, HEAD_SCALE  # noqa: E402,F401
 
 NAME = "dark_being"
 CLASS = "Bulwark"
@@ -34,12 +34,16 @@ CLASS = "Bulwark"
 COLOURS = {
     "skin": (0.009, 0.007, 0.013),
     "iron": (0.30, 0.29, 0.28),
-    "kilt": (0.03, 0.022, 0.03),
+    "kilt": (0.028, 0.02, 0.022),
+    "hide": (0.035, 0.024, 0.02),
     "eye": (0.05, 0.03, 0.06),
     "eye/2": (0.45, 0.25, 0.75),
     "eye/3": (0.01, 0.01, 0.015),
 }
 GLOW = (0.72, 0.42, 1.0)
+# Muscle carved into the body (``anatomy``): the masses into the game's mesh,
+# the grooves into its normal map.
+SCULPT = 1.0
 METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.3)}
 # Violet light painted on: in the shade, and on every ridge of the muscle.
 ART = {

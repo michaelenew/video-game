@@ -32,34 +32,45 @@ CLASS = "Champion"
 COLOURS = {
     "knit": (0.36, 0.24, 0.16),
     "knit/2": (0.36, 0.24, 0.16),
-    "knit/3": (0.80, 0.82, 0.86),      # gauntlets: plate
+    "knit/3": (0.78, 0.80, 0.84),      # gauntlets: plate
     "knit/4": (0.36, 0.24, 0.16),
-    "plate": (0.80, 0.82, 0.86),
-    "gold": (0.90, 0.70, 0.36),
-    "cloak": (0.82, 0.84, 0.88),
-    "skirt": (0.70, 0.72, 0.76),
+    "plate": (0.78, 0.80, 0.84),
+    "trim": (0.95, 0.78, 0.45),
+    "cloak": (0.84, 0.86, 0.90),
+    "skirt": (0.55, 0.57, 0.62),
 }
-GLOW = (1.0, 0.93, 0.76)
-METAL = {"plate": (0.5, 0.24), "gold": (0.8, 0.3), "knit": (0.6, 0.25)}
-# No painted trim: on plate cut in planes it spread over whole facets as
-# white blotches. Its edges are its light (``outfit.glowing_edges``).
-ART = {"shade_tint": (0.75, 0.8, 1.0), "warm": (1.12, 1.06, 0.98), "trim": (1.0, 1.0, 1.0),
-       "stitch_dark": 0.0, "edge_light": 0.12}
+GLOW = (1.0, 0.92, 0.72)
+METAL = {"plate": (0.6, 0.18), "trim": (0.8, 0.25), "knit": (0.6, 0.22)}
+# No painted trim: the plate's rims are real (``hard``), in gold.
+ART = {"shade_tint": (0.75, 0.8, 1.0), "warm": (1.1, 1.05, 0.98), "trim": (1.0, 1.0, 1.0),
+       "stitch_dark": 0.0, "edge_light": 0.14}
 LUMINOUS = {"cloak": 0.015}
 
 
 def veins(pos):
-    """The helm's slit of light: a thin band across its face at the eyes."""
+    """Light let into the plate: the helm's slit across its eyes, and a
+    small sun at the breast -- a disc and eight thin rays."""
+    out = np.zeros(pos.shape[:-1])
     eye = wardrobe.EXTRAS.get("visor")
-    if eye is None:
-        return np.zeros(pos.shape[:-1])
-    c = g.g2b(np.array(eye))
-    rel = pos - c
-    across = np.abs(rel[..., 0])
-    front = -rel[..., 1]          # Blender's -y is forward
-    height = rel[..., 2]
-    slit = np.exp(-(height / 0.006) ** 2) * (across < 0.055) * (front > -0.01)
-    return np.clip(slit * np.clip(1.2 - across / 0.055, 0, 1) * 1.6, 0, 1)
+    if eye is not None:
+        c = g.g2b(np.array(eye))
+        rel = pos - c
+        across = np.abs(rel[..., 0])
+        front = -rel[..., 1]          # Blender's -y is forward
+        slit = np.exp(-(rel[..., 2] / 0.006) ** 2) * (across < 0.055) * (front > -0.01)
+        out = np.maximum(out, np.clip(slit * np.clip(1.2 - across / 0.055, 0, 1) * 1.6, 0, 1))
+    sun = wardrobe.EXTRAS.get("sun")
+    if sun is not None:
+        c = g.g2b(np.array(sun))
+        rel = pos - c
+        flat = np.sqrt(rel[..., 0] ** 2 + rel[..., 2] ** 2)
+        front = -rel[..., 1] > -0.06
+        ang = np.arctan2(rel[..., 2], rel[..., 0])
+        disc = np.exp(-(flat / 0.014) ** 4)
+        ring = np.exp(-((flat - 0.024) / 0.0025) ** 2)
+        rays = np.exp(-(np.sin(ang * 4.0) * flat / 0.0022) ** 2) * (flat > 0.03) * (flat < 0.07)
+        out = np.maximum(out, np.clip((disc + ring + rays * (1 - flat / 0.07)) * front, 0, 1))
+    return out
 
 
 character.build(sys.modules[__name__])

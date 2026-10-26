@@ -1,12 +1,12 @@
 """What the dark being wears: a viking's kit, reworked, in iron.
 
 The owner's reference, 2026-10-26, "rejiggered": a warrior bare to the
-waist so the obsidian body shows everywhere, and on it small iron plates
-over the shoulders with a spike each; a heavy chain hung round the neck; a
-broad iron belt with a round boss; a dark kilt to the knee; and **metal
-bands that look like metal** -- a wide bracer round each forearm with a band
-at each end, and two bands round each upper arm. Bald, the face bare. No
-horns: the bands carry it.
+waist so the obsidian body shows everywhere, and on it pauldrons of three
+lapped iron plates over each shoulder; a heavy chain hung round the neck; a
+broad belt of black hide with an iron boss; a kilt of hide strips to the
+knee; and **metal bands that look like metal** (``hard``) -- a riveted
+bracer on each forearm with a forged cuff at the wrist, and two forged bands
+round each upper arm. Bald, the face bare. No horns: the bands carry it.
 
 And **rifts** (``RIFTS``): places where the obsidian has shattered and light
 is coming out -- a shatter pattern painted round each impact (``build.veins``,
@@ -19,7 +19,8 @@ import numpy as np
 
 import character
 import garment as g
-from wardrobe import EXTRAS, belt, coat_tails, mat, piece, rigid, stone, w
+import hard
+from wardrobe import EXTRAS, belt, coat_tails, mat, rigid, stone, w
 
 # Where the obsidian has broken, as (joint, offset from it in the game's
 # frame, metres, radius): the left breast, the right shoulder, the left
@@ -28,60 +29,49 @@ RIFTS = [
     ("chest", (-0.085, 0.04, 0.12), 0.13),
     ("arm.l", (0.03, 0.02, 0.05), 0.09),
     ("chest", (0.07, 0.07, -0.12), 0.11),
-    ("forearm.r", (0.0, -0.10, 0.04), 0.07),
+    ("shin.r", (0.0, 0.10, 0.06), 0.07),
 ]
 
 
-def metal_band(body, r, a, b, at, width, gap, name, thick=0.009):
-    """A band of iron round a limb: thick, so its edges catch the light as
-    metal does, square to the bone."""
-    up = r.dir(b, a)
-    mid = r.along(a, b, at)
-    return piece(body, name, gap, lambda c, fw: w(fw, a, b) > 0.3,
-                 trims=[(mid + up * width / 2, up)], keeps=[(mid - up * width / 2, up)],
-                 material="iron", thick=thick, faces=360, trim=0.004, smooth=3)
-
-
 def irons(body, r):
+    """**Metal that reads as metal** (the owner, 2026-10-26): forged bands,
+    not shells. On each forearm a wide bracer -- a plate round the forearm
+    with a rolled rim at both ends and a band of studs -- and on each upper
+    arm two narrow forged bands, riveted."""
     out = []
     for s in "lr":
         fa, hd, ua, el = f"forearm.{s}", f"hand.{s}", f"arm.{s}", f"forearm.{s}"
-        out.append(metal_band(body, r, fa, hd, 0.62, 0.13, 0.012, f"bracer.{s}", thick=0.007))
-        out.append(metal_band(body, r, fa, hd, 0.52, 0.022, 0.02, f"bracer_top.{s}"))
-        out.append(metal_band(body, r, fa, hd, 0.84, 0.022, 0.02, f"bracer_end.{s}"))
-        out.append(metal_band(body, r, ua, el, 0.40, 0.028, 0.012, f"armband_a.{s}"))
-        out.append(metal_band(body, r, ua, el, 0.52, 0.028, 0.012, f"armband_b.{s}"))
+        mid = r.along(fa, hd, 0.62)
+        up = r.dir(hd, fa)
+        out += hard.plate(body, f"bracer.{s}", 0.012, lambda c, fw, fa=fa, hd=hd: w(fw, fa, hd) > 0.3, "iron",
+                          trims=[(mid + up * 0.075, up)], keeps=[(mid - up * 0.075, up)], thick=0.006,
+                          rim=0.006, smooth=4, close=0.02, faces=700)
+        out += hard.band(body, r, fa, hd, 0.86, 0.026, 0.02, f"cuff.{s}", "iron", thick=0.009, studs=10)
+        out += hard.band(body, r, ua, el, 0.38, 0.03, 0.006, f"armband_a.{s}", "iron", thick=0.008, studs=8)
+        out += hard.band(body, r, ua, el, 0.52, 0.022, 0.006, f"armband_b.{s}", "iron", thick=0.007)
     return out
 
 
 def pauldrons(body, r):
+    """Three plates over each shoulder, each lapping the one below: a cap
+    over the top of the shoulder and two lames down the arm, each with a
+    rolled rim and a rivet at its front and back."""
     out = []
     for s in "lr":
-        top = r.o[f"arm.{s}"][1]
+        arm, el = f"arm.{s}", f"forearm.{s}"
+        top = r.o[arm][1]
+        down = r.dir(arm, el)
 
-        def keep(c, fw, s=s, top=top):
-            return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.45) & (c[:, 1] > top - 0.05)
+        def cap(c, fw, s=s, top=top):
+            return (w(fw, f"arm.{s}", f"clavicle.{s}") > 0.4) & (c[:, 1] > top - 0.035)
 
-        out.append(piece(body, f"pauldron.{s}", 0.024, keep, smooth=6, close=0.02, material="iron",
-                         thick=0.008, faces=500, trim=0.01))
-        # A spike off the top of each, up and out.
-        sh = r.o[f"arm.{s}"]
-        side = np.sign(sh[0])
-        base = sh + np.array([side * 0.01, 0.07, -0.01])
-        tip = base + np.array([side * 0.06, 0.11, -0.02])
-        bpy.ops.mesh.primitive_cone_add(vertices=8, radius1=0.022, radius2=0.0, depth=1.0,
-                                        location=(0, 0, 0))
-        cone = bpy.context.active_object
-        from mathutils import Vector
-        d = tip - base
-        cone.scale = (1.0, 1.0, float(np.linalg.norm(d)))
-        cone.rotation_mode = "QUATERNION"
-        cone.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(Vector(tuple(g.g2b(d))))
-        cone.location = tuple(g.g2b((base + tip) / 2))
-        cone.name = f"spike.{s}"
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-        g.material(cone, mat("iron"))
-        out.append(rigid(cone, f"clavicle.{s}"))
+        out += hard.plate(body, f"pauldron.{s}", 0.03, cap, "iron", thick=0.007, rim=0.007, smooth=10,
+                          close=0.03, faces=900)
+        for k, (at, gap) in enumerate(((0.13, 0.024), (0.24, 0.018))):
+            mid = r.along(arm, el, at)
+            out += hard.plate(body, f"lame{k}.{s}", gap, lambda c, fw, arm=arm: w(fw, arm) > 0.4, "iron",
+                              trims=[(mid + down * 0.04, down)], keeps=[(mid - down * 0.035, down)],
+                              thick=0.006, rim=0.005, smooth=6, close=0.02, faces=500)
     return out
 
 
@@ -117,15 +107,23 @@ def chain(body, r):
 
 
 def waist(body, r):
-    pieces = belt(body, r, material="iron", sashed=False, at=0.03)
+    """A broad belt of black hide, iron plaques riveted round it, and a
+    round iron boss at the front with a raised rim."""
+    pieces = belt(body, r, material="hide", sashed=False, at=0.03)
     hip = r.o["thigh.l"][1] + 0.05
-    boss = stone("boss", (0.0, hip, 0.125), (0.045, 0.045, 0.014), "iron", "root", seed=2, facets=1, rough=0.1)
-    return pieces + [boss]
+    boss = stone("boss", (0.0, hip, 0.13), (0.05, 0.05, 0.016), "iron", "root", seed=2, facets=2, rough=0.05)
+    ring = []
+    for k in range(48):
+        a = k / 48 * 2 * np.pi
+        ring.append([np.cos(a) * 0.052, hip + np.sin(a) * 0.052, 0.138])
+    rim = rigid(hard.tube("boss_rim", np.array(ring), 0.007, "iron", closed=True), "root")
+    return pieces + [boss, rim]
 
 
 def kilt(body, r):
-    return coat_tails(body, r, spans=[(-40, 40, 0.48), (44, 136, 0.50), (140, 220, 0.48), (224, 316, 0.50)],
-                      material="kilt", flare=0.28, at=0.0, ripple=0.2)
+    """A kilt of black hide in eight strips, to the knee."""
+    return coat_tails(body, r, spans=[(a - 20, a + 20, 0.50) for a in range(0, 360, 45)],
+                      material="kilt", flare=0.24, at=0.0, ripple=0.12)
 
 
 def rifts(body, r):
@@ -164,8 +162,13 @@ def rifts(body, r):
 
 
 def eyes_dark(body, r):
+    """Eyes that are the rifts' light, faintly."""
     from wardrobe import eyes
-    return eyes(body, r, iris="eye")
+    out = eyes(body, r, iris="eye")
+    for ob in out:
+        grp = ob.vertex_groups.new(name="edge")
+        grp.add(list(range(len(ob.data.vertices))), 0.5, "REPLACE")
+    return out
 
 
 GARMENTS = {"irons": irons, "pauldrons": pauldrons, "chain": chain, "waist": waist, "kilt": kilt,

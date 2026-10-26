@@ -329,6 +329,20 @@ pub fn beam(commands: &mut Commands, beings: &Beings, from: (Entity, Vec3), to: 
     });
 }
 
+/// Each being's reflections (`still::Lustre`), dark then light: the
+/// obsidian a mirror-black glass with violet at its edges, the knight's
+/// plate polished steel. The world has nothing for them to reflect.
+pub const LUSTRE: [crate::still::Lustre; 2] = [
+    crate::still::Lustre {
+        gloss: Vec4::new(9000.0, 6.0, 0.0, 0.0),
+        sheen: Vec4::new(500.0, 160.0, 1400.0, 3.0),
+    },
+    crate::still::Lustre {
+        gloss: Vec4::new(7000.0, 4.0, 0.0, 0.0),
+        sheen: Vec4::new(300.0, 300.0, 340.0, 4.0),
+    },
+];
+
 /// How high off the floor the seal is laid, so it never fights the floor
 /// for the same depth.
 const SEAL_LIFT: f32 = 0.025;

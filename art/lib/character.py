@@ -6,7 +6,8 @@ painted, exported. What differs is a class's *spec*, a module with:
 
 - ``NAME``: the file, ``crates/game/assets/<NAME>.glb``;
 - ``CLASS``: the class's name as the animation exporter writes it;
-- ``BODY``, ``GIRTH``, ``HEAD_SCALE``: the body (``mh``, ``fit``);
+- ``BODY``, ``GIRTH``, ``HEAD_SCALE``: the body (``mh``, ``fit``), and
+  ``FIT`` (optional) how its trunk is fitted (``fit.fit``'s ``trunk``);
 - ``COLOURS``: the painter's colour for every material (and ``name/2`` to
   ``name/4`` for its masks); ``GLOW`` the colour of whatever shines;
   ``METAL`` which materials are metal, and how rough;
@@ -16,6 +17,9 @@ painted, exported. What differs is a class's *spec*, a module with:
   vertices would be soft;
 - ``LUMINOUS`` (optional): material -> how much of its own painted colour
   it gives off as light, for a body that is light rather than lit;
+- ``SCULPT`` (optional): how much muscle to carve into the body
+  (``anatomy.sculpt``): a share of it into the game's mesh, all of it into a
+  dense copy the body's normal map is baked from (``sculpt``);
 - ``outfit``: a module with ``dress(body, rig, only)``.
 
     art/blender.sh art/<class>/build.py [--look out.png] [--paint] [--size 2048]
@@ -28,6 +32,7 @@ import sys
 import bpy
 import numpy as np
 
+import anatomy
 import fit
 import garment as g
 import glb
@@ -63,11 +68,41 @@ def body(spec):
         v = mh.flatten_bust(base, rig, v, mh.shaped(base, spec.FLAT), spec.BUST)
     sk = fit.Skeleton(os.path.join(ROOT, "target/art/anim.json"), spec.CLASS)
     verts, faces, face_uvs, uvs, W, bo, br, marks = fit.fit(base, rig, v, sk, spec.GIRTH, spec.HEAD_SCALE,
-                                                            carried=mh.grip(base, rig, v))
+                                                            carried=mh.grip(base, rig, v),
+                                                            trunk=getattr(spec, "FIT", None))
     ob = stage.mesh_object("body", g.g2b(verts), faces, uvs, face_uvs)
     g.set_weights(ob, W)
     g.normalize(ob)
     return ob, sk, bo, br, marks
+
+
+def sculpt(ob, bo, amount, game_share=0.65):
+    """Carve muscle into the body (``anatomy.sculpt``): ``game_share`` of it
+    into the game's own mesh, which is too coarse for a groove but takes the
+    masses -- the silhouette -- and all of it into a copy subdivided twice,
+    ``body~hi``, which the body's normal map and painted light are baked
+    from, so the grooves are in the texture."""
+    def push(o, share):
+        co = np.zeros(len(o.data.vertices) * 3)
+        o.data.vertices.foreach_get("co", co)
+        p = g.b2g(co.reshape(-1, 3))
+        nb = np.zeros(len(o.data.vertices) * 3)
+        o.data.vertices.foreach_get("normal", nb)
+        n = g.b2g(nb.reshape(-1, 3))
+        d = anatomy.sculpt(p, g.weights_of(o), bo, amount * share)
+        o.data.vertices.foreach_set("co", g.g2b(p + n * d[:, None]).ravel())
+        o.data.update()
+
+    hi = ob.copy()
+    hi.data = ob.data.copy()
+    hi.name = hi.data.name = "body~hi"
+    g.link(hi)
+    g.subdivide(hi, 2)
+    push(hi, 1.0)
+    hi["hi"] = True
+    hi.hide_render = True
+    push(ob, game_share)
+    return hi
 
 
 def _half(a):
@@ -86,6 +121,9 @@ def finish(spec, bo, br, size):
     out = os.path.join(ROOT, "crates/game/assets", f"{spec.NAME}.glb")
     objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and not o.hide_render]
     body = bpy.data.objects["body"]
+    # The sculpted body's dense copy (``sculpt``), if there is one: what the
+    # body's normal map is baked from, not part of the costume's.
+    body_hi = bpy.data.objects.get("body~hi")
     team = [o for o in objs if o.name.startswith(("sash", "team"))]
     # Hair cards are not painted: their texture is the strands
     # (``wardrobe.strand_texture``), cut out where there are none.
@@ -94,7 +132,7 @@ def finish(spec, bo, br, size):
     for o in costume + team:
         g.group_to_colour(o, ["hem", "edge"])
     costume = g.join(costume, "costume")
-    highs = [o for o in bpy.context.scene.objects if o.get("hi")]
+    highs = [o for o in bpy.context.scene.objects if o.get("hi") and o is not body_hi]
     for o in highs:
         o.hide_render = False
     high = g.join(highs, "costume~hi") if highs else None
@@ -110,7 +148,10 @@ def finish(spec, bo, br, size):
     pieces = [(body, "body", size), (costume, "costume", size)] + ([(team, "team", size // 4)] if team else [])
     for ob, name, res in pieces:
         slot_names = [s.material.name for s in ob.material_slots]
-        p = paint.passes(ob, res, spec.COLOURS, high=high if ob is costume else None)
+        source = high if ob is costume else body_hi if ob is body else None
+        if source is not None:
+            source.hide_render = False
+        p = paint.passes(ob, res, spec.COLOURS, high=source)
         col = paint.compose(p, art)
         images.append(paint.to_png(col, os.path.join(tex, f"{name}.jpg"), quality=92))
         entry = {"color": len(images) - 1}
@@ -180,6 +221,8 @@ def finish(spec, bo, br, size):
             poly.material_index = 0
     if high:
         bpy.data.objects.remove(high)
+    if body_hi:
+        bpy.data.objects.remove(body_hi)
     parts = [body, costume] + ([team] if team else [])
     if cards:
         cards = g.join(cards, "cards")
@@ -205,6 +248,8 @@ def build(spec):
     else:
         stage.reset()
         ob, sk, bo, br, marks = body(spec)
+        if getattr(spec, "SCULPT", 0.0):
+            sculpt(ob, bo, spec.SCULPT)
         rig = wardrobe.Rig(sk, bo, br, marks)
         only = _opt("--only")
         spec.outfit.dress(ob, rig, only[0].split(",") if only else None)

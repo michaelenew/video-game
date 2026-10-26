@@ -323,7 +323,9 @@ fn ready(
                 // Its glow is light, in the camera's exposure: at the
                 // file's factor of one it would not show.
                 base.emissive = LinearRgba::rgb(1.0, 1.0, 1.0) * crate::being::GLOW[k];
-                skins.add(still::skin(base))
+                let mut skin = still::skin(base);
+                skin.extension.lustre = crate::being::LUSTRE[k];
+                skins.add(skin)
             });
             crate::being::dress(&mut commands, entity, &beings, owner, k, painted);
             continue;
