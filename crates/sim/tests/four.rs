@@ -21,9 +21,11 @@ const FOUR: [Class; 4] = [
     Class::Elementalist,
 ];
 
+/// Eight since 2026-10-26: the fight the open world is sized for
+/// (exploration 0029, NET-2). This file's fights are still four.
 #[test]
-fn four_seats_is_the_most_there_is() {
-    assert_eq!(MAX_PLAYERS, 4);
+fn eight_seats_is_the_most_there_is() {
+    assert_eq!(MAX_PLAYERS, 8);
 }
 
 #[test]

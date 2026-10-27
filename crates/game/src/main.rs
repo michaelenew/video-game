@@ -188,13 +188,20 @@ fn seats_of(dummy: Dummy) -> u8 {
 
 /// Every seat's class: `--p1` to `--p4`, the first of the rotation (the
 /// Champion) where none is named.
+///
+/// **A seat nobody plays is player one's class** -- what a replay's start
+/// line says of one (`sim::replay::Start::tidied`), since it never names
+/// it. They were the Champion, so every tape whose first player was not one
+/// was refused by its own start checksum (2026-10-24).
 fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
-    std::array::from_fn(|i| {
+    let named: [sim::Class; MAX_PLAYERS] = std::array::from_fn(|i| {
         opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
             .or_else(|| (i == 0).then(|| chosen_tutorial(opts)).flatten())
             .unwrap_or(sim::class::ROTATION[0])
-    })
+    });
+    let played = chosen_players(opts) as usize;
+    std::array::from_fn(|i| if i < played { named[i] } else { named[0] })
 }
 
 /// **How many play** (`--players`, `?players=` in a link): two to four. More
@@ -230,10 +237,15 @@ fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
         .drafting(drafts());
         return seated(w, dummy);
     }
-    let w = picker::world(chosen_start(opts), chosen_classes(opts), drafts());
+    // Seated as the start is built, the way its tape's line rebuilds it:
+    // seated after, a room for three or four started from a world no line
+    // describes.
     match chosen_players(opts) {
-        n if n > 2 => w.seated(n),
-        _ => seated(w, dummy),
+        n if n > 2 => picker::world(chosen_start(opts), chosen_classes(opts), drafts(), n),
+        _ => seated(
+            picker::world(chosen_start(opts), chosen_classes(opts), drafts(), 2),
+            dummy,
+        ),
     }
 }
 
@@ -587,6 +599,9 @@ pub struct Sim {
     /// [`picker`]. On the wire rather than a fresh `World` built here, so a
     /// peer changes arena on the same frame.
     travel: sim::input::Travel,
+    /// Knobs of the Oven moved in a match, on their way onto the wire: one a
+    /// tick, on this machine's input ([`palette::Moved`]).
+    tunes: palette::Moved,
     /// **The fight so far, as a replay** (`sim::replay`): where it started
     /// and every frame's inputs, kept from the first frame so that "that felt
     /// wrong" can be saved after the fact (`Y`, or the Esc menu) and put
@@ -830,10 +845,16 @@ impl Default for Sim {
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
             history: Rewind::new(&seed),
-            ledger: regions::Ledger::new(&seed, 0, dev_mode()),
+            // A tape plays back on the books it was recorded beside: a
+            // match's begin at its agreed start.
+            ledger: match &playing {
+                Some(p) => regions::Ledger::for_tape(&p.tape, &seed, dev_mode()),
+                None => regions::Ledger::new(&seed, 0, dev_mode()),
+            },
             regions_said: 0,
             rehearsing: None,
             travel: sim::input::Travel::NONE,
+            tunes: palette::Moved::default(),
             tape: sim::replay::Tape::begin(&seed, build()),
             playing,
             saved: None,
@@ -7408,11 +7429,6 @@ fn tick_sim(
                 }
             });
             let two = match sim.dummy {
-                // A tutorial hall's dummy is the room's (`tutorial`), unless
-                // a person has the second keys.
-                mode if mode != Dummy::Human && tutorial::dummy_input(&sim.cur).is_some() => {
-                    tutorial::dummy_input(&sim.cur).unwrap_or_default()
-                }
                 // Not in a hunt: the bot fights a fighter, and in a hunt
                 // player two is out of it (see `seated`).
                 Dummy::Bot(level) if !sim.cur.hunting() => spar(
@@ -7432,7 +7448,8 @@ fn tick_sim(
             let mut pair = [SimInput::default(); MAX_PLAYERS];
             pair[0] = rehearsed
                 .unwrap_or_else(|| scripted_or(scripted, held))
-                .travelling(travel);
+                .travelling(travel)
+                .tuning(sim.tunes.next());
             pair[1] = two;
             // **One keyboard readies both seats**: player two, or the dummy,
             // is in this room, and a dummy cannot press Enter.
@@ -7490,8 +7507,10 @@ fn tick_sim(
                 let Sim { cur, ledger, .. } = &mut *sim;
                 ledger.confirm_through(cur.frame, cur);
             }
+            let frame = sim.cur.frame;
+            sim.tunes.went(frame);
             scape.observe(&sim.prev, &sim.cur);
-            tutorial::observe(&mut coach, &sim.prev, &sim.cur);
+            tutorial::observe(&mut coach, &sim.prev, &sim.cur, sim.local_player());
             // What was picked up and fed, for this game's bag and morphs.
             let me = sim.local_player();
             keeping.record(&sim.prev, &pair, &sim.cur, me);
@@ -7511,12 +7530,23 @@ fn tick_sim(
         for _ in 0..ticks {
             let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
             let travel = std::mem::take(&mut sim.travel);
-            let local = scripted_or(scripted, held).travelling(travel);
-            online::step(&mut sim, local, &mut scape, &mut keeping);
+            let local = scripted_or(scripted, held)
+                .travelling(travel)
+                .tuning(sim.tunes.next());
+            let was = sim.cur.frame;
+            online::step(&mut sim, local, &mut scape, &mut keeping, &mut coach);
+            // A knob asked for goes off the queue once a frame was made with
+            // it; a tick the line held back carries it again.
+            if sim.cur.frame != was {
+                let frame = sim.cur.frame;
+                sim.tunes.went(frame);
+            }
         }
         record_round_end(&mut sim);
         say_region_findings(&mut sim);
     }
+    let Sim { tunes, cur, .. } = &mut *sim;
+    tunes.settle(cur);
 }
 
 /// Every new finding of the region watchdog, said once, where a developer
@@ -8494,6 +8524,28 @@ mod tests {
             sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
             sim::moves::get(sim::Class::BloodMage, slot).reach,
         )
+    }
+
+    /// **The world a run starts in is the one its tape's start line
+    /// rebuilds**, whoever player one is: the seats nobody plays were the
+    /// Champion, the line says they are player one's class, and every tape
+    /// of a Reaver's match was refused by its own start (2026-10-24).
+    #[test]
+    fn a_run_starts_where_its_tape_says_it_did() {
+        for args in [
+            "--p1 shadowreaver --p2 champion --arena needle",
+            "--p1 bloodmage --hunt ridgeback",
+            "--p1 dualmage --p2 elementalist --players 3 --p3 shadowreaver",
+        ] {
+            let opts = platform::Options::from_args(args.split(' ').map(String::from));
+            for dummy in [Dummy::Human, Dummy::Idle] {
+                let w = start_world(&opts, dummy);
+                let tape = sim::replay::Tape::begin(&w, "test");
+                if let Err(e) = tape.world() {
+                    panic!("{args}: {e}");
+                }
+            }
+        }
     }
 
     #[test]

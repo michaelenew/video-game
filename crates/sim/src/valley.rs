@@ -224,7 +224,28 @@ pub enum Kind {
     Reach,
     /// A creature's arena: walking in starts its hunt.
     Room(SpeciesId),
+    /// **A tutorial hall** (`crate::tutorial`): nobody fights but the hall's
+    /// dummy, and nobody is knocked out. Reached by a trip, alone.
+    Hall,
 }
+
+/// The tutorial halls, as places of the valley, in `tutorial::ALL`'s order.
+static HALLS: [Place; crate::tutorial::ALL.len()] = {
+    let mut out = [const {
+        Place {
+            arena: ArenaId(0),
+            kind: Kind::Hall,
+            seams: &[],
+            vents: &[],
+        }
+    }; crate::tutorial::ALL.len()];
+    let mut k = 0;
+    while k < out.len() {
+        out[k].arena = crate::tutorial::ALL[k].arena;
+        k += 1;
+    }
+    out
+};
 
 /// One place of the valley.
 #[derive(Debug)]
@@ -295,6 +316,9 @@ pub fn place(id: ArenaId) -> Option<&'static Place> {
         ArenaId::VEILSTALKER => &rooms::ASHWOOD,
         ArenaId::MANTIS => &rooms::SHRINE,
         ArenaId::SIEGESHELL => &rooms::LONG_VALLEY,
+        id if crate::tutorial::of(id).is_some() => {
+            &HALLS[crate::tutorial::ALL.iter().position(|t| t.arena == id)?]
+        }
         id => &ranges::PLACES[ranges::index(id)?],
     })
 }

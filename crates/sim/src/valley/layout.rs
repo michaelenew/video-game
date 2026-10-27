@@ -411,6 +411,20 @@ fn pads() -> Vec<Pad> {
         door: (at.x, at.z),
         ledge: false,
     });
+    // The halls: a floor inside a rim, and nothing cut through it.
+    for (k, t) in crate::tutorial::ALL.iter().enumerate() {
+        let hall = t.arena.get();
+        let at = v3(hall_at(k));
+        let (lo, hi) = hall.rim.map_or_else(|| footprint(hall), |rim| rim.rect());
+        out.push(Pad {
+            lo: (lo.0.add(at.x), lo.1.add(at.z)),
+            hi: (hi.0.add(at.x), hi.1.add(at.z)),
+            y: at.y,
+            rim: hall.rim.map(|rim| (rim, (at.x, at.z))),
+            door: (at.x, at.z),
+            ledge: false,
+        });
+    }
     for r in &ROOMS {
         let (lo, hi) = pad_of(r);
         let at = v3(r.at);
@@ -737,6 +751,21 @@ fn growth(land: &Land, crags: &[Crag], out: &mut Vec<Solid>) {
 
 /// **The plan**: every place put down, the land between them, every doorway,
 /// every crag, cairn, tree and boulder.
+/// **The tutorial halls on the map** (2026-10-25): a row of them past the
+/// valley's north edge, each on its own floor inside its own rim, and no door
+/// -- the way in is the Esc menu's trip, and it takes only whoever asked
+/// (`World::go_alone`). On the map rather than a world of their own so that
+/// two people who each go to one are in it together, and one who goes is
+/// not taking everybody else with them. Centimetres: x, floor, z.
+pub fn hall_at(k: usize) -> [i32; 3] {
+    [0, 0, HALL_ROW + k as i32 * HALL_GAP]
+}
+
+/// Where the row of halls starts, past the map's north edge (490 m), and
+/// how far apart they are: a hall's rim is under thirty metres across.
+const HALL_ROW: i32 = 64_000;
+const HALL_GAP: i32 = 5_000;
+
 pub fn plan() -> Plan {
     let mut plan = Plan {
         void: cm(VOID),
@@ -756,6 +785,15 @@ pub fn plan() -> Plan {
             arena: r.arena,
             at: v3(r.at),
             apron: apron_of(r),
+            pad: true,
+            band: None,
+        });
+    }
+    for (k, t) in crate::tutorial::ALL.iter().enumerate() {
+        plan.places.push(PlanPlace {
+            arena: t.arena,
+            at: v3(hall_at(k)),
+            apron: Fx::ZERO,
             pad: true,
             band: None,
         });

@@ -44,7 +44,7 @@ use crate::tuning as t;
 /// A count, not a feel number. Two per fighter is already more than the auto's
 /// own frame data can put in the air against any fire pillar that stands long
 /// enough to be shot through twice.
-pub const MAX_BOLTS: usize = MAX_PLAYERS * 2;
+pub const MAX_BOLTS: usize = crate::state::POOLED_FOR * 2;
 
 /// Every fire bolt in flight. Fixed size for the same reason the effects array
 /// is: it is part of the rollback snapshot, and a heap allocation per frame of

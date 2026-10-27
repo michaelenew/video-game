@@ -1081,10 +1081,11 @@ fn every_class_climbs_a_crag() {
 }
 
 /// **Fast travel** (`Destination::Cairn`): from Hearth to every cairn on the
-/// map, both fighters stand on it, it is their checkpoint, and the world has
-/// moved to where it is -- and, a second later, nobody has fallen off it.
+/// map, whoever asked stands on it, it is their checkpoint, and -- a second
+/// later -- they have not fallen off it. Since 2026-10-25 nobody else goes:
+/// the other player is where they were, with the checkpoint they had.
 #[test]
-fn fast_travel_stands_everybody_on_any_cairn() {
+fn fast_travel_stands_whoever_asked_on_any_cairn() {
     let cairns = valley::cairns();
     assert!(cairns.len() > 10, "only {} cairns", cairns.len());
     assert!(cairns.len() <= 256, "a cairn is a byte on the wire");
@@ -1093,6 +1094,7 @@ fn fast_travel_stands_everybody_on_any_cairn() {
     for (k, &b) in cairns.iter().enumerate() {
         let top = valley::top_of(&atlas.solids[b as usize]);
         let mut w = World::arrive(CLASSES, open_journey(), valley::START, None, 2);
+        let stayed = on_map(&w, 1);
         let go = Input {
             travel: Travel::cairn(k as u8),
             ..Input::new(0)
@@ -1102,23 +1104,28 @@ fn fast_travel_stands_everybody_on_any_cairn() {
         for _ in 0..60 {
             w.advance(idle());
         }
-        for i in 0..2 {
-            let feet = on_map(&w, i);
-            let off = feet.sub(top);
-            let flat = off.x.abs().max(off.z.abs());
-            if flat.raw() > Fx::from_int(2).raw() || off.y.abs().raw() > Fx::ONE.raw() {
-                failed.push(format!(
-                    "cairn {k} ({}) at {:?}: fighter {i} is {:?} off it",
-                    atlas
-                        .place_at(top.x, top.z)
-                        .map_or("-", |p| p.arena.get().name),
-                    top,
-                    off
-                ));
-            }
-            if w.valley.cairn[i] != b as u16 + 1 {
-                failed.push(format!("cairn {k}: not fighter {i}'s checkpoint"));
-            }
+        let feet = on_map(&w, 0);
+        let off = feet.sub(top);
+        let flat = off.x.abs().max(off.z.abs());
+        if flat.raw() > Fx::from_int(2).raw() || off.y.abs().raw() > Fx::ONE.raw() {
+            failed.push(format!(
+                "cairn {k} ({}) at {:?}: fighter 0 is {:?} off it",
+                atlas
+                    .place_at(top.x, top.z)
+                    .map_or("-", |p| p.arena.get().name),
+                top,
+                off
+            ));
+        }
+        if w.valley.cairn[0] != b as u16 + 1 {
+            failed.push(format!("cairn {k}: not fighter 0's checkpoint"));
+        }
+        let moved = on_map(&w, 1).sub(stayed);
+        if moved.x.abs().max(moved.z.abs()).raw() > Fx::ONE.raw() {
+            failed.push(format!("cairn {k}: fighter 1 went too, {moved:?}"));
+        }
+        if w.valley.cairn[1] == b as u16 + 1 {
+            failed.push(format!("cairn {k}: it is fighter 1's checkpoint too"));
         }
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));

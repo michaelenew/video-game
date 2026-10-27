@@ -204,13 +204,18 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// **Every class but the Champion moved 2026-10-22, deliberately**: the
 /// grounded dodge is 26 frames, 12 of them invulnerable, at 19.2 m/s -- a fifth
 /// longer and a fifth further, for the dive roll (feel-log.md).
+/// **Every class re-pinned 2026-10-26 for eight fighter slots**, the hash
+/// alone: four more slots in the snapshot are four more fighters hashed.
+/// What the hunts *did* was checked to be the same on the old build and the
+/// new -- both fighters' and the creature's positions, health and actions
+/// and every effect, every frame of every class's 2,400 (exploration 0029).
 const PINNED: [(Class, u64); 6] = [
-    (Class::Champion, 0x35a804f43175a4cb),
-    (Class::Bulwark, 0x42cb6898b5200410),
-    (Class::ShadowReaver, 0xd2b1297a5b0ca3e3),
-    (Class::BloodMage, 0x09dc9321005dc822),
-    (Class::DualMage, 0xcc6860c5690be2d0),
-    (Class::Elementalist, 0x826a6453001ad85e),
+    (Class::Champion, 0x76340afe58c9dbeb),
+    (Class::Bulwark, 0x1eb09fbc999c0ed0),
+    (Class::ShadowReaver, 0xede34670f0e1f70a),
+    (Class::BloodMage, 0x1d14548f46a90352),
+    (Class::DualMage, 0xb7d27bb21c4aa6d0),
+    (Class::Elementalist, 0x367bdc91e553e93e),
 ];
 
 #[test]

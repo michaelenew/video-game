@@ -122,8 +122,8 @@ fn lotus_dragged(s: &Seen) -> bool {
             (Some(a), Some(b)) => {
                 a.kind == EffectKind::GuillotineLotus
                     && b.kind == EffectKind::GuillotineLotus
-                    && a.owner == 0
-                    && b.owner == 0
+                    && a.owner as usize == s.me
+                    && b.owner as usize == s.me
                     && b.age > a.age.saturating_add(2)
             }
             _ => false,

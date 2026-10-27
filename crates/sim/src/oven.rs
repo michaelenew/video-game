@@ -22,6 +22,13 @@
 //! desync silently and look like a netcode bug, so the tuning hash is folded
 //! into `World::checksum` — a mismatched Oven shows up immediately as a desync
 //! rather than as a mystery.
+//!
+//! **In a match the Oven still moves** (2026-10-25): a knob moved is asked
+//! for on the player's input, kept in the world ([`Edits`]) and laid over
+//! the Oven the match began with before every frame ([`adopt`]), so both
+//! machines run the new number from the same frame and a rollback runs the
+//! old one where it was. Moved straight into the store, as training does,
+//! one machine played a different game from the next frame on.
 
 use crate::class::{ALL_CLASSES, Class};
 use crate::fixed::Fx;
@@ -2247,6 +2254,236 @@ pub fn hash() -> u64 {
         h.write_i32(c.load(Ordering::Relaxed));
     }
     h.finish()
+}
+
+// ---------------------------------------------------------------------------
+// A match's edits: the Oven, moved in a match, on every machine at once
+// ---------------------------------------------------------------------------
+
+/// Every knob's place in one flat numbering: the scalars, then the air, the
+/// moves, the camera and every species' store. What an edit is named by on
+/// the wire ([`crate::input::Tune`]) and in [`Edits`].
+pub const CELLS: usize = SCALAR_COUNT + AIR_COUNT + MOVE_COUNT + VIEW_COUNT + SPECIES_CELL_COUNT;
+const SPECIES_CELL_COUNT: usize = species::COUNT * MAX_SPECIES_KNOBS;
+const _: () = assert!(CELLS < u16::MAX as usize, "a cell is named in sixteen bits");
+
+/// The live store a cell is in, and its place there.
+fn cell_of(cell: usize) -> (&'static AtomicI32, i32) {
+    let mut i = cell;
+    if i < SCALAR_COUNT {
+        return (&SCALAR_CELLS[i], tuned::SCALARS[i]);
+    }
+    i -= SCALAR_COUNT;
+    if i < AIR_COUNT {
+        return (&AIR_CELLS[i], tuned::AIR[i]);
+    }
+    i -= AIR_COUNT;
+    if i < MOVE_COUNT {
+        return (&MOVE_CELLS[i], tuned::MOVES[i]);
+    }
+    i -= MOVE_COUNT;
+    if i < VIEW_COUNT {
+        return (&VIEW_CELLS[i], tuned::VIEW[i]);
+    }
+    i -= VIEW_COUNT;
+    let (id, k) = (i / MAX_SPECIES_KNOBS, i % MAX_SPECIES_KNOBS);
+    let id = id.min(species::COUNT - 1);
+    (&SPECIES_CELLS[id][k], species_baked(SpeciesId(id as u8), k))
+}
+
+/// How many knobs a match can move: what [`Edits`] holds. A match is
+/// played, not tuned from scratch -- a session of tuning is training's --
+/// and every slot is eight bytes of the snapshot.
+pub const MATCH_EDITS: usize = 32;
+
+/// **The knobs moved in a match**, and to what: part of the world
+/// (`World::edits`), so a rollback restores them with everything else and
+/// every machine of a match runs the same rules on every frame.
+///
+/// They are kept as *changes*, not as a copy of the Oven, which would be
+/// fifty kilobytes a snapshot: the rules a frame runs are the Oven as the
+/// match began, which every peer agreed on to start it (`net::meet`'s
+/// terms), with these over it ([`adopt`]). An edit is asked for on a
+/// player's input ([`crate::input::Tune`]) and taken as the frame is made,
+/// so it is the same edit on the same frame everywhere, predicted and
+/// corrected like a button.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct Edits {
+    /// `(cell + 1, raw)`; nought is an empty slot.
+    slots: [(u16, i32); MATCH_EDITS],
+}
+
+impl Default for Edits {
+    fn default() -> Edits {
+        Edits::NONE
+    }
+}
+
+impl Edits {
+    pub const NONE: Edits = Edits {
+        slots: [(0, 0); MATCH_EDITS],
+    };
+
+    /// Set `cell` to `raw`: a knob already moved moves again, a new one takes
+    /// a free slot. `false` when there is none: the match has moved as many
+    /// knobs as it holds, and the edit is not taken anywhere.
+    pub fn set(&mut self, cell: u16, raw: i32) -> bool {
+        if cell as usize >= CELLS {
+            return false;
+        }
+        let key = cell + 1;
+        if let Some(slot) = self.slots.iter_mut().find(|(c, _)| *c == key) {
+            slot.1 = raw;
+            return true;
+        }
+        match self.slots.iter_mut().find(|(c, _)| *c == 0) {
+            Some(slot) => {
+                *slot = (key, raw);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// What `cell` was moved to in this match, if it was.
+    pub fn get(&self, cell: u16) -> Option<i32> {
+        self.slots
+            .iter()
+            .find(|(c, _)| *c == cell + 1)
+            .map(|(_, raw)| *raw)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.iter().all(|(c, _)| *c == 0)
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.slots.iter().all(|(c, _)| *c != 0)
+    }
+
+    /// Every edit, as `(cell, raw)`.
+    pub fn iter(&self) -> impl Iterator<Item = (u16, i32)> + '_ {
+        self.slots
+            .iter()
+            .filter(|(c, _)| *c != 0)
+            .map(|(c, raw)| (*c - 1, *raw))
+    }
+}
+
+/// The edits the live store holds now, each with the value it covers: what
+/// [`adopt`] puts back when an edit is no longer the world's. One world's
+/// at a time -- the one last advanced -- since every frame is made from one.
+struct Adopted {
+    edits: Edits,
+    under: [i32; MATCH_EDITS],
+}
+
+static ADOPTED: std::sync::Mutex<Adopted> = std::sync::Mutex::new(Adopted {
+    edits: Edits::NONE,
+    under: [0; MATCH_EDITS],
+});
+/// Whether anything is adopted: the fast way past [`adopt`] for every world
+/// that has no edits, which is every world outside a match that moved one.
+static ANY_ADOPTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// **Run the next frame on these rules**: the live store becomes the Oven
+/// as it stood under the edits, with `edits` over it. Called by
+/// `World::advance` before anything reads a knob, so a rollback to a frame
+/// before an edit runs that frame on the rules it was first run on, and the
+/// frames after it on the edit. Nothing at all when neither the world nor
+/// the store has any edits.
+pub fn adopt(edits: &Edits) {
+    if edits.is_empty() && !ANY_ADOPTED.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut held = ADOPTED.lock().unwrap_or_else(|e| e.into_inner());
+    if held.edits == *edits {
+        return;
+    }
+    // Put back what the old edits covered, newest last so a cell in two
+    // slots cannot happen and the order cannot matter.
+    let Adopted { edits: old, under } = &mut *held;
+    for (k, (c, _)) in old.slots.iter().enumerate() {
+        if *c != 0 {
+            cell_of(*c as usize - 1)
+                .0
+                .store(under[k], Ordering::Relaxed);
+        }
+    }
+    for (k, (c, raw)) in edits.slots.iter().enumerate() {
+        if *c != 0 {
+            let cell = cell_of(*c as usize - 1).0;
+            under[k] = cell.load(Ordering::Relaxed);
+            cell.store(*raw, Ordering::Relaxed);
+        }
+    }
+    *old = *edits;
+    ANY_ADOPTED.store(!edits.is_empty(), Ordering::Relaxed);
+    EDITS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// A knob's cell, for a [`crate::input::Tune`].
+impl Knob {
+    pub fn cell(self) -> u16 {
+        let i = match self {
+            Knob::Scalar(s) => s as usize,
+            Knob::Air(c, f) => SCALAR_COUNT + air_index(c, f),
+            Knob::Move(c, slot, f) => SCALAR_COUNT + AIR_COUNT + move_index(c, slot, f),
+            Knob::View(k) => SCALAR_COUNT + AIR_COUNT + MOVE_COUNT + k as usize,
+            Knob::Species(id, t) => {
+                SCALAR_COUNT
+                    + AIR_COUNT
+                    + MOVE_COUNT
+                    + VIEW_COUNT
+                    + id.0 as usize * MAX_SPECIES_KNOBS
+                    + t.index(id.get())
+            }
+        };
+        i as u16
+    }
+}
+
+/// [`hash`], of the Oven **as it stands under a match's edits**: what two
+/// machines of a match agreed on to start it and keep agreeing on however
+/// many knobs it moves, the edits themselves being in the world's own hash.
+/// What `World::checksum` folds in.
+pub fn base_hash() -> u64 {
+    if !ANY_ADOPTED.load(Ordering::Relaxed) {
+        return hash();
+    }
+    let held = ADOPTED.lock().unwrap_or_else(|e| e.into_inner());
+    // Hashed in the same order as `hash`, every cell, with what each edit
+    // covers in its place.
+    use std::hash::Hasher;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let covered = |cell: usize| {
+        held.edits
+            .slots
+            .iter()
+            .position(|(c, _)| *c as usize == cell + 1)
+            .map(|k| held.under[k])
+    };
+    let order = [
+        (0, SCALAR_COUNT),
+        (SCALAR_COUNT, AIR_COUNT),
+        (SCALAR_COUNT + AIR_COUNT, MOVE_COUNT),
+        (CELLS - SPECIES_CELL_COUNT, SPECIES_CELL_COUNT),
+        (SCALAR_COUNT + AIR_COUNT + MOVE_COUNT, VIEW_COUNT),
+    ];
+    for (from, len) in order {
+        for cell in from..from + len {
+            let raw = covered(cell).unwrap_or_else(|| cell_of(cell).0.load(Ordering::Relaxed));
+            h.write_i32(raw);
+        }
+    }
+    h.finish()
+}
+
+/// What `cell` holds live, and what is baked for it: for showing a knob a
+/// match moved.
+pub fn cell_raw(cell: u16) -> (i32, i32) {
+    let (live, baked) = cell_of(cell as usize);
+    (live.load(Ordering::Relaxed), baked)
 }
 
 // ---------------------------------------------------------------------------

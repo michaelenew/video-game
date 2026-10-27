@@ -252,6 +252,33 @@ pub trait Line: Send + Sync {
     fn report(&self, _out: &mut Vec<String>) {}
 }
 
+impl Line for Box<dyn Line> {
+    fn offer(&mut self) {
+        (**self).offer();
+    }
+    fn answer(&mut self, offer: &str) {
+        (**self).answer(offer);
+    }
+    fn accept(&mut self, answer: &str) {
+        (**self).accept(answer);
+    }
+    fn description(&mut self, now_ms: u64) -> Option<String> {
+        (**self).description(now_ms)
+    }
+    fn state(&mut self) -> LineState {
+        (**self).state()
+    }
+    fn send(&mut self, packet: &[u8]) {
+        (**self).send(packet);
+    }
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        (**self).recv()
+    }
+    fn report(&self, out: &mut Vec<String>) {
+        (**self).report(out);
+    }
+}
+
 /// GGRS over any number of [`Line`]s: one to each other player.
 ///
 /// Messages are encoded the way GGRS's own UDP socket encodes them, so the

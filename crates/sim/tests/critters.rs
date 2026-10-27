@@ -51,15 +51,17 @@ fn keep_up(w: &mut World) {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn a_critter_is_fifty_six_bytes_and_a_full_pack_fits_the_snapshot() {
+fn a_critter_is_sixty_bytes_and_a_full_pack_fits_the_snapshot() {
     // Forty-eight until four fighters (2026-10-14): what has cut it is a
     // byte per fighter now, and what each fighter's swing has struck a bit.
     // Fifty-six since the seats stopped being capped by the masks that count
     // them: the swing's mask is a word of fighters rather than a byte, and
     // the mount names any creature slot in two bytes rather than four in one.
-    assert_eq!(std::mem::size_of::<Critter>(), 56);
+    // Sixty since eight fighter slots (2026-10-26): the swing's mask of
+    // fighters struck is as wide as the slots.
+    assert_eq!(std::mem::size_of::<Critter>(), 60);
     let world = std::mem::size_of::<World>();
-    assert!(world <= 22 * 1024, "a World is {world} bytes");
+    assert!(world <= 26 * 1024, "a World is {world} bytes");
     // Every slot full: the Gnawers' coop pack is ten, the most there is.
     let mut w = gnats(Class::Champion);
     for i in 0..MAX_CRITTERS {

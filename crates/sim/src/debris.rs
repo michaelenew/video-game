@@ -50,7 +50,7 @@ const RING: usize = PIECES_PER_BLAST - 1;
 /// before the first blast's pieces have burned out is the rare case, and
 /// [`light_one`] gives the oldest piece up rather than silently refusing the
 /// new blast, the same rule a fire bolt's cap follows.
-pub const MAX_DEBRIS: usize = MAX_PLAYERS * PIECES_PER_BLAST;
+pub const MAX_DEBRIS: usize = crate::state::POOLED_FOR * PIECES_PER_BLAST;
 
 pub type Shrapnel = [Option<Shard>; MAX_DEBRIS];
 

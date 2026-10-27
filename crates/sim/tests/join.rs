@@ -118,9 +118,14 @@ fn a_newcomer_takes_the_smaller_side() {
     // Two on side nought, one on side one: side one, whatever the coin.
     assert_eq!(three.open_seat(false), Some(3));
     assert_eq!(three.open_seat(true), Some(3));
-    let mut four = three.clone();
-    four.seat_join(3, Class::Champion);
-    assert_eq!(four.open_seat(false), None, "four is everybody");
+    let mut full = three.clone();
+    full.seat_join(3, Class::Champion);
+    // Two a side: the coin again, and so on until every slot is somebody's.
+    for _ in 4..sim::state::MAX_PLAYERS {
+        let seat = full.open_seat(false).expect("a free slot");
+        full.seat_join(seat, Class::Champion);
+    }
+    assert_eq!(full.open_seat(false), None, "every slot is somebody's");
 }
 
 #[test]

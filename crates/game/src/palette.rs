@@ -57,6 +57,104 @@ impl Default for Palette {
     }
 }
 
+/// **Knobs moved in a match, on their way to the world.** A knob set straight
+/// into the Oven changes the rules on this machine alone, and the next frame
+/// is a different game from the other machine's -- a desync. So in a match
+/// (and in any world that already carries a match's edits) the palette asks
+/// for the change instead: it rides on the next tick's input
+/// (`sim::input::Tune`), every machine takes it on the same frame, and a
+/// rollback puts it back where it was (`sim::oven::Edits`). Training keeps
+/// the direct path, which has no limit on how many knobs move.
+#[derive(Default)]
+pub struct Moved {
+    /// Not yet sent, oldest first, one per knob: a slider dragged across a
+    /// dozen values in a tick sends only where it stopped.
+    waiting: Vec<(u16, i32)>,
+    /// Sent, and not yet in the world: input delay holds an edit a few
+    /// frames, and the slider shows where it was let go meanwhile.
+    sent: Vec<(u16, i32, u32)>,
+}
+
+impl Moved {
+    /// Ask for `cell` to be `raw`.
+    fn ask(&mut self, cell: u16, raw: i32) {
+        self.waiting.retain(|(c, _)| *c != cell);
+        self.waiting.push((cell, raw));
+    }
+
+    /// What `cell` has been asked to be, if it is on its way.
+    fn asked(&self, cell: u16) -> Option<i32> {
+        self.waiting
+            .iter()
+            .rev()
+            .find(|(c, _)| *c == cell)
+            .map(|(_, raw)| *raw)
+            .or_else(|| {
+                self.sent
+                    .iter()
+                    .rev()
+                    .find(|(c, _, _)| *c == cell)
+                    .map(|(_, raw, _)| *raw)
+            })
+    }
+
+    /// The edit the next tick's input carries, if any. Taken off the queue
+    /// by [`Moved::went`] once a frame has really been made with it: a tick
+    /// the line held back sends nothing.
+    pub fn next(&self) -> sim::input::Tune {
+        self.waiting
+            .first()
+            .map_or(sim::input::Tune::NONE, |(c, raw)| {
+                sim::input::Tune::set(*c, *raw)
+            })
+    }
+
+    /// A frame was made, at `frame`, with [`Moved::next`] on it.
+    pub fn went(&mut self, frame: u32) {
+        if !self.waiting.is_empty() {
+            let (c, raw) = self.waiting.remove(0);
+            self.sent.push((c, raw, frame));
+        }
+    }
+
+    /// The world as it stands: an edit it holds has arrived, and one sent a
+    /// second ago and still not there was refused (a match full of edits).
+    pub fn settle(&mut self, w: &sim::World) {
+        self.sent.retain(|(c, raw, at)| {
+            w.edits.get(*c) != Some(*raw) && w.frame.saturating_sub(*at) < sim::TICK_HZ
+        });
+    }
+}
+
+/// How the palette changes a knob: straight into the Oven in training, or
+/// asked for on the wire in a match ([`Moved`]).
+struct Setter<'a> {
+    moved: Option<&'a mut Moved>,
+    edits: sim::oven::Edits,
+}
+
+impl Setter<'_> {
+    fn raw(&self, knob: Knob) -> i32 {
+        match &self.moved {
+            Some(m) => m.asked(knob.cell()).unwrap_or_else(|| knob.raw()),
+            None => knob.raw(),
+        }
+    }
+
+    fn set(&mut self, knob: Knob, raw: i32) {
+        match &mut self.moved {
+            Some(m) => m.ask(knob.cell(), raw),
+            None => knob.set_raw(raw),
+        }
+    }
+
+    /// Whether this knob can move here: in a match, while it has room for
+    /// another, or this one has moved already.
+    fn movable(&self, knob: Knob) -> bool {
+        self.moved.is_none() || !self.edits.is_full() || self.edits.get(knob.cell()).is_some()
+    }
+}
+
 /// Raw store units are integers; a person edits decimals. The conversion lives
 /// here, on the editor side, so `sim` stays free of floating point.
 fn to_display(unit: Unit, raw: i32) -> f32 {
@@ -126,10 +224,17 @@ pub fn sample_focus(
     focus.keyboard = ctx.wants_keyboard_input();
 }
 
-pub fn draw(mut contexts: EguiContexts, mut palette: ResMut<Palette>) {
+pub fn draw(mut contexts: EguiContexts, mut palette: ResMut<Palette>, mut sim: ResMut<crate::Sim>) {
     if !palette.open {
         return;
     }
+    let sim = &mut *sim;
+    let in_match = sim.driver.online() || !sim.cur.edits.is_empty();
+    let edits = sim.cur.edits;
+    let mut setter = Setter {
+        moved: in_match.then_some(&mut sim.tunes),
+        edits,
+    };
     let ctx = contexts.ctx_mut().clone();
     let ctx = &ctx;
 
@@ -189,7 +294,7 @@ pub fn draw(mut contexts: EguiContexts, mut palette: ResMut<Palette>) {
                             .default_open(!needle.is_empty())
                             .show(ui, |ui| {
                                 for knob in members {
-                                    knob_row(ui, knob);
+                                    knob_row(ui, knob, &mut setter);
                                 }
                             });
                     }
@@ -217,15 +322,37 @@ pub fn draw(mut contexts: EguiContexts, mut palette: ResMut<Palette>) {
                         bake::Outcome::Failed(m) => format!("FAILED: {m}"),
                     };
                 }
+                // Every knob back at once is more edits than a match holds:
+                // one at a time there, with each knob's own ↺.
                 if ui
-                    .add_enabled(dirty, egui::Button::new("Revert"))
-                    .on_hover_text("Back to the values committed in tuned.rs")
+                    .add_enabled(dirty && !in_match, egui::Button::new("Revert"))
+                    .on_hover_text(if in_match {
+                        "In a match, one knob at a time: each one's ↺"
+                    } else {
+                        "Back to the values committed in tuned.rs"
+                    })
                     .clicked()
                 {
                     oven::reset_to_baked();
                     message = "reverted to baked".into();
                 }
             });
+            if in_match {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "In a match: a knob moved moves on every machine. {} of {} moved{}",
+                        edits.iter().count(),
+                        sim::oven::MATCH_EDITS,
+                        if edits.is_full() {
+                            " -- the most a match holds; those can still move"
+                        } else {
+                            ""
+                        }
+                    ))
+                    .small()
+                    .weak(),
+                );
+            }
             if !message.is_empty() {
                 ui.label(egui::RichText::new(&message).small());
             }
@@ -238,41 +365,46 @@ pub fn draw(mut contexts: EguiContexts, mut palette: ResMut<Palette>) {
 
 /// One editable value: a slider, its number, and whether it has drifted from
 /// what is committed.
-fn knob_row(ui: &mut egui::Ui, knob: Knob) {
+fn knob_row(ui: &mut egui::Ui, knob: Knob, setter: &mut Setter) {
     let unit = knob.unit();
     let (lo, hi) = knob.range();
-    let mut value = to_display(unit, knob.raw());
+    let raw = setter.raw(knob);
+    let mut value = to_display(unit, raw);
+    let movable = setter.movable(knob);
 
     ui.horizontal(|ui| {
         // A dot marks a value that differs from the baked one, so a session's
         // changes are findable after the fact without remembering them.
-        let mark = if knob.is_dirty() { "●" } else { " " };
+        let dirty = raw != knob.baked_raw();
+        let mark = if dirty { "●" } else { " " };
         ui.label(egui::RichText::new(mark).small());
         ui.label(knob.label()).on_hover_text(knob.id());
     });
 
     ui.horizontal(|ui| {
-        if unit == Unit::Flag {
-            let mut on = knob.raw() != 0;
-            if ui.checkbox(&mut on, "").changed() {
-                knob.set_raw(on as i32);
+        ui.add_enabled_ui(movable, |ui| {
+            if unit == Unit::Flag {
+                let mut on = raw != 0;
+                if ui.checkbox(&mut on, "").changed() {
+                    setter.set(knob, on as i32);
+                }
+            } else {
+                let range = to_display(unit, lo)..=to_display(unit, hi);
+                let slider = egui::Slider::new(&mut value, range)
+                    .fixed_decimals(decimals(unit))
+                    .clamping(egui::SliderClamping::Never);
+                if ui.add(slider).changed() {
+                    setter.set(knob, from_display(unit, value));
+                }
             }
-        } else {
-            let range = to_display(unit, lo)..=to_display(unit, hi);
-            let slider = egui::Slider::new(&mut value, range)
-                .fixed_decimals(decimals(unit))
-                .clamping(egui::SliderClamping::Never);
-            if ui.add(slider).changed() {
-                knob.set_raw(from_display(unit, value));
+            if raw != knob.baked_raw()
+                && ui
+                    .small_button("↺")
+                    .on_hover_text("Reset this one")
+                    .clicked()
+            {
+                setter.set(knob, knob.baked_raw());
             }
-        }
-        if knob.is_dirty()
-            && ui
-                .small_button("↺")
-                .on_hover_text("Reset this one")
-                .clicked()
-        {
-            knob.set_raw(knob.baked_raw());
-        }
+        });
     });
 }

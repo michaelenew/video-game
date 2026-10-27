@@ -76,8 +76,10 @@ const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 48;
 /// traded old ground for new on every touch; a hundred and twenty-eight is
 /// 1,280 bytes more. None of it goes over the network -- a peer is sent
 /// inputs -- so its only cost is the copy, and a ring of nine is under 200
-/// KiB.
-const SNAPSHOT_CAP: usize = 22 * 1024;
+/// KiB. **Twenty-six for eight fighter slots** (2026-10-26, the owner's
+/// call: exploration 0029, eight to a fight): 2,608 bytes of four more
+/// fighters, the pools they fill held at four fighters' worth.
+const SNAPSHOT_CAP: usize = 26 * 1024;
 
 /// Frames per timed run. Ten seconds of play, so a move's whole lifecycle --
 /// startup, active, recovery, and whatever it leaves on the field -- is inside
@@ -790,6 +792,7 @@ fn input_script(frames: u32) -> Vec<[Input; 2]> {
                     aim: (r >> 16) as u16,
                     pitch: ((r >> 32) as i16) / 8,
                     travel: Default::default(),
+                    tune: Default::default(),
                 }
             })
         })

@@ -110,18 +110,18 @@ pub fn mode(name: &str) -> Option<(&'static species::Species, ArenaId)> {
         .map(|a| (sp, a.id))
 }
 
-/// The world a start describes, with two seats played: `sim::replay::Start`
+/// The world a start describes, with `seats` played: `sim::replay::Start`
 /// is the one place a world is built from its settings, so a replay of a
 /// fight rebuilds exactly the fight the picker started. `draft` is what play
 /// is -- versus rounds open with a pick, and the classes are locked for the
 /// round after it (`World::drafting`) -- and a scripted run is not.
-pub fn world<const N: usize>(start: Start, classes: [Class; N], draft: bool) -> World {
+pub fn world<const N: usize>(start: Start, classes: [Class; N], draft: bool, seats: u8) -> World {
     sim::replay::Start {
         classes: World::seats_of(classes),
         hunt: start.hunt,
         arena: start.arena,
         temper: start.temper,
-        seats: 2,
+        seats,
         draft,
     }
     .world()
@@ -394,6 +394,7 @@ mod tests {
             },
             classes,
             true,
+            2,
         );
         assert_eq!(range.arena, ArenaId::RANGE);
         assert!(!range.hunting());
@@ -405,11 +406,12 @@ mod tests {
             },
             classes,
             true,
+            2,
         );
         assert_eq!(hunt.arena, ArenaId::PROVING_GROUND);
         assert!(hunt.hunting());
         assert_eq!(
-            world(Start::default(), classes, true).arena,
+            world(Start::default(), classes, true, 2).arena,
             ArenaId::PROVING_GROUND
         );
     }
@@ -438,13 +440,14 @@ mod tests {
         assert_eq!(read(&args).temper, 2);
         assert_eq!(read(&Options::from_query("?hunt")).temper, 0);
         assert_eq!(read(&Options::from_query("?hunt&temper=9")).temper, 3);
-        let w = world(read(&args), [Class::Bulwark; 2], true);
+        let w = world(read(&args), [Class::Bulwark; 2], true, 2);
         assert_eq!(w.temper(), 2);
         // A temper asked of a versus match is nothing at all.
         let v = world(
             read(&Options::from_query("?temper=3")),
             [Class::Bulwark; 2],
             false,
+            2,
         );
         assert_eq!(v, World::with_classes([Class::Bulwark; 2]));
     }
@@ -527,7 +530,7 @@ mod tests {
             start(true, Some("pair"), None, None),
         ];
         for fight in fights {
-            let w = world(fight, classes, true);
+            let w = world(fight, classes, true, 2);
             let said = describe(&w);
             let get = |name: &str| {
                 said.iter()
@@ -540,7 +543,7 @@ mod tests {
                 get("arena"),
                 get("temper"),
             );
-            let again = world(back, classes, true);
+            let again = world(back, classes, true, 2);
             assert_eq!(
                 again.checksum(),
                 w.checksum(),

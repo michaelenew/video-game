@@ -25,11 +25,11 @@ pub static TUTORIAL: Tutorial = Tutorial {
 };
 
 /// Her stains that have been set off: a lit fuse.
-fn lit_stains(w: &crate::World) -> usize {
+fn lit_stains(w: &crate::World, me: usize) -> usize {
     w.effects
         .iter()
         .flatten()
-        .filter(|e| e.owner == 0 && e.kind == EffectKind::Pool && e.life != u16::MAX)
+        .filter(|e| e.owner as usize == me && e.kind == EffectKind::Pool && e.life != u16::MAX)
         .count()
 }
 
@@ -108,7 +108,7 @@ fn bled(s: &Seen) -> bool {
     was.bleeding == 0 && now.bleeding > 0 && now.bled_by == 0
 }
 fn set_off(s: &Seen) -> bool {
-    lit_stains(s.after) > lit_stains(s.before)
+    lit_stains(s.after, s.me) > lit_stains(s.before, s.me)
 }
 fn drank(s: &Seen) -> bool {
     s.now().health > s.was().health && s.now().grey < s.was().grey

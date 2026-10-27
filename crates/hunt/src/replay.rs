@@ -549,8 +549,10 @@ pub fn judge_moving(tape: &Tape, window: Option<(u32, u32)>) -> Result<Judgement
     let mut lag = crate::link::Lag::new(tape.first_frame);
     // What a frame cost to simulate: the time from the end of one watch to
     // the start of the next is the copy of the world and its `advance`.
+    // The crowd's aggregates, off the books the game kept beside the fight.
+    let mut books = regions::Ledger::for_tape(tape, &tape.world()?, false);
     let mut mark = std::time::Instant::now();
-    let end = tape.play(|before, inputs, after| {
+    let end = tape.play(&mut books, |before, inputs, after| {
         lag.observe(after, mark.elapsed().as_micros() as u32);
         trek.observe(before, after);
         for person in people.iter_mut() {

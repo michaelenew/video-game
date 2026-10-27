@@ -151,6 +151,7 @@ fn input_script(frames: usize) -> Vec<[Input; MAX_PLAYERS]> {
                     aim: (r >> 16) as u16,
                     pitch: ((r >> 32) as i16) / 8,
                     travel: Default::default(),
+                    tune: Default::default(),
                 }
             })
         })

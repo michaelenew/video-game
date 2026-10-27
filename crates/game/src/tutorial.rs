@@ -13,7 +13,7 @@
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use sim::tutorial::{self, Dummy, Progress, Tutorial, Word};
-use sim::{Class, Input as SimInput, World};
+use sim::{Class, World};
 
 /// What this player has done in the halls, and a hall asked for that waits
 /// on a class change to arrive first.
@@ -22,17 +22,23 @@ pub struct Coach {
     pub progress: Progress,
     /// The menu asked for this class's hall: the class first, then the trip.
     pub want: Option<Class>,
+    /// The newest frame tallied: online a rollback makes a frame again, and
+    /// it is counted the first time (as it is sounded).
+    through: Option<u32>,
 }
 
-/// One tick of the halls: what fighter zero did, tallied.
-pub fn observe(coach: &mut Coach, before: &World, after: &World) {
-    coach.progress.observe(before, after);
-}
-
-/// **Fighter two's input in a hall**, or `None` anywhere else: the room's
-/// (`sim::tutorial::dummy_input`).
-pub fn dummy_input(w: &World) -> Option<SimInput> {
-    tutorial::dummy_input(w)
+/// One tick of the halls: what this machine's fighter, in seat `me`, did --
+/// their own tally, whoever else is in the hall (2026-10-25). Each frame
+/// once, the first time it is made.
+pub fn observe(coach: &mut Coach, before: &World, after: &World, me: usize) {
+    if coach
+        .through
+        .is_some_and(|f| after.frame <= f && after.frame + 600 > f)
+    {
+        return;
+    }
+    coach.through = Some(after.frame);
+    coach.progress.observe(before, after, me);
 }
 
 /// **Keep the hall and the class together**: playing a class in another
@@ -42,7 +48,8 @@ pub fn steer(sim: &mut crate::Sim, coach: &mut Coach) {
     if sim.travel != sim::input::Travel::NONE {
         return;
     }
-    let class = sim.cur.players[0].class;
+    let me = sim.local_player();
+    let class = sim.cur.players[me].class;
     if let Some(want) = coach.want {
         if class == want {
             coach.want = None;
@@ -52,7 +59,7 @@ pub fn steer(sim: &mut crate::Sim, coach: &mut Coach) {
         }
         return;
     }
-    if let Some(here) = tutorial::of(sim.cur.arena)
+    if let Some((here, _)) = sim.cur.hall_of(me)
         && here.class != class
         && let Some(t) = tutorial::for_class(class)
     {
@@ -69,7 +76,8 @@ pub fn menu(ui: &mut egui::Ui, sim: &mut crate::Sim, coach: &mut Coach) {
             let Some(t) = tutorial::for_class(class) else {
                 continue;
             };
-            let here = sim.cur.arena == t.arena;
+            let me = sim.local_player();
+            let here = sim.cur.hall_of(me).is_some_and(|(u, _)| u.arena == t.arena);
             let (done, of) = coach.progress.rooms_done(t, false);
             let label = if of > 0 && done == of {
                 format!("{} ✔", class.name())
@@ -77,10 +85,10 @@ pub fn menu(ui: &mut egui::Ui, sim: &mut crate::Sim, coach: &mut Coach) {
                 class.name().to_string()
             };
             if ui.selectable_label(here, label).clicked() && !here {
-                if sim.cur.players[0].class == class {
+                if sim.cur.players[me].class == class {
                     sim.travel = sim::input::Travel::arena(t.arena);
                 } else {
-                    sim.travel = sim::input::Travel::class(0, class);
+                    sim.travel = sim::input::Travel::class(me, class);
                     coach.want = Some(class);
                 }
             }
@@ -157,7 +165,7 @@ pub fn draw(
     coach: Res<Coach>,
     menu: Res<crate::menu::Menu>,
 ) {
-    let Some(t) = tutorial::of(sim.cur.arena) else {
+    let Some((t, local)) = sim.cur.hall_of(sim.local_player()) else {
         return;
     };
     if menu.open {
@@ -167,7 +175,7 @@ pub fn draw(
         return;
     };
     let w = &sim.cur;
-    let k = tutorial::room_at(t, w.players[0].pos.x);
+    let k = tutorial::room_at(t, local.x);
     egui::Window::new("tutorial")
         .title_bar(false)
         .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-18.0, 150.0))
