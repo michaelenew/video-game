@@ -206,7 +206,7 @@ class Shell:
         return out.reshape(q.shape)
 
 
-REST_SPREAD = 11.0  # degrees: view::being::REST_SPREAD, the arms as they hang
+REST_SPREAD = 11.0  # degrees: view::being::REST_SPREAD[0], the dark being's arms as they hang
 
 
 def rest_frame(r, arm, el, spread=REST_SPREAD):

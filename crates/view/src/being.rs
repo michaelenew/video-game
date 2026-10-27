@@ -168,10 +168,13 @@ pub const LAG_SECONDS: f32 = 0.12;
 /// free (`pose.rs`).
 pub const BODIES: [sim::Class; 2] = [sim::Class::Champion, sim::Class::Champion];
 
-/// How far out from the body the being's arms hang at rest, in degrees:
-/// enough to clear the mass of the lats, which is what keeps a heavily built
-/// figure's arms off its sides.
-pub const REST_SPREAD: f32 = 11.0;
+/// How far out from the body each being's arms hang at rest, in degrees,
+/// dark then light: enough to clear the mass of the lats, which is what keeps
+/// a heavily built figure's arms off its sides; the knight's further, its
+/// shoulders broad and its arms out from its plate (the owner, 2026-10-27:
+/// "bring the arms and shoulders out wider"). The art draws each being's
+/// armour for its own (`art/lib/facet.py`, `rest_frame`).
+pub const REST_SPREAD: [f32; 2] = [11.0, 18.0];
 
 /// How bent its elbows are at rest, in degrees: soft, not straight.
 pub const REST_ELBOW: f32 = 12.0;
@@ -181,9 +184,9 @@ pub const REST_ELBOW: f32 = 12.0;
 /// shoulders drawn back and open, the arms hanging just off the body. Not
 /// hers: her idle is a caster's, and on a body this size it read as a cat
 /// pretending to stand.
-pub fn rest() -> Pose {
+pub fn rest(k: usize) -> Pose {
     Pose::rest()
-        .shoulders(0.0, REST_SPREAD, 0.0)
+        .shoulders(0.0, REST_SPREAD[k], 0.0)
         .elbows(REST_ELBOW)
         .clavicle_l(-6.0, 0.0)
         .clavicle_r(-6.0, 0.0)
@@ -197,8 +200,8 @@ pub const CAST_OUT: f32 = 3.0;
 
 /// Being `k`'s pose (0 dark, 1 light): [`rest`], turned toward `hers` -- her
 /// pose, a beat late -- by `casting`, 0 at rest and 1 throwing with her.
-pub fn stance(_k: usize, hers: &Pose, casting: f32) -> Pose {
-    rest().blend(hers, casting.clamp(0.0, 1.0))
+pub fn stance(k: usize, hers: &Pose, casting: f32) -> Pose {
+    rest(k).blend(hers, casting.clamp(0.0, 1.0))
 }
 
 /// How far behind her it stands, in metres: enough that she is in front of

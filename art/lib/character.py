@@ -6,6 +6,10 @@ painted, exported. What differs is a class's *spec*, a module with:
 
 - ``NAME``: the file, ``crates/game/assets/<NAME>.glb``;
 - ``CLASS``: the class's name as the animation exporter writes it;
+- ``BASE`` and ``PROXY`` (optional): a sculpted base mesh under
+  ``art/sources`` to build the body from instead, fitted through a
+  MakeHuman body of ``PROXY``'s recipe (``base_mesh``); ``BODY``, ``GIRTH``
+  and ``HEAD_SCALE`` then go unused.
 - ``BODY``, ``GIRTH``, ``HEAD_SCALE``: the body (``mh``, ``fit``), and
   ``FIT`` (optional) how its trunk is fitted (``fit.fit``'s ``trunk``);
 - ``COLOURS``: the painter's colour for every material (and ``name/2`` to
@@ -59,6 +63,10 @@ def _opt(name, n=1):
 
 
 def body(spec):
+    if getattr(spec, "BASE", None):
+        # A sculpted base mesh, fitted through MakeHuman (``base_mesh``).
+        import base_mesh
+        return base_mesh.body(spec)
     base = mh.Base(os.path.join(ROOT, "target/art/mh"))
     rig = mh.Rig(os.path.join(ROOT, "target/art/mh"))
     v = mh.shaped(base, spec.BODY)
@@ -277,6 +285,13 @@ def build(spec):
                 b.inputs["Roughness"].default_value = rough
                 if m.name in spec.COLOURS:
                     b.inputs["Base Color"].default_value = (*spec.COLOURS[m.name], 1)
+        if "--clay" in _args():
+            # Every surface one grey, to judge the form alone.
+            clay = stage.flat_material("clay", (0.62, 0.6, 0.57), 0.6)
+            for o in bpy.context.scene.objects:
+                if o.type == "MESH":
+                    o.data.materials.clear()
+                    o.data.materials.append(clay)
         stage.lights()
         # ``--view height,distance,lens,look_at,angle;angle...``: a close
         # look at one piece, framed as its reference is.

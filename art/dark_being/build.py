@@ -17,7 +17,7 @@ sys.path[:0] = [os.path.join(HERE, "..", "lib"), HERE]
 
 import character  # noqa: E402
 import outfit  # noqa: E402,F401
-from recipe import BODY, FIT, GIRTH, HEAD_SCALE  # noqa: E402,F401
+from recipe import BASE, BODY, FIT, GIRTH, HEAD_SCALE, PROXY  # noqa: E402,F401
 
 NAME = "dark_being"
 CLASS = "Champion"
@@ -42,7 +42,8 @@ EDGE_GLOW = False
 GLOW = (0.72, 0.42, 1.0)
 # Muscle carved into the body (``anatomy``): the masses into the game's mesh,
 # the grooves into its normal map.
-SCULPT = 1.0
+# None for now: the base mesh is sculpted already.
+SCULPT = 0.0
 SCULPT_SHARE = 1.0
 METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.48)}
 # Violet light painted on: in the shade, and on every ridge of the muscle.

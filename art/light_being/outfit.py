@@ -10,7 +10,7 @@ round each.
 
 - Pauldrons: a cop of flat faces flared well out from the shoulder, its
   upper border rising to one blade-like point at the height of the ear;
-  three lames under it, each tucked under the one above and pointed at its
+  two lames under it, each tucked under the one above and pointed at its
   front lower corner.
 - Chest: a breastplate of planes meeting at a keel; a kite down the
   sternum with the sun at its widest; over each breast three strips laid up
@@ -66,6 +66,12 @@ def ridge(us, centre, height, half):
     return height * np.clip(1.0 - np.abs(us - centre) / half, 0.0, 1.0)
 
 
+# How far its arms hang out from its body at rest, degrees: its own, wider
+# than the dark being's (``view::being::REST_SPREAD``), and what every plate
+# on the arm is drawn for (``facet.rest_frame``).
+SPREAD = 18.0
+
+
 def trunk_axis(r):
     hip = r.o["thigh.l"][1]
     return plate.Axis([0.0, hip, r.o["chest"][2]], [0, 1, 0], [0, 0, 1], [1, 0, 0])
@@ -91,10 +97,10 @@ def cuirass(body, r):
     # shoulders, half-width, front, back), metres.
     keys = np.array([
         [0.00, 0.155, 0.118, 0.115],
-        [0.36, 0.13, 0.11, 0.1],
-        [0.55, 0.18, 0.16, 0.12],
-        [0.74, 0.215, 0.18, 0.135],
-        [0.92, 0.2, 0.15, 0.13],
+        [0.36, 0.112, 0.1, 0.092],
+        [0.55, 0.168, 0.152, 0.112],
+        [0.74, 0.232, 0.18, 0.135],
+        [0.92, 0.228, 0.15, 0.13],
         [1.10, 0.15, 0.11, 0.11],
     ])
     h = vs / H
@@ -203,14 +209,14 @@ def pauldrons(body, r):
     """Each pauldron after the owner's reference, plate by plate: a cop of
     five flat faces round the shoulder, its upper border swept up into one
     blade-like point over the outside of the shoulder at the height of the
-    ear; below it three lames, each tucked under the one above, each of
+    ear; below it two lames, each tucked under the one above, each of
     five faces, each running to a point at its front lower corner. Every
     face is flat and framed in trim; every fold is a bevelled edge."""
     out = []
     phis = (-110.0, -55.0, -14.0, 0.0, 14.0, 55.0, 110.0)
     for s in "lr":
         arm, el = f"arm.{s}", f"forearm.{s}"
-        fr = facet.rest_frame(r, arm, el)
+        fr = facet.rest_frame(r, arm, el, SPREAD)
         # The cop: rows from its upper border down to its hem. Its border
         # rises to a blade only at the very outside -- a point, not a slope.
         top = {-110: (0.10, 0.072), -55: (0.125, 0.085), -14: (0.145, 0.11), 0: (0.255, 0.14),
@@ -219,16 +225,18 @@ def pauldrons(body, r):
         # shoulders are the widest thing about it.
         rows = [
             [(p, *top[int(p)]) for p in phis],
-            [(p, 0.075, 0.135 if abs(p) < 100 else 0.118) for p in phis],
-            [(p, 0.0, 0.158 if abs(p) < 100 else 0.132) for p in phis],
-            [(p, -0.075 - (0.045 if p == 55.0 else 0.0), 0.172 if abs(p) < 100 else 0.14) for p in phis],
+            [(p, 0.075, 0.125 if abs(p) < 100 else 0.112) for p in phis],
+            [(p, 0.0, 0.142 if abs(p) < 100 else 0.124) for p in phis],
+            [(p, -0.06 - (0.035 if p == 55.0 else 0.0), 0.152 if abs(p) < 100 else 0.13) for p in phis],
         ]
         out.append(facet.plate(f"pauldron.{s}", facet.round_limb(fr, rows), frame=0.009, joint=arm, thick=0.007))
         # The lames close round the arm, each under the one above, the
         # lowest the smallest.
-        for k in range(3):
-            h0 = -0.055 - 0.05 * k
-            rad = 0.124 - 0.009 * k
+        # Two, not three: the arm shows under them (the owner, 2026-10-27:
+        # "make the pauldrons not drown the arms quite so much").
+        for k in range(2):
+            h0 = -0.045 - 0.045 * k
+            rad = 0.112 - 0.008 * k
             span = (-100.0, -50.0, 0.0, 50.0, 100.0)
             rows = [
                 [(p, h0, rad - (0.012 if abs(p) > 90 else 0.0)) for p in span],
@@ -249,7 +257,7 @@ def arms(body, r):
     ring = tuple(float(p) for p in range(0, 361, 45))
     for s in "lr":
         arm, el, wr = f"arm.{s}", f"forearm.{s}", f"hand.{s}"
-        lateral = facet.rest_frame(r, arm, el).m[0]
+        lateral = facet.rest_frame(r, arm, el, SPREAD).m[0]
         up_arm = facet.bone_frame(r, arm, el, lateral)
         rows = [[(p, h, rad) for p in ring] for h, rad in ((-0.2, 0.066), (-0.275, 0.062))]
         out.append(facet.plate(f"rerebrace.{s}", facet.round_limb(up_arm, rows), frame=0.007, joint=arm,
