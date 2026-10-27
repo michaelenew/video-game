@@ -334,7 +334,7 @@ impl Rig {
 
 /// Names for the limb bones and parts, by station and side, so nothing is
 /// formatted at build time.
-const LIMB_NAMES: [[[&str; 3]; 2]; super::STATIONS] = [
+pub(super) const LIMB_NAMES: [[[&str; 3]; 2]; super::STATIONS] = [
     [
         ["fore.l", "fore.l.lower", "fore.l.foot"],
         ["fore.r", "fore.r.lower", "fore.r.foot"],
@@ -650,7 +650,14 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
     r.body.half_width = half_w;
     r.body.pitch = pitch;
 
-    let bob = d.lift;
+    // A body swelling grows up from its belly, as a toad puffs up: grown
+    // as much down as up, it went through the floor its short legs could
+    // not lift it off (exploration 0034).
+    let bob = if g.stance == Stance::Limbless {
+        d.lift
+    } else {
+        d.lift.add(half_h.sub(p.half_h).max(Fx::ZERO))
+    };
     let bob = if aloft {
         bob.add(len.mul(fx(1, 2)))
     } else {
@@ -1103,6 +1110,19 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
         // bird's does; every other limb at the belly line.
         let root_at = if pair.role == Role::Wing && !pose.wing_walks {
             half_h.mul(fx(1, 2)).neg()
+        } else if super::posture::splayed(g.stance, pair.build) && !pose.wing_walks {
+            // A sprawling leg runs out level from its hip: hung lower than
+            // its own thickness off the floor (and a quarter, for the walk's
+            // bob), it lay along it (exploration 0034). The hip goes up the
+            // flank as far as that needs, and no further than the leg still
+            // reaches the floor from.
+            let standing = super::posture::standing_length(g.stance, pair.build, false, limb);
+            let at = q.root.add(pose.attach.mul(sin_turns(pitch)));
+            let want = girth
+                .mul(fx(5, 4))
+                .add(fx(1, 20))
+                .min(standing.mul(fx(97, 100)));
+            hang.min(at.sub(want)).max(half_h.neg())
         } else {
             hang
         };
@@ -1391,12 +1411,7 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                     // A spider's leg: out along its fan -- the fore pair
                     // reaching forward, the hind pair back -- the knee
                     // high above the body, the foot far out on the floor.
-                    let yaw = match station {
-                        Station::Fore => fx(1, 12),
-                        Station::MidFore => fx(1, 36),
-                        Station::MidHind => fx(-1, 36),
-                        Station::Hind => fx(-1, 10),
-                    };
+                    let yaw = spider_fan(station);
                     let (fan_x, fan_z) = (sin_turns(yaw), cos_turns(yaw).mul(sd));
                     let want = limb.mul(fx(7, 10));
                     let out = want
@@ -1543,6 +1558,25 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
     r.body
 }
 
+/// Which way a spider's leg runs out from its hip, in turns of yaw off
+/// straight out: the fore pair reaching forward, the hind back, the middle
+/// two a little either way -- far enough apart that two middle pairs off
+/// one short body do not step on each other (exploration 0034).
+pub fn spider_fan(station: Station) -> Fx {
+    match station {
+        Station::Fore => fx(1, 12),
+        Station::MidFore => fx(1, 18),
+        Station::MidHind => fx(-1, 18),
+        Station::Hind => fx(-1, 10),
+    }
+}
+
+/// How far ahead of its hip's line a spider's foot stands, from its fan:
+/// the leg runs out about seven tenths of its length.
+pub fn spider_ahead(station: Station, limb: Fx) -> Fx {
+    limb.mul(fx(7, 10)).mul(sin_turns(spider_fan(station)))
+}
+
 /// The whole body turned about the point it stands on by `yaw` turns,
 /// toward `+z`: every bone's offset and every part's axis, so a turned
 /// body is the same body facing elsewhere.
@@ -1640,7 +1674,11 @@ fn out_of_the_way(
         let pose = q.stations[i];
         let (limb, girth) = (p.limb[i], p.girth[i]);
         let half_limb = limb.mul(fx(1, 2));
-        if !pose.grounded || pose.wing_walks {
+        // A spider's leg runs out sideways from the hip at once, far
+        // outside the body's line: not among the legs under it either --
+        // counted there, it turned the legs behind it out (exploration
+        // 0034).
+        if !pose.grounded || pose.wing_walks || pair.build == Build::Spindle {
             // A wing folded at the top of the flank, an arm held at the
             // chest: above the legs, not among them (exploration 0033). As
             // obstacles they turned every leg under them out sideways. A
@@ -1648,7 +1686,7 @@ fn out_of_the_way(
             // posture (`Solver::feet`).
             return None;
         }
-        if pair.role == Role::Wing || pair.build == Build::Spindle {
+        if pair.role == Role::Wing {
             // In the way, as it stands.
             let ahead = girth;
             return Some(Reach {

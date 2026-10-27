@@ -136,9 +136,13 @@ fn faults(g: &Genome) -> Vec<String> {
                         continue;
                     };
                     let room = f(p.girth[i]) + f(p.girth[j]);
-                    // The fore pair's foot ahead of the hind pair's.
+                    // The fore pair's foot ahead of the hind pair's -- where
+                    // they are in line: a sprawl's foot a leg's thickness
+                    // further out passes the other without touching it.
                     let ahead = li[2][0] - lj[2][0];
-                    worst_cross = worst_cross.max((room - ahead) / room);
+                    if (li[2][2] - lj[2][2]).abs() < room {
+                        worst_cross = worst_cross.max((room - ahead) / room);
+                    }
                     // And no segment of one through a segment of the other.
                     for (a0, a1) in [(li[0], li[1]), (li[1], li[2])] {
                         for (b0, b1) in [(lj[0], lj[1]), (lj[1], lj[2])] {
@@ -353,37 +357,63 @@ fn carriage(g: &Genome) -> (f32, f32) {
 /// **Carried like an animal**: a level body no more than about a quarter
 /// of the way to upright, and a neck no steeper than a horse's unless the
 /// genome says the head is raised.
+/// What is wrong with how a body carries itself standing.
+fn carriage_faults(g: &Genome) -> Vec<String> {
+    let mut bad = vec![];
+    let (pitch, neck) = carriage(g);
+    let level = g.stance == sim::breed::Stance::Level;
+    let neck_max = if g.head == sim::breed::HeadKind::Raised {
+        65.0
+    } else {
+        55.0
+    };
+    // A bird stands tilted on its two legs; a four-legged body, a
+    // hyena's back at most.
+    // Its legs, not wings it leans on: a pterosaur on its wrists is
+    // a biped's tilt.
+    let legs = g.pairs().filter(|(_, p)| p.role.grounded()).count();
+    let pitch_max = if legs <= 1 { 45.0 } else { 20.0 };
+    if level && pitch.abs() > pitch_max {
+        bad.push(format!("a level body pitched {pitch:.0} degrees"));
+    }
+    // An upright body's head is on top of it, as a mantis's is.
+    if g.stance != sim::breed::Stance::Upright && neck > neck_max {
+        bad.push(format!("neck up {neck:.0} degrees"));
+    }
+    bad
+}
+
+/// What a player could not read of a body's attacks: a move unreadable,
+/// or two alike.
+fn reading_faults(g: &Genome) -> Vec<String> {
+    let q = posture::posture(g);
+    let v = sim::breed::verdict::judge(g, &q);
+    if v.unanswerable > 0 || v.lookalikes > 0 {
+        vec![format!(
+            "{} unreadable, {} alike ({:?})",
+            v.unanswerable, v.lookalikes, v.lookalike[0]
+        )]
+    } else {
+        vec![]
+    }
+}
+
+/// **Carried like an animal**: a level body no more than about a quarter
+/// of the way to upright, and a neck no steeper than a horse's unless the
+/// genome says the head is raised.
 #[test]
 fn every_body_is_carried_like_an_animal() {
     let mut bad = vec![];
-    let mut check = |name: String, g: &Genome| {
-        let (pitch, neck) = carriage(g);
-        let level = g.stance == sim::breed::Stance::Level;
-        let neck_max = if g.head == sim::breed::HeadKind::Raised {
-            65.0
-        } else {
-            55.0
-        };
-        // A bird stands tilted on its two legs; a four-legged body, a
-        // hyena's back at most.
-        // Its legs, not wings it leans on: a pterosaur on its wrists is
-        // a biped's tilt.
-        let legs = g.pairs().filter(|(_, p)| p.role.grounded()).count();
-        let pitch_max = if legs <= 1 { 45.0 } else { 20.0 };
-        if level && pitch.abs() > pitch_max {
-            bad.push(format!("{name}: a level body pitched {pitch:.0} degrees"));
-        }
-        // An upright body's head is on top of it, as a mantis's is.
-        if g.stance != sim::breed::Stance::Upright && neck > neck_max {
-            bad.push(format!("{name}: neck up {neck:.0} degrees"));
-        }
-    };
     for (_, name, g, _) in CAST {
-        check(name.to_string(), g);
+        for e in carriage_faults(g) {
+            bad.push(format!("{name}: {e}"));
+        }
     }
     for (line, stages) in lines() {
         for (k, g) in stages.iter().enumerate() {
-            check(format!("{line} {k}"), g);
+            for e in carriage_faults(g) {
+                bad.push(format!("{line} {k}: {e}"));
+            }
         }
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
@@ -500,8 +530,13 @@ fn attack_faults(g: &Genome) -> Vec<String> {
                     }
                 }
             }
-            if mass <= 0.0 || lo > hi {
+            if mass <= 0.0 {
                 continue;
+            }
+            // A held windup stood on nothing: every foot in the air.
+            if lo > hi {
+                out.push(format!("{}: no foot on the floor", spec.kind.name()));
+                break;
             }
             let (cx, cz) = (cx / mass, cz / mass);
             // A biped balances over one foot as it strikes, as a bird or a
@@ -533,7 +568,7 @@ fn attack_faults(g: &Genome) -> Vec<String> {
 /// more than a fifth of all of them told by a cry.
 #[test]
 fn attacks_are_read_off_the_whole_body() {
-    use sim::breed::{strike, verdict};
+    use sim::breed::strike;
     let (mut moves, mut cried) = (0, 0);
     let mut bad = vec![];
     let mut all: Vec<(String, Genome)> = CAST.iter().map(|c| (c.1.to_string(), *c.2)).collect();
@@ -544,12 +579,8 @@ fn attacks_are_read_off_the_whole_body() {
     }
     for (name, g) in &all {
         let q = posture::posture(g);
-        let v = verdict::judge(g, &q);
-        if v.unanswerable > 0 || v.lookalikes > 0 {
-            bad.push(format!(
-                "{name}: {} unreadable, {} alike ({:?})",
-                v.unanswerable, v.lookalikes, v.lookalike[0]
-            ));
+        for e in reading_faults(g) {
+            bad.push(format!("{name}: {e}"));
         }
         let (kit, n) = strike::kit(g, &q);
         for (spec, m) in kit[..n].iter().flatten() {
@@ -592,5 +623,85 @@ fn every_attack_is_one_the_body_could_make() {
         "{} of {total} bodies:\n{}",
         bad.len(),
         bad.join("\n")
+    );
+}
+
+/// **Bred, grafted and mutated as a game breeds them** (exploration
+/// 0034): the lines are four walks somebody chose; a player's eggs are
+/// whatever the dice give. Forty families of six generations, each
+/// generation a cross with one of the cast, a trophy grafted on, or a
+/// generation's drift, from a parent of the cast.
+fn families() -> u64 {
+    std::env::var("FAMILIES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(40)
+}
+
+fn bred() -> Vec<(String, Genome)> {
+    let mut out = vec![];
+    let from = std::env::var("FAMILY_FROM")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    for family in from..from + families() {
+        let mut rng = Rng::new(0x5eed_0000 + family);
+        let mut g = *CAST[rng.below(CAST.len())].2;
+        for generation in 0..6 {
+            let mate = *CAST[rng.below(CAST.len())].2;
+            g = match rng.below(3) {
+                0 => cross::breed(&g, &mate, &Rates::DEFAULT, &mut rng).genome,
+                1 => {
+                    let drops: Vec<_> = archetypes::drops(&mate).into_iter().flatten().collect();
+                    if drops.is_empty() {
+                        g
+                    } else {
+                        let kind = drops[rng.below(drops.len())];
+                        cross::graft(&g, &Trophy { kind, donor: mate }, &Rates::DEFAULT, &mut rng)
+                            .genome
+                    }
+                }
+                _ => cross::mutate(&g, &Rates::DEFAULT, &mut rng).genome,
+            };
+            out.push((format!("family {family} generation {generation}"), g));
+        }
+    }
+    out
+}
+
+#[test]
+fn bred_bodies_are_plausible() {
+    use sim::breed::strike;
+    let all = bred();
+    let mut bad = vec![];
+    let (mut moves, mut cried) = (0, 0);
+    for (name, g) in &all {
+        let q = posture::posture(g);
+        let (kit, n) = strike::kit(g, &q);
+        for (spec, m) in kit[..n].iter().flatten() {
+            if spec.damage > 0 {
+                moves += 1;
+                cried += m.cry.is_some() as usize;
+            }
+        }
+        let mut e = faults(g);
+        e.extend(attack_faults(g));
+        e.extend(carriage_faults(g));
+        e.extend(reading_faults(g));
+        if !e.is_empty() {
+            bad.push(format!("{name} {:?}: {}", g.stance, e.join("; ")));
+        }
+    }
+    eprintln!("{cried} of {moves} bred damaging moves cry");
+    assert!(
+        bad.is_empty(),
+        "{} of {} bred bodies:\n{}",
+        bad.len(),
+        all.len(),
+        bad.join("\n")
+    );
+    assert!(
+        cried * 5 <= moves,
+        "{cried} of {moves} bred moves are told by a cry, not the body"
     );
 }

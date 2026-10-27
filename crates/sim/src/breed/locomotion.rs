@@ -270,10 +270,16 @@ pub fn at(g: &Genome, q: &Posture, share: Fx) -> Gait {
         for w in pairs[..n].windows(2) {
             let (a, b) = (w[0], w[1]);
             let foot = |i: usize| {
+                let fan = if g.limbs[i].is_some_and(|l| l.build == super::Build::Spindle) {
+                    super::build::spider_ahead(super::Station::ALL[i], p.limb[i])
+                } else {
+                    Fx::ZERO
+                };
                 q.stations[i]
                     .attach
                     .mul(cos_turns(q.pitch))
                     .add(q.stations[i].reach)
+                    .add(fan)
             };
             let clear = foot(a)
                 .sub(foot(b))
@@ -288,10 +294,16 @@ pub fn at(g: &Genome, q: &Posture, share: Fx) -> Gait {
         for w in pairs[..n].windows(2) {
             let (a, b) = (w[0], w[1]);
             let foot = |i: usize| {
+                let fan = if g.limbs[i].is_some_and(|l| l.build == super::Build::Spindle) {
+                    super::build::spider_ahead(super::Station::ALL[i], p.limb[i])
+                } else {
+                    Fx::ZERO
+                };
                 q.stations[i]
                     .attach
                     .mul(cos_turns(q.pitch))
                     .add(q.stations[i].reach)
+                    .add(fan)
             };
             let clear = foot(a)
                 .sub(foot(b))

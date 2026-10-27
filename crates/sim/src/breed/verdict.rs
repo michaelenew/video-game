@@ -135,9 +135,13 @@ impl Reading {
     /// or a cry says what is coming (exploration 0033: a limb alone moving
     /// is read too late).
     pub fn legible(&self, len: Fx) -> bool {
-        self.change >= len.mul(fx(1, 8))
-            && self.early >= fx(1, 2)
-            && (self.body >= len.mul(strike::BODY_TELL) || self.cry.is_some())
+        // A cry is heard from the windup's first frame, whatever the body
+        // shows: the owner's edge case, a move the body cannot tell
+        // (exploration 0034).
+        self.cry.is_some()
+            || (self.change >= len.mul(fx(1, 8))
+                && self.early >= fx(1, 2)
+                && self.body >= len.mul(strike::BODY_TELL))
     }
 
     /// Neither read on sight nor answered by where you stand.

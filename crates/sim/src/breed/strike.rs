@@ -562,9 +562,17 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             c.pitch = fx(1, 40);
             c.lift = h.mul(fx(1, 10));
             swing_foot(&mut c, i, 0, fx(1, 2), fx(1, 2));
-            swing_foot(&mut c, i, 1, fx(1, 3), fx(1, 3));
             swing_foot(&mut s, i, 0, fx(3, 5), Fx::ZERO);
-            swing_foot(&mut s, i, 1, fx(1, 2), fx(1, 10));
+            // The other leg of the pair comes up with it only on a body
+            // with more than one other pair to stand on: on two pairs, it
+            // stabs with one and stands on three (exploration 0034).
+            let others = (0..STATIONS)
+                .filter(|&k| k != i && q.stations[k].grounded)
+                .count();
+            if others >= 2 {
+                swing_foot(&mut c, i, 1, fx(1, 3), fx(1, 3));
+                swing_foot(&mut s, i, 1, fx(1, 2), fx(1, 10));
+            }
             s.pitch = fx(-1, 60);
             strikers = [limb_side(i, 0), "", "", ""];
             delivery = Delivery::Swept;
@@ -1074,7 +1082,25 @@ fn aim_at(g: &Genome, q: &Posture, s: &mut Drive, strikers: &Strikers, aim: Aim)
                 let Some(i) = body.parts().iter().position(|part| part.name == "head") else {
                     return;
                 };
-                let dy = y.sub(body.centre(i).y);
+                // No lower than the head's own depth below its middle --
+                // the jaw under it included -- allows: aimed by its middle
+                // at a man's height, a big body's rush drove its jaw three
+                // metres into the floor (exploration 0034).
+                let centre = body.centre(i).y;
+                let below = body
+                    .parts()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, part)| part.name == "head" || part.name == "jaw")
+                    .map(|(k, _)| centre.sub(body.lowest(k)))
+                    .max()
+                    .unwrap_or(Fx::ZERO);
+                let y = if merged {
+                    y
+                } else {
+                    y.max(below.add(fx(1, 20)))
+                };
+                let dy = y.sub(centre);
                 // Turns per metre of height, near enough: a radian is a
                 // sixth of a turn, over the arm that swings it.
                 let arm = if merged {
@@ -1090,13 +1116,28 @@ fn aim_at(g: &Genome, q: &Posture, s: &mut Drive, strikers: &Strikers, aim: Aim)
                 if merged && limbless {
                     s.rise = s.rise.add(turn.mul(fx(1, 4))).max(fx(-1, 20)).min(fx(1, 8));
                 } else if merged {
-                    s.lift = s.lift.add(dy).max(q.root.mul(fx(-3, 5)));
+                    // A head that is the front of the body reaches its
+                    // mark with its lower jaw, a quarter of the way up it,
+                    // and the body sinks no further than its belly:
+                    // aimed by its middle, a toad's bite sank it through
+                    // the floor (exploration 0034).
+                    let dy = dy.add(p.half_h.mul(fx(3, 4)));
+                    s.lift = s
+                        .lift
+                        .add(dy)
+                        .max(q.root.mul(fx(-3, 5)))
+                        .max(p.half_h.mul(fx(10, 9)).sub(q.root).min(Fx::ZERO))
+                        .max(sink_room(g, q).neg());
                 } else {
                     let want = s.neck_pitch.add(turn);
                     s.neck_pitch = want.max(fx(-1, 4)).min(fx(1, 8));
                     // A neck bent as far as it goes: the body sinks the rest.
                     if want < fx(-1, 4) {
-                        s.lift = s.lift.add(dy.mul(fx(1, 2))).max(q.root.mul(fx(-3, 5)));
+                        s.lift = s
+                            .lift
+                            .add(dy.mul(fx(1, 2)))
+                            .max(q.root.mul(fx(-3, 5)))
+                            .max(sink_room(g, q).neg());
                     }
                 }
             }
@@ -1237,8 +1278,16 @@ fn gather(
     let rest = locomotion::rest(g);
     let base = build::body_driven(g, q, &rest);
     let cocked = |c: &Drive| build::body_driven(g, q, &rest.plus(c));
-    let moved = |c: &Drive| super::verdict::trunk_apart(&base, &cocked(c));
-    if moved(&c) >= want {
+    // Shown: the trunk moved, and the silhouette by as much as the
+    // verdict asks of a windup (an eighth of the body). A big body with a
+    // small head met the first and not the second, and its bite was read
+    // by nobody (exploration 0034).
+    let shown = |c: &Drive| {
+        let at = cocked(c);
+        super::verdict::trunk_apart(&base, &at) >= want
+            && super::verdict::apart(&base, &at) >= len.mul(fx(1, 8))
+    };
+    if shown(&c) {
         return (c, None);
     }
     // Which way the strike goes, from the cocked pose to the struck one.
@@ -1288,7 +1337,7 @@ fn gather(
             t.pitch = t.pitch.sub(dir.y.mul(fx(1, 60)).mul(k));
         }
         t.yaw = t.yaw.sub(dir.z.mul(fx(1, 30)).mul(k));
-        if moved(&t) >= want {
+        if shown(&t) {
             return (t, None);
         }
         c = t;
@@ -1311,11 +1360,20 @@ fn settle(g: &Genome, q: &Posture, spec: &MoveSpec, m: &mut Motion) {
     // What the body already has on (or in) the floor standing: a move asks
     // no part to be higher than it stands.
     let rest = body_at(g, q, m, spec, 0);
-    for _ in 0..4 {
-        let mut short = Fx::ZERO;
+    for _ in 0..12 {
+        // What goes under in the windup, which is held and stood on, and
+        // what goes under in the strike, which is quick: lifted apart, so a
+        // bite whose neck dips at the strike no longer lifted the windup
+        // too, every foot off the floor (exploration 0034).
+        let (mut short, mut short_strike) = (Fx::ZERO, Fx::ZERO);
         let last = spec.startup + spec.active;
         for k in 1..=12 {
             let frame = last * k / 12;
+            let short = if frame < spec.startup {
+                &mut short
+            } else {
+                &mut short_strike
+            };
             let body = body_at(g, q, m, spec, frame);
             for (i, part) in body.parts().iter().enumerate() {
                 let bone = body.bones[part.shape.bone].name;
@@ -1328,15 +1386,46 @@ fn settle(g: &Genome, q: &Posture, spec: &MoveSpec, m: &mut Motion) {
                     continue;
                 }
                 let floor = clear.min(rest.lowest(i));
-                short = short.max(floor.sub(body.lowest(i)));
+                *short = (*short).max(floor.sub(body.lowest(i)));
             }
         }
-        if short <= Fx::ZERO {
+        // The windup no higher than its planted legs reach; what is left
+        // comes out of its tilt, the body held level instead.
+        // A windup on spread wings, or one that leaves the floor anyway, is
+        // borne by more than its legs.
+        let borne = m.cocked.wings != Wings::Folded || m.arc > Fx::ZERO;
+        let room = if borne {
+            Fx::from_int(1000)
+        } else {
+            leg_room(g, q, &m.cocked)
+        };
+        if room < Fx::ZERO {
+            m.cocked.lift = m.cocked.lift.add(room);
+            continue;
+        }
+        if short <= Fx::ZERO && short_strike <= Fx::ZERO {
             return;
         }
-        let up = short;
+        // As high as the legs reach, and no higher: tried, and what the
+        // built feet say is too much taken back off.
+        let mut up = short.max(Fx::ZERO).min(room);
+        if up > Fx::ZERO && !borne {
+            let mut tried = m.cocked;
+            tried.lift = tried.lift.add(up);
+            let over = leg_room(g, q, &tried);
+            if over < Fx::ZERO {
+                up = up.add(over).max(Fx::ZERO);
+            }
+        }
+        if short > up {
+            // Its legs can lift it no higher: the windup is made smaller,
+            // the same gathering a quarter less, until it clears.
+            let wings = m.cocked.wings;
+            m.cocked = m.cocked.scaled(fx(3, 4));
+            m.cocked.wings = wings;
+        }
         m.cocked.lift = m.cocked.lift.add(up);
-        m.struck.lift = m.struck.lift.add(up);
+        m.struck.lift = m.struck.lift.add(up.max(short_strike));
         // Aimed again by what it reaches with -- a head, a tail -- not by
         // sinking the body, which is what was just undone.
         if let Some(a) = m.aim.filter(|a| !matches!(a, Aim::Body(_))) {
@@ -1346,6 +1435,94 @@ fn settle(g: &Genome, q: &Posture, spec: &MoveSpec, m: &mut Motion) {
             }
         }
     }
+}
+
+/// How far the body can sink on its legs: the least, over the pairs it
+/// stands on, of how far its hip is above two fifths of its leg -- a deep
+/// crouch, and no deeper, or the thigh is on the floor (exploration 0034).
+fn sink_room(g: &Genome, q: &Posture) -> Fx {
+    let p = proportions(g);
+    let mut room = q.root;
+    if q.bellied {
+        return Fx::ZERO;
+    }
+    for (i, pose) in q.stations.iter().enumerate() {
+        let Some(pair) = g.limbs[i] else { continue };
+        if !pose.grounded {
+            continue;
+        }
+        let standing =
+            super::posture::standing_length(g.stance, pair.build, pose.wing_walks, p.limb[i]);
+        let hip = q
+            .root
+            .add(pose.attach.mul(sin_turns(q.pitch)))
+            .sub(p.half_h.mul(super::posture::ATTACH_DOWN));
+        room = room.min(hip.sub(standing.mul(fx(2, 5))));
+    }
+    room.max(Fx::ZERO)
+}
+
+/// How much higher this drive could carry the body before a foot it
+/// stands on leaves the floor: the least, over the planted feet, of a
+/// leg's reach less its hip's height.
+fn leg_room(g: &Genome, q: &Posture, d: &Drive) -> Fx {
+    let p = proportions(g);
+    let mut room = Fx::from_int(1000);
+    // A body on its belly stands on nothing: its legs are paddles.
+    if q.bellied {
+        return room;
+    }
+    for (i, pose) in q.stations.iter().enumerate() {
+        let Some(pair) = g.limbs[i] else { continue };
+        if !pose.grounded || d.feet[i].iter().all(|f| f.lift > Fx::ZERO) {
+            continue;
+        }
+        let standing =
+            super::posture::standing_length(g.stance, pair.build, pose.wing_walks, p.limb[i]);
+        // A swelling body rises by its growth and its hips hang lower by
+        // three quarters of it (`build`): a quarter net.
+        let swell = if g.stance == super::Stance::Limbless {
+            Fx::ZERO
+        } else {
+            p.half_h
+                .mul(d.swell.max(Fx::ZERO))
+                .mul(Fx::ONE.sub(super::posture::ATTACH_DOWN))
+        };
+        let hip = q
+            .root
+            .add(d.lift)
+            .add(swell)
+            .add(pose.attach.mul(sin_turns(q.pitch.add(d.pitch))))
+            .sub(p.half_h.mul(super::posture::ATTACH_DOWN));
+        room = room.min(standing.mul(fx(97, 100)).sub(hip));
+    }
+    // And measured: a planted foot the built body holds off the floor is
+    // room already overspent.
+    let body = build::body_driven(g, q, &locomotion::rest(g).plus(d));
+    let still = build::body_driven(g, q, &locomotion::rest(g));
+    for (i, part) in body.parts().iter().enumerate() {
+        let bone = body.bones[part.shape.bone].name;
+        if !bone.ends_with(".foot") {
+            continue;
+        }
+        let planted = (0..STATIONS).any(|k| {
+            (0..2).any(|side| {
+                q.stations[k].grounded
+                    && bone == build::LIMB_NAMES[k][side][2]
+                    && d.feet[k][side].lift == Fx::ZERO
+            })
+        });
+        if planted {
+            let off = body
+                .lowest(i)
+                .sub(still.lowest(i).max(Fx::ZERO))
+                .sub(fx(1, 20));
+            if off > Fx::ZERO {
+                room = room.min(off.neg());
+            }
+        }
+    }
+    room
 }
 
 /// Where a body's weight is along it and across, and the span of its feet
@@ -1383,7 +1560,9 @@ fn steady(g: &Genome, q: &Posture, spec: &MoveSpec, m: &mut Motion) {
         return;
     }
     let p = proportions(g);
-    let margin = p.torso.mul(fx(1, 20));
+    // A tenth of the torso in from the feet's edge: the weight is over
+    // them through the windup's middle too, not only at its end.
+    let margin = p.torso.mul(fx(1, 10));
     for _ in 0..4 {
         let body = body_at(g, q, m, spec, spec.startup - 1);
         let Some((com, lo, hi, _)) = weight_and_feet(&body) else {
@@ -1796,21 +1975,19 @@ pub fn kit(g: &Genome, q: &Posture) -> ([Option<(MoveSpec, Motion)>; build::MAX_
     }
     let mut out: [Option<(MoveSpec, Motion)>; build::MAX_MOVES] = [None; build::MAX_MOVES];
     let mut n = 0;
-    let tell = len.mul(BODY_TELL);
     for spec in set.iter() {
         let mut m = motion(g, q, spec.kind);
         steady(g, q, spec, &mut m);
         settle(g, q, spec, &mut m);
         // Measured as the verdict measures it, after everything that moved
-        // it: a windup the whole body still does not show, cries.
-        if m.cry.is_none() && spec.damage > 0 {
-            let cocked = body_at(g, q, &m, spec, spec.startup - 1);
-            let shown = super::verdict::trunk_apart(&rest, &cocked).max(
-                super::verdict::trunk_apart(&body_at(g, q, &m, spec, 0), &cocked),
-            );
-            if shown < tell {
-                m.cry = Some(Cry::voice(g));
-            }
+        // it: a move that must be read on sight, and that the whole body
+        // still does not show, cries. One answered by where you stand needs
+        // no cry (exploration 0034).
+        if m.cry.is_none()
+            && spec.damage > 0
+            && super::verdict::read(g, q, &rest, spec, &m).unanswerable(len)
+        {
+            m.cry = Some(Cry::voice(g));
         }
         out[n] = Some((*spec, m));
         n += 1;

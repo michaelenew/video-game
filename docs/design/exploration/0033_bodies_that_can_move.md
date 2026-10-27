@@ -208,5 +208,7 @@ The owner, on the list this section was: *"Make the rest plausible."*
   its weight is forward (a long neck, big wings) and the hands are what
   catch it.
 
+Bodies bred as the game breeds them, not chosen lines: [0034](0034_bred_as_the_game_breeds.md).
+
 The hand edits of 0032 are retired (`game::touch::TOUCHES` is empty): they
 reshaped boxes on bodies that could not walk.

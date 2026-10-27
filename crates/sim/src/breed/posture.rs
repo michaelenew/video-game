@@ -351,7 +351,18 @@ impl Solver<'_> {
     /// A foot's world x: the hip's, plus the reach.
     fn foot_x(&self, i: usize) -> Fx {
         let s = &self.pose.stations[i];
-        s.attach.mul(cos_turns(self.pose.pitch)).add(s.reach)
+        // A spider's foot lands along its fan, not under its hip
+        // (exploration 0034): the feet are spread, and balanced over,
+        // where they are.
+        let fan = if self.g.limbs[i].is_some_and(|l| l.build == Build::Spindle) && !s.wing_walks {
+            super::build::spider_ahead(Station::ALL[i], self.p.limb[i])
+        } else {
+            Fx::ZERO
+        };
+        s.attach
+            .mul(cos_turns(self.pose.pitch))
+            .add(s.reach)
+            .add(fan)
     }
 
     /// The feet's span, with a foot's own length either end, and the rear
@@ -669,7 +680,7 @@ impl Solver<'_> {
     /// The root heights at which every grounded limb reaches the floor at
     /// this pitch, and the one they would like.
     fn vertical_at(&self, pitch: Fx) -> (Fx, Fx, Fx) {
-        let mut lo = self.p.half_h; // the belly stays off the floor
+        let mut lo = self.trunk_low(pitch);
         let mut hi = Fx::from_int(10_000);
         let mut want = Fx::ZERO;
         let mut n = 0;
@@ -695,6 +706,111 @@ impl Solver<'_> {
             want = self.p.half_h;
         }
         (lo, hi, want)
+    }
+
+    /// The least root height that keeps the trunk off the floor at this
+    /// pitch: the belly, and its ends tipped.
+    fn trunk_low(&self, pitch: Fx) -> Fx {
+        let mut lo = self.p.half_h; // the belly stays off the floor
+        // And so do its ends, tipped: the front of a head that is the
+        // front of the body, and the haunch -- a body pitched nose down on
+        // short forelegs put its head in the floor, and one pitched up its
+        // haunch (exploration 0034). A tenth of the height is the margin.
+        let front = if self.g.head == HeadKind::Merged {
+            self.p.front.add(self.p.head_half.mul(Fx::from_int(2)))
+        } else {
+            self.p.front
+        };
+        let rear = if self.g.segments.abdomen {
+            // An abdomen may drag; the haunch it hangs from may not.
+            self.p.torso.mul(fx(-1, 6))
+        } else {
+            self.p.rear
+        };
+        // A thorax hangs half as deep again as the torso (`build`).
+        let deep = if self.p.thorax {
+            self.p.half_h.mul(fx(3, 2))
+        } else {
+            self.p.half_h
+        };
+        for (x, deep) in [(front, deep), (Fx::ZERO, deep), (rear, self.p.half_h)] {
+            let need = deep.sub(x.mul(sin_turns(pitch)));
+            lo = lo.max(need.mul(fx(10, 9)));
+        }
+        lo
+    }
+
+    /// **Nothing on the floor but its feet** (exploration 0034): the
+    /// standing body built and measured, and whatever but a foot or a shin
+    /// is under a tenth of the body's height -- a grazer's jaw, a haunch, a
+    /// folded wing -- lifted clear: a head by its neck, anything else by
+    /// standing taller, as far as the legs reach. Each rule above keeps a
+    /// part clear by reckoning; this is the reckoning checked, for the
+    /// bodies breeding makes that no rule foresaw.
+    fn clear_the_floor(&mut self) -> bool {
+        if self.g.stance == Stance::Limbless {
+            return false;
+        }
+        let mut moved = false;
+        const LEGS: [&str; 4] = ["fore.", "midfore.", "midhind.", "hind."];
+        for _ in 0..12 {
+            let body = super::build::body_in(self.g, &self.pose);
+            let clear = self.pose.root.mul(fx(1, 10));
+            let mut worst = Fx::ZERO;
+            let mut head = false;
+            for (i, part) in body.parts().iter().enumerate() {
+                let bone = body.bones[part.shape.bone].name;
+                if part.shape.hollow
+                    || bone.ends_with(".foot")
+                    || bone.ends_with(".lower")
+                    || part.name.starts_with("tail")
+                {
+                    continue;
+                }
+                let trunk = super::verdict::TRUNK
+                    .iter()
+                    .any(|t| part.name.starts_with(t));
+                if (self.pose.bellied && trunk)
+                    || (self.pose.drags && matches!(part.name, "rump" | "haunch" | "abdomen"))
+                {
+                    continue;
+                }
+                // A leg's upper part need only be off the floor.
+                let leg = LEGS.iter().any(|l| bone.starts_with(l));
+                let short = if leg { Fx::ZERO } else { clear }.sub(body.lowest(i));
+                if short > worst {
+                    worst = short;
+                    head = matches!(part.name, "head" | "jaw" | "neck")
+                        || part.name.starts_with("horn");
+                }
+            }
+            if worst <= Fx::ZERO {
+                return moved;
+            }
+            moved = true;
+            if head && self.g.head != HeadKind::Merged && self.pose.neck_rise < fx(1, 8) {
+                self.pose.neck_rise = self.pose.neck_rise.add(fx(1, 50));
+                continue;
+            }
+            if self.pose.bellied {
+                return moved;
+            }
+            let (_, hi, _) = self.vertical_at(self.pose.pitch);
+            let room = hi.sub(self.pose.root);
+            if room <= Fx::ZERO {
+                return moved;
+            }
+            self.pose.root = self.pose.root.add(worst.add(fx(1, 50)).min(room));
+            self.feet();
+        }
+        moved
+    }
+
+    /// Whether the legs, standing as they now do, hold the trunk off the
+    /// floor: a body whose legs cannot rests on its belly instead, a newt's
+    /// carriage (exploration 0034).
+    fn trunk_held(&self) -> bool {
+        self.pose.root >= self.trunk_low(self.pose.pitch).mul(fx(9, 10))
     }
 
     /// Choose the root height and, if the limbs cannot all reach at this
@@ -998,6 +1114,26 @@ impl Solver<'_> {
             // body already tilted it stood the neck past vertical.
             rise = rise.min(most.sub(self.pose.pitch));
         }
+        // And never through the floor: a grazer's head carried low on a
+        // short body went into it standing (exploration 0034). The neck
+        // leaves near the root's height; the head is held clear of the
+        // floor by a tenth of that.
+        if self.g.head != HeadKind::Merged {
+            let arm = self.p.neck_len.add(self.p.head_half);
+            let base = self
+                .pose
+                .root
+                .add(self.p.front.mul(sin_turns(self.pose.pitch)));
+            for _ in 0..50 {
+                let bottom = base
+                    .add(arm.mul(sin_turns(self.pose.pitch.add(rise))))
+                    .sub(self.p.head_half);
+                if bottom >= self.pose.root.mul(fx(1, 10)) || rise >= Fx::ZERO {
+                    break;
+                }
+                rise = rise.add(fx(1, 100));
+            }
+        }
         self.pose.neck_rise = rise;
     }
 }
@@ -1078,8 +1214,10 @@ pub fn posture(g: &Genome) -> Posture {
     }
     solver.vertical();
     if g.stance == Stance::Level {
+        // Either way: nose down on short forelegs too, a hyena's back
+        // the other way round at most (exploration 0034).
         let most = level_pitch_most(g);
-        solver.pose.pitch = solver.pose.pitch.min(most);
+        solver.pose.pitch = solver.pose.pitch.clamp(most.neg(), most);
     }
     // The vertical may have pitched it to get every foot down; the feet
     // follow the weight once more.
@@ -1095,7 +1233,9 @@ pub fn posture(g: &Genome) -> Posture {
     }
     // Legs too weak for the body: it rests on its belly, the legs out to
     // the sides as paddles, bent as far as the floor makes them.
-    if g.stance != Stance::Limbless && super::plan::leg_strength(g) < super::plan::WEAK_LEGS {
+    if g.stance != Stance::Limbless
+        && (super::plan::leg_strength(g) < super::plan::WEAK_LEGS || !solver.trunk_held())
+    {
         solver.pose.bellied = true;
         // On the deepest of its trunk: a thorax stands half as deep again
         // as the torso, and lay half under the floor (exploration 0033).
@@ -1106,7 +1246,12 @@ pub fn posture(g: &Genome) -> Posture {
         } else {
             Fx::ONE
         };
-        solver.pose.root = solver.pose.root.min(solver.p.half_h.mul(deep));
+        // On it, not through it: a body whose short legs held it lower
+        // than its thorax is deep lay with the thorax in the floor
+        // (exploration 0034).
+        // A leg too short to reach the floor from there is a paddle held
+        // up off it (below).
+        solver.pose.root = solver.p.half_h.mul(deep);
         solver.pose.pitch = Fx::ZERO;
         solver.feet();
     }
@@ -1115,7 +1260,7 @@ pub fn posture(g: &Genome) -> Posture {
     // standing, it hung in the air and the weight was over nothing
     // (exploration 0033).
     let standing = solver.pose.stations.iter().filter(|s| s.grounded).count();
-    if standing > 1 {
+    if standing > 1 || solver.pose.bellied {
         for s in solver.pose.stations.iter_mut() {
             if s.grounded && s.dangles && !s.wing_walks {
                 s.grounded = false;
@@ -1128,6 +1273,11 @@ pub fn posture(g: &Genome) -> Posture {
     }
     solver.hop();
     solver.head();
+    if solver.clear_the_floor() && g.pair_count() > 0 && !solver.pose.bellied {
+        // Stood taller or the head raised, the feet follow the weight.
+        solver.force();
+        solver.feet();
+    }
     solver.pose.com = solver.masses.com(solver.pose.pitch);
     solver.pose.support = solver.support();
     solver.pose.balanced = g.stance == Stance::Limbless || solver.error() == Fx::ZERO;
