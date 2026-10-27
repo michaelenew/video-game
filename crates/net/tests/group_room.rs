@@ -135,7 +135,7 @@ impl Rooms {
 
     /// Everybody here is one group of everybody here.
     fn one_group(&self) -> bool {
-        let mut ids: Vec<u16> = self.here().map(|p| p.room.me()).collect();
+        let mut ids: Vec<u64> = self.here().map(|p| p.room.me()).collect();
         ids.sort();
         self.here()
             .all(|p| p.room.session.as_ref().is_some_and(|s| s.members() == ids))
@@ -190,5 +190,35 @@ fn a_room_of_groups_gathers_takes_in_a_newcomer_and_lets_one_go() {
             && r.here()
                 .all(|p| p.room.session.as_ref().unwrap().world.frame > frame + 200)
     });
+    r.agree();
+}
+
+/// **Two players are two members, whatever their ids** (2026-10-27): these
+/// two folded to the same sixteen-bit id when the world kept one, and the
+/// room played them as a single member.
+#[test]
+fn two_whose_ids_once_folded_together_are_two_members() {
+    let (a, b) = (0x0001_0000_0000_0000_u64, 0x0000_0000_0000_0001_u64);
+    let fold = |id: u64| (id ^ (id >> 16) ^ (id >> 32) ^ (id >> 48)) as u16;
+    assert_eq!(
+        fold(a),
+        fold(b),
+        "the pair the old fold could not tell apart"
+    );
+    let mut r = Rooms::new();
+    r.arrive("ann", a, Class::Champion);
+    r.arrive("bo", b, Class::Elementalist);
+    r.run_until(Duration::from_secs(20), |r| r.one_group());
+    for _ in 0..100 {
+        r.round();
+    }
+    for p in r.here() {
+        let s = p.room.session.as_ref().unwrap();
+        assert_eq!(s.members(), vec![b, a], "{}", p.name);
+        let present = (0..sim::state::MAX_PLAYERS)
+            .filter(|&k| s.world.is_present(k))
+            .count();
+        assert_eq!(present, 2, "{}: two fighters in the world", p.name);
+    }
     r.agree();
 }

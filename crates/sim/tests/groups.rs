@@ -18,7 +18,7 @@ fn on_map(w: &World, i: usize) -> V3 {
 }
 
 /// A group of two arrived at `place` of the valley, ids from `first`.
-fn group(place: sim::arena::ArenaId, classes: [Class; 2], first: u16) -> World {
+fn group(place: sim::arena::ArenaId, classes: [Class; 2], first: u64) -> World {
     let mut w = World::arrive(classes, sim::valley::Journey::default(), place, None, 2);
     w.ids[0] = first;
     w.ids[1] = first + 1;
@@ -155,7 +155,7 @@ fn a_split_and_a_merge_give_everybody_back_where_they_are() {
         4,
     );
     for (i, id) in w.ids.iter_mut().enumerate().take(4) {
-        *id = 100 + i as u16;
+        *id = 100 + i as u64;
     }
     play(&mut w, 60, &[0, 1, 2, 3]);
     let mut ours = split(&w, &[0, 1]);
@@ -188,12 +188,12 @@ fn a_split_and_a_merge_give_everybody_back_where_they_are() {
     for j in 0..2 {
         let k = m.from_a[j].unwrap();
         assert_eq!(on_map(&m.world, k), on_map(&ours, j));
-        assert_eq!(m.world.ids[k], 100 + j as u16);
+        assert_eq!(m.world.ids[k], 100 + j as u64);
     }
     for j in 2..4 {
         let k = m.from_b[j].unwrap();
         assert_eq!(on_map(&m.world, k), on_map(&theirs, j));
-        assert_eq!(m.world.ids[k], 100 + j as u16);
+        assert_eq!(m.world.ids[k], 100 + j as u64);
     }
     assert_eq!(
         (0..MAX_PLAYERS).filter(|&i| m.world.is_present(i)).count(),
@@ -212,7 +212,7 @@ fn two_hunts_two_maps_and_too_many_are_refused() {
     );
     let town = group(sim::valley::START, [Class::Champion; 2], 1);
     assert_eq!(group::merge(&town, &hunt).err(), Some(Refused::NotOneMap));
-    let five = |first: u16| {
+    let five = |first: u64| {
         let mut w = World::arrive(
             [Class::Champion; 5],
             sim::valley::Journey::default(),
@@ -221,7 +221,7 @@ fn two_hunts_two_maps_and_too_many_are_refused() {
             5,
         );
         for (i, id) in w.ids.iter_mut().enumerate().take(5) {
-            *id = first + i as u16;
+            *id = first + i as u64;
         }
         w
     };

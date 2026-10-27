@@ -427,6 +427,11 @@ plays as it always has, on GGRS. In a room of groups:
   it as off GGRS's advances -- and begins its replay again at a merge,
   which is a new world.
 
+**A player's id is the lobby's own, all sixty-four bits** (`World::ids`,
+2026-10-27). The first version folded it to sixteen, and two of a room's
+players folding to one id -- about one room of eight in two thousand --
+were played as one member; `group_room.rs` holds a pair that did.
+
 What holds it: `net/tests/groups.rs` (a member leaving, the leader or not,
 on lossy lines: the rest agree and play on) and `net/tests/group_room.rs`
 (two open a room's link and are one group; a third comes and the three
@@ -442,9 +447,6 @@ for a group rather than a seat.
   aggregates come off a ledger kept for one seat, and a group's members
   would each keep a different one. Feeding it from the group's own
   confirmed world is the next step for it.
-- **An id is sixteen bits** folded from the lobby's sixty-four
-  (`group::short_id`): two of a room's players colliding is about one room
-  in two thousand of eight, and plays them as one member.
 - **A room is still a room**: its size caps who can be in the valley at
   once. The open world past that is a lobby without a cap, and the beats
   then go only to those who could ever be near (§10's far test).

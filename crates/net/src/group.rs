@@ -70,14 +70,14 @@ pub type Watch<'a> = dyn FnMut(&World, &[Input; MAX_PLAYERS], &World) + 'a;
 pub struct Control {
     /// This group stops at this frame and hands its world to the group whose
     /// leader is `to`.
-    pub hand_over: Option<(u32, u16)>,
+    pub hand_over: Option<(u32, u64)>,
     /// This group takes in the world handed over by the group of leader
     /// `from`, at this frame.
-    pub absorb: Option<(u32, u16)>,
+    pub absorb: Option<(u32, u64)>,
     /// **Somebody left**: their line closed. They are gone from this frame
     /// on, said by the lowest member still on the line, and read off any
     /// member's packets -- the leaver may have been the leader.
-    pub drop: Option<(u32, u16)>,
+    pub drop: Option<(u32, u64)>,
 }
 
 /// What goes on a line, by its first byte.
@@ -85,7 +85,7 @@ pub struct Control {
 pub enum Packet {
     /// My inputs for the frames ending at `frame`, newest last, to my group.
     Inputs {
-        from: u16,
+        from: u64,
         frame: u32,
         inputs: Vec<Input>,
         control: Control,
@@ -94,14 +94,14 @@ pub enum Packet {
     /// centimetres, my group's leader and how many it is, and whether it is
     /// in a hunt.
     Beat {
-        from: u16,
-        leader: u16,
+        from: u64,
+        leader: u64,
         at: [i32; 3],
         members: u8,
         hunting: bool,
     },
     /// The base leader to the other group's: hand me your world.
-    Call { from: u16 },
+    Call { from: u64 },
     /// A world, in `total` chunks: the hand-over (`merged` false, at the
     /// handing group's frame) or the merged world (`merged` true).
     Chunk {
@@ -142,7 +142,7 @@ impl Packet {
                 b.push(K_INPUTS);
                 b.extend_from_slice(&from.to_le_bytes());
                 b.extend_from_slice(&frame.to_le_bytes());
-                let put = |b: &mut Vec<u8>, c: Option<(u32, u16)>| {
+                let put = |b: &mut Vec<u8>, c: Option<(u32, u64)>| {
                     let (f, who) = c.unwrap_or((0, 0));
                     b.extend_from_slice(&f.to_le_bytes());
                     b.extend_from_slice(&who.to_le_bytes());
@@ -201,15 +201,16 @@ impl Packet {
             Some(s)
         };
         let u16_ = |s: &[u8]| u16::from_le_bytes([s[0], s[1]]);
+        let u64_ = |s: &[u8]| u64::from_le_bytes(s.try_into().unwrap());
         let u32_ = |s: &[u8]| u32::from_le_bytes([s[0], s[1], s[2], s[3]]);
         match take(1)?[0] {
             K_INPUTS => {
-                let from = u16_(take(2)?);
+                let from = u64_(take(8)?);
                 let frame = u32_(take(4)?);
                 let mut control = Control::default();
                 for k in 0..3 {
                     let f = u32_(take(4)?);
-                    let who = u16_(take(2)?);
+                    let who = u64_(take(8)?);
                     let c = (f != 0).then_some((f, who));
                     match k {
                         0 => control.hand_over = c,
@@ -240,8 +241,8 @@ impl Packet {
                 })
             }
             K_BEAT => {
-                let from = u16_(take(2)?);
-                let leader = u16_(take(2)?);
+                let from = u64_(take(8)?);
+                let leader = u64_(take(8)?);
                 let mut pos = [0i32; 3];
                 for c in pos.iter_mut() {
                     *c = u32_(take(4)?) as i32;
@@ -257,7 +258,7 @@ impl Packet {
                 })
             }
             K_CALL => Some(Packet::Call {
-                from: u16_(take(2)?),
+                from: u64_(take(8)?),
             }),
             K_CHUNK => {
                 let merged = take(1)?[0] != 0;
@@ -307,7 +308,7 @@ impl Known {
 /// The last heartbeat from a peer outside my group.
 #[derive(Clone, Copy, Debug)]
 pub struct Heard {
-    pub leader: u16,
+    pub leader: u64,
     pub at: V3,
     pub members: u8,
     pub hunting: bool,
@@ -345,37 +346,37 @@ enum Merging {
     Idle,
     /// The base leader has called the other group's leader.
     Calling {
-        to: u16,
+        to: u64,
         since: u32,
     },
     /// My group stops at `at` and hands its world to `base`'s group.
     Handing {
         at: u32,
-        base: u16,
+        base: u64,
     },
     /// My group stopped; I wait for the merged world.
     Waiting {
-        base: u16,
+        base: u64,
         sent: u32,
     },
 }
 
 /// **One peer of a world of groups**, on real lines.
 pub struct Session<L: Line> {
-    pub me: u16,
-    lines: Vec<(u16, L)>,
+    pub me: u64,
+    lines: Vec<(u64, L)>,
     /// My group's world.
     pub world: World,
     tape: Box<Tape>,
     mine: Box<[Option<(u32, Input)>; TAPE]>,
-    known: BTreeMap<u16, Known>,
+    known: BTreeMap<u64, Known>,
     /// Members gone from my group (a split), and the frame from which.
-    gone: Vec<(u16, u32)>,
+    gone: Vec<(u64, u32)>,
     /// The newest frame every member's input is known for.
     pub confirmed: u32,
     dirty: Option<u32>,
     /// The last heartbeat from every peer outside my group.
-    pub heard: BTreeMap<u16, Heard>,
+    pub heard: BTreeMap<u64, Heard>,
     merging: Merging,
     /// My decisions, as a leader, carried in every packet of inputs.
     control: Control,
@@ -384,13 +385,13 @@ pub struct Session<L: Line> {
     handed_world: Option<(u32, World)>,
     merged_in: Incoming,
     /// The merged world I made as a base leader, to send to the newcomers.
-    merged_out: Option<(World, Vec<u16>, u32)>,
+    merged_out: Option<(World, Vec<u64>, u32)>,
     /// Ticks played, frame made or not: what resending is timed by while
     /// the world stands still.
     ticks: u32,
     /// Peers whose line closed, and whom I am relaying for: the frame they
     /// are gone from and the tick I stop relaying.
-    left: Vec<(u16, u32, u32)>,
+    left: Vec<(u64, u32, u32)>,
     pub rollbacks: u32,
     pub stalls: u32,
     pub merges: u32,
@@ -433,7 +434,7 @@ fn apart(a: V3, b: V3) -> i64 {
 impl<L: Line> Session<L> {
     /// A peer with its group's world from the start. `lines` reach every
     /// other peer, by id.
-    pub fn new(me: u16, world: World, lines: Vec<(u16, L)>) -> Session<L> {
+    pub fn new(me: u64, world: World, lines: Vec<(u64, L)>) -> Session<L> {
         Session {
             me,
             lines,
@@ -461,42 +462,42 @@ impl<L: Line> Session<L> {
     }
 
     /// The slot of a player in a world, by id.
-    fn slot(w: &World, id: u16) -> Option<usize> {
+    fn slot(w: &World, id: u64) -> Option<usize> {
         (0..MAX_PLAYERS).find(|&k| w.ids[k] == id)
     }
 
     /// **My group at frame `f`**: every id in the world in the fight, but
     /// those gone by then.
-    pub fn members_at(&self, w: &World, f: u32) -> Vec<u16> {
+    pub fn members_at(&self, w: &World, f: u32) -> Vec<u64> {
         (0..MAX_PLAYERS)
             .filter(|&k| w.ids[k] != 0 && !w.is_dummy(k) && w.is_present(k))
             .map(|k| w.ids[k])
             .filter(|id| !self.gone.iter().any(|(g, from)| g == id && *from <= f))
-            .collect::<std::collections::BTreeSet<u16>>()
+            .collect::<std::collections::BTreeSet<u64>>()
             .into_iter()
             .collect()
     }
 
     /// My group now.
-    pub fn members(&self) -> Vec<u16> {
+    pub fn members(&self) -> Vec<u64> {
         self.members_at(&self.world, self.world.frame + 1)
     }
 
     /// My group's leader: its lowest id.
-    pub fn leader(&self) -> u16 {
+    pub fn leader(&self) -> u64 {
         self.members().into_iter().min().unwrap_or(self.me)
     }
 
     /// **A line to somebody new**: from now on they hear my heartbeat, and
     /// my inputs once they are in my group.
-    pub fn add_line(&mut self, id: u16, line: L) {
+    pub fn add_line(&mut self, id: u64, line: L) {
         if id != self.me && !self.lines.iter().any(|(k, _)| *k == id) {
             self.lines.push((id, line));
         }
     }
 
     /// Everybody I have a line to.
-    pub fn peers(&self) -> Vec<u16> {
+    pub fn peers(&self) -> Vec<u64> {
         self.lines.iter().map(|(id, _)| *id).collect()
     }
 
@@ -543,7 +544,7 @@ impl<L: Line> Session<L> {
 
     /// `id` is gone from frame `d`: played again from there if I had
     /// played past it.
-    fn gone_from(&mut self, id: u16, d: u32) {
+    fn gone_from(&mut self, id: u64, d: u32) {
         if self.gone.iter().any(|(g, _)| *g == id) {
             return;
         }
@@ -556,7 +557,7 @@ impl<L: Line> Session<L> {
     /// The inputs of somebody who left, as far as I have them, to the rest
     /// of my group: a run up to the frame before they are gone from.
     fn relay(&mut self) {
-        let due: Vec<(u16, u32)> = self
+        let due: Vec<(u64, u32)> = self
             .left
             .iter()
             .filter(|(_, _, until)| self.ticks <= *until)
@@ -599,7 +600,7 @@ impl<L: Line> Session<L> {
         }
     }
 
-    fn send_to(&mut self, to: u16, p: &[u8]) {
+    fn send_to(&mut self, to: u64, p: &[u8]) {
         if let Some((_, line)) = self.lines.iter_mut().find(|(id, _)| *id == to) {
             line.send(p);
         }
@@ -824,7 +825,7 @@ impl<L: Line> Session<L> {
             }
             .encode()
         });
-        let ids: Vec<u16> = self.lines.iter().map(|(id, _)| *id).collect();
+        let ids: Vec<u64> = self.lines.iter().map(|(id, _)| *id).collect();
         for id in ids {
             if members.contains(&id) {
                 self.send_to(id, &packet);
@@ -927,7 +928,7 @@ impl<L: Line> Session<L> {
             && let Some(ours) = self.world_at(f)
         {
             if let Ok(m) = group::merge(&ours, &theirs) {
-                let newcomers: Vec<u16> = (0..MAX_PLAYERS)
+                let newcomers: Vec<u64> = (0..MAX_PLAYERS)
                     .filter(|&k| m.from_b[k].is_some())
                     .map(|k| theirs.ids[k])
                     .collect();
@@ -961,7 +962,7 @@ impl<L: Line> Session<L> {
         {
             let members = self.members_at(&w, f + 1);
             let origin = w.map_origin();
-            let pos = |id: u16| Self::slot(&w, id).map(|k| w.players[k].pos.add(origin));
+            let pos = |id: u64| Self::slot(&w, id).map(|k| w.players[k].pos.add(origin));
             // My component: everybody joined to me by steps under SPLIT_AT.
             let far = (SPLIT_AT as i64) * (SPLIT_AT as i64);
             let mut mine = vec![self.me];
@@ -982,7 +983,7 @@ impl<L: Line> Session<L> {
                     }
                 }
             }
-            let leaving: Vec<u16> = members
+            let leaving: Vec<u64> = members
                 .iter()
                 .filter(|id| !mine.contains(id))
                 .copied()
@@ -1060,10 +1061,10 @@ impl<L: Line> Session<L> {
 
     /// Hand my group's world over to `base`'s group: in chunks, to every
     /// peer whose heartbeat says it is in that group.
-    fn hand_over(&mut self, base: u16) {
+    fn hand_over(&mut self, base: u64) {
         let bytes = raw::world_bytes(&self.world);
         let total = bytes.len().div_ceil(CHUNK) as u16;
-        let to: Vec<u16> = self
+        let to: Vec<u64> = self
             .heard
             .iter()
             .filter(|(_, h)| h.leader == base)
@@ -1117,15 +1118,6 @@ impl<L: Line> Session<L> {
     }
 }
 
-/// **A lobby's id as a group's**: the world keeps who a slot is in sixteen
-/// bits (`World::ids`). Folded, never nought, which is a slot nobody is in.
-/// Two of a room's players folding to one id is a chance in some thousands
-/// for a room of eight; a room that meets it plays them as one member.
-pub fn short_id(id: u64) -> u16 {
-    let f = (id ^ (id >> 16) ^ (id >> 32) ^ (id >> 48)) as u16;
-    f.max(1)
-}
-
 /// **A room of groups** (exploration 0029 §14, G3): a lobby people come
 /// into and leave whenever they like (`crate::lobby`), and one group
 /// session over the lines it opens. Nobody is seated by a host and no world
@@ -1150,8 +1142,8 @@ impl Room {
     }
 
     /// My id in the session.
-    pub fn me(&self) -> u16 {
-        short_id(self.lobby.me())
+    pub fn me(&self) -> u64 {
+        self.lobby.me()
     }
 
     /// **Before the frame**: the lobby polled, a line to anybody new taken
@@ -1170,17 +1162,12 @@ impl Room {
             if !(lineup.go || lineup.newcomer == me) || !self.lobby.lines_ready() {
                 return false;
             }
-            let lines = self
-                .lobby
-                .group_lines()
-                .into_iter()
-                .map(|(id, l)| (short_id(id), l))
-                .collect();
+            let lines = self.lobby.group_lines().into_iter().collect();
             let mut w = mine();
             w.ids = [0; MAX_PLAYERS];
-            w.ids[0] = short_id(me);
+            w.ids[0] = me;
             self.epoch = lineup.epoch;
-            self.session = Some(Session::new(short_id(me), w, lines));
+            self.session = Some(Session::new(me, w, lines));
             return true;
         };
         // **Host**: somebody waiting is let into the lineup, in a seat
@@ -1195,7 +1182,7 @@ impl Room {
         if lineup.epoch != self.epoch || self.ticks % 30 == 0 {
             self.epoch = lineup.epoch;
             for (id, line) in self.lobby.group_lines() {
-                session.add_line(short_id(id), line);
+                session.add_line(id, line);
             }
         }
         false

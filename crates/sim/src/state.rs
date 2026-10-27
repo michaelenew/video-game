@@ -1727,8 +1727,10 @@ pub struct World {
     /// the same in every group's world they are ever in, or nought for a
     /// slot nobody has been given. What a merge of two groups' worlds keeps
     /// a fighter by when it moves them into a free slot (`crate::group`).
-    /// Hashed while any is set.
-    pub ids: [u16; MAX_PLAYERS],
+    /// Hashed while any is set. Sixty-four bits, the lobby's own id: a
+    /// shorter one folded from it let two players of a room be one
+    /// (2026-10-27).
+    pub ids: [u64; MAX_PLAYERS],
     /// **The valley's journey** (`crate::valley`): whether this world is the
     /// valley, which creatures have been beaten on the way, which seam you
     /// came in by, each fighter's last cairn. All zero, and not hashed,
@@ -4790,7 +4792,7 @@ impl World {
         if self.ids != [0; MAX_PLAYERS] {
             h.write_u32(0x6964_7321);
             for id in self.ids {
-                h.write_u32(id as u32);
+                h.write_u64(id);
             }
         }
         if self.dummies != [0; MAX_PLAYERS] {

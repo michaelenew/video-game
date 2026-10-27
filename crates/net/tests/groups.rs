@@ -14,8 +14,8 @@ use sim::{Class, World};
 
 type L = Lossy<MemoryLine>;
 
-fn mesh(ids: &[u16], lose_one_in: usize) -> Vec<Vec<(u16, L)>> {
-    let mut lines: Vec<Vec<(u16, L)>> = ids.iter().map(|_| Vec::new()).collect();
+fn mesh(ids: &[u64], lose_one_in: usize) -> Vec<Vec<(u64, L)>> {
+    let mut lines: Vec<Vec<(u64, L)>> = ids.iter().map(|_| Vec::new()).collect();
     let mut seed = 1;
     for a in 0..ids.len() {
         for b in a + 1..ids.len() {
@@ -28,7 +28,7 @@ fn mesh(ids: &[u16], lose_one_in: usize) -> Vec<Vec<(u16, L)>> {
     lines
 }
 
-fn group(place: sim::arena::ArenaId, classes: [Class; 2], ids: [u16; 2]) -> World {
+fn group(place: sim::arena::ArenaId, classes: [Class; 2], ids: [u64; 2]) -> World {
     let mut w = World::arrive(classes, sim::valley::Journey::default(), place, None, 2);
     w.ids[0] = ids[0];
     w.ids[1] = ids[1];
@@ -78,7 +78,7 @@ fn agree(peers: &[Session<L>], who: &[usize]) -> bool {
 
 #[test]
 fn two_groups_merge_when_they_meet_and_split_when_they_part() {
-    let ids = [1u16, 2, 3, 4];
+    let ids = [1u64, 2, 3, 4];
     let town = group(
         sim::valley::START,
         [Class::Champion, Class::Elementalist],
@@ -99,7 +99,7 @@ fn two_groups_merge_when_they_meet_and_split_when_they_part() {
             Session::new(id, w, std::mem::take(&mut lines[k]))
         })
         .collect();
-    let tick = |peers: &mut Vec<Session<L>>, trip: Option<(u16, Travel)>| {
+    let tick = |peers: &mut Vec<Session<L>>, trip: Option<(u64, Travel)>| {
         for p in peers.iter_mut() {
             let mut input = Input::default();
             if let Some((id, t)) = trip
@@ -192,8 +192,8 @@ impl<L: net::meet::Line> net::meet::Line for Cut<L> {
 /// led the group or not.
 #[test]
 fn a_member_who_leaves_is_gone_at_one_frame_for_everybody() {
-    for leaver in [1u16, 3] {
-        let ids = [1u16, 2, 3];
+    for leaver in [1u64, 3] {
+        let ids = [1u64, 2, 3];
         let mut w = World::arrive(
             [Class::Champion, Class::Elementalist, Class::DualMage],
             sim::valley::Journey::default(),
@@ -206,7 +206,7 @@ fn a_member_who_leaves_is_gone_at_one_frame_for_everybody() {
         }
         // Every line to and from the leaver shares one switch.
         let cut = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let mut lines: Vec<Vec<(u16, Cut<L>)>> = ids.iter().map(|_| Vec::new()).collect();
+        let mut lines: Vec<Vec<(u64, Cut<L>)>> = ids.iter().map(|_| Vec::new()).collect();
         for (k, row) in mesh(&ids, 20).into_iter().enumerate() {
             for (to, line) in row {
                 let on = if ids[k] == leaver || to == leaver {
@@ -223,7 +223,7 @@ fn a_member_who_leaves_is_gone_at_one_frame_for_everybody() {
             .map(|(k, &id)| Session::new(id, w.clone(), std::mem::take(&mut lines[k])))
             .collect();
         // Walking, so the leaver's inputs are worth predicting wrongly.
-        let walk = |id: u16, t: u32| {
+        let walk = |id: u64, t: u32| {
             let bits = if (t / 20 + id as u32) % 3 == 0 {
                 Input::W
             } else {
@@ -256,7 +256,7 @@ fn a_member_who_leaves_is_gone_at_one_frame_for_everybody() {
                 p.world.frame,
                 before[n]
             );
-            let rest: Vec<u16> = ids.iter().copied().filter(|&i| i != leaver).collect();
+            let rest: Vec<u64> = ids.iter().copied().filter(|&i| i != leaver).collect();
             assert_eq!(p.members(), rest, "leaver {leaver}: peer {}", p.me);
             let slot = (0..sim::state::MAX_PLAYERS)
                 .find(|&s| p.world.ids[s] == leaver)
