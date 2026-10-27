@@ -159,6 +159,8 @@ ASLEEP = {
     # Its plates smaller than when it stands: laid as land, a plate is a
     # summit, and must not outshout the body under it.
     "plates": 0.6,
+    # Its horns wrapped round its head, part of the land.
+    "horns": "wrapped",
 }
 
 # The pose it was asleep in before (2026-10-23): curled the whole of its
@@ -414,10 +416,21 @@ def body_parts(pose):
         # and back, out and over, then curling down past the cheek and
         # forward along the jaw -- a ram's, on a giant.
         base = at + hf * 0.45 + hu * 0.85 + hl * s_ * 0.55
-        parts += horn(base, [hl * s_ * 0.4 + hu * 0.9 - hf * 0.35, hl * s_ * 0.7 + hu * 0.3 - hf * 0.8,
-                             hl * s_ * 0.95 - hu * 0.55 - hf * 0.35, hl * s_ * 0.75 - hu * 0.8 + hf * 0.45,
-                             hl * s_ * 0.35 - hu * 0.35 + hf * 1.0, hl * s_ * 0.3 + hu * 0.15 + hf, hl * s_ * 0.2 + hu * 0.35 + hf],
-                      5.2, 0.72, 0.2)
+        if pose.get("horns") == "wrapped":
+            # Asleep (the owner: "wrap the horns underneath more and make
+            # them more a part of the terrain"): a short rise off the crown,
+            # then hugging the skull -- back, down past the cheek, under the
+            # jaw and forward along it -- so laid as land a horn is a ridge
+            # round the head and not a hoop over it.
+            parts += horn(base, [hl * s_ * 0.3 + hu * 0.5 - hf * 0.6, hl * s_ * 0.55 - hu * 0.3 - hf * 0.5,
+                                 hl * s_ * 0.45 - hu * 0.9 + hf * 0.1, hl * s_ * 0.15 - hu * 0.75 + hf * 0.7,
+                                 -hl * s_ * 0.15 - hu * 0.2 + hf, -hl * s_ * 0.2 + hf],
+                          4.4, 0.62, 0.3)
+        else:
+            parts += horn(base, [hl * s_ * 0.4 + hu * 0.9 - hf * 0.35, hl * s_ * 0.7 + hu * 0.3 - hf * 0.8,
+                                 hl * s_ * 0.95 - hu * 0.55 - hf * 0.35, hl * s_ * 0.75 - hu * 0.8 + hf * 0.45,
+                                 hl * s_ * 0.35 - hu * 0.35 + hf * 1.0, hl * s_ * 0.3 + hu * 0.15 + hf, hl * s_ * 0.2 + hu * 0.35 + hf],
+                          5.2, 0.72, 0.2)
         for k in range(4):
             parts.append(blade(at + hf * (0.15 - 0.28 * k) + hu * (0.55 - 0.18 * k) + hl * s_ * (0.9 + 0.12 * k),
                                -hf + hl * s_ * 0.9 + hu * 0.35, 0.6 - 0.1 * k, 0.18, hu))

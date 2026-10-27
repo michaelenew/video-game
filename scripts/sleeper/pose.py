@@ -24,21 +24,31 @@ def standing():
     return build(STANDING)[:3]
 
 
+# Whether the horns are stone arches laid on the land (`asleep_horns`,
+# `sleeper_arch.txt`) rather than part of it. Not since 2026-10-27 (the
+# owner: "make the horns less obvious ... more a part of the terrain"):
+# wrapped round the head, they are in the land with the rest of it. The
+# arch machinery stays, for a horn that should stand clear again.
+HORNS_AS_STONE = False
+
+
 @functools.cache
 def _asleep_body():
-    return build(ASLEEP, without=("horn",))
+    return build(ASLEEP, without=("horn",) if HORNS_AS_STONE else ())
 
 
 def mesh():
-    """The sleeping body without its horns, for the land: vertices and
-    triangles. The horns are stone laid on it (`asleep_horns`)."""
+    """The sleeping body for the land: vertices and triangles -- without its
+    horns if they are stone laid on it (`asleep_horns`)."""
     v, t, _, _ = _asleep_body()
     return v, t
 
 
 def asleep_horns():
     """The sleeping beast's horns as chains of capsules, set down where the
-    body (`mesh`) is."""
+    body (`mesh`) is -- none when they are part of the land."""
+    if not HORNS_AS_STONE:
+        return []
     return horns(ASLEEP, _asleep_body()[3])
 
 

@@ -214,7 +214,7 @@ def arches(lo, lift):
             chain.append((a, ra))
         chain.append((b, rb))
     chains.append(chain)
-    for chain in chains:
+    for chain in [c for c in chains if c]:
         pts = []
         # The horn keeps its own height where it leaves the skull, and its
         # curl stands upright from there, not squashed as the body is: a
