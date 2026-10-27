@@ -172,16 +172,41 @@ stage's moves for `art/gait.py`.
 ![Wings folded along the body](../gallery/0033_wings.jpg)
 ![Walks, the cast and the lines, at the end](../gallery/0033_walks_final.jpg)
 
+## The rest made plausible
+
+The owner, on the list this section was: *"Make the rest plausible."*
+
+- **The Ridgeback's torso** is two fifths of its length on four legs
+  (`build::proportions`; three tenths still on two, where a longer body
+  tipped the Galewing onto its wings). That broke a crossbred stage
+  (Mantis to Ridgeback, stage 7): its short middle pair capped how high
+  the body stood, the long pairs either side folded under it so deep that
+  a stride flipped a hind knee forward through the middle leg. **A middle
+  pair that holds the body down is held up** (`Solver::hold_up_the_short`):
+  where it leaves another pair standing at less than half its length, it
+  is carried, and the pairs either side stand the body.
+- **The pterosaur stage** (Ridgeback to Galewing, stage 3): a walking
+  wing's elbow folds back along the flank and a little out, so the forearm
+  comes down and forward to the hand, and the wrist is planted nearer the
+  feet. Aimed straight out, the elbows stood up like a spider's.
+- **A new leg arrives long enough to stand** (`cross::feed`): a walking
+  pair grafted beside legs already standing comes three quarters as long
+  as the shortest of them (never longer than the donor's), not half the
+  donor's. At half, the Galewing fed toward the Mantis grew a middle pair
+  as nubs, held them up, and stood on its hind legs alone for three
+  stages; it stands on four now, scythes held up.
+
+![Galewing to Mantis, stage 7, on four legs](../gallery/0033_mantis_on_four.jpg)
+![Ridgeback to Galewing, stage 3, elbows back](../gallery/0033_pterosaur.jpg)
+
 ## Still not plausible
 
-- A crossbreed that walks on its wrists (Ridgeback to Galewing, stage 3)
-  plants them well ahead with its elbows out: a big pterosaur's stance, and
-  the ugliest of the lines.
-- Some crossbred Mantis-like stages carry long hind legs and short budding
-  middle ones, and stand on the hind pair alone.
-- The Ridgeback's torso is short for legs as long as its.
 - A cry is a field on the move; nothing in the game plays or shows it yet,
-  because bred bodies do not fight in the game yet.
+  because bred bodies do not fight in the game yet. When they do, the cue
+  belongs in `crates/sound/src/cue.rs` (a cry is a patch, like any sound).
+- The pterosaur stage still plants its hands well ahead of its shoulders:
+  its weight is forward (a long neck, big wings) and the hands are what
+  catch it.
 
 The hand edits of 0032 are retired (`game::touch::TOUCHES` is empty): they
 reshaped boxes on bodies that could not walk.

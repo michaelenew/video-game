@@ -777,6 +777,61 @@ impl Solver<'_> {
             hi.max(self.p.half_h)
         };
         self.pose.root = root;
+        self.hold_up_the_short();
+    }
+
+    /// How straight the shortest-standing of the other pairs is at this
+    /// root and pitch: hip height over standing length.
+    fn least_extension(&self, skip: usize) -> Fx {
+        let mut least = Fx::from_int(10);
+        for (i, s) in self.grounded() {
+            if i == skip {
+                continue;
+            }
+            let pair = self.g.limbs[i].unwrap();
+            let standing = standing_length(self.g.stance, pair.build, s.wing_walks, self.p.limb[i]);
+            let hip = self
+                .pose
+                .root
+                .add(s.attach.mul(sin_turns(self.pose.pitch)))
+                .sub(self.p.half_h.mul(ATTACH_DOWN));
+            least = least.min(hip.div(standing.max(fx(1, 100))));
+        }
+        least
+    }
+
+    /// **A middle pair that holds the body down is held up** (exploration
+    /// 0033): a pair between two others, too short for the height they
+    /// stand the body at, capped the root, and the long pairs either side
+    /// folded under it so deep that a stride flipped their knees through
+    /// it. A limb still growing in -- a crossbreed's budding middle pair --
+    /// is carried, as the pair too short to reach the floor is; the pairs
+    /// either side stand the body.
+    fn hold_up_the_short(&mut self) {
+        if self.grounded().count() < 3 || self.pose.bellied {
+            return;
+        }
+        let (front, hind) = self
+            .grounded()
+            .fold((usize::MAX, 0), |(f, h), (i, _)| (f.min(i), h.max(i)));
+        for j in front + 1..hind {
+            let s = self.pose.stations[j];
+            let before = self.least_extension(j);
+            if !s.grounded || s.wing_walks || before >= fx(1, 2) {
+                continue;
+            }
+            let kept = (self.pose.root, self.pose.pitch, self.pose.applied.pitch, s);
+            self.pose.stations[j].grounded = false;
+            self.pose.stations[j].extension = Fx::ZERO;
+            self.vertical();
+            if self.least_extension(j) <= before {
+                self.pose.root = kept.0;
+                self.pose.pitch = kept.1;
+                self.pose.applied.pitch = kept.2;
+                self.pose.stations[j] = kept.3;
+            }
+            return;
+        }
     }
 
     /// With the root and the pitch settled, each limb's bend and how far
@@ -802,8 +857,8 @@ impl Solver<'_> {
             let more = super::unit(lean.sub(WING_PLANT).div(Fx::ONE.sub(WING_PLANT)));
             let gap = self
                 .spacing(i, i)
-                .add(self.p.limb[i].mul(fx(1, 10)))
-                .add(self.p.limb[i].mul(fx(1, 5)).mul(more));
+                .add(self.p.limb[i].mul(fx(1, 20)))
+                .add(self.p.limb[i].mul(fx(1, 10)).mul(more));
             let want = behind.add(gap);
             let here = self.foot_x(i);
             if here < want {

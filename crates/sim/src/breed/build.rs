@@ -427,6 +427,11 @@ pub fn proportions(g: &Genome) -> Proportions {
         half_w = half_w.mul(fx(6, 5));
     }
     let torso = match g.stance {
+        // Two fifths on two pairs of legs or more: at three tenths a big
+        // body stood on legs longer than the space between its shoulders
+        // and hips, and they had no room to step (exploration 0033). A
+        // biped's is short and compact over its one pair, as a bird's is.
+        Stance::Level if g.grounded_pairs() >= 2 => len.mul(fx(2, 5)),
         Stance::Level => len.mul(fx(3, 10)),
         Stance::Upright => len.mul(fx(1, 4)),
         Stance::Lowslung => len.mul(fx(9, 20)),
@@ -1367,14 +1372,18 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
             }
             let (upper, lower) = match pair.build {
                 _ if pose.wing_walks => {
-                    // The humerus and forearm reach the floor, elbow out
-                    // to the side, the wrist planted.
+                    // The humerus and forearm reach the floor, the wrist
+                    // planted. The elbow folds back along the flank and a
+                    // little out, as a pterosaur's does, so the forearm
+                    // comes down and forward to the hand: aimed straight
+                    // out, it stood the wrists a wingspan apart with the
+                    // elbows up like a spider's (exploration 0033).
                     let (arm_a, arm_b) = wing_arm(limb);
                     let (elbow, wrist) = ik2(
                         arm_a,
                         arm_b,
                         v3(reach, down.neg(), Fx::ZERO),
-                        v3(Fx::ZERO, Fx::ZERO, sd),
+                        v3(Fx::ONE.neg(), Fx::ZERO, sd.mul(fx(2, 3))),
                     );
                     (elbow, wrist.sub(elbow))
                 }
