@@ -152,3 +152,125 @@ fn two_groups_merge_when_they_meet_and_split_when_they_part() {
         );
     }
 }
+
+/// A line that can be cut, both ways at once, as a closed tab cuts it.
+struct Cut<L> {
+    line: L,
+    cut: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl<L: net::meet::Line> net::meet::Line for Cut<L> {
+    fn offer(&mut self) {}
+    fn answer(&mut self, _: &str) {}
+    fn accept(&mut self, _: &str) {}
+    fn description(&mut self, _: u64) -> Option<String> {
+        None
+    }
+    fn state(&mut self) -> net::meet::LineState {
+        if self.cut.load(std::sync::atomic::Ordering::Relaxed) {
+            net::meet::LineState::Failed
+        } else {
+            net::meet::LineState::Open
+        }
+    }
+    fn send(&mut self, packet: &[u8]) {
+        if !self.cut.load(std::sync::atomic::Ordering::Relaxed) {
+            self.line.send(packet);
+        }
+    }
+    fn recv(&mut self) -> Option<Vec<u8>> {
+        if self.cut.load(std::sync::atomic::Ordering::Relaxed) {
+            None
+        } else {
+            self.line.recv()
+        }
+    }
+}
+
+/// **Somebody closes their game in the middle of a group**: the rest agree
+/// on the frame they are gone from and play on, whether the one who left
+/// led the group or not.
+#[test]
+fn a_member_who_leaves_is_gone_at_one_frame_for_everybody() {
+    for leaver in [1u16, 3] {
+        let ids = [1u16, 2, 3];
+        let mut w = World::arrive(
+            [Class::Champion, Class::Elementalist, Class::DualMage],
+            sim::valley::Journey::default(),
+            sim::valley::START,
+            None,
+            3,
+        );
+        for (k, id) in ids.iter().enumerate() {
+            w.ids[k] = *id;
+        }
+        // Every line to and from the leaver shares one switch.
+        let cut = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut lines: Vec<Vec<(u16, Cut<L>)>> = ids.iter().map(|_| Vec::new()).collect();
+        for (k, row) in mesh(&ids, 20).into_iter().enumerate() {
+            for (to, line) in row {
+                let on = if ids[k] == leaver || to == leaver {
+                    cut.clone()
+                } else {
+                    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+                };
+                lines[k].push((to, Cut { line, cut: on }));
+            }
+        }
+        let mut peers: Vec<Session<Cut<L>>> = ids
+            .iter()
+            .enumerate()
+            .map(|(k, &id)| Session::new(id, w.clone(), std::mem::take(&mut lines[k])))
+            .collect();
+        // Walking, so the leaver's inputs are worth predicting wrongly.
+        let walk = |id: u16, t: u32| {
+            let bits = if (t / 20 + id as u32) % 3 == 0 {
+                Input::W
+            } else {
+                0
+            };
+            Input::aimed(bits, (t * 300 + id as u32 * 9000) as u16)
+        };
+        for t in 0..150 {
+            for p in peers.iter_mut() {
+                let i = walk(p.me, t);
+                p.tick(i);
+            }
+        }
+        assert_eq!(peers[0].members(), vec![1, 2, 3]);
+        cut.store(true, std::sync::atomic::Ordering::Relaxed);
+        let staying: Vec<usize> = (0..3).filter(|&k| ids[k] != leaver).collect();
+        let before: Vec<u32> = staying.iter().map(|&k| peers[k].world.frame).collect();
+        for t in 150..450 {
+            for &k in &staying {
+                let i = walk(peers[k].me, t);
+                peers[k].tick(i);
+            }
+        }
+        for (n, &k) in staying.iter().enumerate() {
+            let p = &peers[k];
+            assert!(
+                p.world.frame > before[n] + 250,
+                "leaver {leaver}: peer {} stuck at {} (was {})",
+                p.me,
+                p.world.frame,
+                before[n]
+            );
+            let rest: Vec<u16> = ids.iter().copied().filter(|&i| i != leaver).collect();
+            assert_eq!(p.members(), rest, "leaver {leaver}: peer {}", p.me);
+            let slot = (0..sim::state::MAX_PLAYERS)
+                .find(|&s| p.world.ids[s] == leaver)
+                .unwrap();
+            assert!(!p.world.is_present(slot), "the leaver's fighter has left");
+        }
+        let f = staying.iter().map(|&k| peers[k].confirmed).min().unwrap();
+        let sums: Vec<_> = staying
+            .iter()
+            .map(|&k| peers[k].world_at(f).map(|w| w.checksum()))
+            .collect();
+        assert!(
+            sums[0].is_some() && sums.iter().all(|s| *s == sums[0]),
+            "leaver {leaver}: the two who stayed disagree at {f}: {sums:?}"
+        );
+    }
+}

@@ -7,9 +7,10 @@
 // brokers, because a test should not depend on somebody else's server (and a
 // sandbox may not reach one). Everything after the board is the real thing --
 // the hello, the build and world check, the offer and the answer, a WebRTC
-// data channel between the two pages, and GGRS running a match over it. Both
-// tabs have to say which player they are, and they have to disagree: the tab
-// that opened the room first is player one.
+// data channel between the two pages, and a room of groups over it
+// (`net::group`, exploration 0029 §14): the room's link is the town, so each
+// tab starts as a group of one where the other also stands, and the two have
+// to come together as one group and play on as one.
 //
 // Chromium hides local addresses behind generated `.local` names, which a
 // container cannot resolve; the flag below turns that off so the two pages
@@ -77,7 +78,7 @@ const second = await open('second');
 let a = '', b = '';
 while (Date.now() < deadline) {
   [a, b] = [await status(first), await status(second)];
-  if (a.includes('Online') && b.includes('Online')) break;
+  if (a.includes('in a group') && b.includes('in a group')) break;
   await first.waitForTimeout(1_000);
 }
 // A few seconds of match, so a desync or a disconnect has time to show.
@@ -91,8 +92,9 @@ await browser.close();
 console.log(`first tab:  ${a}`);
 console.log(`second tab: ${b}`);
 console.log(`screenshots: ${prefix}-first.png ${prefix}-second.png`);
-if (!a.includes('player one')) errors.push(`the first tab should be player one; it says: ${a}`);
-if (!b.includes('player two')) errors.push(`the second tab should be player two; it says: ${b}`);
+for (const [tab, says] of [['first', a], ['second', b]]) {
+  if (!says.includes('in a group')) errors.push(`the ${tab} tab should be in a group with the other; it says: ${says}`);
+}
 if (errors.length) {
   console.error('what the pages said:');
   for (const line of said.slice(-30)) console.error(`  ${line}`);

@@ -54,6 +54,15 @@ const RESEND: u32 = 10;
 /// How many frames ahead of the newest a leader names a frame: past what
 /// any member can have confirmed, so every member stops on it.
 const AHEAD: u32 = WINDOW + 2;
+/// How long, in ticks, a member whose line to somebody closed relays that
+/// somebody's last inputs to the rest of the group.
+const RELAY_FOR: u32 = 60;
+
+/// What sees every frame a session plays, the first time and every time a
+/// rollback plays it again: the world before, the inputs, the world after.
+/// The game keeps its replay, its sounds, its bag and its tutorial checks
+/// off it, as it does off GGRS's advances.
+pub type Watch<'a> = dyn FnMut(&World, &[Input; MAX_PLAYERS], &World) + 'a;
 
 /// What a leader says in its inputs beside them: the group's decisions,
 /// which every member reads at the frame they confirm.
@@ -65,6 +74,10 @@ pub struct Control {
     /// This group takes in the world handed over by the group of leader
     /// `from`, at this frame.
     pub absorb: Option<(u32, u16)>,
+    /// **Somebody left**: their line closed. They are gone from this frame
+    /// on, said by the lowest member still on the line, and read off any
+    /// member's packets -- the leaver may have been the leader.
+    pub drop: Option<(u32, u16)>,
 }
 
 /// What goes on a line, by its first byte.
@@ -136,6 +149,7 @@ impl Packet {
                 };
                 put(&mut b, control.hand_over);
                 put(&mut b, control.absorb);
+                put(&mut b, control.drop);
                 b.push(inputs.len() as u8);
                 for i in inputs {
                     put_input(&mut b, i);
@@ -193,14 +207,14 @@ impl Packet {
                 let from = u16_(take(2)?);
                 let frame = u32_(take(4)?);
                 let mut control = Control::default();
-                for k in 0..2 {
+                for k in 0..3 {
                     let f = u32_(take(4)?);
                     let who = u16_(take(2)?);
                     let c = (f != 0).then_some((f, who));
-                    if k == 0 {
-                        control.hand_over = c;
-                    } else {
-                        control.absorb = c;
+                    match k {
+                        0 => control.hand_over = c,
+                        1 => control.absorb = c,
+                        _ => control.drop = c,
                     }
                 }
                 let n = take(1)?[0] as usize;
@@ -374,6 +388,9 @@ pub struct Session<L: Line> {
     /// Ticks played, frame made or not: what resending is timed by while
     /// the world stands still.
     ticks: u32,
+    /// Peers whose line closed, and whom I am relaying for: the frame they
+    /// are gone from and the tick I stop relaying.
+    left: Vec<(u16, u32, u32)>,
     pub rollbacks: u32,
     pub stalls: u32,
     pub merges: u32,
@@ -435,6 +452,7 @@ impl<L: Line> Session<L> {
             merged_in: Incoming::default(),
             merged_out: None,
             ticks: 0,
+            left: Vec::new(),
             rollbacks: 0,
             stalls: 0,
             merges: 0,
@@ -469,6 +487,118 @@ impl<L: Line> Session<L> {
         self.members().into_iter().min().unwrap_or(self.me)
     }
 
+    /// **A line to somebody new**: from now on they hear my heartbeat, and
+    /// my inputs once they are in my group.
+    pub fn add_line(&mut self, id: u16, line: L) {
+        if id != self.me && !self.lines.iter().any(|(k, _)| *k == id) {
+            self.lines.push((id, line));
+        }
+    }
+
+    /// Everybody I have a line to.
+    pub fn peers(&self) -> Vec<u16> {
+        self.lines.iter().map(|(id, _)| *id).collect()
+    }
+
+    /// My slot in my group's world.
+    pub fn my_slot(&self) -> Option<usize> {
+        Self::slot(&self.world, self.me)
+    }
+
+    /// **Lines that closed**: whoever was at the far end has left. Outside
+    /// my group that is all; in it, the lowest member still on a line to
+    /// them says from which frame they are gone -- the frame after the
+    /// newest input of theirs it has -- and relays those inputs to the rest
+    /// for a while, so nobody waits on a frame of theirs only it heard.
+    fn closed_lines(&mut self) {
+        let mut closed = Vec::new();
+        self.lines.retain_mut(|(id, line)| {
+            let failed = line.state() == crate::meet::LineState::Failed;
+            if failed {
+                closed.push(*id);
+            }
+            !failed
+        });
+        let members = self.members();
+        for id in closed {
+            self.heard.remove(&id);
+            if !members.contains(&id) || self.left.iter().any(|(g, _, _)| *g == id) {
+                continue;
+            }
+            let live = members
+                .iter()
+                .copied()
+                .filter(|m| *m != id && (*m == self.me || self.peers().contains(m)))
+                .min();
+            if live != Some(self.me) {
+                continue;
+            }
+            let newest = self.known.get(&id).map_or(self.confirmed, |k| k.newest);
+            let d = newest.max(self.confirmed) + 1;
+            self.control.drop = Some((d, id));
+            self.left.push((id, d, self.ticks + RELAY_FOR));
+            self.gone_from(id, d);
+        }
+    }
+
+    /// `id` is gone from frame `d`: played again from there if I had
+    /// played past it.
+    fn gone_from(&mut self, id: u16, d: u32) {
+        if self.gone.iter().any(|(g, _)| *g == id) {
+            return;
+        }
+        self.gone.push((id, d));
+        if d <= self.world.frame {
+            self.dirty = Some(self.dirty.map_or(d, |x| x.min(d)));
+        }
+    }
+
+    /// The inputs of somebody who left, as far as I have them, to the rest
+    /// of my group: a run up to the frame before they are gone from.
+    fn relay(&mut self) {
+        let due: Vec<(u16, u32)> = self
+            .left
+            .iter()
+            .filter(|(_, _, until)| self.ticks <= *until)
+            .map(|(id, d, _)| (*id, *d))
+            .collect();
+        self.left.retain(|(_, _, until)| self.ticks <= *until);
+        if due.is_empty() || self.ticks % RESEND != 0 {
+            return;
+        }
+        let members = self.members();
+        for (id, d) in due {
+            let Some(k) = self.known.get(&id) else {
+                continue;
+            };
+            let mut run = Vec::new();
+            let mut f = d - 1;
+            while f >= 1 && run.len() < TAPE - 1 {
+                match k.input_at(f) {
+                    Some(i) => run.push(i),
+                    None => break,
+                }
+                f -= 1;
+            }
+            if run.is_empty() {
+                continue;
+            }
+            run.reverse();
+            let p = Packet::Inputs {
+                from: id,
+                frame: d - 1,
+                inputs: run,
+                control: Control::default(),
+            }
+            .encode();
+            for m in &members {
+                if *m != self.me && *m != id {
+                    self.send_to(*m, &p);
+                }
+            }
+        }
+    }
+
     fn send_to(&mut self, to: u16, p: &[u8]) {
         if let Some((_, line)) = self.lines.iter_mut().find(|(id, _)| *id == to) {
             line.send(p);
@@ -485,7 +615,7 @@ impl<L: Line> Session<L> {
                 }
             }
         }
-        for (_, p) in heard {
+        for (line, p) in heard {
             match p {
                 Packet::Inputs {
                     from,
@@ -494,8 +624,16 @@ impl<L: Line> Session<L> {
                     control,
                 } => {
                     let now = self.world.frame;
+                    // A relay of somebody who left carries their inputs,
+                    // not their decisions.
+                    let theirs = line == from;
+                    if theirs && let Some((d, id)) = control.drop {
+                        self.gone_from(id, d);
+                    }
                     let k = self.known.entry(from).or_insert_with(Known::new);
-                    k.control = control;
+                    if theirs {
+                        k.control = control;
+                    }
                     k.newest = k.newest.max(frame);
                     let first = (frame + 1).saturating_sub(inputs.len() as u32);
                     for (n, input) in inputs.into_iter().enumerate() {
@@ -606,7 +744,7 @@ impl<L: Line> Session<L> {
     }
 
     /// Play again from `from` with what is known now.
-    fn replay_from(&mut self, from: u32) {
+    fn replay_from(&mut self, from: u32, watch: &mut Watch) {
         let now = self.world.frame;
         let Some(start) = self.tape.get(from).map(|e| e.before.clone()) else {
             return;
@@ -616,7 +754,9 @@ impl<L: Line> Session<L> {
         while f <= now {
             let inputs = self.inputs_for(&w, f);
             self.tape.record(&w, inputs);
+            let before = w.clone();
             w.advance(inputs);
+            watch(&before, &inputs, &w);
             f += 1;
         }
         self.world = w;
@@ -634,8 +774,15 @@ impl<L: Line> Session<L> {
 
     /// **One frame**, given my input. Returns whether the world advanced.
     pub fn tick(&mut self, input: Input) -> bool {
+        self.tick_watching(input, &mut |_, _, _| {})
+    }
+
+    /// [`Session::tick`], with `watch` shown every frame played.
+    pub fn tick_watching(&mut self, input: Input, watch: &mut Watch) -> bool {
         self.ticks += 1;
         self.receive();
+        self.closed_lines();
+        self.relay();
         if let Merging::Waiting { base, sent } = self.merging {
             // Waiting for the merged world: the hand-over again, now and
             // then, to whoever is behind the base, if it was mine to hand.
@@ -692,24 +839,25 @@ impl<L: Line> Session<L> {
             self.send_merged();
         }
         if let Some(from) = self.dirty.take() {
-            self.replay_from(from);
+            self.replay_from(from, watch);
         }
         if next.saturating_sub(self.confirmed) > WINDOW {
             self.stalls += 1;
-            self.confirm();
+            self.confirm(watch);
             return false;
         }
         let inputs = self.inputs_for(&self.world, next);
-        let w = &mut self.world;
-        self.tape.record(w, inputs);
-        w.advance(inputs);
-        self.confirm();
+        let before = self.world.clone();
+        self.tape.record(&before, inputs);
+        self.world.advance(inputs);
+        watch(&before, &inputs, &self.world);
+        self.confirm(watch);
         true
     }
 
     /// The newest frame every member's input is known for, and what the
     /// group decides at the frames it reaches.
-    fn confirm(&mut self) {
+    fn confirm(&mut self, watch: &mut Watch) {
         let mut f = self.confirmed;
         while f < self.world.frame {
             let next = f + 1;
@@ -732,7 +880,7 @@ impl<L: Line> Session<L> {
             }
             f = next;
             self.confirmed = f;
-            if self.decide(f) {
+            if self.decide(f, watch) {
                 return;
             }
         }
@@ -754,7 +902,7 @@ impl<L: Line> Session<L> {
         }
     }
 
-    fn decide(&mut self, f: u32) -> bool {
+    fn decide(&mut self, f: u32, watch: &mut Watch) -> bool {
         let leader = self.leader();
         let control = self.control_of_leader();
         if let Some((at, base)) = control.hand_over
@@ -791,7 +939,9 @@ impl<L: Line> Session<L> {
                     let next = self.world.frame + 1;
                     let inputs = self.inputs_for(&self.world, next);
                     self.tape.record(&self.world, inputs);
+                    let before = self.world.clone();
                     self.world.advance(inputs);
+                    watch(&before, &inputs, &self.world);
                 }
                 if leader == self.me {
                     self.merged_out = Some((m.world, newcomers, f));
@@ -964,5 +1114,90 @@ impl<L: Line> Session<L> {
         {
             self.merged_out = None;
         }
+    }
+}
+
+/// **A lobby's id as a group's**: the world keeps who a slot is in sixteen
+/// bits (`World::ids`). Folded, never nought, which is a slot nobody is in.
+/// Two of a room's players folding to one id is a chance in some thousands
+/// for a room of eight; a room that meets it plays them as one member.
+pub fn short_id(id: u64) -> u16 {
+    let f = (id ^ (id >> 16) ^ (id >> 32) ^ (id >> 48)) as u16;
+    f.max(1)
+}
+
+/// **A room of groups** (exploration 0029 §14, G3): a lobby people come
+/// into and leave whenever they like (`crate::lobby`), and one group
+/// session over the lines it opens. Nobody is seated by a host and no world
+/// is sent to a newcomer: everybody starts as a group of one in a world of
+/// their own, and whoever they come near they merge with.
+pub struct Room {
+    pub lobby: Box<dyn crate::lobby::Gathering>,
+    pub session: Option<Session<Box<dyn Line>>>,
+    /// The lineup whose lines were last taken in.
+    epoch: u32,
+    ticks: u32,
+}
+
+impl Room {
+    pub fn new(lobby: Box<dyn crate::lobby::Gathering>) -> Room {
+        Room {
+            lobby,
+            session: None,
+            epoch: 0,
+            ticks: 0,
+        }
+    }
+
+    /// My id in the session.
+    pub fn me(&self) -> u16 {
+        short_id(self.lobby.me())
+    }
+
+    /// **Before the frame**: the lobby polled, a line to anybody new taken
+    /// in, a newcomer let into the lineup by its host (for the lines; there
+    /// is no seat to give). The session starts once my lines to the lineup
+    /// are open, from `mine()`: my world, with me in slot nought. True on
+    /// the frame it starts.
+    pub fn tend(&mut self, now_ms: u64, mine: impl FnOnce() -> World) -> bool {
+        self.ticks += 1;
+        self.lobby.poll(now_ms);
+        let me = self.lobby.me();
+        let Some(lineup) = self.lobby.lineup().cloned() else {
+            return false;
+        };
+        let Some(session) = &mut self.session else {
+            if !(lineup.go || lineup.newcomer == me) || !self.lobby.lines_ready() {
+                return false;
+            }
+            let lines = self
+                .lobby
+                .group_lines()
+                .into_iter()
+                .map(|(id, l)| (short_id(id), l))
+                .collect();
+            let mut w = mine();
+            w.ids = [0; MAX_PLAYERS];
+            w.ids[0] = short_id(me);
+            self.epoch = lineup.epoch;
+            self.session = Some(Session::new(short_id(me), w, lines));
+            return true;
+        };
+        // **Host**: somebody waiting is let into the lineup, in a seat
+        // nobody holds -- the lobby's word for a place in the room.
+        if let Some((id, _)) = self.lobby.newcomer()
+            && let Some(seat) =
+                (0..MAX_PLAYERS as u8).find(|s| !lineup.members.iter().any(|m| m.seat == *s))
+        {
+            self.lobby.admit(id, seat as usize);
+        }
+        // Lines to whoever is new, as they open.
+        if lineup.epoch != self.epoch || self.ticks % 30 == 0 {
+            self.epoch = lineup.epoch;
+            for (id, line) in self.lobby.group_lines() {
+                session.add_line(short_id(id), line);
+            }
+        }
+        false
     }
 }

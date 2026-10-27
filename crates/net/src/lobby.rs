@@ -237,6 +237,11 @@ pub trait Gathering: Send + Sync {
     /// The session for the newest lineup is running: everybody in it has
     /// what they need, so nothing more is sent to a newcomer.
     fn settled(&mut self);
+    /// **The lines open now** to everybody in the newest lineup, by id: what
+    /// a room of groups plays over (`crate::group::Room`), in place of a
+    /// session's mesh. They are a session's from then on, as
+    /// [`Gathering::session`]'s are, and a host's newcomer is let in.
+    fn group_lines(&mut self) -> Vec<(u64, Box<dyn Line>)>;
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1373,6 +1378,35 @@ impl<B: Board, L: Line + 'static> Gathering for Lobby<B, L> {
 
     fn settled(&mut self) {
         self.outgoing = None;
+    }
+
+    fn group_lines(&mut self) -> Vec<(u64, Box<dyn Line>)> {
+        let Some(lineup) = self.lineup.clone().filter(|l| l.has(self.me)) else {
+            return Vec::new();
+        };
+        let me = self.me;
+        let mut out: Vec<(u64, Box<dyn Line>)> = Vec::new();
+        for m in &lineup.members {
+            if m.id == me {
+                continue;
+            }
+            if let Some(link) = self.links.iter_mut().find(|l| l.partner == m.id)
+                && link.line.state() == LineState::Open
+            {
+                out.push((m.id, Box::new(link.line.clone())));
+            }
+        }
+        self.running = true;
+        self.in_session = lineup.members.iter().map(|m| m.id).collect();
+        if self
+            .admitting
+            .is_some_and(|(epoch, _)| epoch <= lineup.epoch)
+        {
+            self.admitting = None;
+            self.admission_given = false;
+        }
+        self.received = None;
+        out
     }
 }
 

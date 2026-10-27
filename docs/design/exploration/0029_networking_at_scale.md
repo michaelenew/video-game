@@ -403,7 +403,53 @@ long as it plays there.
 Next, **G3**: the game plays on group sessions instead of GGRS, and the
 load harness gets a groups mode to measure them beside the other two.
 
-## 14 · Open
+## 14 · The game plays the valley in groups (2026-10-27, G3)
+
+**A room whose link is the valley is a room of groups** (`net::group::Room`,
+the game's `Driver::Groups`); a room for one fight -- an arena, a hunt --
+plays as it always has, on GGRS. In a room of groups:
+
+- **The lobby only finds people and opens lines** (`Gathering::group_lines`).
+  Its host still lets a newcomer into the lineup, because that is what
+  opens lines to them, but there is no seat to give and no world to send.
+- **Everybody starts as a group of one**, alone in a world of their own at
+  the link's place with its journey, and merges with whoever is near
+  (§13). Two who open the same link stand in the same square and are one
+  group a second later; a third who comes in later merges the same way.
+- **Somebody closing their game** is gone at one frame for the whole group.
+  Every member's packets carry a `drop` beside the leader's decisions: the
+  lowest member still on a line to the leaver names the frame after the
+  newest input of theirs it holds, and for a second relays those inputs to
+  the rest, so nobody waits on a frame of theirs only one member heard. Read
+  off any member's packets, because the one who left may have led.
+- **The game sees every frame the group plays** (`Session::tick_watching`)
+  -- its replay, its sounds, its bag and its tutorial checks are kept off
+  it as off GGRS's advances -- and begins its replay again at a merge,
+  which is a new world.
+
+What holds it: `net/tests/groups.rs` (a member leaving, the leader or not,
+on lossy lines: the rest agree and play on) and `net/tests/group_room.rs`
+(two open a room's link and are one group; a third comes and the three
+are; one leaves and the two play on -- every one of them through a merge).
+The browser checks (`room-smoke`, `menu-smoke`, `room-desktop`) now ask
+for a group rather than a seat.
+
+**What is not there yet**, in the order it matters:
+
+- **Seeing a group you are not in.** Two groups 150 m apart do not see
+  each other: the See tier (§4) is what draws them, from the heartbeat.
+- **The crowd field in a group** is unfed (`World::advance`): its
+  aggregates come off a ledger kept for one seat, and a group's members
+  would each keep a different one. Feeding it from the group's own
+  confirmed world is the next step for it.
+- **An id is sixteen bits** folded from the lobby's sixty-four
+  (`group::short_id`): two of a room's players colliding is about one room
+  in two thousand of eight, and plays them as one member.
+- **A room is still a room**: its size caps who can be in the valley at
+  once. The open world past that is a lobby without a cap, and the beats
+  then go only to those who could ever be near (§10's far test).
+
+## 15 · Open
 
 - **NET-3** The See tier's distance and rate: how far should another player
   be drawn, and how smoothly?
