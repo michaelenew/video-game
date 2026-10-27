@@ -438,11 +438,39 @@ dragon. Make it subtle, mostly art for now. The dragon itself should
 essentially be the mountain, and its dragon-like features should be just
 discernible only from certain angles. Maybe it wakes up eventually."
 
-**The mountain north of the Pinewood, east of the High Plane, is a beast
-asleep** (`sim::valley::dragon`). It is the land, not a creature and not a
-box: a height added to the mountain wherever its body lies, before the
-land's noise and crags go over it, so it wears the same rock and snow as
-the range round it, and what is drawn is what a foot would stand on.
+**The mountain east of the High Plane is a beast asleep**
+(`sim::valley::dragon`). It is the land, not a creature and not a box: a
+height added to the mountain wherever its body lies, before the land's
+noise and crags go over it, so it wears the same rock and snow as the
+range round it, and what is drawn is what a foot would stand on.
+
+**It is laid out for one view: from the High Plane, looking down**
+(2026-10-27; the owner, after the curled beast "still doesn't read at all
+like a creature even if you know"). At this size, among crags as big as
+its own features and in the Pinewood's fog (nothing past 600 m), a beast
+lying in the range reads from nowhere in particular. It reads where one of
+its outlines is against something lower, and the one place players look
+*down* on these mountains is the High Plane. So:
+
+- it lies **stretched out on its belly**, as a crocodile basks -- the back
+  long with a lazy bend, the chin on its folded forearms, the hind legs
+  sprawled, the tail sweeping round to its right -- because from above a
+  curled animal is a round mass (the curl was tried: laid as land it was a
+  drum with a ring on it) and a stretched one is a lizard;
+- it lies **broadside below the plane's east edge**, nose north, centred
+  at (840, 380): looked at end-on it foreshortens into a wedge, and any
+  nearer the plane's own flank -- a table mountain's, falling a metre a
+  metre for 130 m -- hides it;
+- **the range is carved down round it** to a smooth snow hollow at 110 m,
+  its crags fading out across the hollow, so its body stands clear of
+  what is round it and its rocky flanks draw its outline;
+- **its plates are smaller asleep** than standing, so the body, not a row
+  of summits, is the shape.
+
+From the Pinewood road and the Saddle the ridge in front hides it; from
+the plane's edge you look down onto its back. `python3
+scripts/sleeper/vista.py` previews the land from those places in seconds
+(after `cargo run --release -p look --example sleeper`).
 
 **Its shape is a creature built for it** (2026-10-23). The way here, for
 the record: a table of joints posed like a statue; a tarrasque of mounds
@@ -476,27 +504,25 @@ and club:
 2. **Its poses** (`beast.py`'s `STANDING` and `ASLEEP`, drawn by
    `python3 scripts/sleeper/pose.py`): standing reared and hunched, the
    head thrust forward and low with its jaws open, the arms hanging;
-   asleep curled up the whole of its length, lopsided -- the back bent
-   in a C to its left, the neck turned all the way round so the head
-   rests against its left haunch, the tail wrapped round the other way to
-   meet it, the club by the snout; the upper hind leg drawn up along the
-   flank, the lower tucked under, both forearms folded back; settled onto
-   its right side.
+   asleep stretched out on its belly (above). The curled pose it slept in
+   first is kept as `CURLED`.
 3. **The shape** (`scripts/sleeper/terrain.py`): the sleeping beast sized
-   to 300 m, squashed to 60 % of its height, its nose turned to 200
-   degrees (a little west of south, at the valley), centred at (790, 400);
-   the highest point of it over every 2 m cell; sunk 18 m into the
-   mountain; every wall settled to a slope of 1.4 at most, as scree
-   settles against a cliff; softened a cell. It writes
-   `crates/sim/src/valley/sleeper.bin`, which the simulation reads.
+   to 340 m, kept at 90 % of its height, nose north, centred at (840,
+   380); the highest point of it over every 2 m cell; sunk 4 m; every wall
+   settled to a slope of 2.2 at most, as scree settles against a cliff;
+   softened a cell; and how far the range is carved round it, down to 110
+   m under its body and easing off over 90 m. It writes
+   `crates/sim/src/valley/sleeper.bin`, which the simulation reads. Its
+   horns are stone arches (`sleeper_arch.txt`): slim, springing from its
+   head and back into the hollow before their tips.
 4. **The sheet** (`cargo run --release -p look --example sleeper`, then
    `python3 scripts/sleeper/sheet.py`): the beast asleep, its shape alone
    on flat ground, and the mountain with it in, side by side from four
    directions.
 
-`SHOT_EYE=200,120,-130,370,-80,80 SHOT_AT=128,10 GAME_ARGS="--arena
-high_plane --open"` looks down on it in the game from 120 m over the
-plane's edge.
+`SHOT_EYE=544,314,380,840,140,380 SHOT_AT=700,0 GAME_ARGS="--arena
+pinewood --open"` is the game's camera at the plane's east edge, looking
+down on it.
 
 **Waking it** is not built (§6, item 8).
 

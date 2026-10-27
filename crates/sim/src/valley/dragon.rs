@@ -1,5 +1,5 @@
-//! **The Sleeper**: a great beast asleep in the mountains north of the
-//! Pinewood, which is one of those mountains (the owner, 2026-10-22: "the
+//! **The Sleeper**: a great beast asleep in the mountains east of the High
+//! Plane, which is one of those mountains (the owner, 2026-10-22: "the
 //! dragon itself should essentially be the mountain, and its dragon like
 //! features should be just discernible only from certain angles").
 //!
@@ -10,11 +10,16 @@
 //!
 //! **Its shape is a creature built for it** (2026-10-23): a giant armoured
 //! lizard, a skeleton with flesh, plates, horns and a clubbed tail on it
-//! (`scripts/sleeper/beast.py`), asleep on its belly with its head on its
-//! forearms, looked down on by `scripts/sleeper/terrain.py`, which writes
-//! `sleeper.bin`: how far its body stands over the mountain, cell by cell.
-//! Change the beast, its pose or where it lies there, not here. The
-//! heights are level data (`tests/knobs.rs`), judged by looking at them.
+//! (`scripts/sleeper/beast.py`), asleep stretched out on its belly with its
+//! chin on its forearms, broadside below the High Plane's east edge -- laid
+//! out to be seen from there, looking down (2026-10-27,
+//! `docs/design/valley.md` §1f). `scripts/sleeper/terrain.py` looks down
+//! on it and writes `sleeper.bin`: how far its body stands over the
+//! mountain, cell by cell, and how far the range is carved down round it
+//! first, so its body stands in a smooth hollow and not among crags as big
+//! as itself. Change the beast, its pose or where it lies there, not here.
+//! The heights are level data (`tests/knobs.rs`), judged by looking at
+//! them.
 //!
 //! **Its horns are stone** (the owner: "I want the horn to read as a
 //! natural arch in the stone the way it's resting"): the land is one height
@@ -27,8 +32,8 @@ use crate::arena::{Material, Solid};
 use crate::fixed::Fx;
 use crate::math::V3;
 
-/// The heightfield `scripts/sleeper/terrain.py` writes: a header of six
-/// i32 and a u16 a cell.
+/// The heightfield `scripts/sleeper/terrain.py` writes: a header of seven
+/// i32, then two grids of a u16 a cell -- the lift, and the carving.
 static FIELD: &[u8] = include_bytes!("sleeper.bin");
 
 /// The horns' curves `scripts/sleeper/terrain.py` writes: a horn a block of
@@ -62,21 +67,41 @@ fn header(k: usize) -> i32 {
     ])
 }
 
-/// The field's height at a cell (east, north), in its own units; zero off
-/// it.
-fn cell(i: i32, j: i32, nx: i32, nz: i32) -> i64 {
+/// A grid's value at a cell (east, north): `grid` 0 is the lift, 1 the
+/// carving. Zero off it.
+fn cell(grid: usize, i: i32, j: i32, nx: i32, nz: i32) -> i64 {
     if i < 0 || j < 0 || i >= nx || j >= nz {
         return 0;
     }
-    let k = 24 + 2 * (j * nx + i) as usize;
+    let k = HEADER + 2 * (grid * (nx * nz) as usize + (j * nx + i) as usize);
     u16::from_le_bytes([FIELD[k], FIELD[k + 1]]) as i64
 }
 
-/// **How far the Sleeper raises the land** at a map point (x, z), on a
-/// mountain that has risen `rise` off its floor there: zero off its body.
-pub fn lift(x: Fx, z: Fx, rise: Fx) -> Fx {
+/// The header's length in bytes: seven i32.
+const HEADER: usize = 28;
+
+/// **What the Sleeper does to the land** at a point: how far its body
+/// raises it, how much of the way down to `carve_to` the range under and
+/// round it is carved first, and that height.
+#[derive(Clone, Copy, Debug)]
+pub struct Here {
+    pub lift: Fx,
+    pub carve: Fx,
+    pub carve_to: Fx,
+}
+
+/// **The Sleeper at a map point** (x, z), on a mountain that has risen
+/// `rise` off its floor there: nothing off it, and nothing where the
+/// mountain has not risen [`SHOWS_FROM`] -- no valley, path or room is
+/// touched.
+pub fn here(x: Fx, z: Fx, rise: Fx) -> Here {
+    let none = Here {
+        lift: Fx::ZERO,
+        carve: Fx::ZERO,
+        carve_to: Fx::ZERO,
+    };
     if rise.raw() <= SHOWS_FROM.raw() {
-        return Fx::ZERO;
+        return none;
     }
     let (west, south, side, nx, nz, scale) = (
         header(0),
@@ -91,26 +116,38 @@ pub fn lift(x: Fx, z: Fx, rise: Fx) -> Fx {
     let at = |v: Fx, edge: i32| (v.raw() as i64 * 100 - edge as i64 * one) / side as i64;
     let (gx, gz) = (at(x, west), at(z, south));
     if gx < 0 || gz < 0 || gx >= (nx as i64 - 1) * one || gz >= (nz as i64 - 1) * one {
-        return Fx::ZERO;
+        return none;
     }
     let (i, j) = ((gx / one) as i32, (gz / one) as i32);
     let (fx, fz) = (gx % one, gz % one);
-    let row = |j: i32| cell(i, j, nx, nz) * (one - fx) + cell(i + 1, j, nx, nz) * fx;
-    let h = (row(j) * (one - fz) + row(j + 1) * fz) / one;
-    let h = Fx::from_raw((h / scale as i64) as i32);
-    if h.raw() <= 0 {
-        return Fx::ZERO;
-    }
+    let sample = |grid: usize| {
+        let row =
+            |j: i32| cell(grid, i, j, nx, nz) * (one - fx) + cell(grid, i + 1, j, nx, nz) * fx;
+        (row(j) * (one - fz) + row(j + 1) * fz) / one
+    };
     let shows = rise
         .sub(SHOWS_FROM)
         .div(FULL_FROM.sub(SHOWS_FROM))
         .min(Fx::ONE);
-    h.mul(shows)
+    let lift = Fx::from_raw((sample(0) / scale as i64) as i32);
+    let carve = Fx::from_raw((sample(1) * one / 65535) as i32);
+    Here {
+        lift: lift.max(Fx::ZERO).mul(shows),
+        carve: carve.max(Fx::ZERO).mul(shows),
+        carve_to: Fx::ratio(header(6), 100),
+    }
+}
+
+/// **How far the Sleeper raises the land** at a map point (x, z): [`here`]'s
+/// lift alone.
+pub fn lift(x: Fx, z: Fx, rise: Fx) -> Fx {
+    here(x, z, rise).lift
 }
 
 /// **The Sleeper's horns as stone**: each horn a curve of points on the map
 /// and the stone's radius at each, set on the mountain under it -- `bare`,
-/// the ground with no Sleeper -- taken as one height over the whole horn, so
+/// the range carved round the Sleeper without its body -- taken as one
+/// height over the whole horn, so
 /// the stone is one smooth piece and not the land's noise traced in rock.
 pub fn arches(bare: &dyn Fn(Fx, Fx) -> Fx) -> Vec<Vec<(V3, Fx)>> {
     let mut horns: Vec<Vec<[Fx; 4]>> = vec![Vec::new()];

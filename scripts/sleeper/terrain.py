@@ -25,10 +25,12 @@ below:
 7. **Soften** it a little, so a low-poly facet does not alias on the land's
    mesh.
 
-The file: a header of six little-endian i32 -- the grid's west and south
+The file: a header of seven little-endian i32 -- the grid's west and south
 edge on the map in centimetres, the cell's side in centimetres, the number
-of cells east and north, and the scale of a height (heights are in units of
-1/that metre) -- and then one u16 a cell, row by row from the south.
+of cells east and north, the scale of a height (heights are in units of
+1/that metre), and the height the range is carved down to, centimetres --
+then the lift, one u16 a cell, row by row from the south, and then how far
+the range is carved at each cell, one u16 a cell (65535 is all the way).
 """
 import struct
 from pathlib import Path
@@ -42,38 +44,41 @@ OUT = ROOT / "crates" / "sim" / "src" / "valley" / "sleeper.bin"
 ARCH = ROOT / "crates" / "sim" / "src" / "valley" / "sleeper_arch.txt"
 
 # How long it is, nose to tail along its longest side, metres.
-LENGTH = 300.0
+LENGTH = 340.0
 # How much of its height it keeps: below one, it lies lower than the model
 # stands -- flatter, more mountain than animal.
-SQUASH = 0.7
+SQUASH = 0.9
 # Where it lies on the map (metres) -- the middle of its footprint -- and
 # which way it faces: the bearing of its nose, degrees clockwise from north
-# (+z). 180 is south, at the valley.
-AT = (790.0, 400.0)
-FACING = 200.0
+# (+z). It is laid out for one view (the owner, 2026-10-27: "High Plane,
+# look down"): broadside below the plane's east edge, nose to the north,
+# far enough east that the plane's own flank -- a table mountain's, falling
+# a metre a metre for 130 m -- does not hide it.
+AT = (840.0, 380.0)
+FACING = 0.0
 # How much of their height the horns keep, where the body keeps SQUASH:
 # all of it, so the curl stands as an arch.
 HORN_SQUASH = 1.0
 # How much slimmer the horns are drawn as stone than on the beast.
-HORN_THIN = 0.62
+HORN_THIN = 0.45
 # Sinking a horn into the mountain: none of the way along it until this
 # share, and by this share of the way it is under the land, this deep, so
 # the rest of it -- its tip -- is buried.
-HORN_HOLDS = 0.2
-HORN_EMERGES = 0.6
-HORN_UNDER = 25.0
+HORN_HOLDS = 0.12
+HORN_EMERGES = 0.45
+HORN_UNDER = 30.0
 # How deep it is sunk into the mountain, metres.
-SINK = 13.0
+SINK = 4.0
 # The steepest any of it stands, rise over run: a flank's wall settles to
 # this. The valley's mountainsides are 1.4.
-SETTLE = 1.6
+SETTLE = 2.2
 # **The range carved down round it**, so the beast is the mountain and not
 # a thing lying on one: within its footprint the mountain under it is
 # lowered to this height (map metres), and round it the carving eases off
 # over this many metres -- so its whole body stands clear of what is round
 # it, and a hollow lies between it and the ridges.
-CARVE_TO = 125.0
-CARVE_MARGIN = 70.0
+CARVE_TO = 110.0
+CARVE_MARGIN = 90.0
 # The cell of the grid, metres.
 CELL = 2.0
 # How many cells the softening reaches.
@@ -186,8 +191,8 @@ def build():
     v, tris = placed()
     lo, top = heightfield(v, tris)
     lift = np.maximum(top - SINK, 0)
-    # Room round it for the slopes to settle into.
-    pad = int(np.ceil(lift.max() / SETTLE / CELL)) + 2
+    # Room round it for the slopes to settle into, and for the carving.
+    pad = int(np.ceil(max(lift.max() / SETTLE, CARVE_MARGIN) / CELL)) + 2
     lift = np.pad(lift, pad)
     lo = lo - pad * CELL
     return lo, soften(settle(lift, SETTLE), SOFTEN)
@@ -248,16 +253,18 @@ def main():
     print(f"{ARCH.relative_to(ROOT)}: {len(horns)} horn(s) standing clear, {sum(len(h) for h in horns)} points")
     nz, nx = lift.shape
     units = np.clip(np.round(lift * HEIGHT_SCALE), 0, 65535).astype("<u2")
+    carving = np.clip(np.round(carve(lift) * 65535), 0, 65535).astype("<u2")
     header = struct.pack(
-        "<6i",
+        "<7i",
         int(round(lo[0] * 100)),
         int(round(lo[1] * 100)),
         int(round(CELL * 100)),
         nx,
         nz,
         HEIGHT_SCALE,
+        int(round(CARVE_TO * 100)),
     )
-    OUT.write_bytes(header + units.tobytes())
+    OUT.write_bytes(header + units.tobytes() + carving.tobytes())
     print(f"{OUT.relative_to(ROOT)}: {nx} x {nz} cells of {CELL} m from ({lo[0]:.0f}, {lo[1]:.0f}), highest {lift.max():.1f} m")
 
 

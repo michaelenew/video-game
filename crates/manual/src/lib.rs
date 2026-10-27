@@ -909,7 +909,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "python3 scripts/sleeper/pose.py [out.png]",
-                "Draw the Sleeper -- the beast asleep in the mountains north of the Pinewood -- standing and asleep, from six sides (scripts/sleeper/beast.py builds it: a skeleton with flesh, plates, horns and a club on it, meshed from a distance field). python3 scripts/sleeper/terrain.py lays the sleeping beast on the map: it writes crates/sim/src/valley/sleeper.bin, how far it raises the land, and sleeper_arch.txt, its horns as stone arches. cargo run --release -p look --example sleeper, then python3 scripts/sleeper/sheet.py, draws the beast, the shape made of it and the mountain with it in, side by side. Needs numpy, Pillow and scikit-image (docs/design/valley.md, the Sleeper).",
+                "Draw the Sleeper -- the beast asleep in the mountains east of the High Plane -- standing and asleep, from six sides (scripts/sleeper/beast.py builds it: a skeleton with flesh, plates, horns and a club on it, meshed from a distance field). python3 scripts/sleeper/terrain.py lays the sleeping beast on the map: it writes crates/sim/src/valley/sleeper.bin, how far it raises the land, and sleeper_arch.txt, its horns as stone arches. cargo run --release -p look --example sleeper, then python3 scripts/sleeper/sheet.py, draws the beast, the shape made of it and the mountain with it in, side by side; python3 scripts/sleeper/vista.py draws the land with it from where a player stands -- the High Plane's edge, the Pinewood road, the Saddle -- in seconds. Needs numpy, Pillow, scipy and scikit-image (docs/design/valley.md, the Sleeper).",
             ),
             e(
                 "cargo run -p sim --bin critcheck",

@@ -111,7 +111,7 @@ STANDING = {
     "arm": [(0.2, -1, -0.12), (0.09, -0.76, 0.64), (0.0, -1, 0.1)],
 }
 
-ASLEEP = {
+CURLED = {
     "hip": (0.0, 2.3, 0.0),
     "up": (0, 1, 0),
     "jaw": 0.0,
@@ -136,7 +136,7 @@ ASLEEP = {
 }
 
 
-SPRAWLED = {
+ASLEEP = {
     "hip": (0.0, 2.2, 0.0),
     "up": (0, 1, 0),
     "jaw": 0.0,
@@ -156,7 +156,16 @@ SPRAWLED = {
     "arm_L": [(0.55, -0.8, 0.3), (-0.45, -0.3, 0.85), (-0.7, -0.4, 0.5)],
     "arm_R": [(-0.55, -0.8, 0.35), (0.4, -0.3, 0.85), (0.65, -0.4, 0.55)],
     "roll": 6.0,
+    # Its plates smaller than when it stands: laid as land, a plate is a
+    # summit, and must not outshout the body under it.
+    "plates": 0.6,
 }
+
+# The pose it was asleep in before (2026-10-23): curled the whole of its
+# length, head against its haunch. Approved as a model and kept; but laid
+# as land it read from nowhere -- a drum with a ring on it -- so it is not
+# the one on the map (`ASLEEP`).
+SPRAWLED = ASLEEP
 
 
 def skeleton(pose):

@@ -386,24 +386,26 @@ impl Land {
 
     /// [`Land::sample`], worked out.
     fn work_out(&self, x: Fx, z: Fx) -> Sample {
-        self.work_out_with(x, z, true)
+        self.work_out_with(x, z, true, true)
     }
 
-    /// **The ground's height with no Sleeper on it** (`super::dragon`): the
-    /// mountain its body lies on, for setting its horns' stone on it. Not
+    /// **The ground the Sleeper lies on** (`super::dragon`): the range carved
+    /// round it, without its body -- for setting its horns' stone on. Not
     /// remembered: it is asked a handful of times, as the map is laid out.
     pub fn bare_height(&self, x: Fx, z: Fx) -> Fx {
-        self.bare_sample(x, z).height
+        self.work_out_with(x, z, true, false).height
     }
 
-    /// [`Land::sample`] with no Sleeper on it: for a tool that lays it out
-    /// (`look`'s `sleeper` example). Not remembered.
+    /// [`Land::sample`] with no Sleeper on it at all, neither carved nor
+    /// lifted: for a tool that lays it out (`look`'s `sleeper` example). Not
+    /// remembered.
     pub fn bare_sample(&self, x: Fx, z: Fx) -> Sample {
-        self.work_out_with(x, z, false)
+        self.work_out_with(x, z, false, false)
     }
 
-    /// [`Land::sample`], worked out, with the Sleeper or without it.
-    fn work_out_with(&self, x: Fx, z: Fx, sleeper: bool) -> Sample {
+    /// [`Land::sample`], worked out: with the range carved round the
+    /// Sleeper or not, and with its body or not.
+    fn work_out_with(&self, x: Fx, z: Fx, carved: bool, body: bool) -> Sample {
         let (px, pz) = (x.raw() as i64, z.raw() as i64);
         let mut best = SKY_HIGH;
         let mut best_rise = SKY_HIGH;
@@ -531,17 +533,21 @@ impl Land {
             best = held;
             best_rise = Fx::ZERO;
         }
-        // The Sleeper (`super::dragon`): a dragon lying on the mountains,
-        // under their noise and crags like the rest of them.
-        let slept = if sleeper {
-            super::dragon::lift(x, z, best_rise)
-        } else {
-            Fx::ZERO
-        };
+        // The Sleeper (`super::dragon`): the range carved down round it into
+        // a hollow, and its body lying in the hollow -- under the land's
+        // noise and crags like the rest of the mountain, though gentler.
+        let here = super::dragon::here(x, z, best_rise);
+        let carve = if carved { here.carve } else { Fx::ZERO };
+        if carve.raw() > 0 && best.raw() > here.carve_to.raw() {
+            best = best.sub(best.sub(here.carve_to).mul(carve));
+        }
+        let slept = if body { here.lift } else { Fx::ZERO };
         best = best.add(slept);
         best_rise = best_rise.add(slept);
         // A hand's breadth on a floor, metres up a mountainside.
         let amp = Fx::ratio(3, 10).add(best_rise.min(Fx::from_int(60)).mul(Fx::ratio(3, 25)));
+        // The hollow's floor lies smooth, so the body in it stands out.
+        let amp = amp.mul(Fx::ONE.sub(carve.mul(Fx::ratio(4, 5))));
         let amp = match by_pad {
             // A rim carries its own noise.
             _ if rimmed => Fx::ZERO,
@@ -561,10 +567,12 @@ impl Land {
         } else {
             Fx::ZERO
         };
-        // Its body is a little smoother than the range round it -- enough
-        // that its shape is there to be found, not so much that it is the
-        // one smooth thing on the skyline.
-        let smooth = Fx::ONE.sub(slept.div(Fx::from_int(24)).min(Fx::ratio(1, 2)));
+        // Its body and its hollow are smoother than the range round them:
+        // the crags fade out across the hollow, so its shape is there to be
+        // found from the High Plane.
+        let smooth = Fx::ONE
+            .sub(slept.div(Fx::from_int(24)).min(Fx::ratio(1, 2)))
+            .mul(Fx::ONE.sub(carve));
         let height = best.add(noise(x, z).mul(amp)).add(crag.mul(smooth));
         Sample {
             height,
