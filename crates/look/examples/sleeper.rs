@@ -9,7 +9,7 @@
 //! A grid of `Land::height`, three metres a cell, over the beast and the
 //! mountain round it, in the map's metres: the first line is the grid's west
 //! and south edges, its cell and its size; then one row a line, from the
-//! south.
+//! south. Also `target/sleeper-bare.txt`: the land with no Sleeper, wide.
 
 use std::fmt::Write;
 
@@ -35,4 +35,19 @@ fn main() {
     std::fs::create_dir_all("target").unwrap();
     std::fs::write("target/sleeper-land.txt", out).unwrap();
     println!("target/sleeper-land.txt");
+    // And the land with no Sleeper on it, wide -- the valley, the High
+    // Plane and the ridges between -- four metres a cell: its height and how
+    // far it has risen off the floor it rises from, for `vista.py` to lay a
+    // beast on and look at from where a player stands.
+    let (west, south, cell, nx, nz) = (400.0f32, -150.0f32, 4.0f32, 201usize, 226usize);
+    let mut out = format!("{west} {south} {cell} {nx} {nz}\n");
+    for j in 0..nz {
+        for i in 0..nx {
+            let s = land.bare_sample(fx(west + i as f32 * cell), fx(south + j as f32 * cell));
+            write!(out, "{:.2},{:.2} ", f(s.height), f(s.rise)).unwrap();
+        }
+        out.push('\n');
+    }
+    std::fs::write("target/sleeper-bare.txt", out).unwrap();
+    println!("target/sleeper-bare.txt");
 }

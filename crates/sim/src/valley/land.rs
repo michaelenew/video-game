@@ -393,7 +393,13 @@ impl Land {
     /// mountain its body lies on, for setting its horns' stone on it. Not
     /// remembered: it is asked a handful of times, as the map is laid out.
     pub fn bare_height(&self, x: Fx, z: Fx) -> Fx {
-        self.work_out_with(x, z, false).height
+        self.bare_sample(x, z).height
+    }
+
+    /// [`Land::sample`] with no Sleeper on it: for a tool that lays it out
+    /// (`look`'s `sleeper` example). Not remembered.
+    pub fn bare_sample(&self, x: Fx, z: Fx) -> Sample {
+        self.work_out_with(x, z, false)
     }
 
     /// [`Land::sample`], worked out, with the Sleeper or without it.

@@ -67,6 +67,13 @@ SINK = 13.0
 # The steepest any of it stands, rise over run: a flank's wall settles to
 # this. The valley's mountainsides are 1.4.
 SETTLE = 1.6
+# **The range carved down round it**, so the beast is the mountain and not
+# a thing lying on one: within its footprint the mountain under it is
+# lowered to this height (map metres), and round it the carving eases off
+# over this many metres -- so its whole body stands clear of what is round
+# it, and a hollow lies between it and the ridges.
+CARVE_TO = 125.0
+CARVE_MARGIN = 70.0
 # The cell of the grid, metres.
 CELL = 2.0
 # How many cells the softening reaches.
@@ -148,6 +155,18 @@ def settle(h, slope):
             h = np.maximum(h, np.roll(np.roll(h, dz, 0), dx, 1) - slope * CELL * d)
         if np.array_equal(h, before):
             return h
+
+
+def carve(lift):
+    """How much of the way down to `CARVE_TO` the mountain is carved at each
+    cell, 0 to 1: all of it under the body, easing off over `CARVE_MARGIN`
+    round it."""
+    from scipy.ndimage import distance_transform_edt
+
+    body = lift > 1.0
+    d = distance_transform_edt(~body) * CELL
+    t = np.clip(1 - d / CARVE_MARGIN, 0, 1)
+    return t * t * (3 - 2 * t)
 
 
 def soften(h, n):

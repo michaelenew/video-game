@@ -120,3 +120,59 @@ def sheet(panels, columns=2, title=None):
         draw.text((x + 6, y + 3), label, fill=(0, 0, 0), font=FONT)
         out.paste(im, (x, y + 22))
     return out
+
+
+def camera(verts, tris, colours, eye, target, fov=58.0, size=(640, 380), sky=(0.80, 0.86, 0.86), reach=700.0,
+           light=(-0.4, 0.8, 0.45)):
+    """Draw `verts`/`tris` as the game's camera would see them: from `eye`
+    looking at `target`, `fov` degrees top to bottom, hazed toward `sky`
+    with distance as the game's fog is, gone by `reach` metres. For judging
+    terrain from where a player stands, not from an orthographic sheet."""
+    w, h = size
+    eye = np.asarray(eye, float)
+    r, u, f = look_basis(np.asarray(target, float) - eye)
+    rel = verts - eye
+    cam = np.c_[rel @ r, rel @ u, rel @ f]
+    focal = (h / 2) / np.tan(np.radians(fov) / 2)
+    near = 1.0
+    depth = np.full((h, w), np.inf)
+    img = np.zeros((h, w, 3))
+    img[:] = sky
+    L = np.asarray(light, float)
+    L /= np.linalg.norm(L)
+    a, b, c = verts[tris[:, 0]], verts[tris[:, 1]], verts[tris[:, 2]]
+    n = np.cross(b - a, c - a)
+    n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
+    n *= np.where(np.einsum("ij,ij->i", n, (a + b + c) / 3 - eye) > 0, -1, 1)[:, None]
+    shade = 0.35 + 0.65 * np.clip(n @ L, 0, 1)
+    z = cam[:, 2]
+    sx = w / 2 + focal * cam[:, 0] / np.maximum(z, near)
+    sy = h / 2 - focal * cam[:, 1] / np.maximum(z, near)
+    keep = (z[tris] > near).all(1)
+    sky = np.asarray(sky)
+    for k in np.nonzero(keep)[0]:
+        i, j, l = tris[k]
+        xs = np.array([sx[i], sx[j], sx[l]])
+        ys = np.array([sy[i], sy[j], sy[l]])
+        x0, x1 = int(max(xs.min(), 0)), int(min(xs.max() + 1, w))
+        y0, y1 = int(max(ys.min(), 0)), int(min(ys.max() + 1, h))
+        if x0 >= x1 or y0 >= y1:
+            continue
+        gx, gy = np.meshgrid(np.arange(x0, x1) + 0.5, np.arange(y0, y1) + 0.5)
+        d = (ys[1] - ys[2]) * (xs[0] - xs[2]) + (xs[2] - xs[1]) * (ys[0] - ys[2])
+        if abs(d) < 1e-9:
+            continue
+        w0 = ((ys[1] - ys[2]) * (gx - xs[2]) + (xs[2] - xs[1]) * (gy - ys[2])) / d
+        w1 = ((ys[2] - ys[0]) * (gx - xs[2]) + (xs[0] - xs[2]) * (gy - ys[2])) / d
+        w2 = 1 - w0 - w1
+        inside = (w0 >= 0) & (w1 >= 0) & (w2 >= 0)
+        # Depth interpolated as 1/z, as a camera sees it.
+        iz = w0 / z[i] + w1 / z[j] + w2 / z[l]
+        zz = 1 / np.maximum(iz, 1e-9)
+        sub = depth[y0:y1, x0:x1]
+        hit = inside & (zz < sub)
+        sub[hit] = zz[hit]
+        fog = np.clip(zz[hit] / reach, 0, 1) ** 1.5
+        col = np.asarray(colours[k]) * shade[k]
+        img[y0:y1, x0:x1][hit] = col * (1 - fog[:, None]) + sky * fog[:, None]
+    return Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8))

@@ -136,6 +136,29 @@ ASLEEP = {
 }
 
 
+SPRAWLED = {
+    "hip": (0.0, 2.2, 0.0),
+    "up": (0, 1, 0),
+    "jaw": 0.0,
+    # Asleep stretched out, as a crocodile basks or a lizard sleeps on a
+    # warm rock: belly down, the back long and nearly straight with a lazy
+    # bend to its left, the neck low, the chin on its folded forearms, the
+    # hind legs sprawled out sideways and flat, the tail sweeping back and
+    # round to its right. Laid as land, the side of it reads: a head, a long
+    # back, a tail -- which a curl, seen from anywhere, does not.
+    "spine": [(0.0, 0.08, 1), (0.12, 0.04, 1), (0.2, -0.04, 1)],
+    "neck": [(0.18, -0.22, 1), (0.12, -0.3, 1), (0.05, -0.25, 1)],
+    "head": (0.08, -0.12, 1),
+    "tail": [(0.0, -0.6, -1), (-0.1, -0.35, -1), (-0.25, -0.12, -1), (-0.4, -0.04, -0.95),
+             (-0.6, 0.0, -0.8), (-0.8, 0.0, -0.55), (-0.95, 0.0, -0.2), (-0.95, 0.0, 0.2)],
+    "leg_L": [(0.85, -0.25, 0.5), (0.35, -0.7, -0.6), (0.3, -0.3, 0.9), (0.4, -0.1, 0.9)],
+    "leg_R": [(-0.85, -0.25, 0.35), (-0.4, -0.7, -0.6), (-0.35, -0.3, 0.9), (-0.45, -0.1, 0.9)],
+    "arm_L": [(0.55, -0.8, 0.3), (-0.45, -0.3, 0.85), (-0.7, -0.4, 0.5)],
+    "arm_R": [(-0.55, -0.8, 0.35), (0.4, -0.3, 0.85), (0.65, -0.4, 0.55)],
+    "roll": 6.0,
+}
+
+
 def skeleton(pose):
     """Every bone's ends for a pose, by part, and the frames the armour is
     placed in."""
@@ -419,6 +442,10 @@ def body_parts(pose):
         u_ = x / total
         size = 0.3 + 0.7 * np.exp(-((u_ - peak) / 0.3) ** 2)
         size *= 0.8 + 0.4 * rng.random()
+        # A pose may carry its plates smaller (`plates`): the land made of the
+        # beast asleep, where a plate is a summit and must not outshout the
+        # body under it.
+        size *= pose.get("plates", 1.0)
         radius = np.interp(x, lens, _radii(line, sk))
         # Two rows, staggered either side of the spine, leaning back.
         s_ = 1 if n % 2 else -1
