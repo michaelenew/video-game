@@ -1048,7 +1048,13 @@ mod bend_tests {
                                 || q.arena == sim::arena::ArenaId::HIGH_PLANE
                         })
                         .any(|q| q.holds_within(fx(x), fx(z), fx(60.0)));
-                    if !edge {
+                    // Nor the Sleeper's hollow, whose flanks are a beast's,
+                    // sheer on purpose too (`sim::valley::dragon`).
+                    let slept = sim::valley::dragon::here(fx(x), fx(z), sim::Fx::from_int(1000))
+                        .carve
+                        .raw()
+                        > 0;
+                    if !edge && !slept {
                         bends.push(bend(&h, x, z));
                     }
                 }
