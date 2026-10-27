@@ -130,7 +130,9 @@ pub fn here(x: Fx, z: Fx, rise: Fx) -> Here {
         .div(FULL_FROM.sub(SHOWS_FROM))
         .min(Fx::ONE);
     let lift = Fx::from_raw((sample(0) / scale as i64) as i32);
-    let carve = Fx::from_raw((sample(1) * one / 65535) as i32);
+    // `sample` is in the grid's units times `one`; 65535 units is all the
+    // way, so this is the share in 16.16.
+    let carve = Fx::from_raw((sample(1) / 65535) as i32);
     Here {
         lift: lift.max(Fx::ZERO).mul(shows),
         carve: carve.max(Fx::ZERO).mul(shows),
