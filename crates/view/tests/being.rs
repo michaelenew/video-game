@@ -105,14 +105,14 @@ fn the_shoulder_and_fist_first_then_the_arm_and_torso_then_the_head() {
 
 #[test]
 fn its_hips_are_at_her_feet_and_its_chin_at_her_forehead() {
-    for class in being::BODIES {
-        hips_and_chin(class);
+    for k in 0..2 {
+        hips_and_chin(k);
     }
 }
 
-fn hips_and_chin(class: Class) {
+fn hips_and_chin(k: usize) {
     let her = skeleton_for(Class::DualMage);
-    let skeleton = skeleton_for(class);
+    let skeleton = being::skeleton(k);
     let s = being::scale(&her, &skeleton);
     let rest = solve(&skeleton, &view::pose::Pose::rest());
     let chin = rest.origin[Joint::Head.index()][1];
@@ -139,7 +139,7 @@ fn hips_and_chin(class: Class) {
 fn at_rest_its_arms_hang_and_casting_it_throws_what_she_throws() {
     // Its own stance between her casts: arms down beside it, the fists at
     // its hips and clear of its sides, never raised (the owner, 2026-10-26).
-    let skeleton = skeleton_for(being::BODIES[0]);
+    let skeleton = being::skeleton(0);
     let rest = solve(&skeleton, &being::stance(0, &view::pose::Pose::rest(), 0.0));
     for left in [true, false] {
         let hand = rest.origin[view::hand_joint(left).index()];

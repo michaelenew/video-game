@@ -24,6 +24,8 @@ widest thing about it; every plate on a limb the limb's own size.
 - Arms: a band round the upper arm, a pointed cop at the elbow, a vambrace
   of twelve faces sized to the forearm, a fin up its outside past the elbow,
   its end over the back of the hand.
+- Gauntlets: a plate over the back of each hand, a raised guard across the
+  knuckles, two lames over the fingers.
 - Legs: a cuisse, a pointed knee cop, a greave, each of twelve faces;
   plate boots.
 - The closed helm the owner liked, faceted: an egg with a ridge from the
@@ -312,6 +314,49 @@ def arms(body, r):
     return out
 
 
+def gauntlets(body, r):
+    """Each hand in plate (the owner, 2026-10-28: "add gauntlets to the
+    knight"), in the armour's own manner -- flat faces, gold frames: over
+    the back of the hand a plate from the wrist to the knuckles; across the
+    knuckles a raised guard; over the fingers two lames, each lapping the
+    next. Each is laid on the hand's own surface, a little clear of it,
+    across the back -- the side away from the grip's hollow."""
+    out = []
+    W = g.weights_of(body)
+    pts = plate.body_points(body)
+    for s in "lr":
+        hd = f"hand.{s}"
+        wrist, tip = r.o[hd], r.tip[hd]
+        L = float(np.linalg.norm(tip - wrist))
+        axis = (tip - wrist) / L
+        hollow = r.marks[f"grip.{s}"] - wrist
+        back = -(hollow - axis * (hollow @ axis))
+        back /= np.linalg.norm(back)
+        side = np.cross(axis, back)
+        fr = facet.Frame(wrist, back, -axis, side)
+        own = pts[W[:, J[hd]] > 0.4] - wrist
+        along = own @ axis
+        flat = own - np.outer(along, axis)
+        ang = np.degrees(np.arctan2(flat @ side, flat @ back))
+        dist = np.linalg.norm(flat, axis=1)
+
+        def reach(t, phi, gap=0.006):
+            m = (np.abs(along - t * L) < 0.012) & (np.abs((ang - phi + 180) % 360 - 180) < 14)
+            return (float(dist[m].max()) if m.any() else 0.03) + gap
+
+        def piece(name, ts, phis, lift=0.0, frame=0.005):
+            rows = [[(p, -t * L, reach(t, p) + lift) for p in phis] for t in ts]
+            return facet.plate(f"{name}.{s}", facet.round_limb(fr, rows), frame=frame, per=2, joint=hd,
+                               thick=0.004, bevel=0.0015, inside=wrist + axis * 0.4 * L - back * 0.02)
+
+        across = (-70.0, -35.0, 0.0, 35.0, 70.0)
+        out.append(piece("gauntlet", (0.02, 0.3, 0.55), across))
+        out.append(piece("knuckles", (0.52, 0.6, 0.68), across, lift=0.004))
+        out.append(piece("finger0", (0.66, 0.8), across, lift=0.002, frame=0.004))
+        out.append(piece("finger1", (0.78, 0.94), across, frame=0.004))
+    return out
+
+
 def legs(body, r):
     """The legs: no tassets (over the thighs they made the hips a block,
     2026-10-28); a cuisse round the thigh and a greave round the shin, each
@@ -411,7 +456,8 @@ def cloak(body, r):
 
 
 GARMENTS = {
-    "legs": legs, "cuirass": cuirass, "pauldrons": pauldrons, "arms": arms, "helm": helm, "cloak": cloak,
+    "legs": legs, "cuirass": cuirass, "pauldrons": pauldrons, "arms": arms, "gauntlets": gauntlets, "helm": helm,
+    "cloak": cloak,
 }
 # Not the cloak, for now: cut from the inflated body it hung as a lumpy
 # brown sack down the back (2026-10-26), and it comes back made properly.

@@ -237,7 +237,7 @@ def landmarks(base, rig, v):
     return lm
 
 
-def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None, trunk=None, extras=None):
+def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None, trunk=None):
     """The body on the game's skeleton, in a bind pose chosen to suit it.
 
     Returns ``(verts, faces, face_uvs, uvs, weights, bind_origin, bind_rot)``
@@ -258,12 +258,6 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None, trunk=None, 
     (a number of rounds) evens out how far the fit moved each vertex across
     the chest and shoulders, so the skin there moves as one sheet. The other
     classes are fitted as they always were.
-
-    ``extras`` (optional, a dict) is filled with what a body fitted *through*
-    this one needs (``base_mesh``): ``rest``, the kept vertices before the
-    fit -- in metres, scaled and grounded as the fit scales them, hands open
-    -- in the same order as the returned ones; ``lm``, the joints there; and
-    ``bone_map(joint, points)``, the map each joint carries its points by.
     """
     girth = girth or {}
     body = base.body_faces()
@@ -481,11 +475,6 @@ def fit(base, rig, v, sk, girth=None, head_scale=1.0, carried=None, trunk=None, 
         marks[f"grip_axis.{side}"] = (index - little) / np.linalg.norm(index - little)
         marks[f"wrist.{side}"] = wrist
     uvs = base.uvs
-    if extras is not None:
-        extras["rest"] = (mirror_mh(v)[keep] + shift) * k
-        extras["lm"] = dict(lm)
-        extras["bone_map"] = bone_map
-        extras["origin"] = origin
     return out, faces, face_uvs, uvs, W, origin, rot, marks
 
 

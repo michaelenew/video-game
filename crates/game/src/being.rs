@@ -104,7 +104,7 @@ pub struct Beings {
     /// Each seat's two beings' material, dark then light.
     pub body: [[Handle<Spirit>; MAX_PLAYERS]; 2],
     pub seal: [Handle<Spirit>; MAX_PLAYERS],
-    /// Each being's own skeleton (`view::being::BODIES`) and how many times
+    /// Each being's own skeleton (`view::being::skeleton`) and how many times
     /// its size it is drawn.
     skeletons: [Skeleton; 2],
     scales: [f32; 2],
@@ -187,7 +187,7 @@ fn setup(
     mut lights: ResMut<Assets<StandardMaterial>>,
 ) {
     let her = skeleton_for(sim::Class::DualMage);
-    let skeletons = view::being::BODIES.map(skeleton_for);
+    let skeletons = [0, 1].map(view::being::skeleton);
     let scales = [0, 1].map(|k| view::being::scale(&her, &skeletons[k]));
     let seal_radius = view::being::seal_radius(&her);
     let mut made = |mode: f32| {

@@ -1,36 +1,29 @@
-"""A body from a sculpted base mesh, fitted to the game's skeleton through
-MakeHuman.
+"""A body from a sculpted base mesh, used as it was made.
 
-MakeHuman's bodies, however they were pushed, never read as a person in the
-game (the owner, 2026-10-27: "Obviously everything is completely wrong ...
-use Blender's model for the dark side as a starting point"). A base mesh an
-artist sculpted -- Blender Studio's realistic male, CC0 (``art/sources``) --
-does. What it has not got is anything the pipeline needs: no skeleton, no
-weights, and its own pose and proportions.
+MakeHuman's bodies never read as a person in the game; Blender Studio's
+realistic male does (``art/sources``, CC0). And it is used **as Blender made
+it** (the owner, 2026-10-28: "The blender model is definitely modified from
+what comes directly from blender, put it back"): fitted onto a skeleton
+that was not his, his shoulders were pulled in five centimetres a side and
+his trunk stretched. So nothing here moves a vertex. The skeleton is built
+to him instead (``view::being::skeleton``, exported as ``DarkBeing``):
 
-So it is fitted *through* a MakeHuman body, which has all of those
-(``fit.fit``):
+1. his joints are found on the mesh (``joints``) -- the middles of his
+   limbs' cross-sections, where an anatomy's proportions put them;
+2. the skeleton's bind pose turns each limb to lie along his;
+3. his weights are Blender's own automatic ones, from an armature at that
+   bind pose.
 
-1. A plain MakeHuman man is fitted to the game's skeleton as every class
-   is; his body before the fit (``rest``) and after it are the map.
-2. The base mesh is laid over him before the fit: scaled to his height, and
-   each arm and leg turned and stretched, joint by joint, onto his.
-3. Each of its vertices then moves as the MakeHuman vertices nearest it
-   moved, and takes their weights.
-
-Its shape is its own throughout; MakeHuman only says where the joints are
-and which bone carries what. Everything is in the game's frame (``+y`` up,
-``+z`` forward), metres.
+Everything is in the game's frame (``+y`` up, ``+z`` forward), metres.
 """
 
 import os
 
+import bpy
 import numpy as np
-from mathutils import kdtree
 
 import fit
 import garment as g
-import mh
 import stage
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,239 +62,154 @@ def _one_tile(uvs, counts):
     return out
 
 
-def _smooth(e0, e1, x):
-    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
-    return t * t * (3 - 2 * t)
-
-
-def _q_mat(a, b):
-    return fit.q_mat(fit.q_between(a, b))
-
-
-def _segment(p, a, b, A, B):
-    """``p`` carried from the segment ``a -> b`` onto ``A -> B``: turned with
-    it, stretched along it, its girth kept."""
-    u = (b - a) / np.linalg.norm(b - a)
-    s = np.linalg.norm(B - A) / np.linalg.norm(b - a)
-    d = p - a
-    along = d @ u
-    perp = d - np.outer(along, u)
-    return A + (np.outer(along * s, u) + perp) @ _q_mat(b - a, B - A).T
-
-
-def _chain(p, mask, ours, theirs, root_blend=(0.02, 0.1), joint_blend=0.04):
-    """Carry the limb's vertices (``mask``) from our joints ``ours`` (root,
-    middle, end) onto ``theirs``: the upper segment, the lower, and what is
-    past the end carried rigidly with the lower. Blended across the middle
-    joint, and from nothing at the root into the trunk."""
-    a, b, c = ours
-    A, B, C = theirs
-    # ``mask`` may be a share, not a yes or no: the limb fading out.
-    amount = np.asarray(mask, float)
-    mask = amount > 0
-    amount = amount[mask]
-    q = p[mask]
-    upper = _segment(q, a, b, A, B)
-    lower = _segment(q, b, c, B, C)
-    end = C + (q - c) @ _q_mat(c - b, C - B).T
-    u1 = (b - a) / np.linalg.norm(b - a)
-    u2 = (c - b) / np.linalg.norm(c - b)
-    t1 = (q - b) @ u1          # past the middle joint along the upper bone
-    t2 = (q - c) @ u2          # past the end joint along the lower bone
-    w_low = _smooth(-joint_blend, joint_blend, t1)
-    # The thumb starts beside the wrist, not past it: the hand is carried
-    # whole from a little before it.
-    w_end = _smooth(-0.04, 0.0, t2)
-    moved = upper * (1 - w_low)[:, None] + lower * (w_low * (1 - w_end))[:, None] + end * (w_low * w_end)[:, None]
-    from_root = (q - a) @ u1
-    w = _smooth(*root_blend, from_root) * amount
-    out = p.copy()
-    out[mask] = q + (moved - q) * w[:, None]
-    return out
-
-
-def _centroid(p, mask):
-    return p[mask].mean(axis=0) if mask.any() else None
-
-
-def _joined(mask, start, nbrs):
-    """The part of ``mask`` joined to vertex ``start`` through the mesh."""
-    keep = np.zeros(len(mask), bool)
-    stack = [start]
-    keep[start] = True
-    while stack:
-        i = stack.pop()
-        for j in nbrs[i]:
-            if mask[j] and not keep[j]:
-                keep[j] = True
-                stack.append(j)
-    return keep
-
-
-def _neighbours(n, faces):
-    nbrs = [[] for _ in range(n)]
-    for f in faces:
-        for a, b in zip(f, f[1:] + f[:1]):
-            nbrs[a].append(b)
-            nbrs[b].append(a)
-    return nbrs
-
-
-def _limbs(p, lm, nbrs):
-    """Our base mesh's own arm and leg joints, found on it after it is
-    scaled to MakeHuman's: each root at MakeHuman's (the shoulder, the hip),
-    and the joints down the limb as the middles of the limb's own cross-
-    sections where MakeHuman's are along it."""
+def joints(p):
+    """His joints, keyed by game joint: each limb's joints are the middles
+    of its cross-sections, at the lengths of an adult's segments as shares
+    of his height (Drillis and Contini): wrist 0.108 and elbow 0.254 back
+    up the arm from the fingertip, the upper arm 0.186 long; knee 0.285 and
+    ankle 0.045 of the height up the leg, the hip joint 0.53."""
+    H = p[:, 1].max()
     out = {}
-    for side in ("l", "r"):
-        sx = np.sign(lm[f"arm.{side}"][0])
-        sh, el, wr, tip = (lm[f"{n}.{side}"] for n in ("arm", "forearm", "hand", "handtip"))
-        # The arm: everything well out to its side below the armpit, and the
-        # hand's lowest point.
-        arm = (p[:, 0] * sx > abs(sh[0]) * 1.05) & (p[:, 1] < sh[1] - 0.06)
-        ftip_i = np.flatnonzero(arm)[np.argmin(p[arm, 1])]
-        ftip = p[ftip_i]
-        d = (ftip - sh) / np.linalg.norm(ftip - sh)
-        length = np.linalg.norm(ftip - sh)
-        theirs = np.linalg.norm(tip - sh)
-        along = (p - sh) @ d
-        perp = np.linalg.norm((p - sh) - np.outer(along, d), axis=1)
-        near = perp < 0.09
-        mid = {}
-        for name, at in (("forearm", el), ("hand", wr)):
-            f = np.linalg.norm(at - sh) / theirs
-            mid[name] = _centroid(p, near & (np.abs(along - f * length) < 0.012) & (p[:, 0] * sx > 0.05))
-        # The whole arm, hand and all: everything further out than the
-        # trunk ever is. (Within a few centimetres of a line down it, the
-        # thumb's side of the hand was left by the thigh.)
-        # Nothing below the fingertips: the feet splay as far out. By the
-        # armpit the arm fades into the chest across the pectoral and the
-        # deltoid, or the turn creases the chest where it stops; lower down,
-        # beside the thigh, it stops sharp.
-        lateral = p[:, 0] * sx
-        high = _smooth(sh[1] - 0.3, sh[1] - 0.15, p[:, 1])
-        lo = abs(sh[0]) * (0.92 - 0.27 * high)
-        hi = abs(sh[0]) * (0.96 + 0.08 * high)
-        whole = _smooth(lo, hi, lateral) * ((p[:, 1] < sh[1] + 0.15) & (p[:, 1] > ftip[1] - 0.02))
-        # And only what is joined to the hand: a thigh's outside as far out
-        # is not.
-        whole = whole * _joined(whole > 0, ftip_i, nbrs)
-        out[f"arm.{side}"] = (sh, mid["forearm"], mid["hand"], d, whole)
-        # The leg: its cross-sections at MakeHuman's knee and ankle heights.
-        hip, kn, an = (lm[f"{n}.{side}"] for n in ("thigh", "shin", "foot"))
-        leg = (p[:, 0] * sx > 0.01) & (p[:, 1] < hip[1])
-        knee = _centroid(p, leg & (np.abs(p[:, 1] - kn[1]) < 0.01))
-        ankle = _centroid(p, leg & (np.abs(p[:, 1] - an[1]) < 0.01) & (p[:, 2] < an[2] + 0.04))
-        out[f"thigh.{side}"] = (hip, knee, ankle, None, leg)
+    for side, sx in (("l", -1.0), ("r", 1.0)):
+        arm = (p[:, 0] * sx > 0.2) & (p[:, 1] > 0.6) & (p[:, 1] < 1.5)
+        tip = p[arm][np.argmin(p[arm, 1])]
+        rings = []
+        for y in np.arange(tip[1] + 0.02, 1.45, 0.02):
+            m = arm & (np.abs(p[:, 1] - y) < 0.01)
+            if m.sum() > 5:
+                rings.append(p[m].mean(0))
+        pts = np.vstack([tip, rings])
+        run = np.r_[0, np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))]
+
+        def along(length):
+            return np.array([np.interp(length, run, pts[:, k]) for k in range(3)])
+        wrist, elbow = along(0.108 * H), along(0.254 * H)
+        up = along(0.33 * H) - elbow
+        up /= np.linalg.norm(up)
+        out[f"arm.{side}"] = elbow + up * 0.186 * H
+        out[f"forearm.{side}"] = elbow
+        out[f"hand.{side}"] = wrist
+        out[f"handtip.{side}"] = tip
+        leg = (p[:, 0] * sx > 0.0) & (p[:, 1] < 0.9) & (np.abs(p[:, 0]) < 0.3)
+
+        def ring(y):
+            return p[leg & (np.abs(p[:, 1] - y) < 0.008)].mean(0)
+        knee, ankle, mid = ring(0.285 * H), ring(0.045 * H), ring(0.45 * H)
+        d = (mid - knee) / np.linalg.norm(mid - knee)
+        out[f"thigh.{side}"] = knee + d * (0.53 * H - knee[1]) / d[1]
+        out[f"shin.{side}"] = knee
+        out[f"foot.{side}"] = ankle
+        foot = leg & (p[:, 1] < 0.05)
+        out[f"toe.{side}"] = p[foot][np.argmax(p[foot, 2])]
     return out
+
+
+def _bind(sk, lm):
+    """The skeleton's bind pose with every limb turned to lie along his,
+    as ``fit.fit`` turns them along MakeHuman's."""
+    J = fit.J
+    rots = [np.array([0, 0, 0, 1.0])] * len(fit.JOINTS)
+    origin, rot = sk.solve(rots)
+    for side in ("l", "r"):
+        for a, b in ((f"arm.{side}", f"forearm.{side}"), (f"forearm.{side}", f"hand.{side}"),
+                     (f"hand.{side}", f"handtip.{side}"), (f"thigh.{side}", f"shin.{side}"),
+                     (f"shin.{side}", f"foot.{side}"), (f"foot.{side}", f"toe.{side}")):
+            i = J[a]
+            want = lm[b] - lm[a]
+            if a.startswith("foot"):
+                want = np.array([want[0], 0.0, want[2]])  # a foot lies flat
+            parent = J["chest"] if a.startswith("arm.") else sk.parents[i]
+            world = fit.q_between(sk.axis[i], want)
+            rots[i] = fit.q_mul(rot[parent] * np.array([-1, -1, -1, 1]), world)
+            origin, rot = sk.solve(rots)
+    return origin, rot
+
+
+def _weights(ob, sk, origin, rot):
+    """Blender's automatic weights (bone heat) from an armature at the bind
+    pose; any vertex the heat left unweighted takes its nearest bone."""
+    arm_data = bpy.data.armatures.new("bind")
+    rig = bpy.data.objects.new("bind", arm_data)
+    bpy.context.collection.objects.link(rig)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode="EDIT")
+    heads, tails = {}, {}
+    for i, name in enumerate(fit.JOINTS):
+        head = origin[i]
+        tail = sk.tip(origin, rot, i)
+        if np.linalg.norm(tail - head) < 1e-3:
+            tail = head + np.array([0.0, 0.05, 0.0])
+        bone = arm_data.edit_bones.new(name)
+        bone.head = tuple(g.g2b(np.asarray(head)))
+        bone.tail = tuple(g.g2b(np.asarray(tail)))
+        heads[name], tails[name] = head, tail
+    for i, name in enumerate(fit.JOINTS):
+        if sk.parents[i] >= 0:
+            arm_data.edit_bones[name].parent = arm_data.edit_bones[fit.JOINTS[sk.parents[i]]]
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    ob.select_set(True)
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+    n = len(ob.data.vertices)
+    W = np.zeros((n, len(fit.JOINTS)))
+    index = {vg.index: vg.name for vg in ob.vertex_groups}
+    for v in ob.data.vertices:
+        for gr in v.groups:
+            name = index[gr.group]
+            if name in fit.J:
+                W[v.index, fit.J[name]] = gr.weight
+    co = np.zeros(n * 3)
+    ob.data.vertices.foreach_get("co", co)
+    p = g.b2g(co.reshape(-1, 3))
+    empty = W.sum(axis=1) < 1e-6
+    if empty.any():
+        dist = np.full((empty.sum(), len(fit.JOINTS)), np.inf)
+        for name, j in fit.J.items():
+            a, b = heads[name], tails[name]
+            ab = b - a
+            t = np.clip(((p[empty] - a) @ ab) / max(ab @ ab, 1e-9), 0, 1)
+            dist[:, j] = np.linalg.norm(p[empty] - (a + np.outer(t, ab)), axis=1)
+        W[np.flatnonzero(empty), np.argmin(dist, axis=1)] = 1.0
+    print(f"  weights: {int(empty.sum())} of {n} vertices left to their nearest bone", flush=True)
+    # Off the armature again: the exporter writes the skeleton itself.
+    ob.parent = None
+    for m in list(ob.modifiers):
+        ob.modifiers.remove(m)
+    for vg in list(ob.vertex_groups):
+        ob.vertex_groups.remove(vg)
+    bpy.data.objects.remove(rig)
+    bpy.data.armatures.remove(arm_data)
+    return W / np.maximum(W.sum(axis=1, keepdims=True), 1e-9)
 
 
 def body(spec):
-    """``character.body`` for a spec with a ``BASE`` mesh: the base mesh on
-    the game's skeleton, with MakeHuman's weights; returns what
-    ``character.body`` does."""
-    base = mh.Base(os.path.join(ROOT, "target/art/mh"))
-    rig = mh.Rig(os.path.join(ROOT, "target/art/mh"))
-    v = mh.shaped(base, spec.PROXY)
+    """``character.body`` for a spec with a ``BASE`` mesh: the base mesh,
+    every vertex where its maker left it, on its own skeleton (``CLASS``,
+    built to it); returns what ``character.body`` does."""
     sk = fit.Skeleton(os.path.join(ROOT, "target/art/anim.json"), spec.CLASS)
-    extras = {}
-    # His hands open, as the base mesh's are: fitted closed, his fingers'
-    # curl dragged its open ones into spikes.
-    fitted, _, _, _, W_mh, bo, br, marks = fit.fit(base, rig, v, sk, None, 1.0, extras=extras)
-    rest, lm = extras["rest"], extras["lm"]
-
     p, faces, uvs, face_uvs, eyes = load(spec.BASE)
-    n = len(p)
-    # The eyes' centres ride along as two more points through every step.
-    p = np.vstack([p, eyes[:, :3]])
-    # His height, standing where he stands, the trunk's depth on his.
-    k = (rest[:, 1].max() - rest[:, 1].min()) / (p[:n, 1].max() - p[:n, 1].min())
-    p = p * k
-    p[:, 1] += rest[:, 1].min() - p[:n, 1].min()
-    band = lambda q: np.abs(q[:, 1] - lm["chest"][1]) < 0.03
-    p[:, 2] += rest[band(rest), 2].mean() - p[:n][band(p[:n]) & (np.abs(p[:n, 0]) < 0.12), 2].mean()
-
-    # Each limb onto his.
-    joints = _limbs(p[:n], lm, _neighbours(n, faces))
-    before = p[:n].copy()
-    if os.environ.get("BASE_DEBUG"):
-        for key, val in joints.items():
-            print("JOINTS", key, [None if x is None else np.round(x, 3).tolist() for x in val[:3]])
-        for key in ("arm.l", "forearm.l", "hand.l", "handtip.l", "thigh.l", "shin.l", "foot.l"):
-            print("LM", key, np.round(lm[key], 3).tolist())
-    for side in ("l", "r"):
-        sh, el, wr, _, mask = joints[f"arm.{side}"]
-        mask = np.r_[mask, 0.0, 0.0]
-        p = _chain(p, mask, (sh, el, wr), (lm[f"arm.{side}"], lm[f"forearm.{side}"], lm[f"hand.{side}"]),
-                   root_blend=(0.0, 0.09))
-        hip, kn, an, _, mask = joints[f"thigh.{side}"]
-        mask = np.r_[mask, False, False]
-        p = _chain(p, mask, (hip, kn, an), (lm[f"thigh.{side}"], lm[f"shin.{side}"], lm[f"foot.{side}"]),
-                   root_blend=(-0.02, 0.08), joint_blend=0.05)
-
-    # Each vertex takes the weights of his nearest.
-    tree = kdtree.KDTree(len(rest))
-    for i, q in enumerate(rest):
-        tree.insert(q, i)
-    tree.balance()
-    W = np.zeros((len(p), W_mh.shape[1]))
-    for i, q in enumerate(p):
-        found = tree.find_n(q, 6)
-        idx = np.array([f[1] for f in found])
-        dist = np.array([f[2] for f in found])
-        w = 1.0 / np.maximum(dist, 1e-4) ** 2
-        W[i] = (w / w.sum()) @ W_mh[idx]
-    W /= np.maximum(W.sum(axis=1, keepdims=True), 1e-9)
-    # The hand is the hand joint's, all of it, from a little before our own
-    # wrist: taken from his nearest, the thumb -- beside the wrist, against
-    # his bent hand -- was shared with the forearm and smeared between them.
-    for side in ("l", "r"):
-        sh, el, wr, _, mask = joints[f"arm.{side}"]
-        u = (wr - el) / np.linalg.norm(wr - el)
-        t = (before - wr) @ u
-        hand = _smooth(-0.04, 0.0, t) * (mask > 0.5)
-        one = np.zeros(W.shape[1])
-        one[fit.J[f"hand.{side}"]] = 1.0
-        W[:n] = W[:n] * (1 - hand)[:, None] + one * hand[:, None]
-    # And moves as his body moved, bone by bone: each of his vertices is
-    # carried by a blend of its bones' maps (``fit``'s ``bone_map``), and
-    # ours by the same maps and the same blend. A vertex is not dragged
-    # after his nearest: a hand is carried whole, however its fingers lie.
-    his_map, origin = extras["bone_map"], extras["origin"]
-    # Except the trunk: his is mapped in height piece by piece between his
-    # spine's joints and the game's, which stretched our belly to twice its
-    # height and squashed the chest (a body that is not his has its own
-    # proportions between them). Ours is one even map from the hips to the
-    # base of the neck, meeting the legs' and the head's where they start.
-    hip_his = (lm["thigh.l"] + lm["thigh.r"]) / 2
-    hip_ours = (origin[fit.J["thigh.l"]] + origin[fit.J["thigh.r"]]) / 2
-    neck_his, neck_ours = lm["head"], origin[fit.J["neck"]]
-    stretch = (neck_ours[1] - hip_ours[1]) / (neck_his[1] - hip_his[1])
-
-    def bone_map(name, q):
-        if name in ("root", "spine", "chest", "clavicle.l", "clavicle.r"):
-            out = hip_ours + (q - hip_his)
-            out[:, 1] = hip_ours[1] + (q[:, 1] - hip_his[1]) * stretch
-            return out
-        return his_map(name, q)
-
-    out = np.zeros_like(p)
-    for j, name in enumerate(fit.JOINTS):
-        m = W[:, j] > 0
-        if m.any():
-            out[m] += W[m, j:j + 1] * bone_map(name, p[m])
-
-    # Its own eyes, where its sockets are: named as MakeHuman's marks are,
-    # by which side of the face they are on.
-    for eye in out[n:]:
-        name = "eye.l" if np.sign(eye[0]) == np.sign(marks["eye.l"][0]) else "eye.r"
-        marks[name] = eye
-    marks["eye_radius"] = float(eyes[:, 3].mean() * k)
-    if os.environ.get("BASE_DEBUG"):
-        print("EYES in", np.round(p[n:], 3).tolist(), "out", np.round(out[n:], 3).tolist(),
-              "W", [[(fit.JOINTS[j], round(float(x), 2)) for j, x in enumerate(row) if x > 0.05] for row in W[n:]])
-
-    ob = stage.mesh_object("body", g.g2b(out[:n]), faces, uvs, face_uvs)
-    g.set_weights(ob, W[:n])
+    # Placed only: standing on the floor, its trunk's middle over the
+    # skeleton's. Never scaled or bent.
+    lift = -p[:, 1].min()
+    chest = np.abs(p[:, 1] - 1.3) < 0.02
+    shift = np.array([0.0, lift, -(p[chest, 2].max() + p[chest, 2].min()) / 2])
+    p = p + shift
+    eyes[:, :3] += shift
+    lm = joints(p)
+    origin, rot = _bind(sk, lm)
+    ob = stage.mesh_object("body", g.g2b(p), faces, uvs, face_uvs)
+    W = _weights(ob, sk, origin, rot)
+    g.set_weights(ob, W)
     g.normalize(ob)
-    return ob, sk, bo, br, marks
+    marks = {"eye_radius": float(eyes[:, 3].mean())}
+    for c in eyes[:, :3]:
+        marks["eye.l" if c[0] < 0 else "eye.r"] = c
+    for side in ("l", "r"):
+        wrist, tip = lm[f"hand.{side}"], lm[f"handtip.{side}"]
+        marks[f"wrist.{side}"] = wrist
+        marks[f"grip.{side}"] = wrist + 0.45 * (tip - wrist)
+        marks[f"grip_axis.{side}"] = np.array([0.0, 0.0, 1.0])
+    return ob, sk, origin, rot, marks

@@ -2,8 +2,8 @@
 
     art/blender.sh art/dark_being/build.py [--look out.png] [--paint] [--size 2048]
 
-On the Champion's skeleton (``CLASS``), as the knight is (``recipe``): the being is posed with the
-Dual mage's own pose when she casts, which is angles and so fits any skeleton
+On its own skeleton (``CLASS``, ``view::being::skeleton``), built to Blender's man: the being is
+posed with the Dual mage's own pose when she casts, which is angles and so fits any skeleton
 (``view::being::BODIES``). Everything else is its own (``recipe.py``,
 ``outfit.py``).
 """
@@ -17,10 +17,10 @@ sys.path[:0] = [os.path.join(HERE, "..", "lib"), HERE]
 
 import character  # noqa: E402
 import outfit  # noqa: E402,F401
-from recipe import BASE, BODY, FIT, GIRTH, HEAD_SCALE, PROXY  # noqa: E402,F401
+from recipe import BASE, BODY, FIT, GIRTH, HEAD_SCALE  # noqa: E402,F401
 
 NAME = "dark_being"
-CLASS = "Champion"
+CLASS = "DarkBeing"
 
 # Linear albedo, judged lit. **Obsidian**: near-black glass, glossy, so the
 # muscle's shapes are drawn by its highlights; and a little violet on its

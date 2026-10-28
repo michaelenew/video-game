@@ -6,10 +6,9 @@ painted, exported. What differs is a class's *spec*, a module with:
 
 - ``NAME``: the file, ``crates/game/assets/<NAME>.glb``;
 - ``CLASS``: the class's name as the animation exporter writes it;
-- ``BASE`` and ``PROXY`` (optional): a sculpted base mesh under
-  ``art/sources`` to build the body from instead, fitted through a
-  MakeHuman body of ``PROXY``'s recipe (``base_mesh``); ``BODY``, ``GIRTH``
-  and ``HEAD_SCALE`` then go unused.
+- ``BASE`` (optional): a sculpted base mesh under ``art/sources`` to build
+  the body from instead, used as it was made, on a skeleton built to it
+  (``base_mesh``); ``BODY``, ``GIRTH`` and ``HEAD_SCALE`` then go unused.
 - ``BODY``, ``GIRTH``, ``HEAD_SCALE``: the body (``mh``, ``fit``), and
   ``FIT`` (optional) how its trunk is fitted (``fit.fit``'s ``trunk``);
 - ``COLOURS``: the painter's colour for every material (and ``name/2`` to
@@ -64,7 +63,7 @@ def _opt(name, n=1):
 
 def body(spec):
     if getattr(spec, "BASE", None):
-        # A sculpted base mesh, fitted through MakeHuman (``base_mesh``).
+        # A sculpted base mesh, as its maker left it (``base_mesh``).
         import base_mesh
         return base_mesh.body(spec)
     base = mh.Base(os.path.join(ROOT, "target/art/mh"))

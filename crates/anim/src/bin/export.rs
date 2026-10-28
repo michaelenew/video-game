@@ -35,20 +35,20 @@ fn main() {
         );
     }
     s.push_str("],\n\"classes\":[");
-    for (ci, class) in sim::class::ALL_CLASSES.iter().enumerate() {
-        let sk = skeleton_for(*class);
-        let comma = if ci + 1 == sim::class::ALL_CLASSES.len() {
-            ""
-        } else {
-            ","
-        };
+    // Every class, and the Dual mage's dark being, whose skeleton is its
+    // own (`view::being::skeleton`): its art is built on it.
+    let mut all: Vec<(&str, view::skeleton::Skeleton)> = sim::class::ALL_CLASSES
+        .iter()
+        .map(|c| (c.name(), skeleton_for(*c)))
+        .collect();
+    all.push(("DarkBeing", view::being::skeleton(0)));
+    let count = all.len();
+    for (ci, (name, sk)) in all.into_iter().enumerate() {
+        let comma = if ci + 1 == count { "" } else { "," };
         let _ = write!(
             s,
             "\n{{\"name\":\"{}\",\"scale\":{:.4},\"hip\":{:.4},\"height\":{:.4},\"bones\":[",
-            class.name(),
-            sk.scale,
-            sk.hip_height,
-            sk.total_height
+            name, sk.scale, sk.hip_height, sk.total_height
         );
         for (bi, j) in JOINTS.iter().enumerate() {
             let b = sk.bone(*j);

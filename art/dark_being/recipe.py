@@ -50,10 +50,8 @@ FIT = None
 # Full size: a small head on a big body is a monster's, not a man's.
 HEAD_SCALE = 1.0
 
-# **The body is Blender Studio's realistic male** (``art/sources``, CC0; the
-# owner, 2026-10-27: "Just use blender's model for the dark side as a
-# starting point"), fitted to the skeleton through a plain MakeHuman man of
-# about his build (``base_mesh``). ``BODY`` and the girths above are the
+# **The body is Blender Studio's realistic male** (``art/sources``, CC0),
+# exactly as Blender made it, on a skeleton built to him (``base_mesh``; the
+# owner, 2026-10-27 and 2026-10-28). ``BODY`` and the girths above are the
 # MakeHuman body it replaced, kept for the clay check.
 BASE = "human_base_mesh_male"
-PROXY = mh.macro(gender="male", age="young", muscle=0.6, weight=0.5, proportions=1.0)

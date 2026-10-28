@@ -18,7 +18,7 @@
 //!
 //! **They are not her** (the owner, 2026-10-25): two bodies of their own, a
 //! dark warrior of obsidian and a celestial knight, on a broader skeleton
-//! than hers ([`BODIES`]), sized by [`scale`].
+//! than hers ([`skeleton`]), sized by [`scale`].
 //!
 //! **It is big, and it rises out of the seal.** Its hips are at her feet,
 //! where the seal on the floor is, and its chin at her forehead, so the
@@ -38,7 +38,7 @@
 //! The being is drawn and never tested against; it is not a hurtbox.
 
 use crate::pose::Pose;
-use crate::skeleton::{Joint, Skeleton, solve};
+use crate::skeleton::{Build, Joint, Skeleton, skeleton_for, solve};
 use sim::aim::Hand;
 use sim::class::Force;
 use sim::state::Player;
@@ -158,15 +158,84 @@ fn smoothstep(from: f32, to: f32, x: f32) -> f32 {
 /// short enough that it is still the same throw.
 pub const LAG_SECONDS: f32 = 0.12;
 
-/// Whose skeleton each being is built on, dark then light: broader than
-/// hers, because they are not her (the owner, 2026-10-25). Both the
-/// Champion's. The dark warrior had the Bulwark's, the widest shoulders in
-/// the game, for a bodybuilder's frame; but its shoulders are far wider
-/// than any man's, and the body stretched to reach them read as "not a
-/// body but body-ish" (the owner, 2026-10-26). On the Champion's the bulk
-/// is the muscle's. A pose is angles, so hers retargets onto either for
-/// free (`pose.rs`).
-pub const BODIES: [sim::Class; 2] = [sim::Class::Champion, sim::Class::Champion];
+/// Each being's skeleton, dark then light: their own, not hers.
+///
+/// The knight's is the Champion's. The dark being's is **the body it is**:
+/// its mesh is Blender Studio's realistic man, used as Blender made it
+/// (the owner, 2026-10-28: "The blender model is definitely modified from
+/// what comes directly from blender, put it back"), so the skeleton is
+/// built to his joints rather than his body bent to a skeleton's -- bent to
+/// the Champion's, his shoulders were pulled in five centimetres a side.
+/// The numbers are his, measured off the mesh (`art/sources`), in metres
+/// at his own 1.80 m.
+pub fn skeleton(k: usize) -> Skeleton {
+    if k == 1 {
+        return skeleton_for(sim::Class::Champion);
+    }
+    dark()
+}
+
+/// Blender's man, measured: shoulder joints 0.198 out at 1.455 high; upper
+/// arm 0.336, forearm 0.254; hip joints 0.082 out at 0.956 high; thigh
+/// 0.441, shin 0.434, the ankle 0.081 off the floor.
+fn dark() -> Skeleton {
+    let mut sk = Skeleton::new(Build {
+        shoulders: DARK_SHOULDER / 0.185,
+        stance: DARK_HIP_OUT / 0.105,
+        ..Build::REFERENCE
+    });
+    let (thigh, shin, ankle) = (0.441, 0.434, 0.081);
+    let (upper, fore) = (0.336, 0.254);
+    let hip = 0.05 + thigh + shin + ankle;
+    let b = &mut sk.bones;
+    b[Joint::Root.index()].offset[1] = hip;
+    // The trunk shortened so his shoulders sit where his do.
+    let shoulder_at = hip
+        + b[Joint::Spine.index()].offset[1]
+        + b[Joint::Chest.index()].offset[1]
+        + b[Joint::ClavicleL.index()].offset[1];
+    b[Joint::Chest.index()].offset[1] -= shoulder_at - DARK_SHOULDER_AT;
+    for (arm, fore_j, hand, thigh_j, shin_j, foot) in [
+        (
+            Joint::ArmL,
+            Joint::ForearmL,
+            Joint::HandL,
+            Joint::ThighL,
+            Joint::ShinL,
+            Joint::FootL,
+        ),
+        (
+            Joint::ArmR,
+            Joint::ForearmR,
+            Joint::HandR,
+            Joint::ThighR,
+            Joint::ShinR,
+            Joint::FootR,
+        ),
+    ] {
+        b[arm.index()].length = upper;
+        b[fore_j.index()].offset[1] = -upper;
+        b[fore_j.index()].length = fore;
+        b[hand.index()].offset[1] = -fore;
+        b[thigh_j.index()].length = thigh;
+        b[shin_j.index()].offset[1] = -thigh;
+        b[shin_j.index()].length = shin;
+        b[foot.index()].offset[1] = -shin;
+    }
+    sk.hip_height = hip;
+    sk.total_height = hip
+        + b[Joint::Spine.index()].offset[1]
+        + b[Joint::Chest.index()].offset[1]
+        + b[Joint::Neck.index()].offset[1]
+        + b[Joint::Head.index()].offset[1]
+        + b[Joint::Head.index()].length;
+    sk
+}
+
+/// How far out his shoulder joints are, and how high; how far out his hips.
+const DARK_SHOULDER: f32 = 0.198;
+const DARK_SHOULDER_AT: f32 = 1.455;
+const DARK_HIP_OUT: f32 = 0.082;
 
 /// How far out from the body each being's arms hang at rest, in degrees,
 /// dark then light: enough to clear the mass of the lats, which is what keeps
