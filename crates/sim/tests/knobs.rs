@@ -407,6 +407,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "The same: the floor under a mark, asked from above everything.",
     ),
     (
+        "V3::new(at.x, Fx::from_int(1000), at.z)",
+        "The same: the floor under a place's mark, for somebody going there alone.",
+    ),
+    (
         "pub const HALF: i32 = 400",
         "Level data, like an arena's table: how wide a crag is.",
     ),

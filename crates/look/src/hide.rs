@@ -91,7 +91,7 @@ impl Hide {
     }
 }
 
-/// **The rest of a monster's hide** (2026-10-23, exploration 0029): the
+/// **The rest of a monster's hide** (2026-10-23, exploration 0030): the
 /// stone of its carapace, the dark in the grooves between scutes, the moss
 /// and lichen on what faces the sky, the char beside a weak point and the
 /// heat in it, and the horn of its spines and claws -- the palette the

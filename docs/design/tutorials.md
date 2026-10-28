@@ -32,7 +32,7 @@ begins (`tutorial::LANDING`, 75 frames — long enough for a bolt to cross a
 room) and says **Hit** or **that missed the dummy**.
 
 **The dummy follows you.** It stands a third of the way into the room you are
-in, facing the door you came through — or aside by the north wall, in a room
+in (with somebody else in the hall too, the first of you by seat), facing the door you came through — or aside by the north wall, in a room
 about getting somewhere — and is stood back up to a full bar every frame. You
 are topped up whenever you run low. Nobody is knocked out of a lesson, and no
 round ends in a hall (`World::step_hall`). One room has a dummy that
@@ -42,6 +42,40 @@ clash (`tutorial::dummy_input`).
 **Tab walks you into the next class's hall**: a hall always teaches the class
 you are playing (`game::tutorial::steer`). What you have done is kept per
 class for the session, beside the fight rather than in it.
+
+## 1b · A shared space (2026-10-25)
+
+The owner, from a replay of two people playing: "make it so that the
+tutorials are a shared space, one person starting one doesnt teleport
+everyone there but two that each go there can see each other, and green
+checks work per person even in multiplayer."
+
+- **The halls are on the valley's map**: a row of them past its north edge
+  (`valley::layout::hall_at`), each on its own floor inside its own rim, with
+  no door (`valley::Kind::Hall`). A hall is a place in the same world as
+  everybody else, not a world of its own.
+- **Going to one takes only you.** In the valley a hall's trip, V and a
+  cairn from the menu move the seat that asked and nobody else
+  (`World::go_alone`): two people who each go to the Champion's hall are in
+  it together. `--tutorial` still starts in the hall, and so does a hall's
+  trip from outside the valley -- now as the valley, arriving there.
+- **One dummy a hall, shared.** A hall somebody is in takes the first seat
+  nobody plays as its dummy (`World::dummies`, `World::step_hall`); it
+  stands in the room of the first of them (by seat) and thrusts at them in
+  the clash room. Its buttons are the simulation's own
+  (`tutorial::dummy_input`), so every machine drives it alike. Two halls in
+  use, two dummies. A room for four has no seat to spare, and a hall there
+  has no dummy: what does not have to strike one still ticks.
+- **Who may hurt whom is asked of the pair** (`World::foes`): a hall's
+  dummy and the people learning in that hall, and nobody else -- two people
+  in a hall never hurt each other.
+- **Your list is yours.** `Progress::observe` takes the seat it tallies, and
+  the game feeds it this machine's seat, offline and online (it was fed
+  only offline, and only seat one: online, nothing ticked). Each frame is
+  counted the first time it is made, as it is sounded.
+
+Held by `tests/halls_together.rs` and, under rollback,
+`net/tests/ggrs_synctest.rs` (`going_alone_into_the_halls`).
 
 ## 2 · How a task is read
 

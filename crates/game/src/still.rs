@@ -110,7 +110,7 @@ mod shade {
         pub along: Vec4,
     }
 
-    /// **A grown creature's detail** (exploration 0029): whether the skin
+    /// **A grown creature's detail** (exploration 0030): whether the skin
     /// works the sculpt's fine detail out at the pixel (`on.x`, 0 or 1) --
     /// creases and pebbling on hide, erosion, pits and cracks on stone, a
     /// lava crust on a weak point's flesh -- and the colour and strength the

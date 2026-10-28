@@ -62,7 +62,7 @@ mesh as colour, normal, glow and roughness maps -- into
 ten minutes; `--fast` is a coarser draft in six, `--size <px>` the textures'
 size, `--no-export` leaves the file be, and it always writes a studio sheet to
 `target/art/ridgeback.png` and `ridgeback_near.png`. Why, and what it is for:
-[`docs/design/exploration/0029_a_target_body.md`](../docs/design/exploration/0029_a_target_body.md).
+[`docs/design/exploration/0030_a_target_body.md`](../docs/design/exploration/0030_a_target_body.md).
 
 **Since 2026-10-24 a creature is a spec on one builder**, `lib/creature.py`:
 its forms, any shells, its sculpt and paint, its hard pieces (horns, claws,
@@ -70,15 +70,15 @@ feathers, scythes -- `ringed_horn` and `vane`), and the segments its skin is
 weighted to; the builder does the union, the bake, the weights and the file.
 `art/galewing/build.py` and `art/mantis/build.py` are written that way, about
 four minutes each (`SCALE` sizes the voxels to the animal: the Mantis is three
-metres, so 0.3). Why: [`docs/design/exploration/0030_two_more_targets.md`](../docs/design/exploration/0030_two_more_targets.md).
-The Ridgeback's moved onto it too (2026-10-24, exploration 0031).
+metres, so 0.3). Why: [`docs/design/exploration/0031_two_more_targets.md`](../docs/design/exploration/0031_two_more_targets.md).
+The Ridgeback's moved onto it too (2026-10-24, exploration 0032).
 
-**Crossbreed lines** (exploration 0031): `GROWN_LINES=1 cargo test -p game
+**Crossbreed lines** (exploration 0032): `GROWN_LINES=1 cargo test -p game
 --bin game grown_lines` grows every stage of the lines in `game::bred::lines`
 to `target/lines/`, and `art/blender.sh art/lineage.py` renders each line as
 a strip of its stages (`--line <name> --stages 0,3,6` for a few, `--yaw`
 and `--pitch` to turn the camera). A stage with hand edits (`game::touch`,
-exploration 0032) is drawn as the breeder's body over the edited one.
+exploration 0033) is drawn as the breeder's body over the edited one.
 `BRED_GAIT=<line>:<stage> cargo test -p game --bin game bred_gait` and
 `art/blender.sh art/gait.py` show a stage's skeleton through each gait it
 has: eight frames, side on over a top view.

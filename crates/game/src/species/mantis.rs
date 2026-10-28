@@ -41,7 +41,7 @@ pub const LOOK: Look = Look {
     stance: None,
 };
 
-/// **How it is built** (2026-10-24, exploration 0030): the sculpted target's
+/// **How it is built** (2026-10-24, exploration 0031): the sculpted target's
 /// choices (`art/mantis/build.py`) as rules -- chitin in rings, a scythe
 /// serrated along its cutting edge, spines under the arm that carries it,
 /// antennae, compound eyes, a tarsus along the floor.

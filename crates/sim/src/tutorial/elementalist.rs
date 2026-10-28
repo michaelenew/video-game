@@ -42,15 +42,19 @@ fn new_stone(s: &Seen, aloft: bool) -> bool {
     })
 }
 
-fn shards(w: &crate::World) -> usize {
-    w.debris.iter().flatten().filter(|d| d.owner == 0).count()
+fn shards(w: &crate::World, me: usize) -> usize {
+    w.debris
+        .iter()
+        .flatten()
+        .filter(|d| d.owner as usize == me)
+        .count()
 }
 
-fn burning_gales(w: &crate::World) -> usize {
+fn burning_gales(w: &crate::World, me: usize) -> usize {
     w.gusts
         .iter()
         .flatten()
-        .filter(|g| g.owner == 0 && g.lit && g.gale == Gale::Disc)
+        .filter(|g| g.owner as usize == me && g.lit && g.gale == Gale::Disc)
         .count()
 }
 
@@ -62,7 +66,7 @@ fn thrown_past(s: &Seen, metres: i32) -> bool {
         super::kind_of(s.now().action),
         Some(UPDRAFT | FIRE_FOUNTAIN | TREMOR)
     ) || s.effects(EffectKind::Updraft).1 > 0;
-    s.was().pos.y.raw() < line.raw() && s.now().pos.y.raw() >= line.raw() && !wind
+    s.was_high().raw() < line.raw() && s.height().raw() >= line.raw() && !wind
 }
 
 fn jumped(s: &Seen) -> bool {
@@ -144,7 +148,7 @@ fn double(s: &Seen) -> bool {
     thrown_past(s, 25)
 }
 fn exploded(s: &Seen) -> bool {
-    shards(s.before) == 0 && shards(s.after) > 0
+    shards(s.before, s.me) == 0 && shards(s.after, s.me) > 0
 }
 fn lit_burst(s: &Seen) -> bool {
     exploded(s) && s.appeared(EffectKind::Embers)
@@ -153,7 +157,7 @@ fn shatter_jump(s: &Seen) -> bool {
     exploded(s) && matches!(super::kind_of(s.now().action), Some(EARTH_JUMP))
 }
 fn burning_gale(s: &Seen) -> bool {
-    burning_gales(s.after) > burning_gales(s.before)
+    burning_gales(s.after, s.me) > burning_gales(s.before, s.me)
 }
 fn thermal(s: &Seen) -> bool {
     let (was, now) = s.effects(EffectKind::FireCarpet);

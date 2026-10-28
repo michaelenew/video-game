@@ -10,7 +10,8 @@ use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
 
 /// Wire format for one player's input. This is the only game data that crosses
-/// the network: seven bytes of payload per player per frame.
+/// the network: eight bytes of payload per player per frame, and eight more
+/// that are nought but for a knob moved.
 ///
 /// Buttons, then yaw, then pitch, each in its own sixteen bits. All three are on
 /// the wire because movement and abilities resolve relative to where the player
@@ -22,13 +23,22 @@ use sim::{Input, World};
 /// Pitch joined it when abilities started landing where the crosshair is. A
 /// crosshair is a line in space and a line needs two angles; with only the yaw
 /// on the wire, two peers would disagree about where a fire pillar went.
+///
+/// The second word is a knob of the Oven moved (`Input::tune`): its cell in
+/// the high half and its value in the low, nought nearly always -- and GGRS
+/// sends each input as its difference from the last, so a word of noughts
+/// costs next to nothing.
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct NetInput(pub u64);
+pub struct NetInput(pub u64, pub u64);
 
 impl From<NetInput> for Input {
     fn from(n: NetInput) -> Input {
         Input::looking_at((n.0 >> 32) as u16, (n.0 >> 16) as u16, n.0 as u16 as i16)
             .travelling(sim::input::Travel((n.0 >> 48) as u16))
+            .tuning(sim::input::Tune {
+                cell: (n.1 >> 32) as u16,
+                raw: n.1 as u32 as i32,
+            })
     }
 }
 
@@ -39,6 +49,7 @@ impl From<Input> for NetInput {
                 | (i.bits as u64) << 32
                 | (i.aim as u64) << 16
                 | i.pitch as u16 as u64,
+            (i.tune.cell as u64) << 32 | i.tune.raw as u32 as u64,
         )
     }
 }

@@ -108,7 +108,7 @@ pub struct Reading {
     /// How much of that change shows a third of the way in, nought to one.
     pub early: Fx,
     /// How far the trunk moved by the end of the windup, metres: the whole
-    /// body's tell (exploration 0033).
+    /// body's tell (exploration 0034).
     pub body: Fx,
     /// The cry it gives instead, where the body cannot.
     pub cry: Option<strike::Cry>,
@@ -132,12 +132,12 @@ impl Reading {
     }
 
     /// The silhouette moves a lot, and early -- and the whole body with it,
-    /// or a cry says what is coming (exploration 0033: a limb alone moving
+    /// or a cry says what is coming (exploration 0034: a limb alone moving
     /// is read too late).
     pub fn legible(&self, len: Fx) -> bool {
         // A cry is heard from the windup's first frame, whatever the body
         // shows: the owner's edge case, a move the body cannot tell
-        // (exploration 0034).
+        // (exploration 0035).
         self.cry.is_some()
             || (self.change >= len.mul(fx(1, 8))
                 && self.early >= fx(1, 2)
@@ -238,7 +238,7 @@ pub const TRUNK: [&str; 7] = [
 /// How far the trunk moved between two bodies: the most any corner of a
 /// trunk part did, so a turn or a tilt counts as much as a shift -- the
 /// whole body's tell, which a player reads before any limb (exploration
-/// 0033).
+/// 0034).
 pub fn trunk_apart(a: &Body, b: &Body) -> Fx {
     let mut most = Fx::ZERO;
     for (i, pa) in a.parts().iter().enumerate() {

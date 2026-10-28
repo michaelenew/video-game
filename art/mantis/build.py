@@ -1,5 +1,5 @@
 """The Mantis, sculpted and baked: the target its grown body is measured
-against (``docs/design/exploration/0030_two_more_targets.md``).
+against (``docs/design/exploration/0031_two_more_targets.md``).
 
     cargo run -p anim --bin export_beast -- mantis     # its skeleton, once
     art/blender.sh art/mantis/build.py [--look out.png] [--size 2048] [--no-export] [--fast]

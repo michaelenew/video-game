@@ -10,6 +10,19 @@ use sim::species::SpeciesId;
 use sim::state::Phase;
 use sim::{Class, Input, World};
 
+/// One frame as the game's local driver makes it: the books kept beside
+/// the world, and the crowd's aggregates due fed to it. A tape is judged fed
+/// the same way (`regions::Ledger::for_tape`), so a fight made any other way
+/// is not the fight its tape describes.
+fn kept(w: &mut World, books: &mut regions::Ledger, inputs: [Input; 2]) {
+    let mut all = [Input::default(); sim::state::MAX_PLAYERS];
+    all[..2].copy_from_slice(&inputs);
+    books.record(w, all);
+    let (due, n) = books.due(w.frame + 1);
+    w.advance_with(inputs, &due[..n]);
+    books.confirm_through(w.frame, w);
+}
+
 /// Play a scripted hunt, taping it, and return the tape and the report the
 /// live run produced.
 fn taped(species: SpeciesId, class: Class, frames: u32, seed: u32) -> (Tape, hunt::Report) {
@@ -19,6 +32,7 @@ fn taped(species: SpeciesId, class: Class, frames: u32, seed: u32) -> (Tape, hun
     // start is checked by hash. The seed goes to the hunter's timing only.
     let mut w = World::hunt_of([class; 2], species).seated(1);
     let mut tape = Tape::begin(&w, "test");
+    let mut books = regions::Ledger::for_tape(&tape, &w, false);
     let mut bot = hunt::Hunter::of(card, 0, seed, hunt::jump_apex(class));
     let mut report = hunt::Report::new(card);
     while w.frame < frames && matches!(w.phase, Phase::Fighting) {
@@ -26,7 +40,7 @@ fn taped(species: SpeciesId, class: Class, frames: u32, seed: u32) -> (Tape, hun
         let inputs = [bot.act(&w), Input::default()];
         let before = w.clone();
         tape.record(w.frame, inputs);
-        w.advance(inputs);
+        kept(&mut w, &mut books, inputs);
         report.observe(&before, &w, std::slice::from_ref(&bot));
     }
     report.finish(&w);
@@ -80,6 +94,7 @@ fn a_pack_hunt_replays_too() {
 fn a_versus_tape_is_judged_without_a_creature() {
     let w = World::with_classes([Class::Champion, Class::Bulwark]);
     let mut tape = Tape::begin(&w, "test");
+    let mut books = regions::Ledger::for_tape(&tape, &w, false);
     let mut w = w;
     let mut bots = [
         hunt::Duelist::new(0, hunt::Level::Normal, 11),
@@ -91,7 +106,7 @@ fn a_versus_tape_is_judged_without_a_creature() {
         }
         let inputs = [bots[0].act(&w), bots[1].act(&w)];
         tape.record(w.frame, inputs);
-        w.advance(inputs);
+        kept(&mut w, &mut books, inputs);
     }
     tape.finish(&w);
     let back = Tape::from_text(&tape.to_text()).expect("parses");
@@ -110,11 +125,12 @@ fn a_taped_walk_through_the_valley_reports_its_places() {
     let mut w = World::versus_in([Class::Champion, Class::Elementalist], sim::valley::START);
     assert!(w.valley.on);
     let mut tape = Tape::begin(&w, "test");
+    let mut books = regions::Ledger::for_tape(&tape, &w, false);
     let walk = Input::aimed(Input::W, 0);
     for _ in 0..600 {
         let inputs = [walk, walk];
         tape.record(w.frame, inputs);
-        w.advance(inputs);
+        kept(&mut w, &mut books, inputs);
     }
     tape.finish(&w);
     let back = Tape::from_text(&tape.to_text()).expect("the tape parses");
@@ -152,6 +168,7 @@ fn the_link_is_laid_beside_how_far_apart_the_fighters_were() {
     let mut w = World::versus_in([Class::Champion, Class::Elementalist], sim::valley::START);
     let mut tape = Tape::begin(&w, "test");
     tape.online = Some((0, 0));
+    let mut books = regions::Ledger::for_tape(&tape, &w, false);
     let (out, back) = (
         Input::aimed(Input::W, 0),
         Input::aimed(Input::W, 2 * Input::QUARTER_TURN),
@@ -165,7 +182,7 @@ fn the_link_is_laid_beside_how_far_apart_the_fighters_were() {
             [out, back]
         };
         tape.record(w.frame, inputs);
-        w.advance(inputs);
+        kept(&mut w, &mut books, inputs);
         if f % 60 == 59 {
             let distant = apart(&w) > 40.0;
             far += u32::from(distant);
@@ -199,11 +216,12 @@ fn the_link_is_laid_beside_how_far_apart_the_fighters_were() {
 fn a_tape_with_no_link_still_says_what_the_simulation_costs_apart() {
     let w = World::versus_in([Class::Champion, Class::Elementalist], sim::valley::START);
     let mut tape = Tape::begin(&w, "test");
+    let mut books = regions::Ledger::for_tape(&tape, &w, false);
     let mut w = w;
     for _ in 0..300 {
         let inputs = [Input::aimed(Input::W, 0), Input::default()];
         tape.record(w.frame, inputs);
-        w.advance(inputs);
+        kept(&mut w, &mut books, inputs);
     }
     let judged = hunt::replay::judge(&tape).expect("the start rebuilds");
     let text = judged.render(&tape, false);
@@ -218,6 +236,7 @@ fn a_tape_with_no_link_still_says_what_the_simulation_costs_apart() {
 fn a_change_of_class_gets_its_own_table() {
     let mut w = World::hunt_of([Class::Bulwark; 2], SpeciesId::RIDGEBACK).seated(1);
     let mut tape = Tape::begin(&w, "test");
+    let mut books = regions::Ledger::for_tape(&tape, &w, false);
     let swing = Input {
         bits: Input::LEFT,
         ..Input::default()
@@ -233,7 +252,7 @@ fn a_change_of_class_gets_its_own_table() {
         }
         let inputs = [mine, Input::default()];
         tape.record(w.frame, inputs);
-        w.advance(inputs);
+        kept(&mut w, &mut books, inputs);
     }
     tape.finish(&w);
     let judged = hunt::replay::judge(&tape).expect("the start rebuilds");
@@ -249,5 +268,50 @@ fn a_change_of_class_gets_its_own_table() {
     assert!(
         text.contains("Bulwark") && text.contains("Champion"),
         "{text}"
+    );
+}
+
+/// **A match's tape reproduces only fed as the match was fed.** The crowd
+/// field's aggregates are fed to the world beside the inputs, off books
+/// begun at the agreed start, and they are not on the tape: the judge keeps
+/// the same books. Played without them -- as it was until 2026-10-24 --
+/// the owner's tape of a versus match in the Needle came out a different
+/// fight, and so did every tape the game had saved since the crowd field.
+#[test]
+fn a_match_tape_is_played_fed_as_the_match_was() {
+    let needle = sim::arena::named("needle").expect("the Needle").id;
+    let w = World::versus_in([Class::ShadowReaver, Class::Champion], needle).drafting(true);
+    let mut tape = Tape::begin(&w, "test");
+    tape.online = Some((1, 2));
+    let mut books = regions::Ledger::for_tape(&tape, &w, false);
+    let mut w = w;
+    let mut bots = [
+        hunt::Duelist::new(0, hunt::Level::Normal, 21),
+        hunt::Duelist::new(1, hunt::Level::Normal, 22),
+    ];
+    for _ in 0..1_200 {
+        for b in bots.iter_mut() {
+            b.watch(&w);
+        }
+        let inputs = [bots[0].act(&w), bots[1].act(&w)];
+        tape.record(w.frame, inputs);
+        kept(&mut w, &mut books, inputs);
+    }
+    tape.finish(&w);
+    let back = Tape::from_text(&tape.to_text()).expect("parses");
+    let judged = hunt::replay::judge(&back).expect("the start rebuilds");
+    assert_eq!(
+        judged.matched,
+        Some(true),
+        "{}",
+        judged.render(&back, false)
+    );
+    let unfed = back
+        .play(&mut sim::replay::Unfed, |_, _, _| {})
+        .expect("the start rebuilds");
+    assert_ne!(
+        back.matched(&unfed),
+        Some(true),
+        "nothing was fed in twenty seconds: the test proves nothing"
     );
 }

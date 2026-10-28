@@ -577,7 +577,7 @@ fn pass(g: &mut Genome, fixes: &mut Fixes) {
     }
 
     // **A middle walking pair no longer than the longer of its
-    // neighbours** (exploration 0034). The pairs either side stand the
+    // neighbours** (exploration 0035). The pairs either side stand the
     // body at their height, so a longer one between them crouched deep and
     // stepped its knee out round the next -- a body a walking animal does
     // not have. A spider's legs fan out instead, and are let be.
@@ -685,7 +685,7 @@ pub fn flight_margin(g: &Genome) -> Fx {
         return Fx::from_int(-1);
     };
     // Armour is weight a wing has to lift: a plated beast that has just
-    // grown wings does not take off on them (exploration 0033).
+    // grown wings does not take off on them (exploration 0034).
     let armour = match (g.minors.hide, g.minors.back) {
         (Hide::Plates | Hide::Shell, _) | (_, Back::Burden) => fx(2, 5),
         _ => Fx::ZERO,

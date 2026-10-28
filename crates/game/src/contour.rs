@@ -35,7 +35,7 @@
 //! - **Wing**: a membrane: flat, with a thickened leading edge.
 //! - **Wedge**: a head: narrowing to the muzzle, a brow over the eyes, a
 //!   flatter jaw.
-//! - **Stalk** (2026-10-24, exploration 0030): an insect's thorax stood on
+//! - **Stalk** (2026-10-24, exploration 0031): an insect's thorax stood on
 //!   end: a bulb at the joint where the legs meet, a slender stalk, and a
 //!   flare at the far end under what it carries.
 //!

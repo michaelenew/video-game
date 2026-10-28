@@ -316,14 +316,14 @@ pub fn credit_due(
 /// **What the valley says on screen**: where you are, and -- when somebody is
 /// standing in a seam -- where it leads and what it is waiting for. Empty
 /// outside the valley. Pure, so it is tested without a window.
-pub fn text(w: &sim::World) -> String {
+pub fn text(w: &sim::World, me: usize) -> String {
     if !w.valley.on {
         return String::new();
     }
-    // Where the first fighter stands: during a chase the world's frame is
-    // the nearest place with an origin of its own, not always the one you
-    // are in (exploration 0023).
-    let feet = w.players[0].pos.add(w.map_origin());
+    // Where this machine's fighter stands: during a chase the world's frame
+    // is the nearest place with an origin of its own, not always the one you
+    // are in (exploration 0023), and anybody may be anywhere (2026-10-25).
+    let feet = w.players[me].pos.add(w.map_origin());
     let here = sim::atlas::valley()
         .place_for(feet)
         .map_or(w.arena, |p| p.arena);
@@ -352,6 +352,7 @@ pub fn text(w: &sim::World) -> String {
         Kind::Reach => format!("The {name}"),
         Kind::Room(s) if w.hunting() => format!("The {name} -- {}", s.get().name),
         Kind::Room(_) => format!("The {name} -- quiet now. Walk out the way you came."),
+        Kind::Hall => format!("The {name} -- V takes you back to Hearth."),
     };
     let beaten = sim::species::shown()
         .filter(|s| w.valley.has_beaten(s.id))
@@ -413,7 +414,7 @@ pub fn update_text(
     mut text: Query<&mut Text, With<ValleyText>>,
     mut shown: Local<String>,
 ) {
-    let mut now = self::text(&sim.cur);
+    let mut now = self::text(&sim.cur, sim.local_player());
     if crate::dev_mode() && sim.cur.valley.on {
         let (places, boxes, tiles) = stream.loaded();
         let atlas = sim::atlas::valley();

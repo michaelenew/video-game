@@ -1,4 +1,4 @@
-//! **A grown body's hard parts** (2026-10-23; exploration 0029): horns,
+//! **A grown body's hard parts** (2026-10-23; exploration 0030): horns,
 //! spines, claws and quills, placed by rule from the species table the way
 //! the sculpted Ridgeback placed them by hand -- silhouette is geometry, and
 //! geometry with rules a table can state:

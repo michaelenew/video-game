@@ -1,4 +1,4 @@
-# 0031 — Growing crossbreeds, and how the growing works
+# 0032 — Growing crossbreeds, and how the growing works
 
 *2026-10-24.* The owner: *"bring the growing algorithms over the crossbred
 skeletons. Each crossbreed needs to read like a plausible creature ... Show
@@ -48,10 +48,10 @@ Each tile is a stage: its generation, its length, and what the feeding
 changed (the morph's own account, `sim::breed::morph::changes`; "sliders
 only" is a step that moved proportions and no gene).
 
-![Ridgeback fed toward the Galewing](../gallery/0031_ridgeback_to_galewing.jpg)
-![Galewing fed toward the Mantis](../gallery/0031_galewing_to_mantis.jpg)
-![Mantis fed toward the Ridgeback](../gallery/0031_mantis_to_ridgeback.jpg)
-![Ridgeback backcrossed into the Mantis](../gallery/0031_ridgeback_x_mantis.jpg)
+![Ridgeback fed toward the Galewing](../gallery/0032_ridgeback_to_galewing.jpg)
+![Galewing fed toward the Mantis](../gallery/0032_galewing_to_mantis.jpg)
+![Mantis fed toward the Ridgeback](../gallery/0032_mantis_to_ridgeback.jpg)
+![Ridgeback backcrossed into the Mantis](../gallery/0032_ridgeback_x_mantis.jpg)
 
 What they show:
 

@@ -64,6 +64,40 @@ pub struct Input {
     /// confirmed and rolled back like a button, and `World::advance` acts on it
     /// on the same frame on both machines. See `docs/design/arenas.md`.
     pub travel: Travel,
+    /// **A knob of the Oven moved in a match**: nothing, nearly always. On
+    /// the wire for the reason `travel` is -- a rule changed on one machine
+    /// on the frame its player let go of a slider is a different game from
+    /// the next frame on -- and taken into the world as the frame is made
+    /// (`crate::oven::Edits`).
+    pub tune: Tune,
+}
+
+/// One knob set to one value: `cell` is the knob's [`crate::oven::Knob::cell`]
+/// plus one, and nought is no edit, which is what the default is.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
+pub struct Tune {
+    pub cell: u16,
+    pub raw: i32,
+}
+
+impl Tune {
+    pub const NONE: Tune = Tune { cell: 0, raw: 0 };
+
+    /// The knob numbered `cell` set to `raw`.
+    pub const fn set(cell: u16, raw: i32) -> Tune {
+        Tune {
+            cell: cell.wrapping_add(1),
+            raw,
+        }
+    }
+
+    /// The knob and its value, if this is an edit.
+    pub const fn edit(self) -> Option<(u16, i32)> {
+        match self.cell {
+            0 => None,
+            c => Some((c - 1, self.raw)),
+        }
+    }
 }
 
 /// Where a [`Input::travel`] request goes. One byte, and a second for seats.
@@ -474,6 +508,7 @@ impl Input {
             aim: 0,
             pitch: 0,
             travel: Travel::NONE,
+            tune: Tune::NONE,
         }
     }
 
@@ -484,6 +519,7 @@ impl Input {
             aim,
             pitch: 0,
             travel: Travel::NONE,
+            tune: Tune::NONE,
         }
     }
 
@@ -494,6 +530,7 @@ impl Input {
             aim,
             pitch,
             travel: Travel::NONE,
+            tune: Tune::NONE,
         }
     }
 
@@ -562,6 +599,11 @@ impl Input {
 
     pub const fn looking(self, aim: u16, pitch: i16) -> Input {
         Input { aim, pitch, ..self }
+    }
+
+    /// The same input, moving a knob of the Oven.
+    pub const fn tuning(self, tune: Tune) -> Input {
+        Input { tune, ..self }
     }
 
     /// The same input, asking to go somewhere else.

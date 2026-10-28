@@ -126,7 +126,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game --release -- --grown-creatures",
-                "Draw the Ridgeback's body grown by rule from its species table, rather than the body sculpted by hand that is its target (art/ridgeback/build.py): the parts made fuller than their boxes, a carapace grown off the skin wherever the table says armour and parting round the weak points, spines, horns, claws and quills by rule, and the fine detail -- creased hide, pitted stone, a glowing lava crust on the soft places -- worked out in the skin's shader. To compare the two; docs/design/exploration/0029_a_target_body.md. The grown body also stands in for the sculpted one in the moment before its file has loaded.",
+                "Draw the Ridgeback's body grown by rule from its species table, rather than the body sculpted by hand that is its target (art/ridgeback/build.py): the parts made fuller than their boxes, a carapace grown off the skin wherever the table says armour and parting round the weak points, spines, horns, claws and quills by rule, and the fine detail -- creased hide, pitted stone, a glowing lava crust on the soft places -- worked out in the skin's shader. To compare the two; docs/design/exploration/0030_a_target_body.md. The grown body also stands in for the sculpted one in the moment before its file has loaded.",
             ),
             e(
                 "cargo run -p game --release -- --box-creatures",
@@ -916,7 +916,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p anim --bin export_beast -- <species>",
-                "Write a creature's skeleton and part boxes at rest, as the game's rig places them, to target/art/<species>.json: what a body formed by hand is sculpted over (art/<species>/build.py, art/blender.sh to run it). docs/design/exploration/0029_a_target_body.md.",
+                "Write a creature's skeleton and part boxes at rest, as the game's rig places them, to target/art/<species>.json: what a body formed by hand is sculpted over (art/<species>/build.py, art/blender.sh to run it). docs/design/exploration/0030_a_target_body.md.",
             ),
             e(
                 "cargo run -p anim --bin preview_beast -- <clip>",
@@ -1125,7 +1125,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "GROWN_LINES=1 cargo test -p game --bin game grown_lines",
-                "Grow every stage of the crossbreed lines (exploration 0031: each formed creature fed toward the next, and one backcrossed) to target/lines/<line>_<stage>.obj, coloured, with target/lines/lines.tsv saying what each stage is; art/blender.sh art/lineage.py renders them into strips.",
+                "Grow every stage of the crossbreed lines (exploration 0032: each formed creature fed toward the next, and one backcrossed) to target/lines/<line>_<stage>.obj, coloured, with target/lines/lines.tsv saying what each stage is; art/blender.sh art/lineage.py renders them into strips.",
             ),
             e(
                 "BRED_DUMP=1 cargo test -p game --bin game bred_dump",
@@ -1141,7 +1141,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "GROWN_STAGES=0,3,6",
-                "With GROWN_LINES: grow those stages of the lines alone. A stage with hand edits (game::touch, exploration 0032) is written twice, the breeder's body as <line>_<stage>_raw.obj beside the edited one.",
+                "With GROWN_LINES: grow those stages of the lines alone. A stage with hand edits (game::touch, exploration 0033) is written twice, the breeder's body as <line>_<stage>_raw.obj beside the edited one.",
             ),
             e(
                 "SHOT_BEAST=angle,distance,height",

@@ -1,4 +1,4 @@
-//! **A crossbreed touched by hand** (2026-10-24, exploration 0032): the
+//! **A crossbreed touched by hand** (2026-10-24, exploration 0033): the
 //! owner's *"take each of the intermediate steps, hand edit them to make each
 //! a reasonable creature in its own right"*.
 //!
@@ -8,7 +8,7 @@
 //! brought in under the body -- applied before it is grown. Written as data
 //! rather than sculpted, so the edits across every stage are a record of
 //! what the breeder gets wrong, which is what the breeder is then changed by
-//! (`docs/design/exploration/0032_hand_edited_crossbreeds.md`).
+//! (`docs/design/exploration/0033_hand_edited_crossbreeds.md`).
 
 use bevy::prelude::*;
 use sim::breed::Genome;
@@ -227,7 +227,7 @@ pub fn edit_body(body: &mut Body, edits: &[Edit], grounded: bool) {
     }
 }
 
-/// **The head carried level** (exploration 0032): the breeder lays the head
+/// **The head carried level** (exploration 0033): the breeder lays the head
 /// along the neck's line, where a bite is aimed by it, so a raised neck held
 /// its head up like a chimney -- the one edit every hand-edited stage made.
 /// Grown, the head and what hangs off it are turned level, nose a little
@@ -294,10 +294,10 @@ const TORSO: [&str; 5] = ["haunch", "barrel", "shoulders", "segment", "rump"];
 /// and the edits. A stage gets every entry that names it, in order; a stage
 /// none names is the breeder's body as it stands.
 ///
-/// Empty since exploration 0033. The edits of 0032 reshaped boxes on bodies
+/// Empty since exploration 0034. The edits of 0033 reshaped boxes on bodies
 /// that could not walk -- legs crossing, scythes on the floor -- and were
 /// judged from one still; the breeder's legs are fixed instead, and the
-/// first pass is in this file's history and 0032's pictures.
+/// first pass is in this file's history and 0033's pictures.
 pub const TOUCHES: &[(&str, &[usize], &[Edit])] = &[];
 
 /// The hand edits of one stage of one line.

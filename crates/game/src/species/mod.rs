@@ -184,7 +184,7 @@ pub struct Build {
     pub heavy: f32,
     /// Parts contoured by the species' own word, by index.
     pub contours: &'static [(usize, crate::contour::Contour)],
-    /// **What the sculpted target taught** (2026-10-23, exploration 0029):
+    /// **What the sculpted target taught** (2026-10-23, exploration 0030):
     /// the choices that made the hand-made body read as a monster, stated so
     /// a grown one makes them too. How far a barrel hangs below its box, as a
     /// share of its depth: a deep chest, the belly low between the legs.
@@ -208,7 +208,7 @@ pub struct Build {
     /// (`horns::paws`); 0 for none.
     pub claws: u8,
     /// **What the Galewing and the Mantis taught** (2026-10-24, exploration
-    /// 0030), each a rule over the species table (`crate::anatomy`).
+    /// 0031), each a rule over the species table (`crate::anatomy`).
     /// What a foot is: a paw (`claws` toes), a bird's talons, an insect's
     /// tarsus.
     pub foot: Foot,

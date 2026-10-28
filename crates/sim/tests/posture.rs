@@ -112,7 +112,7 @@ fn heads_are_carried_above_the_back() {
         let head_y = f(body.at(head).y);
         // Above the spine by most of a third of the body's half-depth: a
         // head carried, not hung -- and no higher, or a body as deep as it
-        // is wide stood its neck up straight (exploration 0033).
+        // is wide stood its neck up straight (exploration 0034).
         let back_y = f(body.at(chest).y) + f(build::proportions(g).half_h) * 0.3;
         assert!(
             head_y >= back_y - 0.05,

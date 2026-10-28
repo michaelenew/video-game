@@ -1,12 +1,12 @@
-# 0034 — Bred as the game breeds
+# 0035 — Bred as the game breeds
 
-*2026-10-27.* The owner, after 0033: *"Good enough. Now it's time to go back
+*2026-10-27.* The owner, after 0034: *"Good enough. Now it's time to go back
 and fix the crossbreeding and evolution algorithms"* -- so that what breeding
-makes is as plausible as the four lines 0033 walked.
+makes is as plausible as the four lines 0034 walked.
 
 ## The lines were four walks somebody chose
 
-0033's checks (`tests/strides.rs`) held the cast's genomes and four lines of
+0034's checks (`tests/strides.rs`) held the cast's genomes and four lines of
 feeding: chosen, and fixed until they passed. A player's eggs are whatever
 the dice give: a cross with any of the cast (`cross::breed`), a trophy
 grafted on (`cross::graft`), a generation's drift (`cross::mutate`), in any
@@ -15,7 +15,7 @@ order.
 `bred()` in `tests/strides.rs` breeds them as the game does: forty families (a hundred now) of
 six generations, each from a parent of the cast, each generation one of the
 three with a mate of the cast. `bred_bodies_are_plausible` puts every one
-through all of 0033's checks -- it moves, it is carried like an animal, its
+through all of 0034's checks -- it moves, it is carried like an animal, its
 attacks are ones its body could make and are read off it -- and asks that no
 more than a fifth of their damaging moves are told by a cry.
 

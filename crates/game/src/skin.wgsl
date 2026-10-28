@@ -16,7 +16,7 @@
 @group(2) @binding(101) var map_a: texture_2d<f32>;
 @group(2) @binding(102) var map_b: texture_2d<f32>;
 
-// A grown creature's detail (`still::Detail`, exploration 0029).
+// A grown creature's detail (`still::Detail`, exploration 0030).
 struct Detail {
     ember: vec4<f32>,
     on: vec4<f32>,

@@ -1,4 +1,4 @@
-"""Render crossbreed lines, stage by stage (exploration 0031).
+"""Render crossbreed lines, stage by stage (exploration 0032).
 
     GROWN_LINES=1 cargo test -p game --bin game grown_lines     # the stages
     art/blender.sh art/lineage.py [--samples 24] [--size 420x320] [--line <name>] [--stages 0,3,6] [--yaw 35] [--pitch 16]

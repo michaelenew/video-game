@@ -12,7 +12,7 @@ use sim::{Class, Fx, Input, V3, World};
 
 fn hall(class: Class) -> World {
     let t = tutorial::for_class(class).expect("a tutorial for every class on offer");
-    World::versus_in([class, Class::Champion], t.arena)
+    World::versus_in([class], t.arena)
 }
 
 /// Stand fighter zero in room `k`, `back` metres in front of the dummy's
@@ -20,13 +20,20 @@ fn hall(class: Class) -> World {
 fn stand_in(w: &mut World, k: usize, back: i32) {
     let t = tutorial::of(w.arena).unwrap();
     let mark = arena::hall::dummy_mark(t.rooms, k);
+    let spot = V3::new(mark.at.x.sub(Fx::from_int(back)), Fx::ZERO, mark.at.z);
     let p = &mut w.players[0];
-    p.pos = V3::new(mark.at.x.sub(Fx::from_int(back)), Fx::ZERO, mark.at.z);
+    p.pos = spot;
     p.facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
     p.vel = V3::ZERO;
     for _ in 0..30 {
         w.advance([toward_dummy(w, 0); 2]);
     }
+    // Back on the spot: a swinging dummy's count may have come round while
+    // it took its place, and its thrust pushed her off it.
+    let p = &mut w.players[0];
+    p.pos = spot;
+    p.vel = V3::ZERO;
+    p.health = p.full_health();
 }
 
 fn yaw_to(from: V3, to: V3) -> u16 {
@@ -51,7 +58,7 @@ fn press(w: &mut World, coach: &mut Progress, bits: u16, held: u32, after: u32) 
         let input = toward_dummy(w, if f < held { bits } else { 0 });
         let before = w.clone();
         w.advance([input, Input::default()]);
-        if let Some(word) = coach.observe(&before, w) {
+        if let Some(word) = coach.observe(&before, w, 0) {
             said.push(word);
         }
     }
@@ -113,10 +120,10 @@ fn a_hall_opens_with_no_pick_and_never_ends_a_round() {
     for class in ROTATION {
         let mut w = hall(class).drafting(true);
         assert!(matches!(w.phase, Phase::Fighting), "no pick in a hall");
-        assert!(w.pvp(), "the dummy can be hit");
+        stand_in(&mut w, 1, 2);
+        assert!(w.is_dummy(1) && w.foes(0, 1), "the dummy can be hit");
         w.players[0].health = 1;
         w.players[1].health = 1;
-        stand_in(&mut w, 1, 2);
         let mut coach = Progress::default();
         press(&mut w, &mut coach, Input::LEFT, 2, 60);
         assert!(matches!(w.phase, Phase::Fighting), "{}", class.name());
@@ -226,13 +233,13 @@ fn a_move_that_lands_is_ticked_and_one_that_misses_is_told() {
         for _ in 0..40 {
             let before = w.clone();
             w.advance([away, Input::default()]);
-            coach.observe(&before, &w);
+            coach.observe(&before, &w, 0);
         }
         for f in 0..held + 100 {
             let before = w.clone();
             let input = Input::looking_at(if f < held { bits } else { 0 }, 1 << 15, 0);
             w.advance([input, Input::default()]);
-            if let Some(word) = coach.observe(&before, &w) {
+            if let Some(word) = coach.observe(&before, &w, 0) {
                 said.push(word);
             }
         }
@@ -312,7 +319,7 @@ fn run(class: Class, room: usize, task: usize, back: i32, script: Script) -> u16
             };
             let before = w.clone();
             w.advance([input, Input::default()]);
-            coach.observe(&before, &w);
+            coach.observe(&before, &w, 0);
         }
     }
     coach.times(class, room, task)
@@ -471,9 +478,9 @@ fn clash_window(gap: i32) -> Vec<u32> {
         let mut coach = Progress::default();
         let mut step = |w: &mut World, bits: u16| {
             let before = w.clone();
-            let two = tutorial::dummy_input(w).unwrap();
-            w.advance([toward_dummy(w, bits), two]);
-            coach.observe(&before, w);
+            // The dummy's thrust is the hall's: the step drives it.
+            w.advance([toward_dummy(w, bits), Input::default()]);
+            coach.observe(&before, w, 0);
         };
         // Up to `early` frames before the next thrust.
         while (w.frame + 1 + early) % every != 0 {
@@ -519,7 +526,7 @@ fn breaking_through_a_stone_is_ticked() {
             for _ in 0..n {
                 let before = w.clone();
                 w.advance([Input::looking_at(bits, 0, pitch), Input::default()]);
-                coach.observe(&before, &w);
+                coach.observe(&before, &w, 0);
             }
         }
         coach.times(Class::Elementalist, 4, 2)

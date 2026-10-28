@@ -36,7 +36,8 @@
 
 use crate::arena::{self, ArenaId};
 use crate::class::ALL_CLASSES;
-use crate::input::Input;
+use crate::crowd::{Aggregate, MAX_STREAMS};
+use crate::input::{Input, Tune};
 use crate::species::{self, SpeciesId};
 use crate::state::MAX_PLAYERS;
 use crate::{Class, World};
@@ -45,8 +46,9 @@ use crate::{Class, World};
 /// `online` and `net` lines; a version one tape still reads, with no link.
 /// Three is four fighters: four inputs a frame, and `p3`/`p4` on the start
 /// line. A frame line from an older tape holds two, and reads with the other
-/// seats sending nothing.
-pub const VERSION: u32 = 3;
+/// seats sending nothing. Four is a knob of the Oven moved in a match: an
+/// `@frame tune seat cell value` line before the frame that carried it.
+pub const VERSION: u32 = 4;
 
 /// A fight as the settings that start it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -321,6 +323,38 @@ impl Link {
     }
 }
 
+/// **What a frame is fed beside its inputs**: the crowd field's aggregates
+/// due at it (`World::advance_with`, [`crate::crowd`]). The game keeps them
+/// on the region ledger, which is a crate above this one; a tape played
+/// without them is a different fight from the one the game played as soon
+/// as the first aggregate is due, so the judge plays it with the ledger
+/// (`regions::Ledger`'s `Feed`) and [`Unfed`] is for a fight that was
+/// never fed, the way a harness plays one.
+pub trait Feed {
+    /// The tape is about to be played from `start`.
+    fn begin(&mut self, tape: &Tape, start: &World);
+    /// What frame `before.frame + 1` is fed, as `before` is advanced by
+    /// `inputs` into it.
+    fn due(
+        &mut self,
+        before: &World,
+        inputs: [Input; MAX_PLAYERS],
+    ) -> ([Aggregate; MAX_STREAMS], usize);
+    /// The frame was made: `after` is the world it made.
+    fn kept(&mut self, after: &World);
+}
+
+/// Nothing fed: `World::advance`, frame after frame.
+pub struct Unfed;
+
+impl Feed for Unfed {
+    fn begin(&mut self, _: &Tape, _: &World) {}
+    fn due(&mut self, _: &World, _: [Input; MAX_PLAYERS]) -> ([Aggregate; MAX_STREAMS], usize) {
+        ([Aggregate::NONE; MAX_STREAMS], 0)
+    }
+    fn kept(&mut self, _: &World) {}
+}
+
 /// A fight, recorded: where it started and what was pressed.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tape {
@@ -432,6 +466,11 @@ impl Tape {
         let mut w = self.start.world();
         w.frame = self.first_frame;
         let have = w.state_checksum();
+        if have != self.start_hash
+            && let Some(old) = self.champions_unseated()
+        {
+            return Ok(old);
+        }
         if have != self.start_hash {
             return Err(format!(
                 "the start world does not match: the tape says {:016x}, this build makes {:016x} from `{}`{}",
@@ -448,15 +487,34 @@ impl Tape {
         Ok(w)
     }
 
+    /// **A tape saved before 2026-10-24**: the game filled the seats nobody
+    /// plays with the Champion, where its line says player one's class, so
+    /// its start is the line's with those seats the Champion. That world, if
+    /// it is the one the tape's checksum names.
+    fn champions_unseated(&self) -> Option<World> {
+        let mut start = self.start;
+        let named = (start.seats as usize).clamp(2, MAX_PLAYERS);
+        for c in start.classes.iter_mut().skip(named) {
+            *c = Class::Champion;
+        }
+        let mut w = start.world();
+        w.frame = self.first_frame;
+        (w.state_checksum() == self.start_hash).then_some(w)
+    }
+
     /// Play the tape through, from its start world, showing every frame to
-    /// `watch` as the world before, the inputs, and the world after. The
-    /// world it ends on is returned; [`Tape::matched`] says whether it is
-    /// the one the game ended on.
+    /// `watch` as the world before, the inputs, and the world after. `feed`
+    /// gives each frame what the game gave it beside its inputs: the crowd
+    /// field's aggregates, off the region ledger (`regions::Ledger` is the
+    /// one the game keeps). The world it ends on is returned;
+    /// [`Tape::matched`] says whether it is the one the game ended on.
     pub fn play(
         &self,
+        feed: &mut impl Feed,
         mut watch: impl FnMut(&World, [Input; MAX_PLAYERS], &World),
     ) -> Result<World, String> {
         let mut w = self.world()?;
+        feed.begin(self, &w);
         let mut events = self.events.iter().peekable();
         for (i, inputs) in self.frames.iter().enumerate() {
             while let Some((at, event)) = events.peek() {
@@ -469,7 +527,9 @@ impl Tape {
                 events.next();
             }
             let before = w.clone();
-            w.advance(*inputs);
+            let (due, n) = feed.due(&before, *inputs);
+            w.advance_with(*inputs, &due[..n]);
+            feed.kept(&w);
             watch(&before, *inputs, &w);
         }
         Ok(w)
@@ -503,6 +563,15 @@ impl Tape {
         if let Some((seat, delay)) = self.online {
             out.push_str(&format!("online seat={} delay={delay}\n", seat + 1));
         }
+        // **As many seats a line as the tape ever used**, two at the least:
+        // eight slots of which two are played wrote six groups of noughts a
+        // frame. A reader fills the rest with nothing pressed.
+        let width = self
+            .frames
+            .iter()
+            .filter_map(|f| f.iter().rposition(|i| *i != Input::default()))
+            .max()
+            .map_or(2, |k| (k + 1).max(2));
         let mut events = self.events.iter().peekable();
         let mut i = 0;
         while i < self.frames.len() {
@@ -515,16 +584,30 @@ impl Tape {
                 }
                 events.next();
             }
+            // A knob moved on this frame, by whichever seats moved one: said
+            // before it, the frame line having no room for it.
+            for (seat, input) in self.frames[i].iter().enumerate() {
+                if let Some((cell, raw)) = input.tune.edit() {
+                    out.push_str(&format!(
+                        "@{i} tune {} {cell} {raw}
+",
+                        seat + 1
+                    ));
+                }
+            }
+            let tuned = self.frames[i]
+                .iter()
+                .any(|input| input.tune.edit().is_some());
             // A run of identical frames, stopped short of the next event so
-            // the event keeps its place.
+            // the event keeps its place. A frame that moved a knob is its own.
             let stop = events
                 .peek()
                 .map_or(self.frames.len(), |(at, _)| (*at as usize).max(i + 1));
             let mut n = 1;
-            while i + n < stop && self.frames[i + n] == self.frames[i] {
+            while !tuned && i + n < stop && self.frames[i + n] == self.frames[i] {
                 n += 1;
             }
-            write_frame(&mut out, &self.frames[i]);
+            write_frame(&mut out, &self.frames[i], width);
             if n > 1 {
                 out.push_str(&format!(" x{n}"));
             }
@@ -567,6 +650,8 @@ impl Tape {
             link: Vec::new(),
         };
         let mut lines = text.lines().enumerate();
+        // Knobs moved, by frame and seat: laid into the frames once read.
+        let mut tunes: Vec<(u32, usize, Tune)> = Vec::new();
         let mut versioned = false;
         let mut version = 1;
         for (n, line) in &mut lines {
@@ -581,10 +666,17 @@ impl Tape {
                     .next()
                     .and_then(|w| w.parse().ok())
                     .ok_or_else(|| format!("{}: an event wants a frame", at()))?;
-                match (
-                    words.next(),
-                    words.next().and_then(|w| w.parse::<u8>().ok()),
-                ) {
+                let kind = words.next();
+                if kind == Some("tune") {
+                    let mut num = || words.next().and_then(|w| w.parse::<i64>().ok());
+                    let (Some(seat), Some(cell), Some(raw)) = (num(), num(), num()) else {
+                        return Err(format!("{}: a tune wants a seat, a cell and a value", at()));
+                    };
+                    let seat = (seat.clamp(1, MAX_PLAYERS as i64) - 1) as usize;
+                    tunes.push((frame, seat, Tune::set(cell as u16, raw as i32)));
+                    continue;
+                }
+                match (kind, words.next().and_then(|w| w.parse::<u8>().ok())) {
                     (Some("seats"), Some(n)) => tape.events.push((frame, Event::Seats(n))),
                     _ => return Err(format!("{}: unknown event {rest:?}", at())),
                 }
@@ -664,12 +756,19 @@ impl Tape {
             return Err("not a replay: no `replay <version>` line".to_string());
         }
         tape.events.sort_by_key(|(f, _)| *f);
+        for (frame, seat, tune) in tunes {
+            let slot = tape.frames.get_mut(frame as usize);
+            let Some(inputs) = slot else {
+                return Err(format!("a tune at frame {frame}, past the last frame"));
+            };
+            inputs[seat].tune = tune;
+        }
         Ok(tape)
     }
 }
 
-fn write_frame(out: &mut String, inputs: &[Input; MAX_PLAYERS]) {
-    for (i, input) in inputs.iter().enumerate() {
+fn write_frame(out: &mut String, inputs: &[Input; MAX_PLAYERS], width: usize) {
+    for (i, input) in inputs.iter().take(width).enumerate() {
         if i > 0 {
             out.push(' ');
         }
@@ -815,10 +914,32 @@ mod tests {
         let text = tape.to_text();
         let back = Tape::from_text(&text).expect("parses");
         let end = back
-            .play(|_, _, _| {})
+            .play(&mut Unfed, |_, _, _| {})
             .expect("the start is one a start describes");
         assert_eq!(back.matched(&end), Some(true));
         assert_eq!(end, w);
+    }
+
+    /// A knob moved in a match is on the tape, on its frame and its seat,
+    /// and a run of frames around it keeps its length.
+    #[test]
+    fn a_knob_moved_is_kept_on_the_tape() {
+        let w = World::new();
+        let mut tape = Tape::begin(&w, "test");
+        let walk = [Input::aimed(Input::W, 100), Input::default()];
+        for f in 0..40 {
+            let mut inputs = walk;
+            if f == 17 {
+                inputs[1] = inputs[1].tuning(Tune::set(321, -70_000));
+            }
+            tape.record(f, inputs);
+        }
+        let text = tape.to_text();
+        assert!(text.contains("@17 tune 2 321 -70000"), "{text}");
+        let back = Tape::from_text(&text).expect("parses");
+        assert_eq!(back.frames, tape.frames);
+        assert_eq!(back.frames[17][1].tune.edit(), Some((321, -70_000)));
+        assert_eq!(back.frames[18][1].tune.edit(), None);
     }
 
     #[test]

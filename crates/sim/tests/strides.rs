@@ -1,6 +1,6 @@
-//! **Can it move** (exploration 0033): a bred body walked through its
+//! **Can it move** (exploration 0034): a bred body walked through its
 //! slowest gait and held to what a walking animal's legs do -- the cast's
-//! own genomes, and every stage of the lines exploration 0031 breeds.
+//! own genomes, and every stage of the lines exploration 0032 breeds.
 //!
 //! "Balanced" was not enough. The posture put the mass over the feet by
 //! dragging the feet together under it, and the walk took strides nearly a
@@ -307,7 +307,7 @@ fn faults(g: &Genome) -> Vec<String> {
     out
 }
 
-/// The lines of exploration 0031, bred the same way `game::bred::lines`
+/// The lines of exploration 0032, bred the same way `game::bred::lines`
 /// breeds them.
 fn lines() -> Vec<(&'static str, Vec<Genome>)> {
     let fed = |from: &Genome, to: &Genome, n: usize, seed: u64| {
@@ -454,7 +454,7 @@ fn every_body_is_carried_like_an_animal() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
-/// **Attacks a body could make** (exploration 0033): through each damaging
+/// **Attacks a body could make** (exploration 0034): through each damaging
 /// move's windup and strike, nothing but what strikes and the feet goes
 /// into the floor, and -- except where the move is a leap, a rush or a
 /// throw of the whole body -- the mass stays over the feet on the floor
@@ -646,7 +646,7 @@ fn every_attack_is_one_the_body_could_make() {
 }
 
 /// **Bred, grafted and mutated as a game breeds them** (exploration
-/// 0034): the lines are four walks somebody chose; a player's eggs are
+/// 0035): the lines are four walks somebody chose; a player's eggs are
 /// whatever the dice give. A hundred families of six generations, each
 /// generation a cross with one of the cast, a trophy grafted on, or a
 /// generation's drift, from a parent of the cast.

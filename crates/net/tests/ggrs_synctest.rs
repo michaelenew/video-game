@@ -105,6 +105,34 @@ fn ggrs_synctest_finds_no_desync_walking_from_one_place_into_the_next() {
     );
 }
 
+/// **Going alone, under rollback** (2026-10-25): one player goes into a
+/// tutorial hall, then the other into another, both swinging at their
+/// dummies, and the first comes back with V -- the trips and the dummies
+/// re-run again and again by SyncTest's forced rollbacks.
+#[test]
+fn ggrs_synctest_finds_no_desync_going_alone_into_the_halls() {
+    let w = World::versus_in([Class::Champion, Class::ShadowReaver], sim::valley::START);
+    let halls =
+        [Class::Champion, Class::ShadowReaver].map(|c| sim::tutorial::for_class(c).unwrap().arena);
+    let mut call = 0u32;
+    let going = move |frame: u32, roll: &mut dyn FnMut() -> u64| {
+        // Called once a seat, in seat order.
+        let seat = (call % 2) as usize;
+        call += 1;
+        let random = roll() as u16 & (Input::LEFT | Input::RIGHT | Input::W | Input::SPACE);
+        let trip = match (frame, seat) {
+            (20, 1) => sim::input::Travel::arena(halls[1]),
+            (200, 0) => sim::input::Travel::arena(halls[0]),
+            (600, 1) => sim::input::Travel::VALLEY,
+            _ => sim::input::Travel::NONE,
+        };
+        Input::looking_at(random, roll() as u16, 0).travelling(trip)
+    };
+    let w = synctest_with(w, "going alone", 900, going);
+    assert!(w.hall_of(0).is_some(), "player one is in a hall");
+    assert!(w.hall_of(1).is_none(), "player two went back");
+}
+
 /// The same for a range: walking in starts the hunt, its creature woken
 /// where its wander had it (`sim::valley::sight`), under rollback. The
 /// Pinewood's Moor, north of the road; a room until 2026-10-22, when the

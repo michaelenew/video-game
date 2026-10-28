@@ -262,7 +262,7 @@ pub fn at(g: &Genome, q: &Posture, share: Fx) -> Gait {
         let duty = kind.duty();
         let mut stride = stride.min(MAX_REACH.mul(Fx::from_int(2)).mul(shortest).div(duty));
         // **And no further than the room between one pair's feet and the
-        // next's** (exploration 0033): a planted foot travels back half the
+        // next's** (exploration 0034): a planted foot travels back half the
         // stride's share of the duty and a swinging one forward as far, so
         // two feet on one side never meet if each keeps within about half
         // the clear ground between them. Past that the fore foot swept
@@ -497,7 +497,7 @@ pub fn drive(g: &Genome, q: &Posture, gait: &Gait, phase: Fx, turn: Fx) -> Drive
     }
     // A belly barely off the floor cannot bob down onto it: the bob is no
     // deeper than the clearance a body keeps, a tenth of its height
-    // (exploration 0034). A body on its belly does not bob at all.
+    // (exploration 0035). A body on its belly does not bob at all.
     let deep = if p.thorax {
         p.half_h.mul(fx(3, 2))
     } else {

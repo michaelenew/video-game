@@ -1,4 +1,4 @@
-# 0029 — A target body: the Ridgeback formed by hand
+# 0030 — A target body: the Ridgeback formed by hand
 
 The owner (2026-10-23), on the contoured grown body of exploration 0027:
 *"Better, and it works probably better in motion than stillframe, but it
@@ -99,8 +99,8 @@ them. `--grown-creatures` draws the algorithm's body instead, to compare.
 
 About 102,000 triangles and four 2048 textures, 10 MB.
 
-![In the game](../gallery/0029_ridgeback_in_game.jpg)
-![In the studio, close](../gallery/0029_ridgeback_near.jpg)
+![In the game](../gallery/0030_ridgeback_in_game.jpg)
+![In the studio, close](../gallery/0030_ridgeback_near.jpg)
 
 Judged lit, in the game: it was too dark three times running in a game whose
 sky light is blue and whose sun was behind the camera's subject. The studio
@@ -126,7 +126,7 @@ The owner: *"make the proc gen version produce as close to this as you
 can."* The grown body (`game::grown`, `--grown-creatures`) now makes each of
 the four lessons above from the species table, with no hand at all:
 
-![The formed target (left) and the grown body (right), from the same angles](../gallery/0029_formed_and_grown.jpg)
+![The formed target (left) and the grown body (right), from the same angles](../gallery/0030_formed_and_grown.jpg)
 
 - **Fuller forms** (`Build::belly`, `girth`): a barrel hangs below its box,
   so the chest is deep; a leg is a column thicker than its box. On the way, a
@@ -202,8 +202,8 @@ grown version needs probably another detailing pass."*
   domed, with grooves and rims wide enough for the mesher to see -- the old
   ones were narrower than a cell and tore into fins along the back.
 
-![The sculpt with its paws](../gallery/0029_paws_sculpt.jpg)
-![The sculpted (top) and grown (bottom) Ridgeback in the game, and their feet](../gallery/0029_paws_in_game.jpg)
+![The sculpt with its paws](../gallery/0030_paws_sculpt.jpg)
+![The sculpted (top) and grown (bottom) Ridgeback in the game, and their feet](../gallery/0030_paws_in_game.jpg)
 
 ## Still open
 

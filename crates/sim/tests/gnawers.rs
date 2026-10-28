@@ -95,7 +95,7 @@ fn connected(before: &World, after: &World, act: u8) -> usize {
 #[test]
 fn a_full_pack_fits_the_snapshot() {
     let world = std::mem::size_of::<World>();
-    assert!(world <= 22 * 1024, "a World is {world} bytes");
+    assert!(world <= 26 * 1024, "a World is {world} bytes");
     // Six and the Big One, in the Commons, from the den.
     let w = hunt(Class::Champion);
     let p = w.pack.expect("a pack");

@@ -1,6 +1,6 @@
-# 0030 — Two more targets: the Galewing and the Mantis
+# 0031 — Two more targets: the Galewing and the Mantis
 
-*2026-10-24.* The owner, after the Ridgeback (0029): *"Now we need two other
+*2026-10-24.* The owner, after the Ridgeback (0030): *"Now we need two other
 creatures hand crafted then a growing algorithm to match. I imagine the
 galewing is a prime candidate, you choose the other."*
 
@@ -30,8 +30,8 @@ thighs over yellow scaled legs, and black talons as long as a forearm. The
 wing roots -- where a hit counts double -- are a pale band across the back.
 About 132,000 triangles, 9 MB.
 
-![The Galewing sculpted](../gallery/0030_galewing_sculpt.jpg)
-![Close](../gallery/0030_galewing_near.jpg)
+![The Galewing sculpted](../gallery/0031_galewing_sculpt.jpg)
+![Close](../gallery/0031_galewing_near.jpg)
 
 **The Mantis** (`art/mantis/build.py`): pale green chitin with the blades
 bone-white, because the arms are what the fight is read from; plates parted by
@@ -43,8 +43,8 @@ underneath, scythes serrated along the cutting edge and hooked at the end; a
 leaf-like lobe on every walking femur; an abdomen in overlapping rings;
 veined wings. About 80,000 triangles, 6 MB.
 
-![The Mantis sculpted](../gallery/0030_mantis_sculpt.jpg)
-![Close](../gallery/0030_mantis_near.jpg)
+![The Mantis sculpted](../gallery/0031_mantis_sculpt.jpg)
+![Close](../gallery/0031_mantis_near.jpg)
 
 What went wrong on the way, so the next one need not: feathers too narrow
 read as a **comb** (they must overlap, about 1.6 times their spacing); a
@@ -77,7 +77,7 @@ rule read off the species table:
   back, a hooked upper and a lower mandible grow out of its front, a raptor's
   eyes are set under the brow where a ray meets the skull, a crest sweeps back
   off the crown.
-- **Feet** (`Build::foot`): a paw (0029), a bird's talons (three toes forward
+- **Feet** (`Build::foot`): a paw (0030), a bird's talons (three toes forward
   and one back off the ankle bone, a talon on each), or an insect's tarsus
   (beads along the floor round a core, two claws).
 - **An insect**: a blade's cutting edge serrated and its end hooked, the arm
@@ -98,8 +98,8 @@ the tip of its abdomen to a ring groove and the end bead of a foot until the
 rings faded and the beads had a core -- and holds each to the parts its target
 has.
 
-![The Galewing in the game: formed (top) and grown (bottom)](../gallery/0030_galewing_in_game.jpg)
-![The Mantis in the game: formed (top) and grown (bottom)](../gallery/0030_mantis_in_game.jpg)
+![The Galewing in the game: formed (top) and grown (bottom)](../gallery/0031_galewing_in_game.jpg)
+![The Mantis in the game: formed (top) and grown (bottom)](../gallery/0031_mantis_in_game.jpg)
 
 ## Still short
 
@@ -111,4 +111,4 @@ has.
 - The grown Mantis's legs are thicker than the target's, the blend that joins
   parts swelling every joint of a leg that thin.
 - ~~The Ridgeback's build still carries its own copy of the pipeline.~~ Moved
-  onto `creature.py` (exploration 0031); a trial build came out the same.
+  onto `creature.py` (exploration 0032); a trial build came out the same.

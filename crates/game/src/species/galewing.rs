@@ -65,7 +65,7 @@ pub const TINT: Tint = Tint {
     stage: fight::wing_stage,
 };
 
-/// **How it is built** (2026-10-24, exploration 0030): the sculpted target's
+/// **How it is built** (2026-10-24, exploration 0031): the sculpted target's
 /// choices (`art/galewing/build.py`) as rules -- a deep breast, feathered
 /// thighs, wings that are a slab carrying flight feathers past it, a fan of
 /// a tail, a hooked beak and a crest, a raptor's talons.

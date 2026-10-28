@@ -1,4 +1,4 @@
-//! **A bred creature grown** (2026-10-24, exploration 0031): the body a
+//! **A bred creature grown** (2026-10-24, exploration 0032): the body a
 //! genome builds to (`sim::breed::build`) handed to the same growing the
 //! cast is drawn with (`crate::grown`), so a crossbreed is a creature with
 //! flesh, plates, feathers or chitin rather than a stack of boxes.
@@ -461,7 +461,7 @@ pub fn line(
     Line { name, stages }
 }
 
-/// The lines exploration 0031 shows: each of the three formed creatures fed
+/// The lines exploration 0032 shows: each of the three formed creatures fed
 /// toward the next, and one bred the slow way.
 pub fn lines() -> Vec<Line> {
     use sim::breed::archetypes::{GALEWING, MANTIS, RIDGEBACK};

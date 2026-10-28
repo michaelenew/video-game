@@ -557,7 +557,7 @@ pub fn feed(body: &Genome, trophy: &Trophy, _rng: &mut Rng) -> Outcome {
         // Every pair the two share closes on the donor's proportions, a
         // quarter as fast while it is still another kind of limb -- held
         // back until the build matched, a wing that became a scythe kept a
-        // wing's thickness for ever (exploration 0032).
+        // wing's thickness for ever (exploration 0033).
         if let (Some(mine), Some(theirs)) = (g.limbs[i].as_mut(), d.limbs[i]) {
             let share = if mine.build == theirs.build {
                 pull.limbs.mul(fx(1, 2))
@@ -752,7 +752,7 @@ fn step_toward(
                     // longer than the donor's: at half, a crossbred
                     // mantis's new middle pair hung under it as a nub
                     // and it stood on its hind pair alone (exploration
-                    // 0033).
+                    // 0034).
                     let walks = |l: &LimbPair| l.role.grounded();
                     let mut length = theirs.length.mul(fx(1, 2));
                     if walks(&theirs)

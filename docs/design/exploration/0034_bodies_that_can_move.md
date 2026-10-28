@@ -1,13 +1,13 @@
-# 0033 — Bodies that can move
+# 0034 — Bodies that can move
 
-*2026-10-26.* The owner, on 0032's hand-edited crossbreeds: *"They don't look
+*2026-10-26.* The owner, on 0033's hand-edited crossbreeds: *"They don't look
 like plausible creatures. The poses are insane, the body plans are jammed
 together, and most of them would barely be able to move. Plausible movement
 is key, then plausible attack patterns."* And: *"fix it in the sim breeder."*
 
 ## What was wrong
 
-0032 judged each stage from one still, and reshaped the skin. Walked
+0033 judged each stage from one still, and reshaped the skin. Walked
 (`BRED_GAIT=<line>:<stage>` or `cast:<Name>`, `art/blender.sh art/gait.py`:
 the body's boxes through eight points of its slowest gait, side on over a
 top view), the breeder's skeletons could not move -- not the crossbreeds
@@ -30,12 +30,12 @@ only, the cast's own genomes too:
 - The simulation's own account called all of this balanced: 0.7 to 0.9
   plausible, with a walk and a run.
 
-![The cast's walks before: legs bunched, crossing, stepped out](../gallery/0033_cast_walks_before.jpg)
+![The cast's walks before: legs bunched, crossing, stepped out](../gallery/0034_cast_walks_before.jpg)
 
 ## The checks
 
 `crates/sim/tests/strides.rs`, `every_body_can_move`: the cast's genomes and
-every stage of 0031's four lines, walked through sixteen points of the
+every stage of 0032's four lines, walked through sixteen points of the
 slowest gait, measured off the built bones:
 
 - on each side, a pair's foot stays ahead of the next pair's, and no leg
@@ -77,7 +77,7 @@ whose head came down only once a big body was past them (it winds up head
 down now), and the **gore**, whose toss went over a tall crossbreed's
 target (it is aimed at standing height now).
 
-![The cast's walks after](../gallery/0033_cast_walks.jpg)
+![The cast's walks after](../gallery/0034_cast_walks.jpg)
 
 ## Carried like an animal
 
@@ -95,7 +95,7 @@ is held to its limit (`level_pitch_most`). `tests/posture.rs`'s "head above
 the back" measures the back from the body's real depth now, not from a
 depth half its width.
 
-![After: crossbreeds](../gallery/0033_lines_walks.jpg)
+![After: crossbreeds](../gallery/0034_lines_walks.jpg)
 
 ## Wings, scythes and the rest of the body
 
@@ -167,10 +167,10 @@ except a leap, a rush or a throw of the whole body) and
 more than a fifth told by a cry). `BRED_ATTACK=<line>:<stage>` exports a
 stage's moves for `art/gait.py`.
 
-![The Ridgeback's moves, rest to strike: striking parts yellow](../gallery/0033_ridgeback_moves.jpg)
-![A crossbred mantis's moves (Galewing to Mantis, stage 9)](../gallery/0033_crossbreed_moves.jpg)
-![Wings folded along the body](../gallery/0033_wings.jpg)
-![Walks, the cast and the lines, at the end](../gallery/0033_walks_final.jpg)
+![The Ridgeback's moves, rest to strike: striking parts yellow](../gallery/0034_ridgeback_moves.jpg)
+![A crossbred mantis's moves (Galewing to Mantis, stage 9)](../gallery/0034_crossbreed_moves.jpg)
+![Wings folded along the body](../gallery/0034_wings.jpg)
+![Walks, the cast and the lines, at the end](../gallery/0034_walks_final.jpg)
 
 ## The rest made plausible
 
@@ -196,8 +196,8 @@ The owner, on the list this section was: *"Make the rest plausible."*
   as nubs, held them up, and stood on its hind legs alone for three
   stages; it stands on four now, scythes held up.
 
-![Galewing to Mantis, stage 7, on four legs](../gallery/0033_mantis_on_four.jpg)
-![Ridgeback to Galewing, stage 3, elbows back](../gallery/0033_pterosaur.jpg)
+![Galewing to Mantis, stage 7, on four legs](../gallery/0034_mantis_on_four.jpg)
+![Ridgeback to Galewing, stage 3, elbows back](../gallery/0034_pterosaur.jpg)
 
 ## Still not plausible
 
@@ -208,7 +208,7 @@ The owner, on the list this section was: *"Make the rest plausible."*
   its weight is forward (a long neck, big wings) and the hands are what
   catch it.
 
-Bodies bred as the game breeds them, not chosen lines: [0034](0034_bred_as_the_game_breeds.md).
+Bodies bred as the game breeds them, not chosen lines: [0035](0035_bred_as_the_game_breeds.md).
 
-The hand edits of 0032 are retired (`game::touch::TOUCHES` is empty): they
+The hand edits of 0033 are retired (`game::touch::TOUCHES` is empty): they
 reshaped boxes on bodies that could not walk.

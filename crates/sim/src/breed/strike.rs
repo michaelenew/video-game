@@ -107,7 +107,7 @@ pub type Strikers = [&'static str; 4];
 #[derive(Clone, Copy, Debug)]
 pub struct Motion {
     pub kind: MoveKind,
-    /// **An artificial tell** (exploration 0033): a move whose windup the
+    /// **An artificial tell** (exploration 0034): a move whose windup the
     /// whole body cannot show -- one begun under the floor, one the body
     /// has no room to gather for -- is announced by a cry of its own, each
     /// of a body's cried moves a different one.
@@ -406,13 +406,13 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             s.surge = len.mul(fx(1, 6));
             // Tossed up through somebody standing, not over them: a tall
             // body's horns went through the air above a head (exploration
-            // 0033).
+            // 0034).
             aim = Some(Aim::Head(fx(6, 5)));
             strikers = ["horns", "head", "", ""];
             delivery = Delivery::Swept;
         }
         Charge => {
-            // Head down before it goes (exploration 0033): wound up with
+            // Head down before it goes (exploration 0034): wound up with
             // the head high, a big body's head only came down once it was
             // past somebody standing close, and the charge went over them.
             c.neck_pitch = fx(-1, 6);
@@ -491,7 +491,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             .unwrap_or(0);
             // One foot up, the body on the other three: tipped nose-up and
             // lifted as it was, the other forefoot left the floor too and
-            // the weight hung ahead of the hind feet (exploration 0033).
+            // the weight hung ahead of the hind feet (exploration 0034).
             c.pitch = fx(1, 120);
             swing_foot(&mut c, i, 0, fx(3, 10), fx(4, 5));
             s.pitch = fx(-1, 80);
@@ -565,7 +565,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             swing_foot(&mut s, i, 0, fx(3, 5), Fx::ZERO);
             // The other leg of the pair comes up with it only on a body
             // with more than one other pair to stand on: on two pairs, it
-            // stabs with one and stands on three (exploration 0034).
+            // stabs with one and stands on three (exploration 0035).
             let others = (0..STATIONS)
                 .filter(|&k| k != i && q.stations[k].grounded)
                 .count();
@@ -586,7 +586,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
             c.neck_yaw = fx(1, 10);
             // The weight thrown forward onto the forefeet first, as a horse
             // kicking does: the body over them, the forefeet where they
-            // stood (exploration 0033). With the hind feet up and the
+            // stood (exploration 0034). With the hind feet up and the
             // weight where it was, it would sit down.
             let front = (0..STATIONS)
                 .filter(|&k| k != i && q.stations[k].grounded)
@@ -596,7 +596,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
                 // Over them already halfway through the windup, where the
                 // hind feet are up and the windup seven eighths of the way
                 // to its end (`ease_out`): eight sevenths of the way, so
-                // the middle frame is (exploration 0034).
+                // the middle frame is (exploration 0035).
                 let shift = x
                     .sub(q.com)
                     .add(p.torso.mul(fx(1, 10)))
@@ -844,7 +844,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
         }
         Inflate => {
             // Swollen where it stands: lifted as well, its forefeet left
-            // the floor (exploration 0033).
+            // the floor (exploration 0034).
             c.swell = fx(2, 5);
             c.pitch = fx(1, 40);
             c.neck_reach = fx(-1, 3);
@@ -1024,7 +1024,7 @@ pub fn motion(g: &Genome, q: &Posture, kind: MoveKind) -> Motion {
                 d.rise = d.rise.add(d.neck_pitch.mul(fx(1, 4)));
             } else {
                 // A little: tipped as far as a neck nods, a body on legs
-                // lifted its forefeet off the floor (exploration 0033).
+                // lifted its forefeet off the floor (exploration 0034).
                 d.pitch = d.pitch.add(d.neck_pitch.mul(fx(1, 8)));
             }
             d.surge = d.surge.add(d.neck_reach.mul(len).mul(fx(1, 6)));
@@ -1093,7 +1093,7 @@ fn aim_at(g: &Genome, q: &Posture, s: &mut Drive, strikers: &Strikers, aim: Aim)
                 // No lower than the head's own depth below its middle --
                 // the jaw under it included -- allows: aimed by its middle
                 // at a man's height, a big body's rush drove its jaw three
-                // metres into the floor (exploration 0034).
+                // metres into the floor (exploration 0035).
                 let centre = body.centre(i).y;
                 let below = body
                     .parts()
@@ -1128,7 +1128,7 @@ fn aim_at(g: &Genome, q: &Posture, s: &mut Drive, strikers: &Strikers, aim: Aim)
                     // mark with its lower jaw, a quarter of the way up it,
                     // and the body sinks no further than its belly:
                     // aimed by its middle, a toad's bite sank it through
-                    // the floor (exploration 0034).
+                    // the floor (exploration 0035).
                     let dy = dy.add(p.half_h.mul(fx(3, 4)));
                     s.lift = s
                         .lift
@@ -1266,7 +1266,7 @@ fn centre_of(body: &Body, strikers: &Strikers) -> Option<V3> {
     (n > 0).then(|| sum.scale(Fx::ONE.div(Fx::from_int(n))))
 }
 
-/// **The whole body winds up** (exploration 0033, the owner: *"attacks
+/// **The whole body winds up** (exploration 0034, the owner: *"attacks
 /// should include a whole body indicator for the most part to keep them
 /// readable"*). Where a move's windup moves only a limb, a head or a tail,
 /// the body gathers the other way from where the strike goes -- drawn back
@@ -1289,7 +1289,7 @@ fn gather(
     // Shown: the trunk moved, and the silhouette by as much as the
     // verdict asks of a windup (an eighth of the body). A big body with a
     // small head met the first and not the second, and its bite was read
-    // by nobody (exploration 0034).
+    // by nobody (exploration 0035).
     let shown = |c: &Drive| {
         let at = cocked(c);
         super::verdict::trunk_apart(&base, &at) >= want
@@ -1354,7 +1354,7 @@ fn gather(
     (c, Some(Cry::voice(g)))
 }
 
-/// **Nothing through the floor but what strikes** (exploration 0033): a
+/// **Nothing through the floor but what strikes** (exploration 0034): a
 /// move whose crouch, sink or reach takes a belly, a haunch, a thigh or a
 /// jaw under the ground at any frame of its windup or strike is lifted --
 /// its cocked and struck poses together, so every frame between rises with
@@ -1372,7 +1372,7 @@ fn settle(g: &Genome, q: &Posture, spec: &MoveSpec, m: &mut Motion) {
         // What goes under in the windup, which is held and stood on, and
         // what goes under in the strike, which is quick: lifted apart, so a
         // bite whose neck dips at the strike no longer lifted the windup
-        // too, every foot off the floor (exploration 0034).
+        // too, every foot off the floor (exploration 0035).
         let (mut short, mut short_strike) = (Fx::ZERO, Fx::ZERO);
         let last = spec.startup + spec.active;
         for k in 1..=12 {
@@ -1477,7 +1477,7 @@ pub fn whole_body(kind: MoveKind) -> bool {
 /// windup's middle and end and the strike's middle, nothing but what
 /// strikes, the feet and the tail goes into the floor, and -- unless the
 /// whole body is thrown, or it lies on its belly -- the weight held over
-/// the feet still down, a biped's over one foot (exploration 0034).
+/// the feet still down, a biped's over one foot (exploration 0035).
 fn makeable(g: &Genome, q: &Posture, spec: &MoveSpec, m: &Motion) -> bool {
     if m.from.lift < Fx::ZERO || g.stance == super::Stance::Limbless {
         return true;
@@ -1558,7 +1558,7 @@ fn makeable(g: &Genome, q: &Posture, spec: &MoveSpec, m: &Motion) -> bool {
 
 /// How far the body can sink on its legs: the least, over the pairs it
 /// stands on, of how far its hip is above half its leg -- a deep crouch,
-/// and no deeper, or the thigh is on the floor (exploration 0034).
+/// and no deeper, or the thigh is on the floor (exploration 0035).
 fn sink_room(g: &Genome, q: &Posture) -> Fx {
     let p = proportions(g);
     let mut room = q.root;
@@ -1674,7 +1674,7 @@ fn weight_and_feet(body: &Body, drags: bool) -> Option<(Fx, Fx, Fx, Fx)> {
     (mass > Fx::ZERO && lo <= hi).then(|| (cx.div(mass), lo, hi, mass))
 }
 
-/// **A windup is stood on** (exploration 0033): where a held windup puts
+/// **A windup is stood on** (exploration 0034): where a held windup puts
 /// the weight past the feet on the floor -- arms out ahead, a head drawn
 /// up -- the body rocks back over its planted feet until it is over them,
 /// as an animal shifts its weight before it strikes.
@@ -1833,7 +1833,7 @@ pub fn drive_at(g: &Genome, m: &Motion, spec: &MoveSpec, frame: i32) -> Drive {
             // A kick back throws the weight forward first and lifts its
             // hind feet after, in the windup's second half: lifted with
             // the rest, it stood its first half on forefeet the weight had
-            // not reached (exploration 0034).
+            // not reached (exploration 0035).
             if m.kind == MoveKind::BackKick {
                 let late = ease_out(t.mul(Fx::from_int(2)).sub(Fx::ONE).max(Fx::ZERO));
                 for i in 0..STATIONS {
@@ -1964,7 +1964,7 @@ pub fn struck_by(name: &str, strikers: &Strikers) -> bool {
         .any(|s| !s.is_empty() && name.starts_with(s))
         // A head strikes with its jaw: hanging under it, the jaw counted
         // as a body part went under the floor at the strike and the body
-        // was lifted metres to keep it out (exploration 0034).
+        // was lifted metres to keep it out (exploration 0035).
         || (name == "jaw" && strikers.contains(&"head"))
 }
 
@@ -2124,7 +2124,7 @@ pub fn kit(g: &Genome, q: &Posture) -> ([Option<(MoveSpec, Motion)>; build::MAX_
         let mut m = motion(g, q, spec.kind);
         steady(g, q, spec, &mut m);
         settle(g, q, spec, &mut m);
-        // **A move it could make, or none** (exploration 0034): a windup
+        // **A move it could make, or none** (exploration 0035): a windup
         // that leaves the weight off the feet still standing, or puts
         // anything but what strikes into the floor, is not given to it --
         // the same rule that gives no kick back to a body with no other
@@ -2135,7 +2135,7 @@ pub fn kit(g: &Genome, q: &Posture) -> ([Option<(MoveSpec, Motion)>; build::MAX_
         // Measured as the verdict measures it, after everything that moved
         // it: a move that must be read on sight, and that the whole body
         // still does not show, cries. One answered by where you stand needs
-        // no cry (exploration 0034).
+        // no cry (exploration 0035).
         if m.cry.is_none()
             && spec.damage > 0
             && super::verdict::read(g, q, &rest, spec, &m).unanswerable(len)
@@ -2146,7 +2146,7 @@ pub fn kit(g: &Genome, q: &Posture) -> ([Option<(MoveSpec, Motion)>; build::MAX_
         n += 1;
     }
     // Two windups the eye cannot tell apart: the later one cries, the edge
-    // case a body's gathering leaves (exploration 0033).
+    // case a body's gathering leaves (exploration 0034).
     let len_ = proportions(g).len;
     for a in 0..n {
         for b in 0..a {

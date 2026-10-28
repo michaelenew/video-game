@@ -16,7 +16,7 @@ The pieces, in the order a body is made:
   a run of cross-sections along a curve, each a superellipse with bumps --
   how a sculptor blocks a limb in, and the same generalised cylinder
   ``game::contour`` grows a body from, so what is learned here goes back
-  there (``docs/design/exploration/0028_a_target_body.md``).
+  there (``docs/design/exploration/0030_a_target_body.md``).
 - **Flesh** (``flesh``): every soft form unioned into one watertight skin by
   a voxel remesh, its seams rounded, so nothing can float or crease.
 - **Plates** (``plate_on``): a patch of the skin lifted off it and given a

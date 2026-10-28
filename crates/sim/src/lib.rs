@@ -30,6 +30,7 @@ pub mod effects;
 pub mod envelope;
 pub mod fixed;
 pub mod ground;
+pub mod group;
 pub mod gust;
 pub mod hazard;
 pub mod input;

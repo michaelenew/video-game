@@ -93,9 +93,13 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 // **Every class moved 2026-10-22, deliberately**: the grounded dodge is 26
 // frames, 12 of them invulnerable, at 19.2 m/s -- a fifth longer and a fifth
 // further, for the dive roll (feel-log.md). Every scripted hunter dodges.
+// Moved 2026-10-28 on merging, deliberately: a foreleg's knee bends the way
+// it walks (sim `tests/knees.rs`), and a leg is collision geometry, so all
+// but the first Champion hunt run into it differently. On the eight-slot
+// build.
 const PINNED: [(Class, u32, u64); 7] = [
-    (Class::Champion, 0x2545_F491, 0xaec266a6c9409ed7),
-    (Class::Champion, 7, 0xde238fe6596bf33c),
+    (Class::Champion, 0x2545_F491, 0xc9eaf753950b4cd7),
+    (Class::Champion, 7, 0x1019f3645972496c),
     // Moved 2026-10-01, deliberately: the class layer throws his shield to
     // close on a window five to eleven metres off, leaps to it and Slams out
     // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
@@ -106,7 +110,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-13, deliberately, with the Elementalist's: slopes, steps
     // and lips -- the steep-ground wall is the footing, and the arena's rim
     // is land, which the scripted hunt walks into. See feel-log.md.
-    (Class::Bulwark, 101, 0x53ef8825ace5c6a0),
+    (Class::Bulwark, 101, 0x47e859efc1554790),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between
@@ -121,7 +125,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // autos again, each hopping her the way she holds (0016); and again for
     // the second round -- forward wings, long holds, spending majors -- and
     // the third: the autos a ball, every click a tap or a hold (2026-10-13).
-    (Class::DualMage, 2_222, 0xfb5b0e7a6a048369),
+    (Class::DualMage, 2_222, 0x3cc3363651febfe9),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
@@ -129,7 +133,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-12 with no change to her fight: an effect is hashed by
     // its kind's number, and the Dual mage's retired Shade bolt sat before
     // her shadow's blades in the list (0015).
-    (Class::ShadowReaver, 31, 0xddcaae620e77d427),
+    (Class::ShadowReaver, 31, 0xaeeb4f2afc055320),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks,
     // and the class layer presses her Bolt through the button it learns
     // rather than through left click. No other pin moved. See feel-log.md.
@@ -140,7 +144,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-18, deliberately: her QoL pass (a bigger, longer
     // pillar, pushes that act on the whole line, a sliding Fissure, burning
     // wind, a higher Updraft). Nobody else's moved.
-    (Class::Elementalist, 59, 0x47f55d9a8951062c),
+    (Class::Elementalist, 59, 0x6cb307dc329ac03c),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day
@@ -166,11 +170,12 @@ const PINNED: [(Class, u32, u64); 7] = [
     // snapshot. Nothing in a fight reads it. Moved again 2026-10-23 by the
     // merge of that with main's dive roll (every class's grounded dodge),
     // which moved every row here on its own: both changes, together.
-    // Moved again 2026-10-23: five of the Ridgeback's clips bent a foreleg
-    // backward at the knee and now bend it the way it walks
-    // (`sim/tests/knees.rs`); a leg is collision geometry, so every hunt
-    // that meets a slam, a stomp or a stumble runs differently.
-    (Class::BloodMage, 83, 0xfe5fbacdb7e99f94),
+    // Every hunt moved 2026-10-26 with no change to play: eight fighter
+    // slots, six parked out of the world here, hashed by `state_checksum`.
+    // Before re-pinning, every hunt was compared frame by frame against the
+    // code before the change -- both fighters, the creature, the phase and
+    // the effects -- and was identical (exploration 0029).
+    (Class::BloodMage, 83, 0x8e53a96174d0683f),
 ];
 
 #[test]

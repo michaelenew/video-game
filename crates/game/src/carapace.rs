@@ -1,4 +1,4 @@
-//! **A grown body's armour** (2026-10-23; exploration 0029, "what the
+//! **A grown body's armour** (2026-10-23; exploration 0030, "what the
 //! algorithm has to learn"): the carapace the sculpted Ridgeback wears,
 //! worked out from the species table instead of written by hand.
 //!

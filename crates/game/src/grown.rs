@@ -22,7 +22,7 @@
 //!    mottle so a flank is not one flat colour. A part that breaks changes
 //!    colour where it is.
 //!
-//! 4. **Toward the sculpted target** (2026-10-24, exploration 0029): parts
+//! 4. **Toward the sculpted target** (2026-10-24, exploration 0030): parts
 //!    fuller than their boxes, a carapace grown off the skin wherever the
 //!    table says armour (`crate::carapace`), hard parts by rule
 //!    (`crate::horns`), paint by region, and the fine detail worked out in
@@ -60,7 +60,7 @@ pub struct Grown {
     /// A body formed by hand rather than grown ([`modelled`]): its own
     /// colours and its glowing flesh.
     pub own: Option<Own>,
-    /// Per vertex, what it is (exploration 0029): how much it is stone (the
+    /// Per vertex, what it is (exploration 0030): how much it is stone (the
     /// carapace) and soft (a weak point's flesh), which hard part it is (0
     /// none, 1 horn or spine, 2 claw or tusk, 3 quill) and how far along it.
     pub region: Vec<[f32; 4]>,
@@ -84,7 +84,7 @@ pub struct Own {
     pub material: StandardMaterial,
 }
 
-/// **What a body is grown from** (2026-10-24, exploration 0031): a skeleton,
+/// **What a body is grown from** (2026-10-24, exploration 0032): a skeleton,
 /// boxes on it and the legs through them, with the frame each box is written
 /// in, what the species' build and look say, and anything its source knows
 /// that the boxes do not. A species' table makes one ([`Anatomy::of_species`]);
@@ -162,7 +162,7 @@ impl Anatomy {
 /// form it by hand into a creature you might find in Monster Hunter or Dark
 /// Souls... we'll refine that first, then update the algorithms to get there
 /// without manual effort"): the file `art/<species>/build.py` writes over the
-/// species' own skeleton (`docs/design/exploration/0029_a_target_body.md`).
+/// species' own skeleton (`docs/design/exploration/0030_a_target_body.md`).
 /// It is the target a grown body is measured against, and it is drawn in
 /// its place -- unless `--grown-creatures` asks for the algorithm, to compare.
 pub fn model_of(id: sim::species::SpeciesId) -> Option<&'static str> {
@@ -177,7 +177,7 @@ pub fn model_of(id: sim::species::SpeciesId) -> Option<&'static str> {
 
 /// The species with a formed body (`art/<species>/build.py`), and its file:
 /// the Ridgeback first (2026-10-23), then the Galewing and the Mantis
-/// (2026-10-24, exploration 0030).
+/// (2026-10-24, exploration 0031).
 const MODELLED: [(sim::species::SpeciesId, &str); 3] = [
     (sim::species::SpeciesId::RIDGEBACK, "ridgeback.glb"),
     (sim::species::SpeciesId::GALEWING, "galewing.glb"),
@@ -201,7 +201,7 @@ pub fn grows(id: sim::species::SpeciesId) -> bool {
 /// Is this part drawn as the grown body rather than as its own box?
 pub fn covers(sp: &Species, index: usize) -> bool {
     // Weak points too: a grown body stands them out of its skin as glowing
-    // flesh (exploration 0029), and a formed one paints them so.
+    // flesh (exploration 0030), and a formed one paints them so.
     grows(sp.id) && !sp.parts[index].shape.hollow
 }
 
@@ -615,7 +615,7 @@ pub fn grow(sp: &Anatomy) -> Option<Grown> {
                 half[long] = (top - joint).abs() * 0.5;
             }
         }
-        // **What the part is** (`crate::anatomy`, exploration 0030): a
+        // **What the part is** (`crate::anatomy`, exploration 0031): a
         // feathered wing's flesh is the front of its box, the flight
         // feathers the rest; a feathered fan's is a stub at the body, the
         // feathers filling the box; a beaked head's is its back, the beak
@@ -650,7 +650,7 @@ pub fn grow(sp: &Anatomy) -> Option<Grown> {
                 keep(&mut middle, &mut half, 1.0 - build.beak * 0.85, false);
             }
         }
-        // **Fuller than the boxes** (exploration 0029): a barrel hangs below
+        // **Fuller than the boxes** (exploration 0030): a barrel hangs below
         // its box, so the chest is deep and the belly low between the legs,
         // and a leg is a column thicker than its box, which the body comes
         // down over.
@@ -863,7 +863,7 @@ pub fn grow(sp: &Anatomy) -> Option<Grown> {
         }
     }
 
-    // **What the boxes do not say** (exploration 0029): toes under each
+    // **What the boxes do not say** (exploration 0030): toes under each
     // claw, the club the quills fan from, a jaw under the skull, and the soft
     // places as flesh standing out of the skin -- the ridge between the
     // armour's halves, the nape between the collars. Joined more tightly
@@ -930,7 +930,7 @@ pub fn grow(sp: &Anatomy) -> Option<Grown> {
             extras.push(capsule(dew, dew, 0.1 * k));
         }
     }
-    // **The legs' muscle** (exploration 0029: "the legs are straight
+    // **The legs' muscle** (exploration 0030: "the legs are straight
     // posts"): the masses the sculpted target's legs have, placed off the
     // leg's two boxes. A foreleg: the deltoid capping it outside, the
     // triceps behind its upper half, the forearm's muscle down the outside
@@ -1466,7 +1466,7 @@ pub fn grow(sp: &Anatomy) -> Option<Grown> {
         // Negative bends away (a ridge), positive bends in (a crease).
         shade[v][2] = (bend / 0.35).clamp(-1.0, 1.0);
     }
-    // **What each vertex is** (exploration 0029): stone where the armour
+    // **What each vertex is** (exploration 0030): stone where the armour
     // stands off the skin, soft where a weak point's flesh is; and what its
     // paint reads -- the groove between scutes, its scute's own number, how
     // open it is to the sky, how near a weak point.
@@ -1992,7 +1992,7 @@ mod tests {
 
     /// The new rules leave something to see: a feathered body grows its
     /// feathers, a beak and talons; an insect its scythes' serration,
-    /// antennae and compound eyes (exploration 0030).
+    /// antennae and compound eyes (exploration 0031).
     #[test]
     fn the_galewing_and_the_mantis_grow_what_their_targets_have() {
         use crate::horns::Kind;

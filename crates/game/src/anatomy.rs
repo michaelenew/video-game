@@ -1,4 +1,4 @@
-//! **What the Galewing and the Mantis taught** (2026-10-24, exploration 0030):
+//! **What the Galewing and the Mantis taught** (2026-10-24, exploration 0031):
 //! the parts of a grown body the Ridgeback never needed, each worked out from
 //! the species table the way `crate::horns` works out horns and claws -- so
 //! the sculpted targets (`art/galewing/build.py`, `art/mantis/build.py`) are
@@ -42,7 +42,7 @@ pub enum Role {
     Blade,
     /// A wing folded along the flank, a plane standing on edge: its
     /// feathers lie along it in rows (a bred body standing, exploration
-    /// 0031).
+    /// 0032).
     Folded,
 }
 

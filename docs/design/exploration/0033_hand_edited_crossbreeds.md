@@ -1,6 +1,6 @@
-# 0032 — Crossbreeds edited by hand, and the breeder taught from the edits
+# 0033 — Crossbreeds edited by hand, and the breeder taught from the edits
 
-*2026-10-24.* The owner, after 0031: *"Take each of the intermediate steps,
+*2026-10-24.* The owner, after 0032: *"Take each of the intermediate steps,
 hand edit them to make each a reasonable creature in its own right. Once
 that's done, we need to edit the crossbreeding algorithm to interpolate more
 like the hand manipulated versions."*
@@ -50,17 +50,17 @@ one or more:
 One fix turned up that was not a stage's but the growing's, and went into
 it: the leg muscle the growing adds to a column leg (the deltoid, the thigh,
 the calf) was sized off the leg's *world* bounds, which on a leaning bred
-leg are mostly its length -- the "pills" 0031 showed on the bred Ridgeback's
+leg are mostly its length -- the "pills" 0032 showed on the bred Ridgeback's
 upper legs. It is sized off the part's own thickness now (`grown::grow`), and
 the raw rows below already have it.
 
 Each tile is the breeder's body as it was before this note (top, "raw")
 over the edited one (bottom, "hand"):
 
-![Ridgeback fed toward the Galewing, raw and hand](../gallery/0032_ridgeback_to_galewing_hand.jpg)
-![Galewing fed toward the Mantis, raw and hand](../gallery/0032_galewing_to_mantis_hand.jpg)
-![Mantis fed toward the Ridgeback, raw and hand](../gallery/0032_mantis_to_ridgeback_hand.jpg)
-![Ridgeback backcrossed into the Mantis, raw and hand](../gallery/0032_ridgeback_x_mantis_hand.jpg)
+![Ridgeback fed toward the Galewing, raw and hand](../gallery/0033_ridgeback_to_galewing_hand.jpg)
+![Galewing fed toward the Mantis, raw and hand](../gallery/0033_galewing_to_mantis_hand.jpg)
+![Mantis fed toward the Ridgeback, raw and hand](../gallery/0033_mantis_to_ridgeback_hand.jpg)
+![Ridgeback backcrossed into the Mantis, raw and hand](../gallery/0033_ridgeback_x_mantis_hand.jpg)
 
 `GROWN_LINES=1 cargo test -p game --bin game grown_lines` writes both, the
 breeder's as `<line>_<stage>_raw.obj`; `GROWN_STAGES=0,3` grows those stages
@@ -87,10 +87,10 @@ where it is only how the body is drawn.
 Each tile below is the old breeder (top), the hand edit (middle), and the new
 breeder with no edits (bottom):
 
-![Ridgeback fed toward the Galewing](../gallery/0032_ridgeback_to_galewing_bred.jpg)
-![Galewing fed toward the Mantis](../gallery/0032_galewing_to_mantis_bred.jpg)
-![Mantis fed toward the Ridgeback](../gallery/0032_mantis_to_ridgeback_bred.jpg)
-![Ridgeback backcrossed into the Mantis](../gallery/0032_ridgeback_x_mantis_bred.jpg)
+![Ridgeback fed toward the Galewing](../gallery/0033_ridgeback_to_galewing_bred.jpg)
+![Galewing fed toward the Mantis](../gallery/0033_galewing_to_mantis_bred.jpg)
+![Mantis fed toward the Ridgeback](../gallery/0033_mantis_to_ridgeback_bred.jpg)
+![Ridgeback backcrossed into the Mantis](../gallery/0033_ridgeback_x_mantis_bred.jpg)
 
 The heavy bodies and the fliers now come out close to the hand's: a deep
 body, a level head, wings with a chord. The Galewing line toward the Mantis

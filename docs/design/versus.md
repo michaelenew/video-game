@@ -282,6 +282,14 @@ Start match; people joining during the vs phase go to whichever team is
 smaller, randomly if they're the same size, dropped right into the fight on
 whatever class they joined the room as."*
 
+**Since 2026-10-27 a room whose link is the valley plays in groups**
+(`net::group::Room`, [exploration 0029](exploration/0029_networking_at_scale.md)
+§14): everybody starts alone where the link puts them, and whoever is near
+shares a world with them; nobody is seated and nobody is sent a world. What
+follows is a room for one fight -- an arena or a hunt -- which plays as it
+always has. A group that starts a match from the valley plays it among its
+own members, as a group.
+
 **What a player sees.** A room's link carries its size (`players=`, chosen
 beside *Create a room*). The first two in start playing together at once, in
 the world the link describes; anybody else who opens the link is let into

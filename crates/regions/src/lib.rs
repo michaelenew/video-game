@@ -521,6 +521,22 @@ impl Ledger {
         self.confirm(start);
     }
 
+    /// **The books a tape was played with**, from its start: begun from the
+    /// agreed start and kept for this machine's seat for a match
+    /// ([`Ledger::begin`], as the online driver does), and fresh in
+    /// training, where the first frame kept is the one after the start (the
+    /// local driver keeps them after each advance). The replay judge and the
+    /// game's `--replay` both start from this, so a tape is fed what the
+    /// game fed it. `watch` as for [`Ledger::new`].
+    pub fn for_tape(tape: &sim::replay::Tape, start: &World, watch: bool) -> Ledger {
+        let mut books = Ledger::new(start, 0, watch);
+        if let Some((seat, _)) = tape.online {
+            books.sit(seat as usize);
+            books.begin(start);
+        }
+        books
+    }
+
     /// Keep the books for every frame up to `frame` not yet kept. `now` is
     /// the world as it stands -- at `frame` itself for the local driver; ahead
     /// of it online, where the frames between come off the tape.
@@ -744,5 +760,27 @@ impl Ledger {
             .iter()
             .min_by_key(|h| h.through)
             .copied()
+    }
+}
+
+/// **A tape played as the game played it**: each frame recorded, fed what is
+/// due, and the books kept for it -- every frame confirmed, which is what a
+/// tape is.
+impl sim::replay::Feed for Ledger {
+    fn begin(&mut self, tape: &sim::replay::Tape, start: &World) {
+        *self = Ledger::for_tape(tape, start, false);
+    }
+
+    fn due(
+        &mut self,
+        before: &World,
+        inputs: [Input; MAX_PLAYERS],
+    ) -> ([Aggregate; MAX_STREAMS], usize) {
+        self.record(before, inputs);
+        Ledger::due(self, before.frame.wrapping_add(1))
+    }
+
+    fn kept(&mut self, after: &World) {
+        self.confirm_through(after.frame, after);
     }
 }

@@ -1,5 +1,5 @@
 """The Ridgeback, sculpted and baked: the target a grown body is measured
-against (``docs/design/exploration/0029_a_target_body.md``).
+against (``docs/design/exploration/0030_a_target_body.md``).
 
     cargo run -p anim --bin export_beast -- ridgeback     # its skeleton, once
     art/blender.sh art/ridgeback/build.py [--look out.png] [--size 2048] [--no-export] [--fast]

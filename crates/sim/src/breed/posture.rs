@@ -109,7 +109,7 @@ pub const ATTACH_DOWN: Fx = fx(3, 4);
 
 /// The band of the support the mass must sit inside: a quarter in from
 /// each end -- at a fifth, a body stood with its weight so near its
-/// forefeet that any blow forward tipped it over them (exploration 0033).
+/// forefeet that any blow forward tipped it over them (exploration 0034).
 const BAND: Fx = fx(1, 4);
 
 /// A part with mass, at a point along the torso's axis (x) and above it (y).
@@ -194,7 +194,7 @@ fn masses(g: &Genome, p: &Proportions) -> Masses {
     let hh = p.head_half;
     // A head that is the front of the body is built as deep and as wide
     // as the body (`build`): weighed as a small one, a toad's stood its
-    // weight far ahead of its forelegs (exploration 0033).
+    // weight far ahead of its forelegs (exploration 0034).
     let head_m = if g.head == HeadKind::Merged {
         hh.mul(p.half_h).mul(p.half_w).mul(Fx::from_int(8)).mul(rho)
     } else {
@@ -339,7 +339,7 @@ impl Solver<'_> {
 
     /// The furthest forward a pair may stand along the body: the torso's
     /// front, or, where the head is the front of the body, under the head
-    /// -- a toad's forelegs are (exploration 0033).
+    /// -- a toad's forelegs are (exploration 0034).
     fn front_most(&self) -> Fx {
         if self.g.head == HeadKind::Merged {
             self.p.front.add(self.p.head_half)
@@ -352,7 +352,7 @@ impl Solver<'_> {
     fn foot_x(&self, i: usize) -> Fx {
         let s = &self.pose.stations[i];
         // A spider's foot lands along its fan, not under its hip
-        // (exploration 0034): the feet are spread, and balanced over,
+        // (exploration 0035): the feet are spread, and balanced over,
         // where they are.
         let fan = if self.g.limbs[i].is_some_and(|l| l.build == Build::Spindle) && !s.wing_walks {
             super::build::spider_ahead(Station::ALL[i], self.p.limb[i])
@@ -443,7 +443,7 @@ impl Solver<'_> {
         }
         // Keep neighbours apart: walk from the hind end forward, each
         // standing pair against the next standing one ahead of it -- not
-        // the next station, which may be empty (exploration 0034: a fore
+        // the next station, which may be empty (exploration 0035: a fore
         // and a mid-hind pair grew from one spot).
         let mut behind: Option<usize> = None;
         for k in (0..STATIONS).rev() {
@@ -654,7 +654,7 @@ impl Solver<'_> {
             // The grounded pairs move as one, as far as the frontmost (or
             // hindmost) may: clamped one by one, several pairs ran into the
             // torso's end and stood on one spot, their legs through each
-            // other (exploration 0033).
+            // other (exploration 0034).
             let mut step = e.div(c);
             for s in self.pose.stations.iter().filter(|s| s.grounded) {
                 step = if step > Fx::ZERO {
@@ -731,7 +731,7 @@ impl Solver<'_> {
         // And so do its ends, tipped: the front of a head that is the
         // front of the body, and the haunch -- a body pitched nose down on
         // short forelegs put its head in the floor, and one pitched up its
-        // haunch (exploration 0034). A tenth of the height is the margin.
+        // haunch (exploration 0035). A tenth of the height is the margin.
         let front = if self.g.head == HeadKind::Merged {
             self.p.front.add(self.p.head_half.mul(Fx::from_int(2)))
         } else {
@@ -756,13 +756,13 @@ impl Solver<'_> {
         lo
     }
 
-    /// **On its belly** (exploration 0033): legs too weak or too short
+    /// **On its belly** (exploration 0034): legs too weak or too short
     /// to hold the body up, it rests on the deepest of its trunk, the legs
     /// out to the sides as paddles, bent as far as the floor makes them.
     fn rest_on_belly(&mut self) {
         self.pose.bellied = true;
         // On the deepest of its trunk: a thorax stands half as deep again
-        // as the torso, and lay half under the floor (exploration 0033).
+        // as the torso, and lay half under the floor (exploration 0034).
         let deep = if self.p.thorax {
             fx(3, 2)
         } else if self.p.abdomen {
@@ -772,7 +772,7 @@ impl Solver<'_> {
         };
         // On it, not through it: a body whose short legs held it lower
         // than its thorax is deep lay with the thorax in the floor
-        // (exploration 0034).
+        // (exploration 0035).
         // A leg too short to reach the floor from there is a paddle held
         // up off it (below).
         self.pose.root = self.p.half_h.mul(deep);
@@ -782,7 +782,7 @@ impl Solver<'_> {
         // within a foot's length (or two legs' thickness) of a neighbour's
         // is carried, not paddled
         // with -- three pairs of stubs on a short belly stepped on each
-        // other (exploration 0034).
+        // other (exploration 0035).
         let grounded: [bool; STATIONS] = core::array::from_fn(|i| self.pose.stations[i].grounded);
         let ends = (
             (0..STATIONS).find(|&i| grounded[i]),
@@ -810,7 +810,7 @@ impl Solver<'_> {
     /// A pair too short to reach the floor from where the others hold the
     /// body -- a limb just budding -- is held up, not walked on: counted as
     /// standing, it hung in the air and the weight was over nothing
-    /// (exploration 0033).
+    /// (exploration 0034).
     fn hold_up_dangling(&mut self) {
         let standing = self.pose.stations.iter().filter(|s| s.grounded).count();
         let mut held = false;
@@ -824,7 +824,7 @@ impl Solver<'_> {
             }
         }
         // The weight was put over every pair: over the ones left standing
-        // now (exploration 0034), or a biped whose forelegs came up stood
+        // now (exploration 0035), or a biped whose forelegs came up stood
         // with its weight ahead of its feet.
         if held && !self.pose.bellied && self.grounded().count() > 0 {
             self.force();
@@ -832,7 +832,7 @@ impl Solver<'_> {
         }
     }
 
-    /// **Nothing on the floor but its feet** (exploration 0034): the
+    /// **Nothing on the floor but its feet** (exploration 0035): the
     /// standing body built and measured, and whatever but a foot or a shin
     /// is under a tenth of the body's height -- a grazer's jaw, a haunch, a
     /// folded wing -- lifted clear: a head by its neck, anything else by
@@ -939,7 +939,7 @@ impl Solver<'_> {
 
     /// Whether the legs, standing as they now do, hold the trunk off the
     /// floor: a body whose legs cannot rests on its belly instead, a newt's
-    /// carriage (exploration 0034).
+    /// carriage (exploration 0035).
     fn trunk_held(&self) -> bool {
         self.pose.root >= self.trunk_low(self.pose.pitch).mul(fx(9, 10))
     }
@@ -951,7 +951,7 @@ impl Solver<'_> {
             self.pose.root = self.p.half_w;
             return;
         }
-        // **Pitched to its legs** (exploration 0033): where the front pair
+        // **Pitched to its legs** (exploration 0034): where the front pair
         // stands taller than the hind (or shorter), the body tips so each
         // stands near its own natural bend -- a hyena's back -- rather than
         // the long pair folding deep under a level one, its knee out
@@ -1048,7 +1048,7 @@ impl Solver<'_> {
     }
 
     /// **A pair that holds the body down is held up** (exploration
-    /// 0033, 0034): a pair between two others, too short for the height they
+    /// 0034, 0035): a pair between two others, too short for the height they
     /// stand the body at, capped the root, and the long pairs either side
     /// folded under it so deep that a stride flipped their knees through
     /// it. A limb still growing in -- a crossbreed's budding middle pair --
@@ -1070,7 +1070,7 @@ impl Solver<'_> {
             // An end pair too, where it is the one at full stretch holding
             // the body down and two pairs are left to stand on: a short
             // front pair crouched the long legs behind it until their
-            // knees stepped out sideways (exploration 0034).
+            // knees stepped out sideways (exploration 0035).
             let end = j == front || j == hind;
             if end {
                 let pair = self.g.limbs[j].unwrap();
@@ -1157,7 +1157,7 @@ impl Solver<'_> {
         }
     }
 
-    /// **Feet apart** (exploration 0033): neighbouring pairs whose feet
+    /// **Feet apart** (exploration 0034): neighbouring pairs whose feet
     /// stand closer than a foot and a step apart -- an insect's legs from
     /// one short thorax, a long-legged body's from a short one -- fan
     /// them: the front pair's foot forward, the hind's back, each as far as
@@ -1240,7 +1240,7 @@ impl Solver<'_> {
         if matches!(self.g.head, HeadKind::Forward | HeadKind::Raised) {
             // A little above the spine, not clear of the back: on a body as
             // deep as it is wide that drove every neck up to vertical
-            // (exploration 0033). A horse's neck at most, a raised head's a
+            // (exploration 0034). A horse's neck at most, a raised head's a
             // little more.
             let arm = self.p.neck_len.add(self.p.head_half);
             let most = if self.g.head == HeadKind::Raised {
@@ -1261,7 +1261,7 @@ impl Solver<'_> {
             rise = rise.min(most.sub(self.pose.pitch));
         }
         // And never through the floor: a grazer's head carried low on a
-        // short body went into it standing (exploration 0034). The neck
+        // short body went into it standing (exploration 0035). The neck
         // leaves near the root's height; the head is held clear of the
         // floor by a tenth of that.
         if self.g.head != HeadKind::Merged {
@@ -1287,7 +1287,7 @@ impl Solver<'_> {
 /// The most a level body is pitched nose up, in turns: a bird stands
 /// tilted on its two legs; on more, a hyena's back at most. A pitch slider
 /// bred in from an upright body stood a four-legged one at sixty degrees
-/// (exploration 0033).
+/// (exploration 0034).
 fn level_pitch_most(g: &Genome) -> Fx {
     let standing = g.pairs().filter(|(_, p)| p.role.grounded()).count();
     if standing <= 1 { fx(1, 9) } else { fx(1, 20) }
@@ -1317,7 +1317,7 @@ pub fn posture(g: &Genome) -> Posture {
     // where two stations' natural places are closer than their legs are
     // thick (an upright body's), they stood in one another.
     // Each pair against the next pair ahead of it, over an empty station
-    // between them too (exploration 0034).
+    // between them too (exploration 0035).
     let mut behind: Option<usize> = None;
     for k in (0..STATIONS).rev() {
         if g.limbs[k].is_none() {
@@ -1366,7 +1366,7 @@ pub fn posture(g: &Genome) -> Posture {
     solver.vertical();
     if g.stance == Stance::Level {
         // Either way: nose down on short forelegs too, a hyena's back
-        // the other way round at most (exploration 0034).
+        // the other way round at most (exploration 0035).
         let most = level_pitch_most(g);
         solver.pose.pitch = solver.pose.pitch.clamp(most.neg(), most);
     }
