@@ -495,6 +495,17 @@ pub fn drive(g: &Genome, q: &Posture, gait: &Gait, phase: Fx, turn: Fx) -> Drive
         }
         GaitKind::Fly | GaitKind::Stand => {}
     }
+    // A belly barely off the floor cannot bob down onto it: the bob is no
+    // deeper than the clearance a body keeps, a tenth of its height
+    // (exploration 0034). A body on its belly does not bob at all.
+    let deep = if p.thorax {
+        p.half_h.mul(fx(3, 2))
+    } else {
+        p.half_h
+    };
+    let room = q.root.sub(deep).sub(h.mul(fx(1, 10))).max(Fx::ZERO);
+    let room = if q.bellied { Fx::ZERO } else { room };
+    d.lift = d.lift.clamp(room.neg(), room.max(d.lift));
     // The head held steady against the body's rock, and turned into a turn.
     d.neck_pitch = d.pitch.neg();
     d.neck_yaw = turn.mul(fx(1, 16));

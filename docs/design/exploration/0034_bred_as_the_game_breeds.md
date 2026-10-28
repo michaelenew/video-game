@@ -12,7 +12,7 @@ the dice give: a cross with any of the cast (`cross::breed`), a trophy
 grafted on (`cross::graft`), a generation's drift (`cross::mutate`), in any
 order.
 
-`bred()` in `tests/strides.rs` breeds them as the game does: forty families of
+`bred()` in `tests/strides.rs` breeds them as the game does: forty families (a hundred now) of
 six generations, each from a parent of the cast, each generation one of the
 three with a mate of the cast. `bred_bodies_are_plausible` puts every one
 through all of 0033's checks -- it moves, it is carried like an animal, its
@@ -87,16 +87,59 @@ metre up). All 240 pass now.
 feet a leg's thickness apart sideways, which pass without touching; it is
 asked of feet in line, and segments through each other are still caught.
 
+## The last 3%
+
+The owner: *"fix the remaining 3% too."* Fixing one family at a time did
+not converge -- each round turned up rarer ones elsewhere -- so the rest
+were fixed as rules, on 6,000 bodies (families 0 to 999), and held out
+against 6,000 none of the rules saw.
+
+- **A move it could make, or none** (`strike::makeable`): every move is put
+  through the same physical checks after it is settled -- nothing but what
+  strikes, the feet and the tail into the floor, the weight over the feet
+  through a held windup -- and a body is not given one it cannot make. The
+  same rule already gave no kick back to a body with no other legs. Wings
+  bear a windup only on a body that can fly. The whole-body moves (a leap, a
+  rush, a stoop) are one list in the simulation (`strike::whole_body`) that
+  the test reads.
+- **A head strikes with its jaw** (`strike::struck_by`): counted as a body
+  part, a jaw under the floor at the strike lifted the whole body metres.
+- **A rear that drags is stood on**: a seal-like body on one pair of legs
+  and its rump balances over both.
+- **Nothing on the floor, finally** (`Solver::clear_the_floor`): stood taller,
+  then tipped to lift the low end, then -- a trunk its legs cannot hold clear
+  -- rested on its belly; a head that is the body's front is lifted as the
+  trunk is. A belly barely clear of the floor does not bob onto it walking.
+- **A body on its belly** carries its legs up its flank, knees out to the
+  side as a lizard's, a crowded middle pair of paddles held up; its feet
+  reckoned from the hips it really has.
+- **A pair that holds the body down is held up** -- an end pair too, where
+  two are left to stand on -- and **the weight is put back over the pairs
+  left standing** once any is held up: a biped whose forelegs came up stood
+  with its weight ahead of its feet.
+- **Legs out of each other's way**: hips kept apart across an empty
+  station (a fore and a mid-hind pair grew from one spot); a knee leads
+  forward only by the floor's measure, not the body's (an upright body
+  stacks its pairs); the way a knee bends is the standing pose's, kept
+  through the stride (decided frame by frame it flipped forward mid-step);
+  a middle knee with no room either way turns out as an insect's
+  (`build::knee_out`) and its foot sprawls; a swinging foot comes no higher
+  than two thirds of its hip (lifted past a low hip, the leg turned inside
+  out); a back kick throws the weight forward before the hind feet leave.
+- **A middle walking pair is no longer than the longer of its neighbours**
+  (`plan::repair`, `Fix::MiddleOutgrown`): a longer one between two that
+  stand the body crouched deep and stepped round them. A spider's legs fan
+  instead and are let be.
+- **Three checks were wrong**: feet a leg's thickness apart on the floor do
+  not meet whatever their order; a walked-on wing is as thick as it is
+  drawn; and a biped is what a body stands on, not what its genome calls
+  legs.
+
 ## How far it holds
 
-The 240 are the bodies the changes were made against. The same breeding,
-families 160 to 399 -- bodies none of the changes saw -- fails 43 of 1440
-(3%): legs crossing on upright bodies, a lizard's haunch on the floor, a
-tongue or a swallow sunk past what short legs allow. To measure it again:
+`bred_bodies_are_plausible` breeds a hundred families (600 bodies) and
+holds all of them. Bred as the game breeds, families 0 to 1999 -- 12,000
+bodies, half of which no rule was written against -- all pass, and 12% of
+their damaging moves cry. To measure it again on bodies nobody has seen:
 
-    FAMILY_FROM=160 FAMILIES=240 cargo test -p sim --test strides bred_bodies
-
-`FAMILIES` alone grows the set from the start. The tail is the next work: it
-is rarer chimeras of the same faults, and each fix above was made general
-rather than for its family, which is why the unseen rate fell from about one
-in five to one in thirty.
+    FAMILY_FROM=2000 FAMILIES=500 cargo test -p sim --test strides bred_bodies

@@ -1110,6 +1110,12 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
         // bird's does; every other limb at the belly line.
         let root_at = if pair.role == Role::Wing && !pose.wing_walks {
             half_h.mul(fx(1, 2)).neg()
+        } else if q.bellied {
+            // A body on its belly carries its legs up its flank, a
+            // thickness and a half off the floor: hung at the belly line,
+            // they lay along it (exploration 0034).
+            let at = q.root.add(pose.attach.mul(sin_turns(pitch)));
+            hang.min(at.sub(girth.mul(fx(3, 2)))).max(half_h.neg())
         } else if super::posture::splayed(g.stance, pair.build) && !pose.wing_walks {
             // A sprawling leg runs out level from its hip: hung lower than
             // its own thickness off the floor (and a quarter, for the walk's
@@ -1327,6 +1333,28 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                         )
                     }
                 };
+                // The upper part swung up from the hip as far as keeps it
+                // off the floor, its length kept: on a body resting on its
+                // belly, a held leg's thigh went into the floor (exploration
+                // 0034).
+                let upper = {
+                    let len = vlen(upper).max(fx(1, 100));
+                    let floor = q.root.mul(fx(1, 10)).add(girth).sub(hip_y);
+                    if aloft || upper.y >= floor {
+                        upper
+                    } else {
+                        let y = floor.min(len);
+                        let flat = len.mul(len).sub(y.mul(y)).max(Fx::ZERO).sqrt();
+                        let along = v3(upper.x, Fx::ZERO, upper.z);
+                        let along_len = vlen(along);
+                        if along_len < fx(1, 1000) {
+                            v3(flat, y, Fx::ZERO)
+                        } else {
+                            let k = flat.div(along_len);
+                            v3(upper.x.mul(k), y, upper.z.mul(k))
+                        }
+                    }
+                };
                 // **Held clear of the floor** (exploration 0033): a long arm
                 // folded on a low body rested its point on the ground. The
                 // forearm swings forward, keeping its length, until the tip
@@ -1380,7 +1408,14 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                     standing.mul(fx(-9, 20)).add(swing),
                 )
             } else {
-                (hip_y.sub(lift), pose.reach.add(swing))
+                // A swinging foot comes up no higher than two thirds of its
+                // hip: on a body low on its belly, lifted past the hip it
+                // turned the leg inside out, its knee forward and up through
+                // the leg in front (exploration 0034).
+                (
+                    hip_y.sub(lift.min(hip_y.mul(fx(2, 3)))),
+                    pose.reach.add(swing),
+                )
             };
             let mut d = down.mul(down).add(reach.mul(reach)).sqrt();
             if d > standing {
@@ -1393,8 +1428,8 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
             let (upper, lower) = match pair.build {
                 _ if pose.wing_walks => {
                     // The humerus and forearm reach the floor, the wrist
-                    // planted. The elbow folds back along the flank and a
-                    // little out, as a pterosaur's does, so the forearm
+                    // planted. The elbow folds out and a little back along
+                    // the flank, as a pterosaur's does, so the forearm
                     // comes down and forward to the hand: aimed straight
                     // out, it stood the wrists a wingspan apart with the
                     // elbows up like a spider's (exploration 0033).
@@ -1403,7 +1438,7 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                         arm_a,
                         arm_b,
                         v3(reach, down.neg(), Fx::ZERO),
-                        v3(Fx::ONE.neg(), Fx::ZERO, sd.mul(fx(2, 3))),
+                        v3(fx(-1, 2), Fx::ZERO, sd),
                     );
                     (elbow, wrist.sub(elbow))
                 }
@@ -1474,8 +1509,37 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                     // A hip low over a foot far out -- a paddle, a body on
                     // its belly -- would put the knee under the floor: it
                     // bends up instead (exploration 0033).
-                    if down.neg().mul(fx(1, 2)).add(ny.mul(bend)) < down.neg().add(girth) {
-                        bend = bend.neg();
+                    // Which way it bends is the standing pose's, kept through
+                    // the stride: decided frame by frame, a knee flipped
+                    // forward mid-step into the leg in front (exploration
+                    // 0034). Mid-stride it is only held off the floor.
+                    let still = {
+                        let (r0, h0) = (pose.reach, hip_y);
+                        let d0 = r0
+                            .mul(r0)
+                            .add(h0.mul(h0))
+                            .sqrt()
+                            .min(standing)
+                            .max(fx(1, 100));
+                        let k0 = half_limb
+                            .mul(half_limb)
+                            .sub(d0.mul(d0).mul(fx(1, 4)))
+                            .max(Fx::ZERO)
+                            .sqrt();
+                        let b0 = if bend > Fx::ZERO { k0 } else { k0.neg() };
+                        h0.neg().mul(fx(1, 2)).add(r0.div(d0).mul(b0)) < h0.neg().add(girth)
+                    };
+                    let mut splay_out = knee_out(g, q, i);
+                    if still && !splay_out {
+                        if q.bellied {
+                            // On its belly the knee goes out to the side, a
+                            // lizard's elbow: flipped forward, a hind knee
+                            // went through the leg in front (exploration
+                            // 0034).
+                            splay_out = true;
+                        } else {
+                            bend = bend.neg();
+                        }
                     }
                     // **Out of the next pair's way** (2026-10-19). The joint
                     // bends in the body's own plane, as every other pair's
@@ -1487,13 +1551,26 @@ fn build(g: &Genome, q: &super::posture::Posture, d: &Drive) -> Body {
                     // as an elbow held out does (a walking wing's is) --
                     // and keeps that turn through the stride.
                     let (turn, widen) = room[i];
-                    let (keep, side_out) = (cos_turns(turn), sin_turns(turn));
+                    // A crowded middle leg sprawls from the hip, its foot a
+                    // quarter of its length out, as an insect's does.
+                    let widen = if knee_out(g, q, i) {
+                        widen.max(limb.mul(fx(1, 4)))
+                    } else {
+                        widen
+                    };
+                    let (keep, side_out) = if splay_out {
+                        (Fx::ZERO, Fx::ONE)
+                    } else {
+                        (cos_turns(turn), sin_turns(turn))
+                    };
                     let mid = v3(reach.mul(fx(1, 2)), down.neg().mul(fx(1, 2)), Fx::ZERO);
-                    let knee = v3(
+                    let mut knee = v3(
                         mid.x.add(nx.mul(bend).mul(keep)),
                         mid.y.add(ny.mul(bend).mul(keep)),
                         bend.abs().mul(side_out).add(widen).mul(sd),
                     );
+                    // Held a thickness and a half off the floor.
+                    knee.y = knee.y.max(girth.mul(fx(3, 2)).sub(down));
                     (
                         knee,
                         v3(
@@ -1627,11 +1704,49 @@ fn knee_ahead(g: &Genome, q: &super::posture::Posture, p: &Proportions, i: usize
     let off = p.limb[i]
         .mul(fx(1, 2))
         .mul(Fx::ONE.sub(ext.mul(ext)).max(Fx::ZERO).sqrt());
+    // Apart along the floor, not along the body: an upright body stacks
+    // its pairs one over the other (exploration 0034).
+    let flat = cos_turns(q.pitch);
     (i + 1..super::STATIONS).any(|j| {
         q.stations[j].grounded
             && g.limbs[j].is_some()
-            && at.sub(q.stations[j].attach) < p.limb[i].mul(fx(2, 5)).max(off.mul(Fx::from_int(2)))
+            && at.sub(q.stations[j].attach).mul(flat)
+                < p.limb[i].mul(fx(2, 5)).max(off.mul(Fx::from_int(2)))
     })
+}
+
+/// **A middle knee with no room either way turns out** (exploration
+/// 0034): where the pairs in front and behind both stand nearer along the
+/// floor than the knee bends out from its leg's line -- three pairs off a
+/// short upright body -- the knee bent forward met the fore leg and bent
+/// back met the hind. It goes out to the side instead, as an insect's
+/// middle legs sprawl.
+pub fn knee_out(g: &Genome, q: &super::posture::Posture, i: usize) -> bool {
+    let pose = q.stations[i];
+    let Some(pair) = g.limbs[i] else {
+        return false;
+    };
+    if !pose.grounded || pose.wing_walks || super::posture::splayed(g.stance, pair.build) {
+        return false;
+    }
+    let p = proportions(g);
+    let ext = pose.extension.min(Fx::ONE);
+    let off = p.limb[i]
+        .mul(fx(1, 2))
+        .mul(Fx::ONE.sub(ext.mul(ext)).max(Fx::ZERO).sqrt());
+    let flat = cos_turns(q.pitch);
+    let near = |j: usize| q.stations[j].grounded && g.limbs[j].is_some();
+    let tight = |j: usize| {
+        q.stations[i]
+            .attach
+            .sub(q.stations[j].attach)
+            .abs()
+            .mul(flat)
+            < off.add(p.girth[i]).add(p.girth[j]).mul(fx(3, 2))
+    };
+    let ahead = (0..i).rev().find(|&j| near(j));
+    let behind = (i + 1..super::STATIONS).find(|&j| near(j));
+    matches!((ahead, behind), (Some(a), Some(b)) if tight(a) && tight(b))
 }
 
 /// **Out of each other's way** (2026-10-19): for each pair, how far (turns,
@@ -1678,7 +1793,7 @@ fn out_of_the_way(
         // outside the body's line: not among the legs under it either --
         // counted there, it turned the legs behind it out (exploration
         // 0034).
-        if !pose.grounded || pose.wing_walks || pair.build == Build::Spindle {
+        if !pose.grounded || pose.wing_walks || pair.build == Build::Spindle || knee_out(g, q, i) {
             // A wing folded at the top of the flank, an arm held at the
             // chest: above the legs, not among them (exploration 0033). As
             // obstacles they turned every leg under them out sideways. A
@@ -1715,7 +1830,14 @@ fn out_of_the_way(
                 .sub(d.mul(d).mul(fx(1, 4)))
                 .max(Fx::ZERO)
                 .sqrt();
-            let bend = if knee_ahead(g, q, p, i) { h } else { h.neg() };
+            let mut bend = if knee_ahead(g, q, p, i) { h } else { h.neg() };
+            // Flipped where the build flips it, a knee that would be under
+            // the floor bent up the other way (exploration 0034): reckoned
+            // unflipped, the knee it clashed with was never seen.
+            let ny = reach.div(d);
+            if hip_y.neg().mul(fx(1, 2)).add(ny.mul(bend)) < hip_y.neg().add(girth) && !q.bellied {
+                bend = bend.neg();
+            }
             reach.mul(fx(1, 2)).add(hip_y.div(d).mul(bend))
         };
         // As far as a stride swings the foot: a leg's reach at most, and

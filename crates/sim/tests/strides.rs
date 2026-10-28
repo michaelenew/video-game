@@ -135,12 +135,23 @@ fn faults(g: &Genome) -> Vec<String> {
                     let (Some(li), Some(lj)) = (leg(i, s), leg(j, s)) else {
                         continue;
                     };
-                    let room = f(p.girth[i]) + f(p.girth[j]);
+                    // A wing walked on is drawn as a wing's bone, thin.
+                    let thick = |k: usize| {
+                        if q.stations[k].wing_walks {
+                            f(build::walking_wing_girth(p.len, p.girth[k]))
+                        } else {
+                            f(p.girth[k])
+                        }
+                    };
+                    let room = thick(i) + thick(j);
                     // The fore pair's foot ahead of the hind pair's -- where
                     // they are in line: a sprawl's foot a leg's thickness
                     // further out passes the other without touching it.
                     let ahead = li[2][0] - lj[2][0];
-                    if (li[2][2] - lj[2][2]).abs() < room {
+                    let aside = (li[2][2] - lj[2][2]).abs();
+                    // Out of order, or touching: feet a leg's thickness
+                    // apart on the floor, either way, do not meet.
+                    if aside < room && (ahead < 0.0 || ahead.hypot(aside) < room) {
                         worst_cross = worst_cross.max((room - ahead) / room);
                     }
                     // And no segment of one through a segment of the other.
@@ -161,9 +172,15 @@ fn faults(g: &Genome) -> Vec<String> {
                     q.stations[i].wing_walks,
                     p.limb[i],
                 );
-                // A sprawl is its own; and a wing walked on holds its elbow
-                // out, as a pterosaur's does.
-                if !posture::splayed(g.stance, pair.build) && !q.stations[i].wing_walks {
+                // A sprawl is its own; a wing walked on holds its elbow
+                // out, as a pterosaur's does; a body on its belly holds its
+                // knees out, as a lizard's are; and so do crowded middle
+                // legs, as an insect's (`build::knee_out`).
+                if !posture::splayed(g.stance, pair.build)
+                    && !q.stations[i].wing_walks
+                    && !q.bellied
+                    && !build::knee_out(g, &q, i)
+                {
                     let out = (l[2][2].abs() - l[0][2].abs()).max(l[1][2].abs() - l[0][2].abs());
                     worst_side = worst_side.max(out / f(standing).max(0.01));
                 }
@@ -208,7 +225,8 @@ fn faults(g: &Genome) -> Vec<String> {
                 .is_some_and(|st| g.limbs[st].is_some_and(|l| posture::splayed(g.stance, l.build)));
             // So may a standing leg's knee in a deep crouch: the margin is
             // for the body, the head and the wings.
-            let leg = station.is_some_and(|st| q.stations[st].grounded);
+            // And a body on its belly paddles with its legs on the floor.
+            let leg = station.is_some_and(|st| q.stations[st].grounded || q.bellied);
             let clear = if sprawl || leg { 0.0 } else { height * 0.08 };
             if clear - low > worst_floor.0 {
                 worst_floor = (clear - low, part.name.to_string());
@@ -226,6 +244,19 @@ fn faults(g: &Genome) -> Vec<String> {
                         let fl = f(p.limb[i]) * 0.15;
                         lo = lo.min(l[2][0] - fl);
                         hi = hi.max(l[2][0] + fl);
+                    }
+                }
+            }
+            // A rear that drags is stood on as a foot is.
+            if q.drags {
+                for i in 0..body.part_count {
+                    let part = &body.parts[i];
+                    if matches!(part.name, "rump" | "haunch" | "abdomen")
+                        && f(body.lowest(i)) < 0.15
+                    {
+                        let x = f(body.centre(i).x);
+                        lo = lo.min(x);
+                        hi = hi.max(x);
                     }
                 }
             }
@@ -371,7 +402,11 @@ fn carriage_faults(g: &Genome) -> Vec<String> {
     // hyena's back at most.
     // Its legs, not wings it leans on: a pterosaur on its wrists is
     // a biped's tilt.
-    let legs = g.pairs().filter(|(_, p)| p.role.grounded()).count();
+    let legs = posture::posture(g)
+        .stations
+        .iter()
+        .filter(|s| s.grounded && !s.wing_walks)
+        .count();
     let pitch_max = if legs <= 1 { 45.0 } else { 20.0 };
     if level && pitch.abs() > pitch_max {
         bad.push(format!("a level body pitched {pitch:.0} degrees"));
@@ -425,7 +460,6 @@ fn every_body_is_carried_like_an_animal() {
 /// throw of the whole body -- the mass stays over the feet on the floor
 /// while the windup is held.
 fn attack_faults(g: &Genome) -> Vec<String> {
-    use sim::breed::build::MoveKind::*;
     use sim::breed::strike;
     let mut out = vec![];
     if g.stance == sim::breed::Stance::Limbless {
@@ -442,27 +476,7 @@ fn attack_faults(g: &Genome) -> Vec<String> {
         if m.from.lift < Fx::ZERO {
             continue;
         }
-        let whole_body = matches!(
-            spec.kind,
-            Charge
-                | Rush
-                | Pounce
-                | Leap
-                | Lunge
-                | Ambush
-                | Stoop
-                | TalonPass
-                | BellyFlop
-                | RearSlam
-                | Shoulder
-                | Plough
-                | SacSlam
-                | Erupt
-                | BreachDive
-                | Buffet
-                | Downwash
-                | FeatherVolley
-        );
+        let whole_body = strike::whole_body(spec.kind);
         let frames = [
             spec.startup / 2,
             spec.startup - 1,
@@ -473,11 +487,7 @@ fn attack_faults(g: &Genome) -> Vec<String> {
             // Into the floor.
             for i in 0..body.part_count {
                 let part = &body.parts[i];
-                if part.shape.hollow
-                    || m.strikers
-                        .iter()
-                        .any(|s| !s.is_empty() && part.name.starts_with(s))
-                {
+                if part.shape.hollow || strike::struck_by(part.name, &m.strikers) {
                     continue;
                 }
                 let bone = body.bones[part.shape.bone].name;
@@ -518,7 +528,10 @@ fn attack_faults(g: &Genome) -> Vec<String> {
                 cx += f(c.x) * v;
                 cz += f(c.z) * v;
                 let bone = body.bones[part.shape.bone].name;
-                if (bone.ends_with(".foot") || bone.ends_with(".lower")) && f(body.lowest(i)) < 0.15
+                // A rear that drags is stood on as a foot is.
+                let dragged = q.drags && matches!(part.name, "rump" | "haunch" | "abdomen");
+                if (bone.ends_with(".foot") || bone.ends_with(".lower") || dragged)
+                    && f(body.lowest(i)) < 0.15
                 {
                     for k in body.corners(i) {
                         if f(k.y) < 0.3 {
@@ -541,7 +554,13 @@ fn attack_faults(g: &Genome) -> Vec<String> {
             let (cx, cz) = (cx / mass, cz / mass);
             // A biped balances over one foot as it strikes, as a bird or a
             // raptor does: a foot's length more.
-            let legs = g.pairs().filter(|(_, l)| l.role.grounded()).count();
+            // What it stands on, not what its genome calls legs: a pair
+            // held up leaves a biped.
+            let legs = q
+                .stations
+                .iter()
+                .filter(|s| s.grounded && !s.wing_walks)
+                .count();
             let foot = if legs <= 1 { f(p.len) * 0.08 } else { 0.0 };
             // And a little more for any body: a strike shifts the weight
             // over the feet as it goes, and a hair past them is caught.
@@ -628,14 +647,14 @@ fn every_attack_is_one_the_body_could_make() {
 
 /// **Bred, grafted and mutated as a game breeds them** (exploration
 /// 0034): the lines are four walks somebody chose; a player's eggs are
-/// whatever the dice give. Forty families of six generations, each
+/// whatever the dice give. A hundred families of six generations, each
 /// generation a cross with one of the cast, a trophy grafted on, or a
 /// generation's drift, from a parent of the cast.
 fn families() -> u64 {
     std::env::var("FAMILIES")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(40)
+        .unwrap_or(100)
 }
 
 fn bred() -> Vec<(String, Genome)> {
