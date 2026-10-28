@@ -104,72 +104,105 @@ fn the_shoulder_and_fist_first_then_the_arm_and_torso_then_the_head() {
 }
 
 #[test]
-fn its_hips_are_at_her_feet_and_its_chin_at_her_forehead() {
+fn its_shoulders_are_at_hers_and_it_stands_to_her_side() {
+    let her = skeleton_for(Class::DualMage);
+    let shoulder = |sk: &view::skeleton::Skeleton| {
+        solve(sk, &view::pose::Pose::rest()).origin[view::drawn_joint(Joint::ArmL).index()][1]
+    };
     for k in 0..2 {
-        hips_and_chin(k);
+        let skeleton = being::skeleton(k);
+        let s = being::scale(&her, &skeleton);
+        let at = s * shoulder(&skeleton);
+        assert!(
+            (at - shoulder(&her)).abs() < 0.005,
+            "being {k}'s shoulder at {at}, hers at {}",
+            shoulder(&her)
+        );
     }
+    // The seal round her waist, under her shoulders.
+    let seal = being::seal_height(&her, being::SealAt::Waist);
+    assert!(seal > her.hip_height * 0.9 && seal < shoulder(&her));
+    assert_eq!(being::seal_height(&her, being::SealAt::Feet), 0.0);
 }
 
-fn hips_and_chin(k: usize) {
-    let her = skeleton_for(Class::DualMage);
+/// Being `k`'s striking hand -- the dark one's left, the light one's right --
+/// and its shoulder, posed.
+fn hand_and_shoulder(k: usize, pose: &view::pose::Pose) -> ([f32; 3], [f32; 3], f32) {
     let skeleton = being::skeleton(k);
-    let s = being::scale(&her, &skeleton);
-    let rest = solve(&skeleton, &view::pose::Pose::rest());
-    let chin = rest.origin[Joint::Head.index()][1];
-    // Placed with its hips on the floor she stands on, its chin is at her
-    // forehead: within a few centimetres of nine tenths of her height.
-    let at = s * (chin - skeleton.hip_height);
-    let forehead = being::CHIN_AT * her.total_height;
-    assert!(
-        (at - forehead).abs() < 0.01,
-        "chin at {at}, forehead at {forehead}"
-    );
-    let her_rest = solve(&her, &view::pose::Pose::rest());
-    assert!(
-        at > her_rest.origin[Joint::Neck.index()][1],
-        "chin under her neck"
-    );
-    assert!(at < her.total_height, "chin over her head");
-    // Big: more than twice her size, and the seal round it wider than she is.
-    assert!(s > 2.0, "the being is only {s} of her");
-    assert!(being::seal_radius(&her) > 1.0);
+    let solved = solve(&skeleton, pose);
+    let left = k == 0;
+    let hand = solved.origin[view::hand_joint(left).index()];
+    let shoulder =
+        solved.origin[view::drawn_joint(if left { Joint::ArmL } else { Joint::ArmR }).index()];
+    (hand, shoulder, skeleton.hip_height)
+}
+
+fn auto_moment(kind: u8, at: u16) -> being::Moment {
+    being::Moment {
+        kind: Some(kind),
+        at,
+        frames: sim::moves::frames(Class::DualMage, kind),
+        clock: 0,
+    }
 }
 
 #[test]
-fn at_rest_its_arms_hang_and_casting_it_throws_what_she_throws() {
-    // Its own stance between her casts: arms down beside it, the fists at
-    // its hips and clear of its sides, never raised (the owner, 2026-10-26).
-    let skeleton = being::skeleton(0);
-    let rest = solve(&skeleton, &being::stance(0, &view::pose::Pose::rest(), 0.0));
-    for left in [true, false] {
-        let hand = rest.origin[view::hand_joint(left).index()];
-        let shoulder =
-            rest.origin[view::drawn_joint(if left { Joint::ArmL } else { Joint::ArmR }).index()];
+fn it_strains_at_rest_and_its_auto_is_its_own_blow() {
+    for k in 0..2 {
+        // At rest, between pulls (the world's first frame), its arm hangs.
+        let (hand, shoulder, hips) = hand_and_shoulder(k, &being::strain(k, 0));
+        assert!(hand[1] < hips + 0.15, "being {k}: a fist up at {}", hand[1]);
         assert!(
-            hand[1] < skeleton.hip_height + 0.1,
-            "a fist is up at {} with the hips at {}",
+            hand[0].abs() > shoulder[0].abs() * 0.8,
+            "being {k}: an arm against the body"
+        );
+        // Every frame of the world it is somewhere a little different: it
+        // breathes and pulls, it does not stand still.
+        let moved = (0..600)
+            .map(|c| being::strain(k, c).separation(&being::strain(k, 0)))
+            .fold(0.0f32, f32::max);
+        // Summed over every joint, in radians: thirty degrees of pull at
+        // least -- the knight, which only tests its binding.
+        assert!(moved > 0.5, "being {k} stands still");
+    }
+    // Its side's auto: drawn back behind its shoulder before the ball leaves,
+    // then driven out in front of it, at its shoulder's height.
+    for (k, kind) in [(0, being::DARK_AUTO), (1, being::LIGHT_AUTO)] {
+        let (s, _, _) = sim::moves::frames(Class::DualMage, kind);
+        let wound = being::pose(k, &auto_moment(kind, s - 1));
+        let (hand, shoulder, _) = hand_and_shoulder(k, &wound);
+        assert!(hand[2] < shoulder[2], "being {k}: not drawn back");
+        let landed = being::pose(k, &auto_moment(kind, s + 2));
+        let (hand, shoulder, _) = hand_and_shoulder(k, &landed);
+        assert!(
+            hand[2] > shoulder[2] + 0.4,
+            "being {k}: the blow is not out in front"
+        );
+        // On its own side of its middle: the half across it is not drawn.
+        assert!(
+            hand[0] * shoulder[0] > 0.0 && hand[0].abs() > shoulder[0].abs() * 0.6,
+            "being {k}: the blow crosses its body, the fist at {} with the shoulder at {}",
+            hand[0],
+            shoulder[0]
+        );
+        assert!(
+            (hand[1] - shoulder[1]).abs() < 0.25,
+            "being {k}: the blow lands at {} with the shoulder at {}",
             hand[1],
-            skeleton.hip_height
+            shoulder[1]
         );
+        // The other side's auto is not its blow.
+        let other = if kind == being::DARK_AUTO {
+            being::LIGHT_AUTO
+        } else {
+            being::DARK_AUTO
+        };
+        let (hand, shoulder, _) = hand_and_shoulder(k, &being::pose(k, &auto_moment(other, s + 2)));
         assert!(
-            hand[0].abs() > shoulder[0].abs() * 0.9,
-            "an arm hangs against the body"
-        );
-        assert!(
-            hand[2].abs() < 0.15,
-            "a fist is held out in front or behind"
+            hand[2] < shoulder[2] + 0.4,
+            "being {k} throws the other side's blow"
         );
     }
-    // Casting, it is her pose, whatever that is.
-    let hers = view::pose::Pose::rest()
-        .shoulder_l(150.0, 0.0, 0.0)
-        .elbow_l(5.0);
-    let cast = being::stance(0, &hers, 1.0);
-    assert!((cast.degrees(Joint::ArmL, 0) - 150.0).abs() < 1e-3);
-    assert!((cast.degrees(Joint::ForearmL, 0) - 5.0).abs() < 1e-3);
-    // And on the way, between the two.
-    let half = being::stance(0, &hers, 0.5);
-    assert!(half.degrees(Joint::ArmL, 0) > 50.0 && half.degrees(Joint::ArmL, 0) < 100.0);
 }
 
 #[test]

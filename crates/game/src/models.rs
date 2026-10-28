@@ -315,33 +315,44 @@ fn ready(
         };
         let mut base = base.clone();
         squeeze.take(&base);
-        // A being is a veil of light in its force (`being::dress`), or,
-        // looked at on its own, its painted self.
+        // A being is its painted self, veiled (`still::Veil`, set each frame
+        // by `being::place`): there as far as its bar has filled, its outer
+        // half, out of the seal. Looked at on its own (`SHOT_BEING`), whole.
         if let Body::Being(k) = body {
-            let painted = crate::being::whole().then(|| {
-                base.reflectance = 0.12;
-                // Its glow is light, in the camera's exposure: at the
-                // file's factor of one it would not show. Only what a glow
-                // texture says glows: with none, the factor lights it all.
-                if base.emissive_texture.is_some() {
-                    base.emissive = LinearRgba::rgb(1.0, 1.0, 1.0) * crate::being::GLOW[k];
-                }
-                if crate::being::clay() {
-                    base.base_color = Color::srgb(0.72, 0.7, 0.67);
-                    base.base_color_texture = None;
-                    base.emissive = LinearRgba::BLACK;
-                    base.emissive_texture = None;
-                    base.metallic = 0.0;
-                    base.metallic_roughness_texture = None;
-                    base.perceptual_roughness = 0.7;
-                }
-                let mut skin = still::skin(base);
-                if !crate::being::clay() {
-                    skin.extension.lustre = crate::being::LUSTRE[k];
-                }
-                skins.add(skin)
-            });
-            crate::being::dress(&mut commands, entity, &beings, owner, k, painted);
+            base.reflectance = 0.12;
+            // Its glow is light, in the camera's exposure: at the file's
+            // factor of one it would not show. Only what a glow texture says
+            // glows: with none, the factor lights it all.
+            if base.emissive_texture.is_some() {
+                base.emissive = LinearRgba::rgb(1.0, 1.0, 1.0) * crate::being::GLOW[k];
+            }
+            if crate::being::clay() {
+                base.base_color = Color::srgb(0.72, 0.7, 0.67);
+                base.base_color_texture = None;
+                base.emissive = LinearRgba::BLACK;
+                base.emissive_texture = None;
+                base.metallic = 0.0;
+                base.metallic_roughness_texture = None;
+                base.perceptual_roughness = 0.7;
+            }
+            if !crate::being::whole() {
+                base.alpha_mode = AlphaMode::Blend;
+            }
+            let mut skin = still::skin(base);
+            if !crate::being::clay() {
+                skin.extension.lustre = crate::being::LUSTRE[k];
+            }
+            // Veiled from the first frame (`still::ShadedKey`).
+            skin.extension.veil.fill.z = if crate::being::whole() { 0.0 } else { 1.0 };
+            let mut e = commands.entity(entity);
+            e.remove::<MeshMaterial3d<StandardMaterial>>();
+            e.insert((
+                MeshMaterial3d(skins.add(skin)),
+                crate::being::BeingSkin(owner, k),
+            ));
+            if !crate::being::whole() {
+                e.insert(bevy::pbr::NotShadowCaster);
+            }
             continue;
         }
         let mut swap = commands.entity(entity);

@@ -17,21 +17,22 @@
 //! GPU; `view/tests/being.rs` holds the order here.
 //!
 //! **They are not her** (the owner, 2026-10-25): two bodies of their own, a
-//! dark warrior of obsidian and a celestial knight, on a broader skeleton
-//! than hers ([`skeleton`]), sized by [`scale`].
+//! dark warrior of obsidian and a celestial knight, each on its own
+//! skeleton ([`skeleton`]).
 //!
-//! **It is big, and it rises out of the seal.** Its hips are at her feet,
-//! where the seal on the floor is, and its chin at her forehead, so the
-//! whole of it above the seal is torso, arms and head, and below the seal
-//! there is nothing: it dissolves into the floor at the waist. [`scale`]
-//! works the size out of her own skeleton, so a retuned body keeps the
-//! proportion.
+//! **Two halves, either side of her** (the owner, 2026-10-28). Each being
+//! stands with its centre line to her side -- the dark one's to her left,
+//! the light's to her right ([`SIDE`]) -- and only its outer half is drawn,
+//! fading into its own middle ([`FADE`]), so she stands in the gap between
+//! a dark half and a light one. Each is as tall as she is at the shoulder
+//! ([`scale`]) and comes out of the seal ([`SEAL_AT`]): nothing of it below.
+//! Each half is there as far as its own bar has filled, in [`presence`]'s
+//! order.
 //!
-//! **It casts with her, a beat behind** (2026-10-25). It is technically the
-//! thing doing the casting, so it is posed with her own pose from
-//! [`LAG_SECONDS`] ago: the same throw, larger, landing a moment after hers.
-//! Between her casts it stands as itself ([`rest`]): arms down, shoulders
-//! broad.
+//! **It moves as itself** ([`pose`]): a bound thing straining at what holds
+//! it, not a puppet of hers. Her auto is its blow, thrown with its own arm
+//! at her frames, so the fuller its bar the plainer it is that the being is
+//! what hits.
 //!
 //! The rule the overlay lives by holds here in the other direction: what is
 //! drawn *is* the bar, by construction, and `view/tests/being.rs` says so.
@@ -154,10 +155,6 @@ fn smoothstep(from: f32, to: f32, x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
-/// How far its pose runs behind hers: long enough to see that it follows,
-/// short enough that it is still the same throw.
-pub const LAG_SECONDS: f32 = 0.12;
-
 /// Each being's skeleton, dark then light: their own, not hers.
 ///
 /// The knight's is the Champion's. The dark being's is **the body it is**:
@@ -262,41 +259,245 @@ pub fn rest(k: usize) -> Pose {
         .chest(-3.0, 0.0, 0.0)
 }
 
-/// How quickly it takes up her pose when she starts to cast, and lets it go
-/// when she stops, as a share a second.
-pub const CAST_IN: f32 = 9.0;
-pub const CAST_OUT: f32 = 3.0;
-
-/// Being `k`'s pose (0 dark, 1 light): [`rest`], turned toward `hers` -- her
-/// pose, a beat late -- by `casting`, 0 at rest and 1 throwing with her.
-pub fn stance(k: usize, hers: &Pose, casting: f32) -> Pose {
-    rest(k).blend(hers, casting.clamp(0.0, 1.0))
+/// Where she is in a move, as the being reads it: which move (`kind`, a
+/// slot of her kit), how many frames into it, and its three phases' lengths;
+/// and the frame the world is on, the being's own clock. All of it the
+/// simulation's, so the being's motion is a function of the snapshot -- a
+/// rollback redraws it exactly, and nothing pops.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Moment {
+    pub kind: Option<u8>,
+    pub at: u16,
+    pub frames: (u16, u16, u16),
+    pub clock: u32,
 }
 
-/// How far behind her it stands, in metres: enough that she is in front of
-/// its body rather than inside it.
-pub const BEHIND: f32 = 0.18;
+/// What `p` is doing, on world frame `clock`.
+pub fn moment(p: &Player, clock: u32) -> Moment {
+    use sim::state::Action;
+    let (kind, at) = match p.action {
+        Action::Startup { kind, left } => {
+            let (s, _, _) = sim::moves::frames(sim::Class::DualMage, kind);
+            (Some(kind), s.saturating_sub(left))
+        }
+        Action::Active { kind, left } => {
+            let (s, a, _) = sim::moves::frames(sim::Class::DualMage, kind);
+            (Some(kind), s + a.saturating_sub(left))
+        }
+        Action::Recovery { kind, left } => {
+            let (s, a, r) = sim::moves::frames(sim::Class::DualMage, kind);
+            (Some(kind), s + a + r.saturating_sub(left))
+        }
+        _ => (None, 0),
+    };
+    let frames = kind.map_or((1, 1, 1), |k| sim::moves::frames(sim::Class::DualMage, k));
+    Moment {
+        kind,
+        at,
+        frames,
+        clock,
+    }
+}
 
-/// How high on her the being's chin comes, as a share of her height: her
-/// forehead.
-pub const CHIN_AT: f32 = 0.93;
+/// Her autos' slots: the dark auto, thrown with her left arm, and the
+/// light, with her right (`docs/design/kits/dual-mage.md`).
+pub const DARK_AUTO: u8 = 0;
+pub const LIGHT_AUTO: u8 = 4;
+
+/// **Being `k`'s pose** (0 dark, 1 light), its own and never hers (the
+/// owner, 2026-10-28: "each being needs its own animations ... it's bound,
+/// not a puppet, and trying to change that"):
+///
+/// - **Her auto is its blow** ("the being is _the thing doing that auto_
+///   with its own hands"): on its side's auto it draws its arm back behind
+///   its shoulder and drives it through, at her frames -- the arm landing
+///   as her ball leaves, which is where the ball starts (behind and outside
+///   her shoulder, `orb, starts behind her`).
+/// - **The other being's blow, it turns from**, and **her spells, it
+///   channels**: its arm up and out, the hand open.
+/// - **Between, it strains** ([`strain`]): a thing held, pulling against
+///   what holds it.
+///
+/// Authored once, for a left arm, and put onto each being's outer arm
+/// ([`drawn`]).
+pub fn pose(k: usize, m: &Moment) -> Pose {
+    let own = strain(k, m.clock);
+    let side = |p: Pose| drawn(k, p);
+    let Some(kind) = m.kind else {
+        return own;
+    };
+    let mine = if k == 0 { DARK_AUTO } else { LIGHT_AUTO };
+    let (s, a, r) = m.frames;
+    let t = m.at as f32;
+    let (s, a, r) = (s.max(1) as f32, a.max(1) as f32, r.max(1) as f32);
+    if kind == mine {
+        let wind = side(wind_up(k));
+        let blow = side(blow(k));
+        if t < s - 1.0 {
+            own.blend(&wind, ease(t / (s - 1.0).max(1.0)))
+        } else if t < s + a {
+            // Driven through from the last frame of the wind-up to the first
+            // active one -- as the ball leaves -- and held after.
+            wind.blend(&blow, ease(((t - (s - 1.0)) / 1.5).min(1.0)))
+        } else {
+            blow.blend(&own, ease((t - s - a) / r))
+        }
+    } else if kind == DARK_AUTO || kind == LIGHT_AUTO {
+        // The other one's blow: it is not its own to throw. It turns from
+        // it, a beat of resistance, and goes back to straining.
+        let up = ease((t / (s + a)).min(1.0));
+        let down = if t > s + a {
+            ease((t - s - a) / r)
+        } else {
+            0.0
+        };
+        own.blend(&side(recoil(k)), 0.6 * up * (1.0 - down))
+    } else {
+        // Anything else she throws: it reaches with her, in its own way.
+        let up = ease((t / s).min(1.0));
+        let down = if t > s + a {
+            ease((t - s - a) / r)
+        } else {
+            0.0
+        };
+        own.blend(&side(channel(k)), up * (1.0 - down))
+    }
+}
+
+fn ease(t: f32) -> f32 {
+    smoothstep(0.0, 1.0, t)
+}
+
+/// The arm drawn back for the blow: the shoulder behind it, the chest
+/// turned away, the elbow folded.
+fn wind_up(k: usize) -> Pose {
+    rest(k)
+        .chest(-4.0, 4.0, -26.0)
+        .spine(0.0, 0.0, -10.0)
+        .shoulder_l(-38.0, 38.0, 0.0)
+        .elbow_l(112.0)
+        .clavicle_l(-14.0, 6.0)
+        .wrist_l(10.0, 0.0, 0.0)
+        .head(4.0, 0.0, -6.0)
+}
+
+/// The blow landed: the arm driven out level and straight ahead of its own
+/// shoulder -- never across its chest, which is the half that is not drawn,
+/// so the chest is turned a little away rather than into it -- the weight
+/// forward.
+fn blow(k: usize) -> Pose {
+    rest(k)
+        .root(6.0, 0.0, 0.0)
+        .chest(4.0, -3.0, -6.0)
+        .spine(2.0, 0.0, 0.0)
+        .shoulder_l(84.0, 24.0, 0.0)
+        .elbow_l(6.0)
+        .clavicle_l(8.0, 2.0)
+        .wrist_l(-28.0, 0.0, 0.0)
+        .head(-4.0, 0.0, 6.0)
+}
+
+/// Turned from the other being's blow: the chest away, the arm drawn in.
+fn recoil(k: usize) -> Pose {
+    rest(k)
+        .chest(-2.0, -6.0, -12.0)
+        .shoulder_l(-10.0, REST_SPREAD[k] + 6.0, 0.0)
+        .elbow_l(40.0)
+        .head(0.0, 4.0, -16.0)
+}
+
+/// Reaching with her spells: the arm up and forward, open-handed.
+fn channel(k: usize) -> Pose {
+    rest(k)
+        .chest(-6.0, -2.0, 8.0)
+        .shoulder_l(62.0, 40.0, 0.0)
+        .elbow_l(24.0)
+        .clavicle_l(8.0, 10.0)
+        .wrist_l(-40.0, 0.0, 0.0)
+        .head(-8.0, 0.0, 0.0)
+}
+
+/// **Straining at its binding**, the being's own idle: it breathes, and
+/// every few seconds it pulls -- the arm hauled back against what holds it,
+/// the body leaning away from her, the head turning to her as if to the
+/// one who holds the leash. The dark being heaves, quick and hard; the
+/// knight tests it, slow and controlled. `clock` is the world's frame.
+pub fn strain(k: usize, clock: u32) -> Pose {
+    let t = clock as f32 / 60.0;
+    let (breath_s, tug_s, phase, force) = if k == 0 {
+        (2.4, 4.4, 0.0, 1.0)
+    } else {
+        (3.6, 7.0, 2.1, 0.55)
+    };
+    let tau = std::f32::consts::TAU;
+    let breath = (tau * t / breath_s).sin();
+    // A pull: sharp in, slow out.
+    let tug = ((tau * t / tug_s + phase).sin().max(0.0)).powf(5.0) * force;
+    let p = rest(k)
+        .chest(-3.0 - 2.0 * breath - 6.0 * tug, -7.0 * tug, -8.0 * tug)
+        .spine(0.0, -5.0 * tug, 0.0)
+        .shoulder_l(-14.0 * tug, REST_SPREAD[k] + 12.0 * tug, 0.0)
+        .elbow_l(REST_ELBOW + 55.0 * tug)
+        .clavicle_l(-6.0 - 12.0 * tug, 2.0 * breath + 9.0 * tug)
+        .wrist_l(18.0 * tug, 0.0, 0.0)
+        .head(-3.0 * breath + 6.0 * tug, 5.0 * tug, -14.0 - 10.0 * tug);
+    drawn(k, p)
+}
+
+/// A pose authored for the left arm, onto being `k`'s outer arm. Its
+/// skeleton is solved as written, without the reflection a fighter's clips
+/// go through (`crate::drawn_joint`), so the slot named left is drawn on
+/// her right: the dark being, on her left, takes the pose mirrored.
+fn drawn(k: usize, p: Pose) -> Pose {
+    if k == 0 { p.mirrored() } else { p }
+}
+
+/// How far behind her each being stands, in metres of her size: enough
+/// that she is in front of it rather than inside it.
+pub const BEHIND: f32 = 0.22;
+
+/// How far to her side each being's centre line is, in metres of her size:
+/// the dark being's to her left, the light's to her right (the owner,
+/// 2026-10-28: "the beings' body center lines probably need to be to the
+/// left and right of the dual mage's"). Each keeps only its outer half, so
+/// she stands in the gap between two halves.
+pub const SIDE: f32 = 0.3;
+
+/// How wide each half's fade into its own middle is, in metres of her size
+/// ("each half should fade into the middle").
+pub const FADE: f32 = 0.09;
 
 /// How many times its own size a being built on `body` is drawn at, so that
-/// **its hips are at her feet and its chin at her forehead** -- `her` is the
-/// Dual mage's skeleton. Its chin is where its head joint sits, standing at
-/// rest; every height is read off the two skeletons.
+/// **its shoulders are at her shoulders' height** (the owner, 2026-10-28),
+/// both standing on her floor. Every height is read off the two skeletons.
 pub fn scale(her: &Skeleton, body: &Skeleton) -> f32 {
-    let rest = solve(body, &crate::pose::Pose::rest());
-    let chin = rest.origin[Joint::Head.index()][1];
-    (CHIN_AT * her.total_height / (chin - body.hip_height).max(0.05)).max(1.0)
+    let shoulder = |sk: &Skeleton| {
+        solve(sk, &crate::pose::Pose::rest()).origin[crate::drawn_joint(Joint::ArmL).index()][1]
+    };
+    shoulder(her) / shoulder(body).max(0.05)
 }
 
-/// The seal on the floor round her feet, where the being's hips are, as a
-/// share of the being's height.
-pub const SEAL_SHARE: f32 = 0.3;
+/// Where the seal is, and so where each being comes out of: round her
+/// waist, or on the floor round her feet. The owner has not chosen yet
+/// (2026-10-28, "either around the mage's waist or feet (not sure yet)").
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum SealAt {
+    Waist,
+    Feet,
+}
 
-/// The seal's radius, in metres: wide enough that the being's waist and its
-/// hanging fists stand inside it, so it reads as what the being rises from.
+pub const SEAL_AT: SealAt = SealAt::Waist;
+
+/// How high the seal is, in metres: at her hip joint for the waist.
+pub fn seal_height(her: &Skeleton, at: SealAt) -> f32 {
+    match at {
+        SealAt::Waist => her.hip_height + 0.06 * her.scale,
+        SealAt::Feet => 0.0,
+    }
+}
+
+/// The seal's radius, in metres: round both beings' waists where they come
+/// out of it.
 pub fn seal_radius(her: &Skeleton) -> f32 {
-    SEAL_SHARE * scale(her, her) * her.total_height
+    (SIDE + 0.3) * her.scale
 }

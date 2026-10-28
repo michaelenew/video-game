@@ -223,47 +223,54 @@ cannot dodge out, and by blocking, which eats the damage and denies the refund. 
 ascension's hard counter. You win with it by timing it for when your opponent is already
 vulnerable, not by reaching it as fast as possible.
 
-### Behind her: the being and the seal (2026-10-25; was six wings)
+### Beside her: two half-beings and the seal (2026-10-28; was one being, before that six wings)
 
-**The two bars are a being breaking out.** One incorporeal body takes shape behind her, **dark
-on her left and light on her right** -- the same sides as the arms that goad them -- each half
-condensing as its own bar fills. It is a **gradient, not a count**: a quarter of a bar is a
-quarter of a body, faint, and a full bar is the whole half, solid at its outline. Lopsided is the
-gap, readable by both players; ascension is all of it, burning brighter.
+**The two bars are two beings breaking out**, one on each side of her: **dark on her left and
+light on her right** -- the same sides as the arms that goad them. Each is its own body (the
+owner, 2026-10-25: "they are 3 different beings"): the dark one Blender Studio's realistic man in
+obsidian, untouched (`art/sources`, on a skeleton built to him), the light one a knight in white
+faceted plate framed in gold (`art/light_being`).
 
-**It arrives limb first.** The shoulder and the fist come first, then the arm between them and
-the torso, then the head last -- a presence that is mostly a blow to begin with, and only at
-the top of the bar has a face. `view::being::presence` is that order and `being.wgsl` is the
-same function on the GPU; its edge drifts like smoke, and the part still condensing glows.
+**Each is half a being** (the owner, 2026-10-28). Each stands with its centre line to her side
+(`view::being::SIDE`) and only its outer half is drawn, fading into its own middle
+(`view::being::FADE`), so she stands in the gap between a dark half and a light one. Each is as
+tall as she is at the shoulder (`view::being::scale`).
 
-**It is big, and it rises out of the seal.** Its hips are at her feet and its chin at her
-forehead (about 2.7 times her size, worked out from her skeleton by `view::being::scale`), so
-above the floor it is torso, arms and head, and at the waist it goes into the seal. Its arms
-never hang lower than a guard (`view::being::guarded`), fists raised in front of her -- hanging,
-the fists that are the first of it would be under the floor.
+**Each half is its own bar, a gradient, arriving limb first.** A quarter of a bar is a quarter of a
+half, faint; the shoulder and the fist come first, then the arm between them and the torso, the
+head last -- a presence that is mostly a blow to begin with, and only at the top of the bar has a
+face. `view::being::presence` is that order and the skin shader (`skin.wgsl`, `still::Veil`) is
+the same function on the GPU, laid over the being's own painted model: its edge drifts like smoke
+and the part still condensing glows in its force's light. Ascension is all of both.
 
-**It casts.** It is technically the thing doing the casting, so it holds her own pose from
-`view::being::LAG_SECONDS` (0.12 s) ago: the same throw, larger, a beat behind hers. A reach of
-hers past the guard is its reach too.
+**It comes out of the seal**, a disc of rings and runes round her -- **at her waist** for now
+(`view::being::SEAL_AT`; the owner has not chosen between the waist and her feet, and
+`SHOT_SEAL=feet` shows the other) -- split down her middle, dark half on her left, light on her
+right. Nothing of either being is drawn below it. It is faintly there whatever the bars; each
+half's runes light round from behind her toward the front as its bar fills.
 
-**The seal** is a disc of rings and runes on the floor round her feet, split down the same line:
-dark half on her left, light on her right. It is faintly there whatever the bars; each half's
-runes light round from behind her toward the front as its bar fills, and its floor is washed in
-its force. The HUD carries the two bars too, but the being and the seal are the display.
+**It moves as itself, not as her puppet** (the owner, 2026-10-28: "it's bound, not a puppet, and
+trying to change that"). Its motion is its own, a function of her move and the world's frame
+(`view::being::pose`), so a rollback redraws it exactly:
 
-**Two beings, two bodies** (the owner, 2026-10-25: "they are 3 different beings"). The dark
-half is a **void titan** -- a bare, faceted body of black volcanic glass, faceless, violet light
-breaking out of a heart in its chest and cracks running from it (`art/dark_being`) -- and the
-light half a **solar seraph** -- tall, in a white-gold cuirass and shoulder plates over a long
-white robe, a gold mask for a face, a burning sunburst behind its head (`art/light_being`). Both
-are built on her skeleton so they throw what she throws. `SHOT_BEING=dark` or `light` draws one
-whole and painted, standing on her floor, for judging each before they are halved.
+- **Her auto is its blow** ("the being is _the thing doing that auto_ with its own hands"). On its
+  side's auto it draws its arm back behind its shoulder through her startup and drives it straight
+  out from its own shoulder as her ball leaves -- the ball starts behind and outside her shoulder,
+  where its arm is -- then lets it go through her recovery. The fuller its bar, the plainer it is
+  that the being is what hits. The other being turns from it.
+- **Her spells, it channels**: its arm up and out, the hand open.
+- **Between, it strains** (`view::being::strain`): it breathes, and every few seconds hauls its
+  arm back and leans away from her against what holds it, its head turning to her. The dark one
+  heaves, quick and hard; the knight tests it, slow.
+
+The HUD carries the two bars too, but the beings and the seal are the display. Drawn and never
+tested against; neither is a hurtbox. `view/tests/being.rs` holds each half to its bar, the order,
+the size, the strain and the blow. Looked at headless with `SHOT_BARS=25,25` through `94,94` and
+each auto through `SHOT_PRESS` and `SHOT_FRAME`, 2026-10-28.
 
 Why the wings went (the owner, 2026-10-25): they did not read as a powerful celestial being
-getting closer to breaking out. Drawn by `crate::being` (her model again, under its own root, in
-the `Spirit` material); `view/tests/being.rs` holds each half to its bar, the order, the size
-and the guard. Drawn and never tested against; it is not a hurtbox. Looked at headless with
-`SHOT_BARS=15,15` through `90,90` and a demo reel, 2026-10-25.
+getting closer to breaking out. Why the one big being behind her went (2026-10-28): halved, the
+two beings are two, either side of her, and each is the thing that throws its own auto.
 
 ## The last auto is the force you are carrying — revised 2026-09-13
 

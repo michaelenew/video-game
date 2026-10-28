@@ -366,7 +366,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Behind you",
-                "The two bars are a being taking shape behind you, dark on your left and light on your right, rising out of the seal at your feet. Each half thickens as its bar fills: shoulder and fist first, then arm and torso, then the head. It casts what you cast, a beat behind. A lopsided being is a mage about to burn; a whole one is a mage about to ascend.",
+                "The two bars are two beings breaking out beside you -- half a dark one on your left and half a light one on your right -- rising out of the seal round your waist. Each half thickens as its own bar fills: shoulder and fist first, then arm and torso, then the head. They are bound, not puppets: between your casts they strain at what holds them, and your autos are their blows -- the dark one throws your left click, the light one your right. Lopsided halves are a mage about to burn; two whole ones are a mage about to ascend.",
             ),
         ],
     },
@@ -1061,11 +1061,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_BARS=<dark>,<light>",
-                "Start a Dual mage with her two bars there, so a capture can look at the being behind her without playing up to it. Ignored for any other class.",
+                "Start a Dual mage with her two bars there, so a capture can look at the beings beside her without playing up to it. Ignored for any other class.",
             ),
             e(
                 "SHOT_BEING=dark|light",
                 "Draw one of the Dual mage's two beings on its own, whole and painted, standing on her floor rather than rising out of the seal -- how each is looked at before they are halved. Pair it with SHOT_PORTRAIT to walk round it.",
+            ),
+            e(
+                "SHOT_SEAL=waist|feet",
+                "Put the Dual mage's seal, and where her beings come out of it, round her waist or on the floor round her feet, whichever the game does not, to compare the two.",
             ),
             e(
                 "SHOT_CLAY=1",

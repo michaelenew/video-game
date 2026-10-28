@@ -87,7 +87,7 @@ fn map(which: usize) -> Handle<Image> {
 const SHADE_SHADER: Handle<Shader> = weak_handle!("c5a83e17-2d6f-4b9a-8e14-6f3c9b2d7a05");
 const SKIN_SHADER: Handle<Shader> = weak_handle!("e2f7b4a9-6c1d-4e38-9a52-8d4f1c7e3b60");
 
-pub use shade::{Lustre, Shade};
+pub use shade::{Lustre, Shade, Veil};
 
 /// The uniform on its own, because `ShaderType`'s derive writes a layout
 /// check per field beside it that nothing calls.
@@ -127,6 +127,34 @@ mod shade {
         pub sheen: Vec4,
     }
 
+    /// **The veil** (2026-10-28): a Dual mage's being drawn as its painted
+    /// self, but only as much of it as its bar has filled -- its shoulder
+    /// and fist first, then its arm and torso, its head last
+    /// (`view::being::presence`) -- only its outer half, fading into its own
+    /// middle, and nothing of it below the seal it comes out of. `fill.z`
+    /// is whether there is a veil at all (0, the default: none, so no
+    /// fighter changes). See `skin.wgsl`.
+    #[derive(ShaderType, Reflect, Clone, Copy, Debug, Default, PartialEq)]
+    pub struct Veil {
+        /// The half's fill, whether she is ascending (0 or 1), on (0 or 1),
+        /// and the being's size against hers.
+        pub fill: Vec4,
+        /// A point on its centre line, and how wide the fade into it is.
+        pub centre: Vec4,
+        /// Unit, toward the half that is kept; and the seal's height.
+        pub keep: Vec4,
+        /// The half's shoulder and fist, and how far from them a point
+        /// arrives with the body (`view::being::REACH`, in metres).
+        pub shoulder: Vec4,
+        pub fist: Vec4,
+        /// The middle of its head, and the head's radius.
+        pub head: Vec4,
+        /// `view::being::ORDER`: first, body, head, soft.
+        pub order: Vec4,
+        /// The colour its condensing edge glows, and how brightly.
+        pub glow: Vec4,
+    }
+
     impl Shade {
         /// No map: everything reads as lit by it.
         pub const NONE: Shade = Shade {
@@ -146,6 +174,7 @@ pub type SkinMaterial = ExtendedMaterial<StandardMaterial, Shaded>;
 /// What the skin adds to the standard material: where the map is, and the
 /// two maps.
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
+#[bind_group_data(ShadedKey)]
 pub struct Shaded {
     #[uniform(100)]
     pub shade: Shade,
@@ -155,6 +184,8 @@ pub struct Shaded {
     pub map_b: Handle<Image>,
     #[uniform(103)]
     pub lustre: Lustre,
+    #[uniform(104)]
+    pub veil: Veil,
 }
 
 impl Default for Shaded {
@@ -164,6 +195,21 @@ impl Default for Shaded {
             map_a: MAP_A,
             map_b: MAP_B,
             lustre: Lustre::default(),
+            veil: Veil::default(),
+        }
+    }
+}
+
+/// Which pipeline a skin needs: a veiled being's writes depth.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ShadedKey {
+    veiled: bool,
+}
+
+impl From<&Shaded> for ShadedKey {
+    fn from(s: &Shaded) -> Self {
+        ShadedKey {
+            veiled: s.veil.fill.z > 0.5,
         }
     }
 }
@@ -171,6 +217,24 @@ impl Default for Shaded {
 impl MaterialExtension for Shaded {
     fn fragment_shader() -> ShaderRef {
         ShaderRef::Handle(SKIN_SHADER)
+    }
+
+    /// A veiled being, blended, still writes depth: a body seen through
+    /// itself would show its far arm through its chest, and its skin through
+    /// its armour, which is drawn as another mesh in no order against it.
+    /// Only a veiled being: any other blended skin is left as Bevy draws it.
+    fn specialize(
+        _pipeline: &bevy::pbr::MaterialExtensionPipeline,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        _layout: &bevy::render::mesh::MeshVertexBufferLayoutRef,
+        key: bevy::pbr::MaterialExtensionKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        if key.bind_group_data.veiled {
+            if let Some(depth) = descriptor.depth_stencil.as_mut() {
+                depth.depth_write_enabled = true;
+            }
+        }
+        Ok(())
     }
 }
 

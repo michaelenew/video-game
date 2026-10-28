@@ -1,33 +1,29 @@
-//! **The being behind the Dual mage, and the seal it rises from**
-//! (`view::being`, 2026-10-25): her two bars, drawn.
+//! **The beings beside the Dual mage, and the seal they rise from**
+//! (`view::being`): her two bars, drawn.
 //!
-//! The being is her own model a second time, under a root of its own
-//! ([`BeingRoot`]) that stands it behind her at [`view::being::scale`] times
-//! her size with its hips at her feet, posed with her pose from
-//! [`view::being::LAG_SECONDS`] ago ([`Echo`]) while she casts, and in its
-//! own stance, arms down, between her casts (`view::being::stance`) -- so it
-//! throws what she throws, larger and a beat behind. It is drawn in [`Spirit`], which is nothing of
-//! her costume: a translucent body, dark on her left and light on her right,
-//! each half there as far as its bar has filled, in the order
-//! `view::being::presence` gives (the shoulder and fist, the arm and torso,
-//! the head), and nothing below its waist, where it goes into the seal.
+//! Each being is its own model -- the obsidian man, the knight -- under a
+//! root of its own ([`BeingRoot`]), standing to her side (the dark one's
+//! centre line to her left, the light one's to her right), as tall as she
+//! is at the shoulder, posed by its own animations off the simulation's
+//! frame (`view::being::pose`): it strains at its binding, and her auto is
+//! its blow. It is drawn as its painted self, veiled (`still::Veil`,
+//! `skin.wgsl`): only its outer half, fading into its own middle; only as
+//! much of that as its bar has filled, the shoulder and fist first, the head
+//! last; and nothing of it below the seal it comes out of.
 //!
-//! The seal is a disc on the floor round her feet in the same material,
-//! split down the same line: dark half on her left, light on her right, a
-//! faint ring whatever the bars, and each half's runes lit round from behind
-//! her toward the front as its bar fills.
+//! The seal is a disc round her, at her waist or her feet
+//! (`view::being::SEAL_AT`), split down her middle: dark half on her left,
+//! light on her right, a faint ring whatever the bars, and each half's runes
+//! lit round as its bar fills.
 //!
-//! Both are presentation and nothing else. The echo is the renderer's own
-//! memory of what it drew, kept in her own space so a change of map frame
-//! moves nothing; a rollback shows for a tenth of a second what was drawn
-//! before it, which is what a thing that follows her is meant to do.
+//! Both are presentation and nothing else, and both are functions of the
+//! snapshot: a rollback redraws them exactly.
 
 use bevy::asset::weak_handle;
 use bevy::pbr::{NotShadowCaster, NotShadowReceiver};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use sim::state::MAX_PLAYERS;
-use view::pose::Pose;
 use view::skeleton::{Joint, Skeleton, skeleton_for};
 
 const SHADER: Handle<Shader> = weak_handle!("b3e1c8d4-6f2a-4a97-8c15-7d40e9a2b6f1");
@@ -40,7 +36,10 @@ mod look {
     use bevy::prelude::*;
     use bevy::render::render_resource::ShaderType;
 
-    /// Everything [`super::Spirit`] needs, in the arena's coordinates.
+    /// Everything [`super::Spirit`] -- the seal -- needs, in the arena's
+    /// coordinates. (Its body fields are the veil's before the beings were
+    /// drawn as their painted selves, `still::Veil`; the seal reads `fill`,
+    /// `left`, `feet` and `reach`.)
     #[derive(ShaderType, Reflect, Debug, Clone, Copy, Default)]
     pub struct SpiritLook {
         /// How full the dark half is, the light half, whether she is
@@ -67,7 +66,7 @@ mod look {
     }
 }
 
-/// The being's material, and the seal's: see the module.
+/// The seal's material: see the module.
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
 pub struct Spirit {
     #[uniform(0)]
@@ -97,72 +96,30 @@ pub struct BeingRoot(pub usize, pub usize);
 #[derive(Component)]
 pub struct Seal(pub usize);
 
-/// Each seat's two materials, and the numbers worked out once from her
-/// skeleton.
+/// Each seat's seal, and the numbers worked out once from her skeleton.
 #[derive(Resource)]
 pub struct Beings {
-    /// Each seat's two beings' material, dark then light.
-    pub body: [[Handle<Spirit>; MAX_PLAYERS]; 2],
     pub seal: [Handle<Spirit>; MAX_PLAYERS],
     /// Each being's own skeleton (`view::being::skeleton`) and how many times
     /// its size it is drawn.
     skeletons: [Skeleton; 2],
     scales: [f32; 2],
+    /// Her size against the reference body, which the being's distances
+    /// (`view::being::SIDE`, ...) are written in.
+    her_scale: f32,
     seal_radius: f32,
+    /// How high the seal is off her floor.
+    seal_height: f32,
     /// A shaft of light out of one of the dark being's rifts (`beam`): a
     /// unit frustum, narrow at the crack, and the light it is drawn in.
     pub beam_mesh: Handle<Mesh>,
     pub beam_light: Handle<StandardMaterial>,
 }
 
-/// How far each seat's being has taken up her pose: 0 standing as itself,
-/// 1 throwing with her (`view::being::stance`). Eased, on the renderer's
-/// clock: it is how a body moves, never a rule.
-#[derive(Resource, Default)]
-pub struct Casting(pub [f32; MAX_PLAYERS]);
-
-/// How many of her drawn poses are kept: a tenth of a second at the
-/// fastest refresh anybody has, and then some.
-const ECHOES: usize = 64;
-
-/// Her poses, as drawn, each with when: what the being is posed from.
-#[derive(Resource)]
-pub struct Echo {
-    poses: [[Option<(f32, Pose)>; ECHOES]; MAX_PLAYERS],
-    next: [usize; MAX_PLAYERS],
-}
-
-impl Default for Echo {
-    fn default() -> Self {
-        Echo {
-            poses: [[None; ECHOES]; MAX_PLAYERS],
-            next: [0; MAX_PLAYERS],
-        }
-    }
-}
-
-impl Echo {
-    fn push(&mut self, owner: usize, at: f32, pose: Pose) {
-        let i = self.next[owner];
-        self.poses[owner][i] = Some((at, pose));
-        self.next[owner] = (i + 1) % ECHOES;
-    }
-
-    /// The newest pose at least `lag` old, or the oldest kept if none is.
-    fn behind(&self, owner: usize, now: f32, lag: f32) -> Option<Pose> {
-        let mut best: Option<(f32, Pose)> = None;
-        let mut oldest: Option<(f32, Pose)> = None;
-        for (at, pose) in self.poses[owner].iter().flatten() {
-            if now - at >= lag && best.is_none_or(|(b, _)| *at > b) {
-                best = Some((*at, *pose));
-            }
-            if oldest.is_none_or(|(o, _)| *at < o) {
-                oldest = Some((*at, *pose));
-            }
-        }
-        best.or(oldest).map(|(_, pose)| pose)
-    }
-}
+/// One of a seat's beings' painted materials (the seat, then 0 dark or 1
+/// light): the veil `place` sets on it each frame.
+#[derive(Component)]
+pub struct BeingSkin(pub usize, pub usize);
 
 pub struct BeingPlugin;
 
@@ -173,8 +130,6 @@ impl Plugin for BeingPlugin {
             Shader::from_wgsl(include_str!("being.wgsl"), "game/src/being.wgsl"),
         );
         app.add_plugins(MaterialPlugin::<Spirit>::default())
-            .init_resource::<Echo>()
-            .init_resource::<Casting>()
             .add_systems(PreStartup, setup)
             .add_systems(Startup, spawn);
     }
@@ -190,25 +145,21 @@ fn setup(
     let skeletons = [0, 1].map(view::being::skeleton);
     let scales = [0, 1].map(|k| view::being::scale(&her, &skeletons[k]));
     let seal_radius = view::being::seal_radius(&her);
-    let mut made = |mode: f32| {
+    let seal = std::array::from_fn(|_| {
         materials.add(Spirit {
             look: SpiritLook {
-                fill: Vec4::new(0.0, 0.0, 0.0, mode),
+                fill: Vec4::new(0.0, 0.0, 0.0, 1.0),
                 ..default()
             },
         })
-    };
-    let body = [
-        std::array::from_fn(|_| made(0.0)),
-        std::array::from_fn(|_| made(0.0)),
-    ];
-    let seal = std::array::from_fn(|_| made(1.0));
+    });
     commands.insert_resource(Beings {
-        body,
         seal,
         skeletons,
         scales,
+        her_scale: her.scale,
         seal_radius,
+        seal_height: view::being::seal_height(&her, seal_at()),
         beam_mesh: meshes.add(beam_mesh()),
         beam_light: lights.add(StandardMaterial {
             base_color: Color::LinearRgba(LinearRgba::rgb(0.7, 0.35, 1.0) * BEAM_LIGHT),
@@ -355,104 +306,126 @@ pub const LUSTRE: [crate::still::Lustre; 2] = [
 /// for the same depth.
 const SEAL_LIFT: f32 = 0.025;
 
-/// Stand each seat's being behind her, pose it from her echo, lay her seal,
-/// and tell both how full each half is.
+/// Each force's colour at a being's condensing edge, dark then light, and
+/// how bright it is, in the lights' units (as `still::Lustre`'s).
+const EDGE: [Vec4; 2] = [
+    Vec4::new(0.62, 0.30, 1.25, 260.0),
+    Vec4::new(1.35, 1.15, 0.72, 200.0),
+];
+
+/// Where the seal is: `view::being::SEAL_AT`, or `SHOT_SEAL=feet` or
+/// `waist` to look at the other. Read once.
+pub fn seal_at() -> view::being::SealAt {
+    match crate::platform::env("SHOT_SEAL").as_deref() {
+        Some("feet") => view::being::SealAt::Feet,
+        Some("waist") => view::being::SealAt::Waist,
+        _ => view::being::SEAL_AT,
+    }
+}
+
+/// Stand each seat's beings beside her, pose each by its own animation,
+/// lay her seal, and tell each being's veil how much of it there is.
 ///
 /// Her feet and facing come off the blended frame, which is where her body
-/// is drawn; the bars off the current snapshot, because a meter is not a
-/// thing to blend (as the wings were before it).
+/// is drawn; the bars and her move off the current snapshot.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)] // a Bevy system: its arguments are what it reads
 pub fn place(
     sim: Res<crate::Sim>,
-    time: Res<Time>,
-    joints: Res<crate::Joints>,
     rigs: Res<crate::models::Rigs>,
     beings: Res<Beings>,
-    mut echo: ResMut<Echo>,
-    mut casting: ResMut<Casting>,
     mut materials: ResMut<Assets<Spirit>>,
+    mut skins: ResMut<Assets<crate::still::SkinMaterial>>,
+    painted: Query<(&BeingSkin, &MeshMaterial3d<crate::still::SkinMaterial>)>,
     mut roots: Query<(&BeingRoot, &mut Transform, &mut Visibility), Without<Seal>>,
     mut seals: Query<(&Seal, &mut Transform, &mut Visibility), Without<BeingRoot>>,
     mut bones: Query<&mut Transform, (Without<BeingRoot>, Without<Seal>, Without<crate::Fighter>)>,
 ) {
-    let now = time.elapsed_secs();
+    use crate::still::Veil;
     let frame = view::interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    // Per seat and per being: its look (what its veil is told) and where its
-    // root stands.
-    let mut looks: [[Option<SpiritLook>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
-    let mut stands: [[Option<(Vec3, Quat)>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
     let whole = looked_at();
+    let hs = beings.her_scale;
+    let mut veils: [[Option<Veil>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
+    let mut stands: [[Option<(Vec3, Quat)>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
+    let mut seal_looks: [Option<SpiritLook>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     for owner in 0..MAX_PLAYERS {
         let p = &sim.cur.players[owner];
         let Some(being) = view::being::being(p).filter(|_| sim.cur.is_present(owner)) else {
             continue;
         };
-        let Some(drawn) = joints.pose[owner] else {
-            continue;
-        };
-        echo.push(owner, now, drawn);
-        let late = echo
-            .behind(owner, now, view::being::LAG_SECONDS)
-            .unwrap_or(drawn);
-        // Into her pose while she throws something, back to its own after.
-        let throwing = p.action.attack_kind().is_some();
-        let w = &mut casting.0[owner];
-        let rate = if throwing {
-            view::being::CAST_IN
-        } else {
-            view::being::CAST_OUT
-        };
-        let target = if throwing { 1.0 } else { 0.0 };
-        *w += (target - *w) * (1.0 - (-rate * time.delta_secs()).exp());
-        let w = *w;
+        let moment = view::being::moment(p, sim.cur.frame);
         let v = frame.players[owner];
         let feet = Vec3::from_array(v.pos);
         let q = view::body_turn([v.facing[0], v.facing[2]]).0;
         let turn = Quat::from_xyzw(q[0], q[1], q[2], q[3]);
         // Character space has the facing at +Z, and a drawn body's left at
-        // +X (`view::hand_joint` says why).
+        // +X (`view::hand_joint` says why): the dark side.
         let left = turn * Vec3::X;
+        let seal_y = feet.y + beings.seal_height;
+        let o = view::being::ORDER;
         for k in 0..2 {
             let skeleton = &beings.skeletons[k];
             let s = beings.scales[k];
-            let skin = view::skeleton::solve(skeleton, &view::being::stance(k, &late, w));
+            let skin = view::skeleton::solve(skeleton, &view::being::pose(k, &moment));
             crate::models::pose(rigs.being[owner][k], Some(&skin), &mut bones);
-            // Hips at her feet; or, looked at whole, standing on her floor.
-            let sink = if whole > 0.0 {
+            // Toward the half it keeps: the dark being's left, the light's
+            // right -- away from her, either side.
+            let out = if k == 0 { 1.0 } else { -1.0 };
+            let side = if whole > 0.0 {
                 0.0
             } else {
-                s * skeleton.hip_height
+                out * view::being::SIDE * hs
             };
-            let root = feet + turn * Vec3::new(0.0, 0.0, -view::being::BEHIND) - Vec3::Y * sink;
+            let root = feet + turn * Vec3::new(side, 0.0, -view::being::BEHIND * hs);
             stands[owner][k] = Some((root, turn));
             let at = |local: [f32; 3]| root + turn * (Vec3::from_array(local) * s);
-            let joint = |j: Joint| at(skin.origin[j.index()]);
-            let fist = |left: bool| at(skin.box_of(skeleton, view::hand_joint(left)).0);
-            let o = view::being::ORDER;
-            looks[owner][k] = Some(SpiritLook {
+            let outer = k == 0;
+            let shoulder = at(skin.origin[view::drawn_joint(if outer {
+                view::skeleton::Joint::ArmL
+            } else {
+                view::skeleton::Joint::ArmR
+            })
+            .index()]);
+            let fist = at(skin.box_of(skeleton, view::hand_joint(outer)).0);
+            let head = at(skin.box_of(skeleton, Joint::Head).0);
+            veils[owner][k] = Some(Veil {
                 fill: Vec4::new(
-                    if whole > 0.0 { 1.0 } else { being.dark },
-                    if whole > 0.0 { 1.0 } else { being.light },
+                    being.of(if k == 0 {
+                        sim::class::Force::Dark
+                    } else {
+                        sim::class::Force::Light
+                    }),
                     if being.ascending { 1.0 } else { 0.0 },
-                    0.0,
+                    if whole > 0.0 { 0.0 } else { 1.0 },
+                    s,
                 ),
-                left: left.extend(s),
-                feet: feet.extend(beings.seal_radius),
-                dark_shoulder: joint(view::drawn_joint(Joint::ArmL)).extend(0.0),
-                dark_fist: fist(true).extend(0.0),
-                light_shoulder: joint(view::drawn_joint(Joint::ArmR)).extend(0.0),
-                light_fist: fist(false).extend(0.0),
-                head: at(skin.box_of(skeleton, Joint::Head).0).extend(0.0),
+                centre: root.extend(view::being::FADE * hs),
+                keep: (left * out).extend(seal_y),
+                shoulder: shoulder.extend(view::being::REACH * hs),
+                fist: fist.extend(0.0),
+                head: head.extend(0.16 * s),
                 order: Vec4::new(o.first, o.body, o.head, o.soft),
-                // Each being keeps only its own half: 1 dark, 2 light.
-                reach: Vec4::new(view::being::REACH, whole, (k + 1) as f32, 0.0),
+                glow: EDGE[k],
             });
         }
+        seal_looks[owner] = Some(SpiritLook {
+            fill: Vec4::new(
+                being.dark,
+                being.light,
+                if being.ascending { 1.0 } else { 0.0 },
+                1.0,
+            ),
+            left: left.extend(1.0),
+            feet: (feet + Vec3::Y * beings.seal_height).extend(beings.seal_radius),
+            order: Vec4::new(o.first, o.body, o.head, o.soft),
+            reach: Vec4::new(view::being::REACH, whole, 0.0, 0.0),
+            ..default()
+        });
     }
 
     for (root, mut tf, mut seen) in roots.iter_mut() {
         let (owner, k) = (root.0, root.1);
-        let shown = looks[owner][k].is_some_and(|l| l.fill.x > 0.0 || l.fill.y > 0.0);
+        let shown =
+            veils[owner][k].is_some_and(|v| v.fill.x > 0.0 || v.fill.y > 0.0 || v.fill.z < 0.5);
         let want = if shown {
             Visibility::Inherited
         } else {
@@ -468,7 +441,7 @@ pub fn place(
         }
     }
     for (seal, mut tf, mut seen) in seals.iter_mut() {
-        let look = looks[seal.0][0];
+        let look = seal_looks[seal.0].filter(|_| whole == 0.0);
         let want = if look.is_some() {
             Visibility::Inherited
         } else {
@@ -480,52 +453,17 @@ pub fn place(
         if let Some(look) = look {
             tf.translation = look.feet.truncate() + Vec3::Y * SEAL_LIFT;
             tf.scale = Vec3::new(beings.seal_radius, 1.0, beings.seal_radius);
-        }
-    }
-    for (owner, pair) in looks.iter().enumerate() {
-        for (k, look) in pair.iter().enumerate() {
-            let Some(look) = *look else {
-                continue;
-            };
-            if let Some(m) = materials.get_mut(&beings.body[k][owner]) {
+            if let Some(m) = materials.get_mut(&beings.seal[seal.0]) {
                 m.look = look;
             }
-            if k == 0 {
-                if let Some(m) = materials.get_mut(&beings.seal[owner]) {
-                    m.look = SpiritLook {
-                        fill: look.fill.truncate().extend(1.0),
-                        reach: Vec4::new(look.reach.x, look.reach.y, 0.0, 0.0),
-                        ..look
-                    };
-                }
-            }
         }
     }
-}
-
-/// Give a being's model its material in place of what the file came with:
-/// its veil of light, kept out of the shadows because it is light, not a
-/// body -- or, looked at on its own (`SHOT_BEING`), its `painted` self.
-pub fn dress(
-    commands: &mut Commands,
-    entity: Entity,
-    beings: &Beings,
-    owner: usize,
-    being: usize,
-    painted: Option<Handle<crate::still::SkinMaterial>>,
-) {
-    let mut e = commands.entity(entity);
-    e.remove::<MeshMaterial3d<StandardMaterial>>();
-    match painted {
-        Some(skin) => {
-            e.insert(MeshMaterial3d(skin));
-        }
-        None => {
-            e.insert((
-                MeshMaterial3d(beings.body[being][owner].clone()),
-                NotShadowCaster,
-                NotShadowReceiver,
-            ));
+    for (tag, handle) in painted.iter() {
+        let Some(veil) = veils[tag.0][tag.1] else {
+            continue;
+        };
+        if let Some(m) = skins.get_mut(&handle.0) {
+            m.extension.veil = veil;
         }
     }
 }

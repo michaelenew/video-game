@@ -396,7 +396,7 @@ does to an auto is what it *does*.
 `cargo run -p sim --bin frametable` prints the live numbers, and the HUD draws the two bars
 under her health in one track: Dark filling leftwards from the middle and Light rightwards, the
 two tiers ticked on each side, and its border in the colour of the force she is carrying. The
-being behind her and the seal at her feet are the same two numbers, readable from across the
+two half-beings beside her and the seal they rise from are the same two numbers, readable from across the
 arena.
 
 ### Why `E` carries an ability

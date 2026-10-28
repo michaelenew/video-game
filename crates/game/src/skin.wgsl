@@ -7,7 +7,7 @@
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::{alpha_discard, apply_pbr_lighting, main_pass_post_lighting_processing},
     forward_io::{VertexOutput, FragmentOutput},
-    mesh_view_bindings::{lights, view},
+    mesh_view_bindings::{lights, view, globals},
     mesh_view_types::DIRECTIONAL_LIGHT_FLAGS_SHADOWS_ENABLED_BIT,
 }
 #import game::still
@@ -22,6 +22,65 @@ struct Lustre {
     sheen: vec4<f32>,
 }
 @group(2) @binding(103) var<uniform> lustre: Lustre;
+
+// `still::Veil`: a Dual mage's being, there as far as its bar has filled,
+// its outer half only, out of the seal (`fill.z`: 0, none).
+struct Veil {
+    fill: vec4<f32>,
+    centre: vec4<f32>,
+    keep: vec4<f32>,
+    shoulder: vec4<f32>,
+    fist: vec4<f32>,
+    head: vec4<f32>,
+    order: vec4<f32>,
+    glow: vec4<f32>,
+}
+@group(2) @binding(104) var<uniform> veil: Veil;
+
+fn veil_hash(p: vec3<f32>) -> f32 {
+    let q = fract(p * 0.3183099 + vec3<f32>(0.1, 0.2, 0.3)) * 17.0;
+    return fract(q.x * q.y * q.z * (q.x + q.y + q.z));
+}
+
+// Value noise: what makes a condensing edge smoke rather than a line.
+fn veil_noise(p: vec3<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(mix(veil_hash(i), veil_hash(i + vec3<f32>(1.0, 0.0, 0.0)), u.x),
+            mix(veil_hash(i + vec3<f32>(0.0, 1.0, 0.0)), veil_hash(i + vec3<f32>(1.0, 1.0, 0.0)), u.x), u.y),
+        mix(mix(veil_hash(i + vec3<f32>(0.0, 0.0, 1.0)), veil_hash(i + vec3<f32>(1.0, 0.0, 1.0)), u.x),
+            mix(veil_hash(i + vec3<f32>(0.0, 1.0, 1.0)), veil_hash(i + vec3<f32>(1.0, 1.0, 1.0)), u.x), u.y),
+        u.z,
+    );
+}
+
+// `view::being::presence`, the same function: how much of a part is there.
+fn veil_presence(reach: f32, head: f32, fill: f32) -> f32 {
+    let o = veil.order;
+    let body = o.x + (o.y - o.x) * clamp(reach, 0.0, 1.0);
+    let start = body + (max(o.z, body) - body) * clamp(head, 0.0, 1.0);
+    return smoothstep(start, start + o.w, fill);
+}
+
+// How much of the being is at `p`, 0 to 1.
+fn veil_alpha(p: vec3<f32>) -> f32 {
+    let s = veil.fill.w;
+    let t = globals.time;
+    let drift = veil_noise(p * (4.0 / s) + vec3<f32>(0.0, -t * 0.6, t * 0.2)) - 0.5;
+    let reach = veil.shoulder.w;
+    let r = min(distance(p, veil.shoulder.xyz), distance(p, veil.fist.xyz)) / reach;
+    let head = 1.0 - smoothstep(veil.head.w * 0.6, veil.head.w, distance(p, veil.head.xyz));
+    // Ascending, the simulation already says full (`view::being::being`).
+    var a = veil_presence(r + drift * 0.35, head, veil.fill.x);
+    // Its outer half, fading into its own middle.
+    let d = dot(p - veil.centre.xyz, veil.keep.xyz);
+    a = a * smoothstep(0.0, veil.centre.w, d + drift * 0.5 * veil.centre.w);
+    // Out of the seal: nothing below it.
+    a = a * smoothstep(veil.keep.w, veil.keep.w + 0.06 * s, p.y + drift * 0.05 * s);
+    return a;
+}
 
 // A soft panel of light in the mirror direction `r`, centred on `d`, its
 // edge wider the rougher the surface.
@@ -52,6 +111,13 @@ const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> FragmentOutput {
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    var veiled = 1.0;
+    if (veil.fill.z > 0.5) {
+        veiled = veil_alpha(in.world_position.xyz);
+        if (veiled <= 0.004) {
+            discard;
+        }
+    }
     var out: FragmentOutput;
     out.color = apply_pbr_lighting(pbr_input);
     let s = still::shade(where_map, map_a, map_b, in.world_position.xyz, pbr_input.N);
@@ -89,6 +155,15 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         let env = studio(normalize(rv), rough) * fres * gloss;
         let edge = lustre.sheen.rgb * pow(1.0 - nv, max(lustre.sheen.w, 0.5));
         out.color = vec4<f32>(out.color.rgb + (env * lustre.gloss.x + edge) * view.exposure, out.color.a);
+    }
+    if (veil.fill.z > 0.5) {
+        // Brightest where it is half there: the front of what is condensing,
+        // in its force's light; and a thin light at its outline.
+        let n = pbr_input.N;
+        let rim = pow(1.0 - saturate(dot(n, pbr_input.V)), 2.0);
+        let front = 4.0 * veiled * (1.0 - veiled);
+        let glow = veil.glow.rgb * veil.glow.w * (front * 1.2 + rim * 0.35 * veiled) * view.exposure;
+        out.color = vec4<f32>(out.color.rgb + glow, veiled);
     }
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;
