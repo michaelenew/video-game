@@ -11,7 +11,11 @@ jumps should feel, and what is still open about progression and story -- is
 [ability spec](ability-spec.md) → a class kit. For implementation, see
 [architecture](architecture.md); before touching anything that is *pointed at
 something*, see [aiming](aiming.md); how the picture is painted -- Guild Wars 2's
-brushwork, how it was found and what did not work -- is [painting](painting.md); the world's checksum logic -- the
+brushwork, how it was found and what did not work -- is [painting](painting.md); how a
+character is built as art rather than as a mannequin -- the Shadow Reaver, by script,
+from a CC0 body -- is [exploration/0024](exploration/0024_a_character_done_properly.md) and
+[`art/README.md`](../../art/README.md), and **the owner's rules for how the cast looks
+and moves -- and the recipe for painting a class -- are [cast-look](cast-look.md)**; the world's checksum logic -- the
 overlapping regions every build keeps its books in -- is
 [regions](regions.md), and where it goes next is
 [exploration/0018](exploration/0018_crowds.md).
@@ -137,6 +141,12 @@ Eleven, all built (2026-10-01), each in its own arena, on five tiers of difficul
 with `--hunt <name>` (`?hunt=<name>` in the browser); `Shift+H` steps through all eleven in
 game, `T` tempers the one you are hunting, and the HUD's list shows your trophies.
 [review.md](review.md) has each one's command, numbers and open questions.
+**In the valley** (since 2026-10-22, [valley.md](valley.md) §1) they are out on
+the land: the herds and packs roaming the valley floor and its road, waking as you
+come near, the six whose
+arenas are odd ground raised as **stations** in the middle of jump sections, and
+every sleeping one drawn where it is from across the valley -- where it stands is a
+function of the frame, so it is seen without being simulated.
 
 | Creature | Tier | Arena | `--hunt` | One line |
 | --- | --- | --- | --- | --- |
@@ -151,6 +161,8 @@ game, `T` tempers the one you are hunting, and the HUD's list shows your trophie
 | [Veilstalker](creatures/veilstalker.md) | 4 | the Ashwood | `veilstalker` | The animal you never see: read what it touches |
 | [Mantis](creatures/mantis.md) | 5 | the Shrine | `mantis` | A duellist that guards, parries and reads what you repeat |
 | [Siegeshell](creatures/siegeshell.md) | 5, for two | the Last Valley | `siegeshell` | A walking hill; break its anchors before it reaches the wall |
+
+**Every class has a tutorial hall** ([tutorials.md](tutorials.md), 2026-10-23): `--tutorial reaver` (`?tutorial=reaver`) or the Esc menu's Tutorials row. A premise room, a room per click and one for the keys -- each move tried once, a box ticked and a count kept, a word on whether it landed -- then the advanced rooms, one technique each. The dummy follows you room to room; Tab walks you into the next class's hall.
 
 **The game starts in the valley** ([valley.md](valley.md)): Hearth's square, with every creature a room off the climb, behind its tier's waystone -- one map you walk, since 2026-10-09 ([atlas.md](atlas.md)). `--versus` starts the proving ground instead, and `--open` lights every waystone.
 
@@ -191,6 +203,7 @@ and the trophy list. The range (`--arena range`) is the dev arena with one of ev
 | [versus.md](versus.md) | **Versus modes**: floating duel stages with a ring-out pit, and King of the Hill -- the point, the lock, captures, both sides' clocks, overtime, respawns, sides that cannot hurt their own; the seven stages and what each is built to have | **Built 2026-10-21**, unplayed |
 | [arenas.md](arenas.md) | An arena is a table: bounds, solids (ceilings included), floor materials, spawns; the picker (`--hunt <creature>`, `--arena`, `H` / `Shift+H` on the wire); **the recipe for adding one** | **Built 2026-10-01** (bestiary P2, world W0); the proving ground pinned bit for bit |
 | [creatures/](creatures/) | One design per creature: [Gnawers](creatures/gnawers.md) (**built 2026-10-01**: `--hunt gnawers`, the Commons; §13 is where it landed), [Hornback herd](creatures/hornback.md) (**built 2026-10-01**: `--hunt hornback`, the low meadow, and `--hunt hornback-escort`, the crossing; §13 is where it landed), [Sandmaw](creatures/sandmaw.md) (**built 2026-10-01**: `--hunt sandmaw`, the Pan; §13 is where it landed), [Mireback](creatures/mireback.md) (**built 2026-10-01**: `--hunt mireback`, the Mire; §13 is where it landed), [The Pair](creatures/the-pair.md) (**built 2026-10-01**: `--hunt pair`, the Den; §13 is where it landed), [Broodmother](creatures/broodmother.md) (**built 2026-10-01**: `--hunt broodmother`, the Hollows; §13 is where it landed), [Galewing](creatures/galewing.md) (**built 2026-10-01**: `--hunt galewing`, the Cliffs; §13 is where it landed), [Veilstalker](creatures/veilstalker.md) (**built 2026-10-01**: `--hunt veilstalker`, the Ashwood; §13 is where it landed), [Mantis](creatures/mantis.md) (**built 2026-10-01**: `--hunt mantis`, the Shrine; §13 is where it landed), [Siegeshell](creatures/siegeshell.md) (**built 2026-10-01**: `--hunt siegeshell`, the Last Valley; §13 is where it landed) | All ten built: the Gnawers, the Hornback herd, the Mireback, the Sandmaw, the Pair, the Broodmother, the Galewing, the Veilstalker, the Mantis and the Siegeshell |
+| [tutorials.md](tutorials.md) | **Tutorial halls**: one per class on offer -- the premise, every click in order (floor, hold, air, takeoff), the keys, then advanced rooms one technique each; area-triggered rooms, a checklist with a count for practice, Hit or missed; how a task is read off two frames and the proxies chosen | **Built 2026-10-23**, unplayed |
 | [courses.md](courses.md) | **Jump courses**: nine hand-authored floating-island courses to play (two easy; the Spiral, the Falls, the Slalom, the Fork and the Waterfall -- the valley's basalt cliff, also on its road -- hard; the Spire and the Gulf barely possible -- every tier an unplayed guess; `--arena falls`, `N` steps through them), big jumps in them for the class mechanics, the Reach (a proving ground of marked distances, `--arena reach`), the corner-clip fix, and the round-two/three measuring tools kept but not used as design inputs | **Built 2026-10-03, hand-authored 2026-10-04, big jumps and the Reach 2026-10-04, the Waterfall 2026-10-10**; for play |
 | [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30**; W0 (the picker), W1 (trophies) and W2 (tempers) built 2026-10-01; the valley built 2026-10-08, as [valley.md](valley.md) |
 | [atlas.md](atlas.md) | **One map, read a tile at a time**: places laid out on one map with their doorways cut, square tiles so a query reads only what is near it (no 64-box cap on the map), the world running in the coordinates of the place it is in and moving with the fighters, rooms whose hunts start when you walk in, and distance loading in the renderer | **Built 2026-10-09**, unplayed; every doorway walked by a test, SyncTest clean across a crossing |

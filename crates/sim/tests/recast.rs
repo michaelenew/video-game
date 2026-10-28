@@ -68,6 +68,14 @@ fn no_two_kinds_of_trip_share_a_byte() {
     for k in 0..=u8::MAX {
         assert_eq!(Travel::cairn(k).destination(), Some(Destination::Cairn(k)));
     }
+    // An arena: its id's high bits in the high byte (2026-10-23, for the
+    // tutorial halls past sixty-three) -- every word that reads as one is
+    // the word that arena writes.
+    for b in 0..=u16::MAX {
+        if let Some(Destination::Arena(id)) = Travel(b).destination() {
+            assert_eq!(Travel::arena(id), Travel(b), "word {b:#06x}");
+        }
+    }
     // A high byte on anything else asks for nothing: a byte that meant a
     // trip still means exactly that trip, and nothing else.
     for b in 0..=255u16 {
@@ -79,6 +87,7 @@ fn no_two_kinds_of_trip_share_a_byte() {
                     | Destination::Feed(_)
                     | Destination::Credit(_)
                     | Destination::Cairn(_)
+                    | Destination::Arena(_)
             )
         }) {
             assert_eq!(

@@ -18,48 +18,71 @@
 //! in-game with Tab. Names are matched loosely: bulwark, champion, reaver,
 //! elementalist, blood, dual.
 
+mod anatomy;
+// Grows bred bodies; the game does not draw a morph with one yet (exploration 0032).
 mod arenas;
 mod bag;
 mod bake;
 mod beast;
+mod blades;
+#[allow(dead_code)]
+mod bred;
+mod brushwork;
 mod cairns;
+mod carapace;
 mod claimed;
+mod coat;
+mod contour;
 mod critters;
 mod crosshair;
 mod debug;
 mod falls;
 mod forms;
+mod fx;
 mod glint;
 mod governor;
 mod ground;
 mod grove;
+mod grown;
 mod heel;
 mod hill;
+mod horns;
 mod hub;
 mod hud;
+mod impact;
+mod ink;
+mod inspect;
 mod keep;
 mod land;
 mod menu;
+mod models;
 mod online;
 mod outline;
 mod paint;
 mod palette;
 mod picker;
 mod platform;
+mod pretty;
 mod profile;
 mod scrape;
 mod settings;
 mod shapes;
+mod sighted;
 mod signs;
 mod sky;
+mod slash;
 mod sound;
 mod species;
 mod splats;
+mod squeeze;
 mod still;
 mod stream;
 mod swing;
+#[allow(dead_code)]
+mod touch;
 mod town;
 mod trophies;
+mod tutorial;
 mod valley;
 mod veil;
 mod warm;
@@ -112,6 +135,12 @@ fn chosen_start(opts: &platform::Options) -> picker::Start {
         opts.value("--arena"),
         opts.value("--temper"),
     );
+    // `--tutorial [class]`: that class's hall (`tutorial`).
+    if let Some(class) = chosen_tutorial(opts)
+        && let Some(t) = sim::tutorial::for_class(class)
+    {
+        start.arena = Some(t.arena);
+    }
     // **The valley is where a run starts** (`docs/design/valley.md`): Hearth's
     // square, unless a fight was asked for -- `--hunt`, `--arena`, or
     // `--versus` for the proving ground as it always was.
@@ -119,6 +148,19 @@ fn chosen_start(opts: &platform::Options) -> picker::Start {
         start.arena = Some(sim::valley::START);
     }
     start
+}
+
+/// `--tutorial [class]`: the class whose tutorial hall a run starts in --
+/// the one named, or player one's.
+fn chosen_tutorial(opts: &platform::Options) -> Option<sim::Class> {
+    if let Some(name) = opts.value("--tutorial") {
+        return Some(parse_class(name).unwrap_or(sim::class::ROTATION[0]));
+    }
+    opts.flag("--tutorial").then(|| {
+        opts.value("--p1")
+            .and_then(parse_class)
+            .unwrap_or(sim::class::ROTATION[0])
+    })
 }
 
 /// `--open`: every waystone in the valley lit, as if every creature had been
@@ -154,12 +196,20 @@ fn seats_of(dummy: Dummy) -> u8 {
 
 /// Every seat's class: `--p1` to `--p4`, the first of the rotation (the
 /// Champion) where none is named.
+///
+/// **A seat nobody plays is player one's class** -- what a replay's start
+/// line says of one (`sim::replay::Start::tidied`), since it never names
+/// it. They were the Champion, so every tape whose first player was not one
+/// was refused by its own start checksum (2026-10-24).
 fn chosen_classes(opts: &platform::Options) -> [sim::Class; MAX_PLAYERS] {
-    std::array::from_fn(|i| {
+    let named: [sim::Class; MAX_PLAYERS] = std::array::from_fn(|i| {
         opts.value(&format!("--p{}", i + 1))
             .and_then(parse_class)
+            .or_else(|| (i == 0).then(|| chosen_tutorial(opts)).flatten())
             .unwrap_or(sim::class::ROTATION[0])
-    })
+    });
+    let played = chosen_players(opts) as usize;
+    std::array::from_fn(|i| if i < played { named[i] } else { named[0] })
 }
 
 /// **How many play** (`--players`, `?players=` in a link): two to four. More
@@ -195,10 +245,15 @@ fn start_world(opts: &platform::Options, dummy: Dummy) -> World {
         .drafting(drafts());
         return seated(w, dummy);
     }
-    let w = picker::world(chosen_start(opts), chosen_classes(opts), drafts());
+    // Seated as the start is built, the way its tape's line rebuilds it:
+    // seated after, a room for three or four started from a world no line
+    // describes.
     match chosen_players(opts) {
-        n if n > 2 => w.seated(n),
-        _ => seated(w, dummy),
+        n if n > 2 => picker::world(chosen_start(opts), chosen_classes(opts), drafts(), n),
+        _ => seated(
+            picker::world(chosen_start(opts), chosen_classes(opts), drafts(), 2),
+            dummy,
+        ),
     }
 }
 
@@ -222,6 +277,13 @@ fn main() {
                 .set(bevy::render::RenderPlugin {
                     synchronous_pipeline_compilation: platform::flag("--sync-pipelines"),
                     ..default()
+                })
+                .set(AssetPlugin {
+                    file_path: platform::asset_root(),
+                    // No settings file beside a model: asked for, it is a
+                    // request a page's host answers with a 404.
+                    meta_check: bevy::asset::AssetMetaCheck::Never,
+                    ..default()
                 }),
         )
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.08)))
@@ -237,6 +299,7 @@ fn main() {
         .init_resource::<Fades>()
         .init_resource::<ShadowFades>()
         .init_resource::<CopyLooks>()
+        .init_resource::<fx::Flowing>()
         .init_resource::<ShieldHands>()
         .init_resource::<Hands>()
         .init_resource::<Torsos>()
@@ -251,6 +314,7 @@ fn main() {
         .init_resource::<heel::Heels>()
         .init_resource::<sound::Soundscape>()
         .init_resource::<Joints>()
+        .init_resource::<tutorial::Coach>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -258,7 +322,9 @@ fn main() {
         .insert_resource(trophies::Trophies::load())
         .insert_resource(cairns::Cairns::load())
         .init_resource::<InsideOwnHead>()
+        .init_resource::<inspect::Inspect>()
         .init_resource::<beast::Boom>()
+        .init_resource::<sighted::Sighted>()
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
@@ -267,6 +333,10 @@ fn main() {
         .add_plugins(splats::SplatsPlugin)
         .add_plugins(swing::SwingPlugin)
         .add_plugins(warm::WarmPlugin)
+        .add_plugins(ink::InkPlugin)
+        .add_plugins(brushwork::BrushworkPlugin)
+        .add_plugins(models::ModelsPlugin)
+        .add_plugins(impact::ImpactPlugin)
         // The line round every silhouette, as a pass over the finished picture.
         // Only where the platform can read a depth buffer: see
         // `platform::draws_outlines`. Registering it anyway would not fail
@@ -287,6 +357,7 @@ fn main() {
             (
                 setup,
                 beast::setup,
+                beast::setup_bodies,
                 beast::setup_signs,
                 critters::setup,
                 signs::setup,
@@ -334,7 +405,15 @@ fn main() {
                 // One entry, so the chain stays under twenty: the balls go
                 // where the poses just put the joints.
                 // And the dust off a wall goes where the poses put the hand.
-                (apply_poses, pose_balls, place_copies, scrape::place).chain(),
+                (
+                    apply_poses,
+                    pose_balls,
+                    place_copies,
+                    pose_models,
+                    swing_coats,
+                    scrape::place,
+                )
+                    .chain(),
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
                 // and this is the twenty-first. They are independent of each
@@ -347,6 +426,7 @@ fn main() {
                     place_debris,
                     place_gusts,
                     place_discs,
+                    fx::flow,
                     place_wingspans,
                     place_marks,
                     place_scythes,
@@ -368,7 +448,14 @@ fn main() {
                     claimed::drape,
                     place_auras,
                 ),
-                beast::place,
+                (
+                    sighted::update,
+                    beast::place,
+                    beast::install_models,
+                    beast::paint_parts,
+                    beast::pose_bodies,
+                )
+                    .chain(),
                 drive_camera,
                 (colour_by_side, fade_own_body).chain(),
                 hud::toggle_class_buttons,
@@ -392,7 +479,7 @@ fn main() {
         .add_systems(
             Update,
             (
-                critters::place,
+                critters::place.after(sighted::update),
                 critters::overlay,
                 (signs::place, hill::place),
                 ground::place,
@@ -410,7 +497,7 @@ fn main() {
                 hud::update_regions,
                 hide_empty_seats,
                 menu::show_progress,
-                (menu::notice_cairns, menu::draw).chain(),
+                (menu::notice_cairns, menu::draw, tutorial::draw).chain(),
                 // What you carry and your morph (`sim::keep`).
                 (
                     heel::follow,
@@ -428,6 +515,12 @@ fn main() {
         // The window through what the camera passes through, on to where
         // the camera has just been put.
         .add_systems(Update, window::follow.after(drive_camera))
+        // The close look's orbit, read after the fight's look has been and
+        // before the camera is placed from it.
+        .add_systems(
+            Update,
+            inspect::steer.after(mouse_look).before(drive_camera),
+        )
         // The bag's key, before anything asks who owns the mouse: opening
         // it is what frees the cursor.
         .add_systems(Update, keep::toggle_bag.before(palette::sample_focus))
@@ -515,6 +608,9 @@ pub struct Sim {
     /// [`picker`]. On the wire rather than a fresh `World` built here, so a
     /// peer changes arena on the same frame.
     travel: sim::input::Travel,
+    /// Knobs of the Oven moved in a match, on their way onto the wire: one a
+    /// tick, on this machine's input ([`palette::Moved`]).
+    tunes: palette::Moved,
     /// **The fight so far, as a replay** (`sim::replay`): where it started
     /// and every frame's inputs, kept from the first frame so that "that felt
     /// wrong" can be saved after the fact (`Y`, or the Esc menu) and put
@@ -758,10 +854,16 @@ impl Default for Sim {
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
             history: Rewind::new(&seed),
-            ledger: regions::Ledger::new(&seed, 0, dev_mode()),
+            // A tape plays back on the books it was recorded beside: a
+            // match's begin at its agreed start.
+            ledger: match &playing {
+                Some(p) => regions::Ledger::for_tape(&p.tape, &seed, dev_mode()),
+                None => regions::Ledger::new(&seed, 0, dev_mode()),
+            },
             regions_said: 0,
             rehearsing: None,
             travel: sim::input::Travel::NONE,
+            tunes: palette::Moved::default(),
             tape: sim::replay::Tape::begin(&seed, build()),
             playing,
             saved: None,
@@ -788,8 +890,14 @@ fn limb_form(joint: view::skeleton::Joint) -> Mesh {
         | Joint::ThighL
         | Joint::ThighR
         | Joint::ShinL
-        | Joint::ShinR => shapes::soft_cylinder(Vec3::ONE, 0.5, 10),
+        | Joint::ShinR
+        | Joint::Neck => shapes::soft_cylinder(Vec3::ONE, 0.5, 10),
         Joint::Head => shapes::soft_box(Vec3::ONE, 0.9, 12, None),
+        // Inside the chest and the foot: a mannequin looks as it did before
+        // they had joints.
+        Joint::ClavicleL | Joint::ClavicleR | Joint::ToeL | Joint::ToeR => {
+            shapes::soft_box(Vec3::ONE, 0.5, 6, None)
+        }
         Joint::HandL | Joint::HandR | Joint::FootL | Joint::FootR => {
             shapes::soft_box(Vec3::ONE, 0.5, 8, None)
         }
@@ -827,11 +935,15 @@ fn ball_width(skeleton: &Skeleton, joint: view::skeleton::Joint) -> f32 {
 }
 
 /// Where each fighter's joints are this frame, in the fighter's own frame:
-/// what [`pose_balls`] puts the balls at. Written by the posing pass.
+/// what [`pose_balls`] puts the balls at. Written by the posing pass. The
+/// Reaping's copies too, and how solid each is, for the Reaver's model
+/// (`reaver`), which is posed from here rather than solved again.
 #[derive(Resource, Default)]
 struct Joints {
     body: [Option<view::skeleton::Skin>; MAX_PLAYERS],
     shadow: [Option<view::skeleton::Skin>; MAX_PLAYERS],
+    copies: [[Option<view::skeleton::Skin>; REAP_COPIES]; MAX_PLAYERS],
+    copy_solid: [[f32; REAP_COPIES]; MAX_PLAYERS],
 }
 
 /// A ball at one of a fighter's joints. See [`BALLS`].
@@ -2389,12 +2501,54 @@ struct EffectLook {
     limb: Handle<Mesh>,
     block: Handle<Mesh>,
     head: Handle<Mesh>,
+    /// The Reaver's blades (`blades`): a throwing star, a shard out of the
+    /// floor, a crescent cut, and the dark violet steel they are made of.
+    shuriken: Handle<Mesh>,
+    shard: Handle<Mesh>,
+    crescent: Handle<Mesh>,
+    steel: Handle<StandardMaterial>,
+    forged: Handle<StandardMaterial>,
+    /// The Blood mage's scythe, as a weapon (`blades::haft`, `blades::scythe_blade`).
+    haft: Handle<Mesh>,
+    scythe_blade: Handle<Mesh>,
+    /// The elements as things (`fx`): what a column or a ball is drawn as
+    /// when it is fire, wind or earth (`EffectLook::dressed`).
+    flame: Handle<Mesh>,
+    fireball: Handle<Mesh>,
+    rubble: Handle<Mesh>,
+    whirl: Handle<Mesh>,
+    windball: Handle<Mesh>,
+    winddisc: Handle<Mesh>,
+    comet: Handle<Mesh>,
+    rock: Handle<Mesh>,
+    /// Moving air, streaked and see-through: the Elementalist's wind.
+    air: Handle<StandardMaterial>,
+    /// The Blood mage's things as things (`fx`): a ridged thorn, a braided
+    /// vine, a drop, a spill on the floor, a tongue of essence.
+    thorn: Handle<Mesh>,
+    vine: Handle<Mesh>,
+    droplet: Handle<Mesh>,
+    puddle: Handle<Mesh>,
+    tongue: Handle<Mesh>,
+    /// The Champion's: a crescent of light, and the gold it is made of.
+    crescent_wave: Handle<Mesh>,
+    gilt: Handle<StandardMaterial>,
+    /// The Dual mage's: a star of light, a cloud, a sunburst, a shard, and
+    /// a disc with a sigil on it in each force.
+    star: Handle<Mesh>,
+    cloud: Handle<Mesh>,
+    sunburst: Handle<Mesh>,
+    point: Handle<Mesh>,
+    disc: Handle<Mesh>,
+    sigil_light: Handle<StandardMaterial>,
+    sigil_dark: Handle<StandardMaterial>,
 }
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn setup(
     mut commands: Commands,
     settings: Res<settings::Settings>,
@@ -2402,6 +2556,8 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut skins: ResMut<Assets<still::SkinMaterial>>,
     mut copies: ResMut<CopyLooks>,
+    mut images: ResMut<Assets<Image>>,
+    mut flowing: ResMut<fx::Flowing>,
 ) {
     let eye = commands
         .spawn((
@@ -2630,34 +2786,56 @@ fn setup(
         height: 1.0,
     });
     let ball = meshes.add(Sphere::new(0.5));
+    let flame_tex = images.add(fx::flame_texture());
+    let wind_tex = images.add(fx::wind_texture());
+    let stone_tex = images.add(fx::stone_texture());
+    let blood_tex = images.add(fx::blood_texture());
+    let essence_tex = images.add(fx::essence_texture());
+    let light_tex = images.add(fx::light_texture());
+    let dark_tex = images.add(fx::dark_texture());
+    let smoke_tex = images.add(fx::smoke_texture());
+    let sigil_tex = images.add(fx::sigil_texture());
+    let feather_tex = images.add(fx::feather_texture());
     let look = EffectLook {
         // Translucent, not solid -- it is flame, and a wall of solid orange
         // plastic reads as a structure rather than a hazard you could
         // arguably see an opponent through.
+        //
+        // Tongues of it (`fx::flame_texture`), flowing up through a heat the
+        // mesh carries from a white root to red tips (`fx::heat`).
         fire: materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.45, 0.12, 0.55),
-            emissive: LinearRgba::rgb(2.4, 0.8, 0.15),
+            base_color: Color::srgba(1.0, 0.75, 0.45, 0.8),
+            base_color_texture: Some(flame_tex.clone()),
+            emissive: LinearRgba::rgb(2.0, 0.75, 0.15),
+            emissive_texture: Some(flame_tex.clone()),
             perceptual_roughness: 0.9,
             alpha_mode: AlphaMode::Blend,
+            double_sided: true,
+            cull_mode: None,
             ..default()
         }),
+        // Wet: clotted dark in patches (`fx::blood_texture`), and glossy.
         blood: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.35, 0.03, 0.09),
+            base_color: Color::srgb(0.55, 0.05, 0.12),
+            base_color_texture: Some(blood_tex.clone()),
             emissive: LinearRgba::rgb(0.5, 0.0, 0.12),
-            perceptual_roughness: 0.95,
+            perceptual_roughness: 0.35,
+            reflectance: 0.6,
             ..default()
         }),
         thrall: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.42, 0.0, 0.02, 0.78),
+            base_color: Color::srgba(0.62, 0.02, 0.05, 0.82),
+            base_color_texture: Some(blood_tex.clone()),
             emissive: LinearRgba::rgb(0.22, 0.0, 0.01),
-            perceptual_roughness: 0.8,
+            perceptual_roughness: 0.4,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         vines: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.03, 0.02, 0.03, 0.55),
+            base_color: Color::srgba(0.07, 0.05, 0.06, 0.8),
+            base_color_texture: Some(images.add(fx::vine_texture())),
             emissive: LinearRgba::rgb(0.06, 0.0, 0.02),
-            perceptual_roughness: 0.6,
+            perceptual_roughness: 0.7,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
@@ -2676,11 +2854,16 @@ fn setup(
             // violet, lit from inside, so it reads as something she draws
             // out of a body rather than what a wound leaves on the floor.
             let solid = 0.18 + 0.72 * step as f32 / (ESSENCE_STEPS - 1) as f32;
+            // Folded through itself (`fx::essence_texture`), and flowing.
             materials.add(StandardMaterial {
-                base_color: Color::srgba(0.26, 0.03, 0.20, solid),
+                base_color: Color::srgba(0.42, 0.05, 0.34, solid),
+                base_color_texture: Some(essence_tex.clone()),
                 emissive: LinearRgba::rgb(0.70 * solid, 0.04, 0.50 * solid),
-                perceptual_roughness: 0.9,
+                emissive_texture: Some(essence_tex.clone()),
+                perceptual_roughness: 0.5,
                 alpha_mode: AlphaMode::Blend,
+                double_sided: true,
+                cull_mode: None,
                 ..default()
             })
         }),
@@ -2689,8 +2872,10 @@ fn setup(
         // thing of hers that reads as an object rather than a stain.
         heart: materials.add(StandardMaterial {
             // Lit only a little from inside: brighter, the bloom washed it
-            // out to a pink that read as a sweet rather than a heart.
-            base_color: Color::srgba(0.55, 0.01, 0.06, 0.97),
+            // out to a pink that read as a sweet rather than a heart. Veined
+            // (`fx::heart_texture`), so it is flesh.
+            base_color: Color::srgba(0.75, 0.03, 0.09, 0.97),
+            base_color_texture: Some(images.add(fx::heart_texture())),
             emissive: LinearRgba::rgb(0.6, 0.0, 0.05),
             perceptual_roughness: 0.75,
             alpha_mode: AlphaMode::Blend,
@@ -2700,7 +2885,10 @@ fn setup(
         // Bright enough to read as *the* thing on screen, which is what a
         // finisher at full depth is supposed to be.
         light: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.98, 0.95, 1.0, 0.55),
+            base_color: Color::srgba(0.98, 0.95, 1.0, 0.7),
+            base_color_texture: Some(light_tex.clone()),
+            double_sided: true,
+            cull_mode: None,
             emissive: LinearRgba::rgb(5.0, 4.4, 6.4),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
@@ -2711,6 +2899,7 @@ fn setup(
         // and the one thing it must not do is wash out the body on the end of
         // it, which is what the player is actually looking at.
         wing_light: materials.add(StandardMaterial {
+            base_color_texture: Some(feather_tex.clone()),
             base_color: Color::srgba(1.0, 0.95, 0.78, 0.34),
             emissive: LinearRgba::rgb(1.8, 1.5, 0.9),
             alpha_mode: AlphaMode::Blend,
@@ -2720,6 +2909,7 @@ fn setup(
             ..default()
         }),
         wing_dark: materials.add(StandardMaterial {
+            base_color_texture: Some(feather_tex.clone()),
             base_color: Color::srgba(0.38, 0.14, 0.62, 0.34),
             emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
             alpha_mode: AlphaMode::Blend,
@@ -2729,38 +2919,117 @@ fn setup(
             ..default()
         }),
         dark: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.16, 0.06, 0.26, 0.88),
+            base_color: Color::srgba(0.16, 0.06, 0.26, 0.92),
+            base_color_texture: Some(dark_tex.clone()),
             emissive: LinearRgba::rgb(0.55, 0.12, 0.95),
+            emissive_texture: Some(dark_tex.clone()),
+            double_sided: true,
+            cull_mode: None,
             perceptual_roughness: 0.8,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         stone: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.52, 0.50, 0.47),
+            base_color: Color::srgb(0.62, 0.60, 0.56),
+            base_color_texture: Some(stone_tex.clone()),
             perceptual_roughness: 0.95,
             ..default()
         }),
         // A lit stone: the same rock, glowing at the seams. Bright enough to
         // read as a stove from across the arena, which is what it is.
+        //
+        // Burning in its cracks (`fx::ember_texture`), so it reads as rock
+        // with a fire inside rather than as a rock painted orange.
         stone_lit: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.62, 0.40, 0.28),
-            emissive: LinearRgba::rgb(2.6, 0.9, 0.2),
+            base_color: Color::srgb(0.78, 0.66, 0.58),
+            base_color_texture: Some(stone_tex.clone()),
+            emissive: LinearRgba::rgb(4.0, 4.0, 4.0),
+            emissive_texture: Some(images.add(fx::ember_texture())),
             perceptual_roughness: 0.9,
             ..default()
         }),
         beam: materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.86, 0.45, 0.75),
+            base_color: Color::srgba(1.0, 0.86, 0.45, 0.85),
+            base_color_texture: Some(wind_tex.clone()),
             emissive: LinearRgba::rgb(6.0, 3.4, 0.9),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
+            ..default()
+        }),
+        air: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.88, 0.94, 1.0, 0.6),
+            base_color_texture: Some(wind_tex.clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        flame: meshes.add(fx::flame()),
+        fireball: meshes.add(fx::fireball()),
+        rubble: meshes.add(fx::rubble()),
+        whirl: meshes.add(fx::whirl()),
+        windball: meshes.add(fx::windball()),
+        winddisc: meshes.add(fx::winddisc()),
+        comet: meshes.add(fx::comet()),
+        rock: meshes.add(fx::rock(7)),
+        thorn: meshes.add(fx::thorn()),
+        vine: meshes.add(fx::vine()),
+        droplet: meshes.add(fx::droplet()),
+        puddle: meshes.add(fx::puddle(3)),
+        tongue: meshes.add(fx::tongue()),
+        crescent_wave: meshes.add(fx::crescent()),
+        star: meshes.add(fx::star()),
+        cloud: meshes.add(fx::cloud()),
+        sunburst: meshes.add(fx::sunburst()),
+        point: meshes.add(fx::point()),
+        disc: meshes.add(fx::disc()),
+        sigil_light: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.95, 0.85, 0.8),
+            base_color_texture: Some(sigil_tex.clone()),
+            emissive: LinearRgba::rgb(4.0, 3.4, 2.4),
+            emissive_texture: Some(sigil_tex.clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        sigil_dark: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.45, 0.2, 0.75, 0.85),
+            base_color_texture: Some(sigil_tex.clone()),
+            emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
+            emissive_texture: Some(sigil_tex.clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        gilt: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.82, 0.4, 0.85),
+            base_color_texture: Some(wind_tex.clone()),
+            emissive: LinearRgba::rgb(4.0, 2.6, 0.8),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
             ..default()
         }),
         column: unit.clone(),
         spike,
         ball,
         hoop: meshes.add(Torus::new(0.94, 1.0)),
+        shuriken: meshes.add(blades::shuriken()),
+        shard: meshes.add(blades::shard()),
+        crescent: meshes.add(blades::crescent()),
+        steel: materials.add(blades::steel()),
+        forged: materials.add(blades::forged()),
+        haft: meshes.add(blades::haft()),
+        scythe_blade: meshes.add(blades::scythe_blade()),
         sun: materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 0.9, 0.62, 0.62),
+            base_color: Color::srgba(1.0, 0.9, 0.62, 0.7),
+            base_color_texture: Some(light_tex.clone()),
             emissive: LinearRgba::rgb(4.2, 3.3, 1.6),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
@@ -2781,14 +3050,16 @@ fn setup(
             ..default()
         }),
         storm: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.07, 0.06, 0.09, 0.5),
+            base_color: Color::srgba(0.12, 0.11, 0.15, 0.6),
+            base_color_texture: Some(smoke_tex.clone()),
             emissive: LinearRgba::rgb(0.02, 0.015, 0.04),
             perceptual_roughness: 1.0,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         wisp: materials.add(StandardMaterial {
-            base_color: Color::srgba(0.12, 0.11, 0.15, 0.22),
+            base_color: Color::srgba(0.16, 0.15, 0.2, 0.3),
+            base_color_texture: Some(smoke_tex.clone()),
             perceptual_roughness: 1.0,
             alpha_mode: AlphaMode::Blend,
             ..default()
@@ -2836,9 +3107,13 @@ fn setup(
     for owner in 0..MAX_PLAYERS {
         for index in 0..sim::class::MAX_STRUCTURES {
             commands.spawn((
-                Mesh3d(meshes.add(shapes::rock_column(
-                    (owner * sim::class::MAX_STRUCTURES + index) as u32 + 1,
-                ))),
+                Mesh3d(meshes.add({
+                    let mut stone = shapes::rock_column(
+                        (owner * sim::class::MAX_STRUCTURES + index) as u32 + 1,
+                    );
+                    fx::wrap_uv(&mut stone);
+                    stone
+                })),
                 MeshMaterial3d(look.stone.clone()),
                 Transform::default(),
                 Visibility::Hidden,
@@ -2863,8 +3138,8 @@ fn setup(
     let wing = meshes.add(wing_mesh());
     for slot in 0..sim::bolt::MAX_BOLTS {
         commands.spawn((
-            Mesh3d(pellet.clone()),
-            MeshMaterial3d(look.beam.clone()),
+            Mesh3d(look.comet.clone()),
+            MeshMaterial3d(look.fire.clone()),
             Transform::default(),
             Visibility::Hidden,
             BoltMesh(slot),
@@ -2875,7 +3150,7 @@ fn setup(
     // blast that broke it.
     for slot in 0..sim::debris::MAX_DEBRIS {
         commands.spawn((
-            Mesh3d(pellet.clone()),
+            Mesh3d(look.rock.clone()),
             MeshMaterial3d(look.stone.clone()),
             Transform::default(),
             Visibility::Hidden,
@@ -2888,15 +3163,15 @@ fn setup(
     // bolt is a stretched bead and a Gale is a disc with a rim.
     for slot in 0..sim::gust::MAX_GUSTS {
         commands.spawn((
-            Mesh3d(pellet.clone()),
-            MeshMaterial3d(look.beam.clone()),
+            Mesh3d(look.comet.clone()),
+            MeshMaterial3d(look.air.clone()),
             Transform::default(),
             Visibility::Hidden,
             GustMesh(slot),
         ));
         commands.spawn((
-            Mesh3d(unit.clone()),
-            MeshMaterial3d(look.beam.clone()),
+            Mesh3d(look.winddisc.clone()),
+            MeshMaterial3d(look.air.clone()),
             Transform::default(),
             Visibility::Hidden,
             DiscMesh(slot),
@@ -2974,14 +3249,17 @@ fn setup(
             MarkMesh(owner),
         ));
     }
-    // The Blood mage's scythe: a bar from her grip to the head of the blade.
-    // Shade-skinned rather than blood: it is iron, and the blood is what it
-    // leaves on the floor.
+    // The Blood mage's scythe: a turned haft and a curved blade
+    // (`blades`), in forged iron: the blood is what it leaves on the floor.
     for owner in 0..MAX_PLAYERS {
         for piece in 0..SCYTHE_PIECES {
             commands.spawn((
-                Mesh3d(unit.clone()),
-                MeshMaterial3d(look.shade.clone()),
+                Mesh3d(if piece == 0 {
+                    look.haft.clone()
+                } else {
+                    look.scythe_blade.clone()
+                }),
+                MeshMaterial3d(look.forged.clone()),
                 Transform::default(),
                 Visibility::Hidden,
                 ScytheMesh { owner, piece },
@@ -3038,16 +3316,32 @@ fn setup(
     };
     use view::arms::Stuff;
     let stuffs = [Stuff::Edge, Stuff::Gold, Stuff::Deep, Stuff::Liquid];
-    let stuff_handles: [Handle<StandardMaterial>; 4] =
-        std::array::from_fn(|i| materials.add(stuff(stuffs[i])));
+    // Chased, all of it (`fx::gilt_texture`): worked metal, not yellow.
+    let chased = images.add(fx::gilt_texture());
+    let stuff_handles: [Handle<StandardMaterial>; 4] = std::array::from_fn(|i| {
+        materials.add(StandardMaterial {
+            base_color_texture: Some(chased.clone()),
+            ..stuff(stuffs[i])
+        })
+    });
+    let forged_blade = meshes.add(fx::blade());
+    let forged_point = meshes.add(fx::point());
     for owner in 0..MAX_PLAYERS {
         for weapon in 0..view::arms::WEAPONS {
             for piece in 0..view::arms::PIECES {
                 let (shape, made_of) = view::arms::MAKE[weapon][piece];
+                // The sword's blade forged (`fx::blade`), every point ground
+                // to the blade's own section (`fx::point`).
                 let mesh = match shape {
+                    view::arms::Shape::Block
+                        if weapon == sim::moves::champion::SWORD as usize
+                            && made_of == view::arms::Stuff::Edge =>
+                    {
+                        forged_blade.clone()
+                    }
                     view::arms::Shape::Block => block.clone(),
                     view::arms::Shape::Rod => unit.clone(),
-                    view::arms::Shape::Point => look.spike.clone(),
+                    view::arms::Shape::Point => forged_point.clone(),
                     view::arms::Shape::Knob => look.ball.clone(),
                 };
                 let at = stuffs.iter().position(|s| *s == made_of).unwrap_or(0);
@@ -3066,7 +3360,7 @@ fn setup(
         }
         for bead in 0..view::arms::BEADS {
             commands.spawn((
-                Mesh3d(look.ball.clone()),
+                Mesh3d(look.droplet.clone()),
                 MeshMaterial3d(stuff_handles[3].clone()),
                 Transform::default(),
                 Visibility::Hidden,
@@ -3078,7 +3372,7 @@ fn setup(
             ));
         }
         commands.spawn((
-            Mesh3d(look.ball.clone()),
+            Mesh3d(look.fireball.clone()),
             MeshMaterial3d(look.beam.clone()),
             Transform::default(),
             Visibility::Hidden,
@@ -3112,6 +3406,23 @@ fn setup(
         ..default()
     });
     commands.insert_resource(ArmsLook { glow, flare });
+    // Fire rises, wind streams, the beam pours out of her hand.
+    flowing.0.extend([
+        (look.fire.clone(), Vec2::new(0.05, 0.9)),
+        (look.air.clone(), Vec2::new(0.0, -1.4)),
+        (look.beam.clone(), Vec2::new(0.0, -4.0)),
+        (look.gilt.clone(), Vec2::new(0.0, -2.5)),
+        (look.light.clone(), Vec2::new(0.0, -0.8)),
+        (look.dark.clone(), Vec2::new(0.04, 0.12)),
+        (look.sun.clone(), Vec2::new(0.0, -0.5)),
+        (look.storm.clone(), Vec2::new(0.03, 0.02)),
+        (look.wisp.clone(), Vec2::new(0.05, 0.03)),
+        (look.thrall.clone(), Vec2::new(0.02, 0.15)),
+    ]);
+    // Essence turns slowly over on itself.
+    for step in &look.essence {
+        flowing.0.push((step.clone(), Vec2::new(0.03, 0.12)));
+    }
     commands.insert_resource(look);
 }
 
@@ -3132,39 +3443,183 @@ fn fade_own_body(
     sim: Res<Sim>,
     inside: Res<InsideOwnHead>,
     parts: Query<(&BodyPart, &MeshMaterial3d<still::SkinMaterial>)>,
+    rigs: Res<models::Rigs>,
     mut materials: ResMut<Assets<still::SkinMaterial>>,
 ) {
     let me = sim.local_player();
     // The rig has already worked out how much of the body to take away and
     // why -- coming up on the crosshair, or the eye simply being close to it.
     let alpha = (1.0 - inside.0).clamp(0.0, 1.0);
-    for (part, material) in parts.iter() {
-        if part.owner != me {
-            continue;
-        }
+    let mine = parts
+        .iter()
+        .filter(|(part, _)| part.owner == me)
+        .map(|(_, material)| &material.0)
+        .chain(rigs.looks[me].iter());
+    for material in mine {
         // Looked at before it is taken mutably: `Assets::get_mut` marks the
         // asset changed whether or not anything is written to it, and a
         // material marked changed is rebuilt on the GPU that frame -- which
         // this did, for one's own skin, sixteen parts over, every frame. The
         // one `get_mut` left is reached only when the alpha has moved.
-        let Some(skin) = materials.get(&material.0) else {
+        let Some(skin) = materials.get(material) else {
             continue;
         };
         if (skin.base.base_color.alpha() - alpha).abs() < 0.001 {
             continue;
         }
-        let Some(skin) = materials.get_mut(&material.0) else {
+        let Some(skin) = materials.get_mut(material) else {
             continue;
         };
         skin.base.base_color.set_alpha(alpha);
         // Blending only while it is actually translucent. An always-blended
         // fighter sorts against the other one and against the arena for no
         // reason the rest of the time.
-        skin.base.alpha_mode = if alpha >= 1.0 {
-            AlphaMode::Opaque
+        // A cut-out stays one (hair cards): turned opaque it is the cards'
+        // rectangles, turned blended it shows its own layers through.
+        if !matches!(skin.base.alpha_mode, AlphaMode::Mask(_)) {
+            skin.base.alpha_mode = if alpha >= 1.0 {
+                AlphaMode::Opaque
+            } else {
+                AlphaMode::Blend
+            };
+        }
+    }
+}
+
+/// The classes drawn as characters rather than mannequins (`reaver`): each
+/// model's joints put where the skeletons were just solved -- her own, her
+/// shadow's, the Reaping's copies' -- and the mannequins' parts hidden while
+/// the models stand in for them.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)] // a Bevy system: its arguments are what it reads
+fn pose_models(
+    sim: Res<Sim>,
+    joints: Res<Joints>,
+    rigs: Res<models::Rigs>,
+    mut inks: ResMut<Assets<ink::InkMaterial>>,
+    mut models: Query<(&models::Model, &mut Visibility)>,
+    mut bones: Query<&mut Transform, Without<Fighter>>,
+    mut parts: Query<(&BodyPart, &mut Visibility), Without<models::Model>>,
+    mut balls: Query<(&BodyBall, &mut Visibility), (Without<models::Model>, Without<BodyPart>)>,
+    mut shadow_parts: Query<
+        (&ShadowPart, &mut Visibility),
+        (Without<models::Model>, Without<BodyPart>, Without<BodyBall>),
+    >,
+    mut shadow_balls: Query<
+        (&ShadowBall, &mut Visibility),
+        (
+            Without<models::Model>,
+            Without<BodyPart>,
+            Without<BodyBall>,
+            Without<ShadowPart>,
+        ),
+    >,
+    mut copy_parts: Query<
+        (&CopyPart, &mut Visibility),
+        (
+            Without<models::Model>,
+            Without<BodyPart>,
+            Without<BodyBall>,
+            Without<ShadowPart>,
+            Without<ShadowBall>,
+        ),
+    >,
+) {
+    let class = |owner: usize| sim.cur.players[owner].class;
+    let modelled = |owner: usize| rigs.ready(owner, class(owner));
+    for (model, mut seen) in models.iter_mut() {
+        let want = if modelled(model.owner) && model.shown_as(class(model.owner)) {
+            Visibility::Inherited
         } else {
-            AlphaMode::Blend
+            Visibility::Hidden
         };
+        if *seen != want {
+            *seen = want;
+        }
+    }
+    for owner in (0..MAX_PLAYERS).filter(|&o| modelled(o)) {
+        models::pose(
+            rigs.her(owner, class(owner)),
+            joints.body[owner].as_ref(),
+            &mut bones,
+        );
+        if class(owner) != sim::Class::ShadowReaver {
+            continue;
+        }
+        models::pose(
+            rigs.shadow[owner],
+            joints.shadow[owner].as_ref(),
+            &mut bones,
+        );
+        for copy in 0..REAP_COPIES {
+            models::pose(
+                rigs.copies[owner][copy],
+                joints.copies[owner][copy].as_ref(),
+                &mut bones,
+            );
+            let solid = (joints.copy_solid[owner][copy] / COPY_SOLID).min(1.0);
+            models::fade_copy(&rigs, owner, copy, solid, &mut inks);
+        }
+    }
+    let mannequin = |owner: usize| {
+        if modelled(owner) {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        }
+    };
+    let put = |seen: &mut Visibility, owner: usize| {
+        let want = mannequin(owner);
+        if *seen != want {
+            *seen = want;
+        }
+    };
+    for (part, mut seen) in parts.iter_mut() {
+        put(&mut seen, part.owner);
+    }
+    for (ball, mut seen) in balls.iter_mut() {
+        put(&mut seen, ball.owner);
+    }
+    for (part, mut seen) in shadow_parts.iter_mut() {
+        put(&mut seen, part.owner);
+    }
+    for (ball, mut seen) in shadow_balls.iter_mut() {
+        put(&mut seen, ball.owner);
+    }
+    for (part, mut seen) in copy_parts.iter_mut() {
+        put(&mut seen, part.owner);
+    }
+}
+
+/// Swing the coat tails of every seat drawn by its model (`coat`), from the
+/// skeleton just solved and where the fighter is.
+fn swing_coats(
+    sim: Res<Sim>,
+    time: Res<Time>,
+    joints: Res<Joints>,
+    rigs: Res<models::Rigs>,
+    mut coats: ResMut<coat::Coats>,
+    fighters: Query<(&Fighter, &Transform)>,
+    mut bones: Query<&mut Transform, Without<Fighter>>,
+) {
+    for (fighter, body) in fighters.iter() {
+        let owner = fighter.0;
+        let class = sim.cur.players[owner].class;
+        if !models::drawn(class) {
+            continue;
+        }
+        let (Some(tails), Some(skin)) = (rigs.tails(owner, class), joints.body[owner].as_ref())
+        else {
+            continue;
+        };
+        coat::swing(
+            &mut coats,
+            owner,
+            tails,
+            skin,
+            body,
+            time.delta_secs(),
+            &mut bones,
+        );
     }
 }
 
@@ -3289,7 +3744,10 @@ fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut
             )
         });
         let shot = sim::state::hitbox(p).filter(|hb| {
-            p.class != sim::Class::Champion && hb.is_a_beam() && !orb_out(p) && !swung
+            !matches!(p.class, sim::Class::Champion | sim::Class::ShadowReaver)
+                && hb.is_a_beam()
+                && !orb_out(p)
+                && !swung
         });
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
@@ -3368,10 +3826,11 @@ fn place_gusts(
         &GustMesh,
         &mut Transform,
         &mut Visibility,
+        &mut Mesh3d,
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
-    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
+    for (tag, mut tf, mut vis, mut mesh, mut skin) in meshes.iter_mut() {
         let Some(shot) = sim.cur.gusts[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
@@ -3388,10 +3847,18 @@ fn place_gusts(
         let want = if shot.lit || matches!(shot.gale, Gale::Ember) {
             &look.fire
         } else {
-            &look.beam
+            &look.air
         };
         if skin.0 != *want {
             skin.0 = want.clone();
+        }
+        // A bolt is a comet with its tail behind it; a coal is a ball of fire.
+        let form = match shot.gale {
+            Gale::Bolt => &look.comet,
+            _ => &look.fireball,
+        };
+        if mesh.0 != *form {
+            mesh.0 = form.clone();
         }
         let radius = shot.girth().to_f32_for_render();
         tf.translation = fx3(shot.pos);
@@ -3473,7 +3940,7 @@ fn place_discs(
         }
         *vis = Visibility::Inherited;
         // A Gale flown through fire is drawn as fire, as the bolts are.
-        let want = if shot.lit { &look.fire } else { &look.beam };
+        let want = if shot.lit { &look.fire } else { &look.air };
         if skin.0 != *want {
             skin.0 = want.clone();
         }
@@ -3600,13 +4067,16 @@ fn place_scythes(
             *vis = Visibility::Hidden;
             continue;
         };
-        // Three pieces of one weapon: the haft from the butt to the neck, and
-        // the blade from the neck to the mid and the mid to the tip, so its
-        // curve is visible.
+        // Two pieces of one weapon: the haft from the butt to the neck, and
+        // the blade from the neck to the tip, bowed the way the hit test's
+        // blade is. A third is not drawn.
+        if tag.piece >= 2 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
         let (from, to) = match tag.piece {
             0 => (Vec3::from(scythe.butt), Vec3::from(scythe.neck)),
-            1 => (Vec3::from(scythe.neck), Vec3::from(scythe.mid)),
-            _ => (Vec3::from(scythe.mid), Vec3::from(scythe.tip)),
+            _ => (Vec3::from(scythe.neck), Vec3::from(scythe.tip)),
         };
         let along = to - from;
         let length = along.length();
@@ -3615,7 +4085,12 @@ fn place_scythes(
             continue;
         }
         *vis = Visibility::Inherited;
-        tf.translation = from + along * 0.5;
+        // The haft is centred on its span; the blade starts at its socket.
+        tf.translation = if tag.piece == 0 {
+            from + along * 0.5
+        } else {
+            from
+        };
         // A full basis rather than a single axis, so the blade's flat lies in
         // the plane of the haft and the bow -- the plane of the cut -- and
         // does not roll to a world direction of its own. Y runs along the
@@ -3626,13 +4101,13 @@ fn place_scythes(
         let x = y.cross(bow).try_normalize().unwrap_or(Vec3::X);
         let z = x.cross(y);
         tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
-        // The haft is a pole. The blade is a thin band: edge-on it is nearly
-        // nothing, across it is a hand's breadth, and its length is the
-        // reach's last third.
+        // The haft is a pole; the blade is drawn at its own length, its
+        // shape kept (`blades::scythe_blade` is a unit blade), so it bows
+        // out the way the volume does as her reach grows.
         tf.scale = if tag.piece == 0 {
-            Vec3::new(0.06, length, 0.06)
+            Vec3::new(0.065, length, 0.065)
         } else {
-            Vec3::new(0.025, length, scythe.breadth)
+            Vec3::splat(length)
         };
     }
 }
@@ -3980,7 +4455,7 @@ fn place_spells(
                 continue;
             }
         }
-        let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+        let (want_mesh, want_skin) = (look.dressed(&piece), look.dressed_material(&piece));
         *vis = Visibility::Inherited;
         if mesh.0 != want_mesh {
             mesh.0 = want_mesh;
@@ -4618,7 +5093,7 @@ fn place_effects(
                 continue;
             }
         }
-        let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+        let (want_mesh, want_skin) = (look.dressed(&piece), look.dressed_material(&piece));
         *vis = Visibility::Inherited;
         if mesh.0 != want_mesh {
             mesh.0 = want_mesh;
@@ -4667,7 +5142,7 @@ fn show_piece(
     mesh: &mut Mesh3d,
     mat: &mut MeshMaterial3d<StandardMaterial>,
 ) {
-    let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
+    let (want_mesh, want_skin) = (look.dressed(&piece), look.dressed_material(&piece));
     *vis = Visibility::Inherited;
     if mesh.0 != want_mesh {
         mesh.0 = want_mesh;
@@ -4808,11 +5283,6 @@ impl Leaves {
         }
     }
 
-    /// The same, drawn as its trail alone.
-    fn alone(self) -> Leaves {
-        Leaves { only: true, ..self }
-    }
-
     /// Where `piece` is drawn, as the newest place on its trail. A blade's
     /// band runs along its own long axis (the piece's `turn` of `Y`), half
     /// out from the middle each way; a streak's lies across the way it moved,
@@ -4883,6 +5353,10 @@ enum Shape {
     Limb,
     Block,
     Head,
+    /// The Reaver's blades (`blades`), unit-sized, scaled uniformly.
+    Shuriken,
+    Shard,
+    Crescent,
 }
 
 /// The Elementalist's wind -- the Air ball and the two drafts -- in air, or
@@ -4926,9 +5400,17 @@ enum Skin {
     /// Broken ground: the stones' own material, so rough terrain reads as
     /// earth rather than as an effect.
     Stone,
+    /// The Reaver's blades: dark violet steel, her violet at the edges.
+    Steel,
+    /// The same steel, solid: what stands -- a shard, a crescent.
+    Forged,
     /// Moving air: the beam's pale, barely-there material, so a draft or a
     /// ring of air is seen without hiding what is in it.
     Air,
+    /// The Champion's light: his gold, streaming -- the crescent he throws,
+    /// the javelin, the cuts. His own, not the Dual mage's white: two
+    /// classes' throws in one colour were one class's.
+    Gilt,
 }
 
 impl EffectLook {
@@ -4941,6 +5423,52 @@ impl EffectLook {
             Shape::Limb => self.limb.clone(),
             Shape::Block => self.block.clone(),
             Shape::Head => self.head.clone(),
+            Shape::Shuriken => self.shuriken.clone(),
+            Shape::Shard => self.shard.clone(),
+            Shape::Crescent => self.crescent.clone(),
+        }
+    }
+
+    /// The mesh a piece is drawn with: its shape, read with what it is made
+    /// of -- a column of fire is a flame, a flat column of air a disc of wind
+    /// (`fx`). Every one fills the room its shape does, so the hit test's
+    /// size is still the drawing's.
+    fn dressed(&self, piece: &Piece) -> Handle<Mesh> {
+        let flat = piece.scale.y < 0.3 * piece.scale.x;
+        match (piece.shape, piece.skin) {
+            (Shape::Column, Skin::Fire) => self.flame.clone(),
+            (Shape::Ball, Skin::Fire) => self.fireball.clone(),
+            (Shape::Column, Skin::Stone) => self.rubble.clone(),
+            (Shape::Column, Skin::Air) if flat => self.winddisc.clone(),
+            (Shape::Column, Skin::Air) => self.whirl.clone(),
+            (Shape::Ball, Skin::Air) => self.windball.clone(),
+            (Shape::Spike, Skin::Blood | Skin::Vines) => self.thorn.clone(),
+            (Shape::Spike, Skin::Essence(_)) => self.tongue.clone(),
+            (Shape::Limb, Skin::Vines | Skin::Essence(_)) => self.vine.clone(),
+            (Shape::Ball | Shape::Column, Skin::Essence(_) | Skin::Blood | Skin::Vines) if flat => {
+                self.puddle.clone()
+            }
+            (Shape::Ball, Skin::Essence(_) | Skin::Blood | Skin::Heart) => self.droplet.clone(),
+            (Shape::Column, Skin::Gilt) if flat => self.crescent_wave.clone(),
+            (Shape::Column, Skin::Gilt) => self.comet.clone(),
+            (Shape::Ball, Skin::Light) => self.star.clone(),
+            (Shape::Ball, Skin::Dark) => self.fireball.clone(),
+            (Shape::Ball, Skin::Storm | Skin::Wisp) => self.cloud.clone(),
+            (Shape::Column, Skin::Light | Skin::Dark) if flat => self.disc.clone(),
+            (Shape::Column, Skin::Sun) if flat => self.sunburst.clone(),
+            (Shape::Spike, Skin::Light | Skin::Dark) => self.point.clone(),
+            (shape, _) => self.mesh(shape),
+        }
+    }
+
+    /// The material a piece is drawn in: its skin's, except a mark on the
+    /// floor in either of the Dual mage's forces, which is a sigil.
+    fn dressed_material(&self, piece: &Piece) -> Handle<StandardMaterial> {
+        let flat = piece.scale.y < 0.3 * piece.scale.x;
+        match (piece.shape, piece.skin) {
+            (Shape::Column, Skin::Light) if flat => self.sigil_light.clone(),
+            (Shape::Column, Skin::Dark) if flat => self.sigil_dark.clone(),
+            _ => self.material(piece.skin),
         }
     }
 
@@ -4961,7 +5489,10 @@ impl EffectLook {
             Skin::Storm => self.storm.clone(),
             Skin::Wisp => self.wisp.clone(),
             Skin::Stone => self.stone.clone(),
-            Skin::Air => self.beam.clone(),
+            Skin::Air => self.air.clone(),
+            Skin::Gilt => self.gilt.clone(),
+            Skin::Steel => self.steel.clone(),
+            Skin::Forged => self.forged.clone(),
         }
     }
 }
@@ -5613,51 +6144,68 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let turn =
                 effect.age as f32 * fast + part as f32 * std::f32::consts::TAU / SPUN_BLADES as f32;
             let mid = at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5;
-            Some(Piece {
-                turn: Quat::IDENTITY,
-                shape: Shape::Column,
-                skin: Skin::Shade,
-                at: mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
-                scale: Vec3::new(SPUN_BLADE, SPUN_BLADE * 0.25, SPUN_BLADE),
-                // Spun so fast it is only its arc.
-                trail: Some(
-                    Leaves::streak(part as u8, SPUN_BLADE * 0.5, SHADOW_TINT, SPUN_TRAIL).alone(),
-                ),
-            })
+            // Her blade, spinning, and the arc it cuts behind it.
+            Some(
+                shuriken(
+                    mid + Vec3::new(turn.cos(), 0.0, turn.sin()) * r,
+                    SPUN_BLADE,
+                    effect.age,
+                    part,
+                )
+                .leaving(Leaves::streak(
+                    part as u8,
+                    SPUN_BLADE * 0.5,
+                    SHADOW_TINT,
+                    SPUN_TRAIL,
+                )),
+            )
         }
         EffectKind::ShadowFan if part < sim::moves::reaver::blades(effect.slot) => {
             let r = effect.field_radius().to_f32_for_render();
+            Some(
+                shuriken(fx3(effect.fan_blade_at(part)), r * 2.0, effect.age, part)
+                    .leaving(Leaves::streak(part as u8, r * 0.8, SHADOW_TINT, 4.0)),
+            )
+        }
+        // Shards of shadow driven up out of the floor where the ring runs,
+        // each its own height and lean, as wide as the ring cuts.
+        EffectKind::ShadowRing if part < sim::effects::RING_PIECES => {
+            let width = sim::tuning::shadow_ring_width().to_f32_for_render();
+            let at = fx3(effect.ring_piece(part));
+            let seed = (part as f32 * 2.399).sin() * 0.5 + 0.5;
+            let rise = (effect.age as f32 / 4.0).min(1.0);
+            let tall = width * (1.5 + 1.1 * seed) * rise;
+            let out = (at - fx3(effect.pos)).with_y(0.0).normalize_or(Vec3::X);
             Some(Piece {
-                turn: Quat::IDENTITY,
-                shape: Shape::Column,
-                skin: Skin::Shade,
-                at: fx3(effect.fan_blade_at(part)),
-                scale: Vec3::new(r * 2.0, r * 0.4, r * 2.0),
-                trail: Some(Leaves::streak(part as u8, r * 0.8, SHADOW_TINT, 4.0)),
+                shape: Shape::Shard,
+                skin: Skin::Forged,
+                at,
+                scale: Vec3::new(width * 1.6, tall, width * 1.6),
+                turn: Quat::from_rotation_arc(
+                    Vec3::Y,
+                    (Vec3::Y + out * (0.25 + 0.3 * seed)).normalize(),
+                ) * Quat::from_rotation_y(out.x.atan2(out.z) + std::f32::consts::FRAC_PI_2),
+                trail: None,
             })
         }
-        EffectKind::ShadowRing if part < sim::effects::RING_PIECES => Some(floating_in(
-            Skin::Shade,
-            fx3(effect.ring_piece(part))
-                + Vec3::Y * sim::tuning::shadow_ring_width().to_f32_for_render(),
-            sim::tuning::shadow_ring_width().to_f32_for_render(),
-        )),
         // **The Champion's full charges** (exploration 0015). The crescent:
         // a wide flat sweep of light, as wide as the hit test where its head
         // is, trailing back along its line.
         EffectKind::Crescent if part == 0 => {
             let r = effect.field_radius().to_f32_for_render();
-            // The trail lies flat across its width, square to its flight.
+            let back = fx3(effect.dir).normalize_or_zero();
+            // A moon thrown back-first along its flight (`fx::crescent`),
+            // sweeping light behind it: the band across its width at the
+            // head, the hit test's, swept back along its flight.
+            let flat = Vec3::new(back.x, 0.0, back.z).normalize_or(Vec3::X);
             let side = fx3(effect.dir).cross(Vec3::Y).normalize_or(Vec3::X);
             Some(Piece {
                 shape: Shape::Column,
-                skin: Skin::Light,
+                skin: Skin::Gilt,
                 at: fx3(effect.head()),
                 scale: Vec3::new(r * 2.0, 0.12, r * 2.0),
-                turn: Quat::IDENTITY,
-                // A wave of light that is only its sweep: the band across its
-                // width at the head, the hit test's, swept back along its flight.
-                trail: Some(Leaves::streak(0, r, LIGHT_TINT, 5.0).flat(side * r).alone()),
+                turn: Quat::from_rotation_arc(Vec3::X, flat),
+                trail: Some(Leaves::streak(0, r, LIGHT_TINT, 5.0).flat(side * r)),
             })
         }
         // The shockwave: broken ground on its live radius, standing where
@@ -5681,39 +6229,58 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             let r = effect.field_radius().to_f32_for_render();
             let landing = effect.age >= sim::tuning::cuts_delay();
             let size = if landing { r * 0.8 } else { r * 0.2 };
+            // Each a slash across the line he ran.
+            let run = Vec3::new(end.x - at.x, 0.0, end.z - at.z).normalize_or(Vec3::X);
             Some(Piece {
                 shape: Shape::Column,
-                skin: Skin::Light,
+                skin: Skin::Gilt,
                 at: at.lerp(end, t),
                 scale: Vec3::new(size * 2.0, 0.08, size * 2.0),
-                turn: Quat::IDENTITY,
+                turn: Quat::from_rotation_arc(Vec3::X, run),
                 trail: None,
             })
         }
-        // The javelin: a line of light behind its head, a spear's length.
-        EffectKind::Javelin if part == 0 => Some(
-            floating_in(Skin::Light, fx3(effect.head()), 0.12)
-                .leaving(Leaves::streak(0, 0.1, LIGHT_TINT, 4.0)),
-        ),
+        // The javelin: one spear of light, its head at the javelin's and its
+        // tail streaming back a spear's length, and the streak it leaves.
+        EffectKind::Javelin if part == 0 => {
+            let head = fx3(effect.head());
+            let back = fx3(effect.dir).normalize_or_zero() * (3.0 * 0.7);
+            Some(
+                rod(Skin::Gilt, head - back, head, 0.12)
+                    .leaving(Leaves::streak(0, 0.1, LIGHT_TINT, 4.0)),
+            )
+        }
         EffectKind::Reaping => reaping_cut(effect, part),
-        EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
-            turn: Quat::IDENTITY,
-            shape: Shape::Column,
-            skin: Skin::Shade,
-            at: fx3(effect.lotus_at(part, effect.pos)),
-            scale: Vec3::new(
+        EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(
+            shuriken(
+                fx3(effect.lotus_at(part, effect.pos)),
                 effect.field_radius().to_f32_for_render() * 2.0,
-                sim::tuning::lotus_blade_thickness().to_f32_for_render() * 2.0,
-                effect.field_radius().to_f32_for_render() * 2.0,
-            ),
-            trail: Some(Leaves::streak(
+                effect.age,
+                part,
+            )
+            .leaving(Leaves::streak(
                 part as u8,
                 effect.field_radius().to_f32_for_render() * 0.8,
                 SHADOW_TINT,
                 4.0,
             )),
-        }),
+        ),
         _ => None,
+    }
+}
+
+/// One of the Reaver's throwing stars (`blades::shuriken`), `size` across
+/// its tips, lying flat and spinning on the simulation's clock: a turn every
+/// third of a second, each blade of a set started at its own angle.
+fn shuriken(at: Vec3, size: f32, age: u16, part: usize) -> Piece {
+    let spin = age as f32 * 0.33 + part as f32 * 1.3;
+    Piece {
+        shape: Shape::Shuriken,
+        skin: Skin::Steel,
+        at,
+        scale: Vec3::splat(size),
+        turn: Quat::from_rotation_y(-spin),
+        trail: None,
     }
 }
 
@@ -6220,14 +6787,15 @@ fn reaping_cut(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
     // line its overhead fell along.
     let at = fx3(effect.pos) - facing * 0.15;
     let down = (Vec3::Y * 1.0 - facing * 0.35).normalize();
+    // A crescent of shadow, the length of the overhead that left it.
     let mut cut = framed(
-        Shape::Block,
+        Shape::Crescent,
         at,
         down,
         facing.cross(Vec3::Y).normalize_or(Vec3::X),
-        Vec3::new((0.05 + 0.1 * open) * tall / 1.8, tall * 0.5 * open, 0.04),
+        Vec3::new((0.6 + 0.6 * open) * tall / 1.8, tall * 0.55 * open, 1.0),
     );
-    cut.skin = Skin::Shade;
+    cut.skin = Skin::Forged;
     Some(cut)
 }
 
@@ -6242,6 +6810,7 @@ fn reaping_cut(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
 fn place_copies(
     sim: Res<Sim>,
     looks: Res<CopyLooks>,
+    mut joints: ResMut<Joints>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut roots: Query<(&CopyRoot, &mut Transform, &mut Visibility), Without<CopyPart>>,
     mut parts: Query<(&CopyPart, &mut Transform), Without<CopyRoot>>,
@@ -6269,6 +6838,7 @@ fn place_copies(
             let solid = copy_solid(t, copy);
             (solid > 0.01).then_some((e, t, solid))
         });
+        joints.copy_solid[owner][copy] = shown.map_or(0.0, |(_, _, solid)| solid);
         let Some((effect, t, solid)) = shown else {
             if *seen != Visibility::Hidden {
                 *seen = Visibility::Hidden;
@@ -6318,6 +6888,7 @@ fn place_copies(
             &view::play::pose_for(input),
         ));
     }
+    joints.copies = skins;
     for (part, mut tf) in parts.iter_mut() {
         let Some(skin) = skins[part.owner][part.copy].as_ref() else {
             continue;
@@ -6603,7 +7174,10 @@ fn tick_sim(
     mut scape: ResMut<sound::Soundscape>,
     mut keeping: ResMut<bag::Keeping>,
     settings: Res<settings::Settings>,
+    mut coach: ResMut<tutorial::Coach>,
 ) {
+    // A hall follows the class you are playing (`tutorial::steer`).
+    tutorial::steer(&mut sim, &mut coach);
     // A won hunt is the player's trophy (world W1), whoever's machine it was
     // won on: each peer writes its own. Read from the world as it stands at
     // the top of the frame, which is the last one drawn.
@@ -6900,7 +7474,8 @@ fn tick_sim(
             let mut pair = [SimInput::default(); MAX_PLAYERS];
             pair[0] = rehearsed
                 .unwrap_or_else(|| scripted_or(scripted, held))
-                .travelling(travel);
+                .travelling(travel)
+                .tuning(sim.tunes.next());
             pair[1] = two;
             // **One keyboard readies both seats**: player two, or the dummy,
             // is in this room, and a dummy cannot press Enter.
@@ -6958,7 +7533,10 @@ fn tick_sim(
                 let Sim { cur, ledger, .. } = &mut *sim;
                 ledger.confirm_through(cur.frame, cur);
             }
+            let frame = sim.cur.frame;
+            sim.tunes.went(frame);
             scape.observe(&sim.prev, &sim.cur);
+            tutorial::observe(&mut coach, &sim.prev, &sim.cur, sim.local_player());
             // What was picked up and fed, for this game's bag and morphs.
             let me = sim.local_player();
             keeping.record(&sim.prev, &pair, &sim.cur, me);
@@ -6978,12 +7556,23 @@ fn tick_sim(
         for _ in 0..ticks {
             let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
             let travel = std::mem::take(&mut sim.travel);
-            let local = scripted_or(scripted, held).travelling(travel);
-            online::step(&mut sim, local, &mut scape, &mut keeping);
+            let local = scripted_or(scripted, held)
+                .travelling(travel)
+                .tuning(sim.tunes.next());
+            let was = sim.cur.frame;
+            online::step(&mut sim, local, &mut scape, &mut keeping, &mut coach);
+            // A knob asked for goes off the queue once a frame was made with
+            // it; a tick the line held back carries it again.
+            if sim.cur.frame != was {
+                let frame = sim.cur.frame;
+                sim.tunes.went(frame);
+            }
         }
         record_round_end(&mut sim);
         say_region_findings(&mut sim);
     }
+    let Sim { tunes, cur, .. } = &mut *sim;
+    tunes.settle(cur);
 }
 
 /// Every new finding of the region watchdog, said once, where a developer
@@ -7419,6 +8008,13 @@ fn apply_poses(
     mut joints: ResMut<Joints>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    // The time a picture stands for: real, except under `SHOT_SLOW`, where a
+    // picture is a fraction of a frame however long it took to draw, and a
+    // fade or a lean eased on the real clock would be over in a picture.
+    let dt = match shot_slow(sim.cur.frame) {
+        Some(slow) if !sim.paused => 1.0 / (view::TICK_HZ * slow as f32),
+        _ => time.delta_secs(),
+    };
 
     // One solve per fighter rather than one per bone: forward kinematics is a
     // single pass down the skeleton and there are sixteen bones hanging off it.
@@ -7430,7 +8026,7 @@ fn apply_poses(
         let class = sim.cur.players[owner].class;
         let mut input = PoseInput::of(&p, class, &frame);
         input.bind_pose = sim.bind_pose;
-        let mut pose = fades.0[owner].pose(input, time.delta_secs());
+        let mut pose = fades.0[owner].pose(input, dt);
         // The hub takes over whichever fighter it is previewing, so an edit is
         // visible on a real character in the real arena rather than in a
         // separate viewer that flatters it.
@@ -7518,7 +8114,7 @@ fn apply_poses(
             &shadow_fades.0[root.0].shadow(
                 shadow_input(&frame, root.0, ghost, sim.bind_pose),
                 ghost.doing,
-                time.delta_secs(),
+                dt,
             ),
         ));
     }
@@ -7619,6 +8215,7 @@ fn mouse_look(
     mut bag: ResMut<keep::Bag>,
     mut lock_seen: Local<bool>,
     mut windows: Query<&mut Window>,
+    inspect: Res<inspect::Inspect>,
 ) {
     // Sensitivity, adjustable mid-match and written straight to disk. Two people
     // sharing a machine should not have to agree on one number, and a setting
@@ -7643,7 +8240,9 @@ fn mouse_look(
         settings.save();
     }
 
-    if look.grabbed {
+    // While the camera is on a close look (F6) the mouse goes round the
+    // fighter instead, and their aim stays where it was.
+    if look.grabbed && inspect.seat.is_none() {
         let sensitivity = settings.radians_per_pixel();
         let (mut dx, mut dy) = (0.0, 0.0);
         for ev in motion.read() {
@@ -7749,8 +8348,10 @@ fn drive_camera(
     mut rig: ResMut<Rig>,
     mut inside: ResMut<InsideOwnHead>,
     mut boom: ResMut<beast::Boom>,
+    inspect: Res<inspect::Inspect>,
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
     mut origin: Local<Option<Vec3>>,
+    mut portrait: Local<Option<Option<[f32; 4]>>>,
 ) {
     if settings.is_changed() {
         rig.0.set_fov(settings.fov_radians());
@@ -7811,6 +8412,45 @@ fn drive_camera(
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);
+        // A close look at somebody (F6): round them, and nobody faded.
+        let seat = inspect.seat.unwrap_or(me).min(MAX_PLAYERS - 1);
+        if let Some((eye, at)) = inspect.frame(frame.players[seat].pos) {
+            tf.translation = eye;
+            tf.look_at(at, Vec3::Y);
+            inside.0 = 0.0;
+        }
+        if let Some([seat, angle, distance, height]) = *portrait.get_or_insert_with(shot_portrait) {
+            // A portrait instead of the fight's camera: round one fighter,
+            // `angle` degrees from straight in front of them.
+            let p = frame.players[(seat as usize).min(MAX_PLAYERS - 1)];
+            let at = Vec3::new(p.pos[0], p.pos[1] + height, p.pos[2]);
+            // `SHOT_SPIN` degrees a second round them: a turntable, for
+            // judging a painted body in motion (exploration 0025).
+            let spin =
+                platform::env_parsed::<f32>("SHOT_SPIN").unwrap_or(0.0) * time.elapsed_secs();
+            let turn = body_turn(p.facing) * Quat::from_rotation_y((angle + spin).to_radians());
+            tf.translation = at + turn * Vec3::new(0.0, 0.15, distance);
+            tf.look_at(at, Vec3::Y);
+            // Nobody's own body is faded for being near the fight's eye.
+            inside.0 = 0.0;
+        }
+        // `SHOT_BEAST`: the same, round the first creature -- how a creature
+        // is looked at as a piece of art.
+        if let Some([angle, distance, height]) = shot_beast() {
+            if let Some(beast) = sim.cur.monsters[0] {
+                let feet = fx3(beast.pos);
+                let at = feet + Vec3::Y * height;
+                let yaw = beast.yaw.to_f32_for_render();
+                let spin =
+                    platform::env_parsed::<f32>("SHOT_SPIN").unwrap_or(0.0) * time.elapsed_secs();
+                let turn = Quat::from_rotation_y(yaw + (angle + spin).to_radians());
+                tf.translation = at + turn * Vec3::new(0.0, distance * 0.25, distance);
+                tf.look_at(at, Vec3::Y);
+                inside.0 = 0.0;
+            }
+        }
+        // `SHOT_EYE`: the camera anywhere, looking at a point -- last, so
+        // it wins over the rest.
         if let Some((eye, at)) = shot_eye() {
             tf.translation = eye;
             tf.look_at(at, Vec3::Y);
@@ -7821,6 +8461,32 @@ fn drive_camera(
             }
         }
     }
+}
+
+/// `SHOT_BEAST=angle,distance,height`: the portrait camera round the first
+/// creature, `angle` degrees round from its facing.
+fn shot_beast() -> Option<[f32; 3]> {
+    let spec = platform::env("SHOT_BEAST")?;
+    let v: Vec<f32> = spec
+        .split(',')
+        .filter_map(|v| v.trim().parse().ok())
+        .collect();
+    (v.len() == 3).then(|| [v[0], v[1], v[2]])
+}
+
+/// `SHOT_SPIN=<degrees a second>` turns that camera round them as the run goes.
+/// `SHOT_PORTRAIT=seat,angle,distance,height` takes the camera off the fight
+/// and puts it `distance` metres from a fighter, `angle` degrees round from
+/// in front of them, looking at `height` above their feet: how a character is
+/// looked at as a piece of art (`docs/design/exploration/0024_a_character_done_properly.md`).
+/// Pair it with `DEMO=0` and a `SHOT_FRAME`.
+fn shot_portrait() -> Option<[f32; 4]> {
+    let spec = platform::env("SHOT_PORTRAIT")?;
+    let v: Vec<f32> = spec
+        .split(',')
+        .filter_map(|v| v.trim().parse().ok())
+        .collect();
+    (v.len() == 4).then(|| [v[0], v[1], v[2], v[3]])
 }
 
 /// A simulation position, in the renderer's units.
@@ -7890,6 +8556,28 @@ mod tests {
             sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
             sim::moves::get(sim::Class::BloodMage, slot).reach,
         )
+    }
+
+    /// **The world a run starts in is the one its tape's start line
+    /// rebuilds**, whoever player one is: the seats nobody plays were the
+    /// Champion, the line says they are player one's class, and every tape
+    /// of a Reaver's match was refused by its own start (2026-10-24).
+    #[test]
+    fn a_run_starts_where_its_tape_says_it_did() {
+        for args in [
+            "--p1 shadowreaver --p2 champion --arena needle",
+            "--p1 bloodmage --hunt ridgeback",
+            "--p1 dualmage --p2 elementalist --players 3 --p3 shadowreaver",
+        ] {
+            let opts = platform::Options::from_args(args.split(' ').map(String::from));
+            for dummy in [Dummy::Human, Dummy::Idle] {
+                let w = start_world(&opts, dummy);
+                let tape = sim::replay::Tape::begin(&w, "test");
+                if let Err(e) = tape.world() {
+                    panic!("{args}: {e}");
+                }
+            }
+        }
     }
 
     #[test]

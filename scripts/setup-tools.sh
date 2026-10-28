@@ -11,6 +11,8 @@
 #                                    # scripts/room-desktop.sh
 #   ./scripts/setup-tools.sh desktop # the desktop build on Linux: ALSA's
 #                                    # headers, for the game's sound
+#   ./scripts/setup-tools.sh art     # building a character's model: Blender
+#                                    # as a Python module, MakeHuman's data
 #   ./scripts/setup-tools.sh all
 #
 # Idempotent: a tool already there at the right version is skipped in under a
@@ -60,6 +62,15 @@
 #       and `alsa-sys` wants ALSA's headers to compile. `libasound2-dev`, a
 #       Debian package like `shot`. The browser build needs nothing: a page's
 #       audio is the browser's.
+#
+# art   `art/blender.sh` runs the scripts that build a character's model
+#       (`art/README.md`): Blender as the `bpy` package, at the version the
+#       scripts were written against, in a virtual environment under
+#       target/art/venv (a download of about four hundred megabytes; it wants
+#       the Python that version of `bpy` was built for, 3.13), and
+#       MakeHuman's CC0 base body, targets and rig, sparse-cloned at a pinned
+#       commit into target/art/makehuman. Not needed to build or play the
+#       game: the model it makes is committed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -134,6 +145,44 @@ desktop() {
   apt_packages desktop "ALSA's headers" libasound2-dev
 }
 
+# --- building a character's model ------------------------------------------------
+BPY_VERSION=5.2.2
+MAKEHUMAN_COMMIT=a8bc2d54ff0ac92e78ff71431b1023eda42bf482
+art() {
+  local py=target/art/venv/bin/python
+  mkdir -p target/art
+  if [ -x "$py" ] && "$py" -c "import bpy, sys; sys.exit(bpy.app.version_string.split()[0] != '$BPY_VERSION')" >/dev/null 2>&1; then
+    echo "art: blender $BPY_VERSION already installed"
+  else
+    local base
+    base=$(command -v python3.13 || command -v python3)
+    echo "art: installing blender $BPY_VERSION as a python module (about 400 MB)"
+    if "$base" -m venv target/art/venv >/dev/null 2>&1 \
+       && target/art/venv/bin/pip install --quiet "bpy==$BPY_VERSION" >/dev/null 2>&1; then
+      echo "art: blender $BPY_VERSION installed"
+    else
+      echo "art: FAILED: $base -m venv target/art/venv && target/art/venv/bin/pip install bpy==$BPY_VERSION (bpy $BPY_VERSION wants Python 3.13)" >&2
+      status=1
+    fi
+  fi
+  local mh=target/art/makehuman
+  if [ -d "$mh/makehuman/data/3dobjs" ] && [ "$(git -C "$mh" rev-parse HEAD 2>/dev/null)" = "$MAKEHUMAN_COMMIT" ]; then
+    echo "art: makehuman's data already there"
+  else
+    echo "art: fetching makehuman's CC0 body, targets and rig"
+    rm -rf "$mh"
+    if git clone --quiet --filter=blob:none --sparse --no-checkout https://github.com/makehumancommunity/makehuman.git "$mh" \
+       && git -C "$mh" sparse-checkout set makehuman/data/3dobjs makehuman/data/rigs makehuman/data/targets \
+       && git -C "$mh" checkout --quiet "$MAKEHUMAN_COMMIT"; then
+      echo "art: makehuman's data fetched"
+    else
+      echo "art: FAILED: git clone https://github.com/makehumancommunity/makehuman.git at $MAKEHUMAN_COMMIT" >&2
+      status=1
+    fi
+  fi
+  ln -sfn makehuman/makehuman/data target/art/mh
+}
+
 # --- the page in a browser -----------------------------------------------------
 browser() {
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -173,7 +222,7 @@ browser() {
 }
 
 if [ $# -eq 0 ]; then
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 fi
 for target in "$@"; do
@@ -183,8 +232,9 @@ for target in "$@"; do
     browser) browser ;;
     broker) broker ;;
     desktop) desktop ;;
-    all) desktop; web; shot; browser; broker ;;
-    *) echo "unknown target '$target': desktop, web, shot, browser, broker or all" >&2; exit 2 ;;
+    art) art ;;
+    all) desktop; web; shot; browser; broker; art ;;
+    *) echo "unknown target '$target': desktop, web, shot, browser, broker, art or all" >&2; exit 2 ;;
   esac
 done
 exit $status

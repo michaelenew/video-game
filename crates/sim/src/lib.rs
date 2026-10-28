@@ -30,6 +30,7 @@ pub mod effects;
 pub mod envelope;
 pub mod fixed;
 pub mod ground;
+pub mod group;
 pub mod gust;
 pub mod hazard;
 pub mod input;
@@ -55,6 +56,7 @@ pub mod stones;
 pub mod temper;
 pub mod tuned;
 pub mod tuning;
+pub mod tutorial;
 pub mod valley;
 pub mod versus;
 

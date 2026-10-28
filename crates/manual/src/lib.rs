@@ -113,8 +113,24 @@ pub const SECTIONS: &[Section] = &[
                 "A frame-cost readout every two seconds, to the terminal: frame time, how many entities there are and how many meshes are on screen, and -- where the driver can time its own work -- what each render pass cost the GPU and how many triangles and pixels it drew. Beside it, the knobs that let one build be measured at several render settings: --cascades <n> and --shadow-reach <m> set the sun's shadow cascades (Bevy's defaults are 4 to 150 m), --shadow-map <px> the shadow map's size (2048), --shadow-filter hard|gaussian how its edge is softened (gaussian, thirteen taps a pixel; hard is one), and --no-outline, --no-fxaa, --no-prepass and --no-wash (a painted look's screen pass) take a pass over the finished picture away, so its cost is what the frame time drops by. --casters no-giants takes the grown giants' wood out of the shadows and --casters moving everything that stands still, leaving the fighters and creatures, and --no-shadow-lookup lights the still world without reading the shadow map: together, what a baked shadow would save. In the valley the still world's shadow is drawn once rather than every frame (docs/design/architecture.md, The still world's shadow), and the readout counts how many times it has been drawn: a count that climbs while nothing moves is something asking for it every frame. --no-still puts the still world back in the cascades, for the before and after. --no-vsync stops waiting for the screen, so a saving shows in the frame time rather than vanishing under the 16.7 ms a vsynced frame always takes. Twelve seconds in, and again a minute in, it lists the heaviest meshes in view and the heaviest casting shadows, with how many copies, how far away and what they hang off, which is what says where a pass's triangles come from. Every GPU pipeline is printed the moment it is asked for, with what it was specialised on: a pipeline is compiled the first time something needs it, and one asked for minutes into a fight is a hitch the warm-up (game::warm) missed. --sync-pipelines compiles every pipeline on the frame that asks for it, as a browser and macOS always do, so that hitch can be seen on any machine. --quit-after <s> leaves cleanly after that many seconds, so a build with bevy/trace_chrome writes its trace. scripts/profile.sh runs it headlessly under lavapipe. What was found with it is in docs/design/architecture.md under The frame budget.",
             ),
             e(
+                "cargo run -p game --release -- --pretty",
+                "The game as pretty as it has yet been made: the world in the brushed look, the cast painted over (--painted-cast) and the creatures' grown bodies, all at once. On the web it is ?pretty. It costs more than the plain picture, which is why it is asked for rather than the default; --look <name> beside it paints the world in another look instead. The switches below are the pieces, for trying one at a time.",
+            ),
+            e(
                 "cargo run -p game --release -- --look brushed",
                 "Paints the picture in one of the looks built in docs/design/painting.md. They are opt-in: the game is plain by default until a painted look is cheap enough to carry. brushed is Guild Wars 2's broad strokes (crisp near, painted far, strokes that follow paths and slopes, colour that follows the land's contours); the others are painted (soft painted tones, violet shade, coloured haze, cut stones), depths (the same in one blue hue, in layers), wash (watercolour on paper). On the web it is ?look=brushed; there only the surface half of a look is drawn, since the rest reads a depth buffer the browser build cannot. The brush's strokes are placed once per tile of land and drawn as splats, a pass of their own, which is what keeps the brush the same size on the screen for the cost of a particle pass; --exact <m> instead works the brush out at every pixel within so many metres and reads baked sheets beyond, --exact 999 at every pixel everywhere (the reference the splats are measured against), and --exact 0 the sheets everywhere. The look's brush is worked out at a share of the screen's resolution that the game lowers whenever a frame runs over a sixtieth of a second and raises again when it has room, so a slow machine paints with a coarser brush rather than dropping frames; --smear <share> fixes the share (1 the whole resolution, 0.5 half).",
+            ),
+            e(
+                "cargo run -p game --release -- --painted-cast",
+                "The Shadow Reaver, the Champion and the Blood mage painted over: brushstrokes riding their clothes, each one a point on the skin carried by the skeleton and drawn square to the eye, so the brushwork moves with the body and never slides or squashes as they turn. Clothes only for now, and at a hem or a cuff a stroke frays past the edge like a cloak turning to flame. The other classes are drawn as without it. The reasoning and what was tried is docs/design/exploration/0025_painted_in_motion.md.",
+            ),
+            e(
+                "cargo run -p game --release -- --grown-creatures",
+                "Draw the Ridgeback's body grown by rule from its species table, rather than the body sculpted by hand that is its target (art/ridgeback/build.py): the parts made fuller than their boxes, a carapace grown off the skin wherever the table says armour and parting round the weak points, spines, horns, claws and quills by rule, and the fine detail -- creased hide, pitted stone, a glowing lava crust on the soft places -- worked out in the skin's shader. To compare the two; docs/design/exploration/0030_a_target_body.md. The grown body also stands in for the sculpted one in the moment before its file has loaded.",
+            ),
+            e(
+                "cargo run -p game --release -- --box-creatures",
+                "Draw every creature as the boxes the simulation collides against, as they were before the Ridgeback's body was grown over its skeleton: one smooth skinned body from its parts, a hide painted by rule (a darker back, a paler belly, bands, armour plates), and its weak points left glowing on it. Its boxes are what you hit and stand on either way; F1 draws them.",
             ),
             e(
                 "cargo run -p manual",
@@ -531,6 +547,21 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "Tutorials",
+        in_browser: true,
+        blurb: "A hall for each class: the first room says what the class is, how it plays and how it wins; then a room for each click and one for its keys, each move to try once; past those, the advanced rooms, one technique each. Walk into a room to open it. docs/design/tutorials.md has every hall.",
+        entries: &[
+            e(
+                "--tutorial <class>, ?tutorial=reaver",
+                "Start in that class's tutorial hall: champion, reaver, elementalist, blood or dual (player one's class with no name). The Esc menu's Tutorials row goes to any of them, and Tab in a hall walks you into the next class's.",
+            ),
+            e(
+                "The checklist",
+                "On the right, the room you are in and what to do there. A box is ticked the first time you do a thing; a count beside it says how many times since, so practising is counted too. A move that should strike the dummy waits to see whether it did, and says Hit or missed.",
+            ),
+        ],
+    },
+    Section {
         title: "The valley",
         in_browser: true,
         blurb: "A run starts in Hearth, the walled town at the valley's mouth: walk out of its gates into a world of places joined together, a climb from the river to the Saddle with every creature in a room off the way, and the Ring in town for fighting each other. docs/design/valley.md has the whole map.",
@@ -746,6 +777,10 @@ pub const SECTIONS: &[Section] = &[
                 "F2",
                 "Freeze the skeleton at rest. Tells a bad clip from a bad rig.",
             ),
+            e(
+                "F6",
+                "A close look at a character: the camera leaves the fight and goes round a fighter -- you first, F6 again for the next, and once more back to the fight. Move the mouse to go round them, the scroll wheel to come in close (a face fills the screen) or back out, and Alt with the wheel to look higher or lower on the body. Nobody fades for the camera being close and the crosshair is hidden. Only the camera moves: the keyboard and the clicks still play, so walk or swing and watch it, or pause with P and step with [ and ] to walk round one pose.",
+            ),
             e("F7", "The Oven: every tuned number in the game, live."),
             e(
                 "F9",
@@ -880,6 +915,10 @@ pub const SECTIONS: &[Section] = &[
                 "Re-bake every creature's pose table from its recipes in crates/anim/src/beast/<species>/, each into its own crates/sim/src/species/<species>/baked.rs. Its parts are simulation geometry, so this one writes into crates/sim. --species <name> for just one.",
             ),
             e(
+                "cargo run -p anim --bin export_beast -- <species>",
+                "Write a creature's skeleton and part boxes at rest, as the game's rig places them, to target/art/<species>.json: what a body formed by hand is sculpted over (art/<species>/build.py, art/blender.sh to run it). docs/design/exploration/0030_a_target_body.md.",
+            ),
+            e(
                 "cargo run -p anim --bin preview_beast -- <clip>",
                 "Draw a creature as a contact sheet PNG, into target/beast-preview: the creature from the side, from above, and every frame overlaid. --all for every clip, --states for the poses the simulation produces rather than the baked ones, --species <name> for a creature other than the Ridgeback. Green is a surface you can stand on, red is a weak point, and the dashed line is how high a full hop reaches.",
             ),
@@ -965,6 +1004,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "./scripts/screenshot.sh [out.png] [seconds]",
                 "Render headlessly with Xvfb. No GPU needed.",
+            ),
+            e(
+                "./scripts/reel.sh <name> <display> <frames> <interval> [VAR=value ...] -- [game args]",
+                "Film the game headlessly: a run of pictures a set interval apart, then a GIF and a contact sheet, in target/reel. How a character's look is judged -- a portrait, a turntable, a walk; docs/design/cast-look.md has the commands. Build the game first.",
             ),
             e(
                 "./scripts/p2p-localhost.sh",
@@ -1079,6 +1122,38 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_REAP=1",
                 "Start with player two six metres in front of player one and the Reaping just begun on him -- five copies of a Shadow Reaver's shadow, the picture of her cash-in at a full tally -- so a capture can look at it without playing a whole tally up. In a hunt, SHOT_REAP=leg and SHOT_REAP=back start it on the creature instead -- on a leg, or on top of its back. SHOT_FRAME picks the moment; pair it with DEMO=0.",
+            ),
+            e(
+                "SHOT_PORTRAIT=seat,angle,distance,height",
+                "Take the camera off the fight and put it distance metres from that seat's fighter (0 is player one), angle degrees round from straight in front of them, looking at height metres above their feet -- how a character is looked at as a piece of art: SHOT_PORTRAIT=0,25,2.4,1.0 is the Shadow Reaver head to foot, 0,20,0.9,1.62 her face. Pair it with DEMO=0 and SHOT_FRAME, and --look brushed for the painted picture.",
+            ),
+            e(
+                "GROWN_OBJ=1 cargo test -p game --bin game grown_obj",
+                "Write the grown Ridgeback's mesh to target/grown.obj, to look at outside the game: what --grown-creatures draws, before the skin's detail. GROWN_OBJ=<species> (galewing, mantis, ...) writes that species' to target/grown_<species>.obj.",
+            ),
+            e(
+                "GROWN_LINES=1 cargo test -p game --bin game grown_lines",
+                "Grow every stage of the crossbreed lines (exploration 0032: each formed creature fed toward the next, and one backcrossed) to target/lines/<line>_<stage>.obj, coloured, with target/lines/lines.tsv saying what each stage is; art/blender.sh art/lineage.py renders them into strips.",
+            ),
+            e(
+                "BRED_DUMP=1 cargo test -p game --bin game bred_dump",
+                "Print the bred Ridgeback's, Galewing's and Mantis's parts: each box's middle, half-size and axis, for comparing a bred body with its species table. BRED_DUMP=<line>:<stage> prints one stage of a crossbreed line instead, with its hand edits.",
+            ),
+            e(
+                "BRED_GAIT=<line>:<stage>,... cargo test -p game --bin game bred_gait",
+                "Write a crossbreed stage's (or cast:<Name>, one of the cast's genomes) body boxes at eight points of its slowest gait to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
+            ),
+            e(
+                "BRED_ATTACK=<line>:<stage>,... cargo test -p game --bin game bred_attack",
+                "Write each damaging move of a crossbreed stage (or cast:<Name>) as its body boxes at five points from rest through windup and strike to target/gait/, the striking parts yellow and a cried move's cry in the name; art/blender.sh art/gait.py renders them as strips.",
+            ),
+            e(
+                "GROWN_STAGES=0,3,6",
+                "With GROWN_LINES: grow those stages of the lines alone. A stage with hand edits (game::touch, exploration 0033) is written twice, the breeder's body as <line>_<stage>_raw.obj beside the edited one.",
+            ),
+            e(
+                "SHOT_BEAST=angle,distance,height",
+                "The same round the hunt's creature: the camera distance metres from it, angle degrees round from the way it faces, looking at height metres above its feet. With --painted-cast it shows a creature's brushwork; SHOT_SPIN turns it.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

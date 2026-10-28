@@ -469,7 +469,9 @@ became the default)
 ## Picking it back up
 
 - **Run it**: `--look brushed` (the game is `plain` by default);
-  `painted|depths|wash` are the others, `?look=` on the web.
+  `painted|depths|wash` are the others, `?look=` on the web. `--pretty`
+  (`?pretty`) is `brushed` with the painted cast: the player's switch for
+  the best the game has yet looked (`crates/game/src/pretty.rs`).
 - **The brush is drawn as splats** (`crates/game/src/splats.rs`,
   `splats.wgsl`; [exploration/0020](exploration/0020_brush_splats.md)):
   every stroke of every tile of land in sight is placed once on the CPU

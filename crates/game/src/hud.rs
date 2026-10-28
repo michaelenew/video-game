@@ -562,6 +562,15 @@ pub fn update_picker(
         trophies.count(),
         course,
     );
+    // A tutorial hall has its own panel where the list would be: the hall
+    // this machine's fighter is in, wherever the others are.
+    if sim.cur.hall_of(sim.local_player()).is_some() {
+        if let Ok(mut t) = text.single_mut() {
+            *t = Text::new("");
+        }
+        *shown = None;
+        return;
+    }
     if shown.as_ref() == Some(&now) {
         return;
     }

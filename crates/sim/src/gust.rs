@@ -111,7 +111,7 @@ pub type Bursts = [Option<Burst>; MAX_GUSTS];
 /// and the cap still has to decide what happens when it is reached: the one
 /// furthest along gives way, so the move never goes quiet exactly when it is
 /// being used most.
-pub const MAX_GUSTS: usize = MAX_PLAYERS * 2;
+pub const MAX_GUSTS: usize = crate::state::POOLED_FOR * 2;
 
 /// Every air shot in flight. Fixed size for the reason the effects array is:
 /// it is part of the rollback snapshot, and a heap allocation per frame of

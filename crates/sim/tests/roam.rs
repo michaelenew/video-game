@@ -291,20 +291,18 @@ fn lost_far_from_home_it_takes_its_egg_back() {
 /// **One live hunt**: a chase into another creature's range does not wake
 /// it -- the world has two creature slots and one pack, and they are the
 /// chaser's -- and once the chase is over, with somebody standing in it,
-/// that range wakes as if just walked into.
+/// that herd wakes as if just walked up to.
 #[test]
 fn a_chase_through_another_range_does_not_wake_it_until_it_is_over() {
     let mut w = carrying_the_meadows_egg();
     let other = range("South Bank");
     flee_down_the_road(&mut w, 1500);
-    // Into the South Bank's range, in its middle.
+    // Up to the South Bank's Gnawers, where they graze -- a herd that roams
+    // is woken by coming near it, not by its ground.
     let o = w.map_origin();
-    let mid = V3::new(
-        sim::arena::cm(other.at.0),
-        sim::arena::cm(other.floor),
-        sim::arena::cm(other.at.1),
-    );
-    w.players[0].pos = V3::new(mid.x, mid.y.add(Fx::ratio(1, 2)), mid.z).sub(o);
+    let mid = sim::valley::sight::herd_middle(other, w.frame);
+    let floor = atlas::valley().relief_at(mid.x, mid.z);
+    w.players[0].pos = V3::new(mid.x, floor.add(Fx::ratio(1, 2)), mid.z).sub(o);
     w.players[0].vel = V3::ZERO;
     for _ in 0..30 {
         w.advance([Input::new(0)]);
@@ -328,9 +326,9 @@ fn a_chase_through_another_range_does_not_wake_it_until_it_is_over() {
     }
     assert_eq!(
         w.arena, other.arena,
-        "the world is not in the range they stand in"
+        "the world is not in the range they stand by"
     );
-    assert!(w.hunting(), "the range they stand in did not wake");
+    assert!(w.hunting(), "the herd they stand by did not wake");
     assert_eq!(w.valley.den, Some(other.arena));
     assert_eq!(w.pack.map(|p| p.species), Some(SpeciesId::GNAWERS));
 }

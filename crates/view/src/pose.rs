@@ -16,8 +16,8 @@
 //!
 //! ## A pose is angles
 //!
-//! Fifty-one numbers: three for where the hips are, and three for each of the
-//! sixteen joints. No positions anywhere else -- an elbow cannot be anywhere
+//! Sixty-six numbers: three for where the hips are, and three for each of the
+//! twenty-one joints. No positions anywhere else -- an elbow cannot be anywhere
 //! except at the end of its upper arm, and saying so in the data structure is
 //! what makes one clip play on six differently-proportioned bodies.
 //!
@@ -229,6 +229,34 @@ impl Pose {
     pub fn wrists(self, bend: f32, spread: f32, twist: f32) -> Pose {
         self.wrist_l(bend, spread, twist)
             .wrist_r(bend, spread, twist)
+    }
+
+    /// The neck under the head: nod, tilt, turn. Usually left alone --
+    /// [`secondary`] gives it a share of whatever the head does.
+    pub fn neck(self, nod: f32, tilt: f32, turn: f32) -> Pose {
+        self.set(Joint::Neck, nod, tilt, turn)
+    }
+
+    /// A collarbone: the shoulder rolled forward (a reach, a stab thrown
+    /// to its full length) and lifted (a shrug). [`secondary`] adds what the
+    /// arm's own angle asks for on top of this.
+    pub fn clavicle_l(self, forward: f32, up: f32) -> Pose {
+        self.set(Joint::ClavicleL, forward, up, 0.0)
+    }
+
+    pub fn clavicle_r(self, forward: f32, up: f32) -> Pose {
+        self.set(Joint::ClavicleR, forward, up, 0.0)
+    }
+
+    /// The toes bent at the ball of the foot: negative turns them up, as a
+    /// heel coming off the floor does. [`secondary`] keeps them on the floor
+    /// by itself.
+    pub fn toes_l(self, bend: f32) -> Pose {
+        self.set(Joint::ToeL, bend, 0.0, 0.0)
+    }
+
+    pub fn toes_r(self, bend: f32) -> Pose {
+        self.set(Joint::ToeR, bend, 0.0, 0.0)
     }
 
     /// Hip: leg forward, leg out to the side, leg rolled.
@@ -635,4 +663,93 @@ pub fn boxes(skeleton: &Skeleton, pose: &Pose) -> [(V3, math::Quat); JOINT_COUNT
 pub fn part_size(skeleton: &Skeleton, j: Joint) -> [f32; 3] {
     let h = skeleton.bone(j).half;
     [h[0] * 2.0, h[1] * 2.0, h[2] * 2.0]
+}
+
+/// **What a body does without being told** (2026-10-20): laid over every
+/// pose the clips make, so the twenty-one joints move like a body even where
+/// a clip was written for sixteen.
+///
+/// - **The neck takes a share of the head**, so a nod or a turn pivots low,
+///   at the base of the neck, rather than at the jaw.
+/// - **The collarbones follow the arm.** A shoulder does not raise an arm
+///   alone: past the horizontal the collarbone lifts, and reaching forward it
+///   rolls forward, which is the last of a reach and the difference between
+///   a stab that extends and one that stops at the chest. An arm's angles are
+///   measured from the chest (`Joint::turns_with`), so it still points where
+///   the clip said: only the shoulder moves, and the hand with it.
+/// - **The toes stay on the floor** when the heel lifts, bent at the ball of
+///   the foot, instead of driving into it.
+///
+/// Angles are build-agnostic, so this works on the reference skeleton and is
+/// true of every class. No allocation: a handful of rotations a frame.
+pub fn secondary(mut pose: Pose) -> Pose {
+    let skeleton = reference();
+    // The neck.
+    let head = pose.angles(Joint::Head);
+    let neck = pose.angles(Joint::Neck);
+    const NECK_SHARE: f32 = 0.4;
+    pose.set_angles(
+        Joint::Neck,
+        [
+            neck[0] + head[0] * NECK_SHARE,
+            neck[1] + head[1] * NECK_SHARE,
+            neck[2] + head[2] * NECK_SHARE,
+        ],
+    );
+    pose.set_angles(
+        Joint::Head,
+        [
+            head[0] * (1.0 - NECK_SHARE),
+            head[1] * (1.0 - NECK_SHARE),
+            head[2] * (1.0 - NECK_SHARE),
+        ],
+    );
+
+    // The collarbones.
+    for (clavicle, arm) in [
+        (Joint::ClavicleL, Joint::ArmL),
+        (Joint::ClavicleR, Joint::ArmR),
+    ] {
+        let a = pose.angles(arm);
+        let bone = skeleton.bone(arm);
+        let dir = crate::skeleton::pointing(bone, arm, a[0], a[1]);
+        let smooth = |x: f32, lo: f32, hi: f32| {
+            let t = ((x - lo) / (hi - lo)).clamp(0.0, 1.0);
+            t * t * (3.0 - 2.0 * t)
+        };
+        // Lifted as the arm rises (`dir.y` from -1 hanging to 1 overhead),
+        // rolled forward as it reaches ahead and back as it swings behind.
+        let up = 24.0 * RAD * smooth(dir[1], -0.25, 1.0);
+        let forward = 20.0 * RAD * smooth(dir[2], 0.1, 1.0) * (1.0 - 0.5 * dir[1].max(0.0))
+            - 9.0 * RAD * smooth(-dir[2], 0.2, 1.0);
+        let c = pose.angles(clavicle);
+        let c = [c[0] + forward, c[1] + up, c[2]];
+        pose.set_angles(clavicle, c);
+    }
+
+    // The toes.
+    let skin = crate::skeleton::solve(skeleton, &pose);
+    for toe in [Joint::ToeL, Joint::ToeR] {
+        let foot = toe.parent().expect("a toe hangs off a foot");
+        let at = skin.origin[toe.index()];
+        if at[1] > 0.08 {
+            continue;
+        }
+        let bone = skeleton.bone(toe);
+        let held = pose.angles(toe);
+        let foot_rot = skin.rot[foot.index()];
+        let tip_y = |bend: f32| {
+            let r = foot_rot.mul(crate::skeleton::local_rotation(bone, toe, [bend, 0.0, 0.0]));
+            at[1] + r.rotate([0.0, 0.0, bone.length])[1]
+        };
+        // Bend up, a few degrees at a time, until the tips clear the floor.
+        let floor = 0.006;
+        let mut bend = held[0];
+        let lowest = bone.limits.swing.0;
+        while tip_y(bend) < floor && bend > lowest {
+            bend = (bend - 4.0 * RAD).max(lowest);
+        }
+        pose.set_angles(toe, [bend, held[1], held[2]]);
+    }
+    pose
 }

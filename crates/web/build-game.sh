@@ -3,7 +3,8 @@
 #
 #   ./crates/web/build-game.sh   ->  target/web/
 #
-# Three files and a marker: the page, the wasm-bindgen glue, and the module.
+# Three files, a marker and a folder: the page, the wasm-bindgen glue, the
+# module, and `assets/` with the characters' models, fetched as they are wanted.
 # Serve the directory over HTTP -- ES modules and `fetch` do not work from a
 # `file://` URL -- or publish it. `.github/workflows/pages.yml` runs exactly
 # this and hands the directory to GitHub Pages.
@@ -52,6 +53,12 @@ cargo build -p game --target wasm32-unknown-unknown --profile wasm-release
 rm -rf "$OUT"
 mkdir -p "$OUT"
 wasm-bindgen --target web --no-typescript --out-name game --out-dir "$OUT" "$WASM"
+
+# The characters' models, beside the page: the game reads each one the first
+# time somebody plays the class (`crates/game/src/models.rs`), so the module
+# does not carry five of them.
+mkdir -p "$OUT/assets"
+cp crates/game/assets/*.glb "$OUT/assets/"
 
 # ---------------------------------------------------------------------------
 # What gets published has to be something a browser will actually accept.

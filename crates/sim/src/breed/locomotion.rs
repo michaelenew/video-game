@@ -260,7 +260,58 @@ pub fn at(g: &Genome, q: &Posture, share: Fx) -> Gait {
         .fold(Fx::from_int(1000), |a, b| a.min(b));
     let stride = if n > 0 && !matches!(kind, GaitKind::Slither | GaitKind::Crawl) {
         let duty = kind.duty();
-        stride.min(MAX_REACH.mul(Fx::from_int(2)).mul(shortest).div(duty))
+        let mut stride = stride.min(MAX_REACH.mul(Fx::from_int(2)).mul(shortest).div(duty));
+        // **And no further than the room between one pair's feet and the
+        // next's** (exploration 0034): a planted foot travels back half the
+        // stride's share of the duty and a swinging one forward as far, so
+        // two feet on one side never meet if each keeps within about half
+        // the clear ground between them. Past that the fore foot swept
+        // back through the hind one every step.
+        for w in pairs[..n].windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let foot = |i: usize| {
+                let fan = if g.limbs[i].is_some_and(|l| l.build == super::Build::Spindle) {
+                    super::build::spider_ahead(super::Station::ALL[i], p.limb[i])
+                } else {
+                    Fx::ZERO
+                };
+                q.stations[i]
+                    .attach
+                    .mul(cos_turns(q.pitch))
+                    .add(q.stations[i].reach)
+                    .add(fan)
+            };
+            let clear = foot(a)
+                .sub(foot(b))
+                .sub(p.limb[a].add(p.limb[b]).mul(fx(3, 20)))
+                .max(fx(1, 100));
+            stride = stride.min(clear.div(duty));
+        }
+        stride
+    } else if kind == GaitKind::Crawl {
+        // A crawl's paddles keep to the same room.
+        let mut stride = stride;
+        for w in pairs[..n].windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let foot = |i: usize| {
+                let fan = if g.limbs[i].is_some_and(|l| l.build == super::Build::Spindle) {
+                    super::build::spider_ahead(super::Station::ALL[i], p.limb[i])
+                } else {
+                    Fx::ZERO
+                };
+                q.stations[i]
+                    .attach
+                    .mul(cos_turns(q.pitch))
+                    .add(q.stations[i].reach)
+                    .add(fan)
+            };
+            let clear = foot(a)
+                .sub(foot(b))
+                .sub(p.limb[a].add(p.limb[b]).mul(fx(3, 20)))
+                .max(fx(1, 100));
+            stride = stride.min(clear.div(kind.duty()));
+        }
+        stride
     } else {
         stride
     };
@@ -444,6 +495,17 @@ pub fn drive(g: &Genome, q: &Posture, gait: &Gait, phase: Fx, turn: Fx) -> Drive
         }
         GaitKind::Fly | GaitKind::Stand => {}
     }
+    // A belly barely off the floor cannot bob down onto it: the bob is no
+    // deeper than the clearance a body keeps, a tenth of its height
+    // (exploration 0035). A body on its belly does not bob at all.
+    let deep = if p.thorax {
+        p.half_h.mul(fx(3, 2))
+    } else {
+        p.half_h
+    };
+    let room = q.root.sub(deep).sub(h.mul(fx(1, 10))).max(Fx::ZERO);
+    let room = if q.bellied { Fx::ZERO } else { room };
+    d.lift = d.lift.clamp(room.neg(), room.max(d.lift));
     // The head held steady against the body's rock, and turned into a turn.
     d.neck_pitch = d.pitch.neg();
     d.neck_yaw = turn.mul(fx(1, 16));

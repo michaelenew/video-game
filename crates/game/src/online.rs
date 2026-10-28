@@ -15,14 +15,21 @@
 //!
 //!     game --port 47811 --peer 192.168.1.20:47812
 //!
-//! **A room** is [`Driver::Room`] for as long as it is open (`net::lobby`,
-//! `net::drop_in`; `docs/design/versus.md` §6): played as training until
-//! somebody else is in it, then online, and people come and go whenever they
-//! like -- each change of who is in it a new GGRS session from the world at
-//! the frame it happened. **Two desktops by address** start in
-//! [`Driver::Meeting`], meet once, and play one session. Either way every
-//! tick goes through GGRS, which owns when to save, load and advance -- the
-//! simulation only has to do those three things correctly.
+//! **A room in the valley** is [`Driver::Groups`] (`net::group`; exploration
+//! 0029 §12–14): everybody in it starts as a group of one in a world of
+//! their own, and players near each other share one world in lockstep,
+//! merging as they meet and splitting as they part. Nobody's trip moves
+//! anybody else, and a fight far off costs nobody anything.
+//!
+//! **A room for one fight** -- an arena or a hunt -- is [`Driver::Room`] for
+//! as long as it is open (`net::lobby`, `net::drop_in`;
+//! `docs/design/versus.md` §6): played as training until somebody else is
+//! in it, then online, and people come and go whenever they like -- each
+//! change of who is in it a new GGRS session from the world at the frame it
+//! happened. **Two desktops by address** start in [`Driver::Meeting`], meet
+//! once, and play one session. Either way every tick goes through GGRS,
+//! which owns when to save, load and advance -- the simulation only has to
+//! do those three things correctly.
 //!
 //! **Which way of meeting is the one thing here that differs by platform**,
 //! and it is chosen in [`start`]: a room is `net::browser` in a page and
@@ -99,6 +106,24 @@ pub enum Driver {
         /// See [`Meter`].
         meter: Meter,
     },
+    /// **A room in the valley, played in groups** (`net::group::Room`,
+    /// exploration 0029 §14): everybody starts as a group of one in a world
+    /// of their own, and whoever comes near merges with them. Nobody's
+    /// trip, hunt or tutorial moves anybody else. Played as training until
+    /// the room's first line opens.
+    Groups {
+        play: Box<net::group::Room>,
+        /// The link's world: my group of one starts from its place and its
+        /// journey.
+        start: Box<World>,
+        room: Room,
+        /// What I come as.
+        class: sim::Class,
+        /// Merges seen, so a new one begins the replay again.
+        merges: u32,
+        /// See [`Meter`].
+        meter: Meter,
+    },
 }
 
 /// **The link, counted a second at a time**, onto the tape
@@ -132,6 +157,10 @@ impl Driver {
             Driver::Room { play, .. } if play.session.is_some() => {
                 play.seat().min(sim::state::MAX_PLAYERS - 1)
             }
+            // In a group, the slot my id holds in my group's world.
+            Driver::Groups { play, .. } => {
+                play.session.as_ref().and_then(|s| s.my_slot()).unwrap_or(0)
+            }
             _ => 0,
         }
     }
@@ -143,6 +172,7 @@ impl Driver {
         match self {
             Driver::Online { .. } => true,
             Driver::Room { play, .. } => play.session.is_some(),
+            Driver::Groups { play, .. } => play.session.is_some(),
             _ => false,
         }
     }
@@ -151,7 +181,7 @@ impl Driver {
     pub fn room(&self) -> Option<&Room> {
         match self {
             Driver::Meeting { room, .. } | Driver::Online { room, .. } => room.as_ref(),
-            Driver::Room { room, .. } => Some(room),
+            Driver::Room { room, .. } | Driver::Groups { room, .. } => Some(room),
             _ => None,
         }
     }
@@ -163,6 +193,7 @@ impl Driver {
         match self {
             Driver::Meeting { rendezvous, .. } => rendezvous.report(),
             Driver::Room { play, .. } => play.lobby.report(),
+            Driver::Groups { play, .. } => play.lobby.report(),
             Driver::Alone { report, .. } => report.clone(),
             _ => Vec::new(),
         }
@@ -200,6 +231,13 @@ impl Driver {
                 Some("Waiting for a friend's game: it has gone quiet for a moment…")
             }
             Driver::Room { play, .. } => Some(seat_line(play.seat())),
+            Driver::Groups { play, .. } => match &play.session {
+                None => Some(play.lobby.status()),
+                Some(s) if s.members().len() > 1 => {
+                    Some("Online: in a group with the friends near you.")
+                }
+                Some(_) => Some("Online: your friends are elsewhere in the valley."),
+            },
         }
     }
 }
@@ -241,6 +279,20 @@ fn terms(start: &World) -> String {
 pub fn start(opts: &Options, start: &World, class: sim::Class) -> Driver {
     if let Some(lobby) = gathering(opts, start, class) {
         return match lobby {
+            // **The valley is played in groups**: one map, everybody going
+            // where they choose. An arena or a hunt link is one fight, and
+            // plays as a room always has.
+            Ok(lobby) if start.valley.on => Driver::Groups {
+                play: Box::new(net::group::Room::new(lobby)),
+                start: Box::new(start.clone()),
+                room: room_of(opts).expect("a room's settings name it"),
+                class,
+                merges: 0,
+                meter: Meter {
+                    since: start.frame,
+                    ..Meter::default()
+                },
+            },
             Ok(lobby) => Driver::Room {
                 play: Box::new(net::drop_in::DropIn::new(lobby, net::p2p::INPUT_DELAY)),
                 start: Box::new(start.clone()),
@@ -477,6 +529,10 @@ pub fn meet(sim: &mut crate::Sim, now_ms: u64, delay: u8) {
         tend_room(sim, now_ms, delay);
         return;
     }
+    if matches!(sim.driver, Driver::Groups { .. }) {
+        tend_groups(sim, now_ms);
+        return;
+    }
     let Driver::Meeting {
         rendezvous, said, ..
     } = &mut sim.driver
@@ -596,6 +652,38 @@ fn tend_room(sim: &mut crate::Sim, now_ms: u64, delay: u8) {
     }
 }
 
+/// **A room of groups, a frame**: its lobby polled, a line to anybody new
+/// taken in, and my group of one started once my first lines are open --
+/// in the link's place, with its journey, alone.
+fn tend_groups(sim: &mut crate::Sim, now_ms: u64) {
+    let Driver::Groups {
+        play, start, class, ..
+    } = &mut sim.driver
+    else {
+        return;
+    };
+    if let Some(why) = play.lobby.failed() {
+        let report = play.lobby.report();
+        platform::log(&format!("meeting failed: {why}"));
+        for line in &report {
+            platform::log(line);
+        }
+        sim.driver = Driver::Alone { why, report };
+        return;
+    }
+    let (place, journey, class) = (start.arena, start.valley, *class);
+    if play.tend(now_ms, || World::arrive([class], journey, place, None, 1)) {
+        let world = play.session.as_ref().map(|s| s.world.clone());
+        if let Some(world) = world {
+            eprintln!("online: in the valley, a group of one until somebody comes near");
+            sim.cur = world;
+            begin_again(sim, 0, 0);
+            sim.ledger.sit(0);
+            sim.ledger.begin(&sim.cur);
+        }
+    }
+}
+
 /// **A session started from the world now in hand**: the replay, the
 /// interpolation and the rewind begin again from it, as for a match.
 fn begin_again(sim: &mut crate::Sim, seat: usize, delay: usize) {
@@ -606,7 +694,7 @@ fn begin_again(sim: &mut crate::Sim, seat: usize, delay: usize) {
     sim.tape.online = Some((seat as u8, delay as u8));
     sim.paused = false;
     sim.rehearsing = None;
-    if let Driver::Room { meter, .. } = &mut sim.driver {
+    if let Driver::Room { meter, .. } | Driver::Groups { meter, .. } = &mut sim.driver {
         meter.since = start.frame;
     }
 }
@@ -644,6 +732,8 @@ pub fn pace(sim: &mut crate::Sim, ticks: u32) -> u32 {
             Some(session) => (session, paced, meter),
             None => return ticks,
         },
+        // A group waits for its slowest member by itself (`net::group`'s
+        // window), and nobody outside it is anybody's to keep pace with.
         _ => return ticks,
     };
     if ticks == 0 {
@@ -679,6 +769,7 @@ pub fn step(
     local: SimInput,
     scape: &mut crate::sound::Soundscape,
     keeping: &mut crate::bag::Keeping,
+    coach: &mut crate::tutorial::Coach,
 ) {
     let crate::Sim {
         driver,
@@ -695,6 +786,7 @@ pub fn step(
         ledger,
         scape,
         keeping,
+        coach,
     };
     match driver {
         Driver::Online {
@@ -779,6 +871,65 @@ pub fn step(
                 begin_again(sim, seat, delay);
             }
         }
+        Driver::Groups {
+            play,
+            merges,
+            meter,
+            ..
+        } => {
+            let Some(session) = &mut play.session else {
+                return;
+            };
+            let me = session.my_slot().unwrap_or(0);
+            let Frame {
+                cur,
+                prev,
+                tape,
+                ledger,
+                scape,
+                keeping,
+                coach,
+            } = &mut world;
+            let began = bevy::platform::time::Instant::now();
+            let (rollbacks, stalls) = (session.rollbacks, session.stalls);
+            // Every frame the group plays, the first time and again after
+            // a rollback, onto the tape and through the ears, the bag and
+            // the tutorial, as GGRS's advances are.
+            let advanced = session.tick_watching(local, &mut |before, inputs, after| {
+                tape.record(before.frame, *inputs);
+                // The region books, kept as every driver keeps them, so
+                // training after the room goes on from where it is.
+                ledger.record(before, *inputs);
+                scape.observe(before, after);
+                keeping.record(before, inputs, after, me);
+                crate::tutorial::observe(coach, before, after, me);
+            });
+            meter.now.rollbacks += session.rollbacks - rollbacks;
+            meter.now.stalls += session.stalls - stalls;
+            meter.now.sim_us = meter.now.sim_us.max(began.elapsed().as_micros() as u32);
+            if advanced {
+                **prev = (**cur).clone();
+            }
+            // A rollback with no new frame changed the world too.
+            **cur = session.world.clone();
+            ledger.confirm_through(session.confirmed.min(cur.frame), cur);
+            if cur.frame >= meter.since + SECOND {
+                meter.now.frame = cur.frame;
+                tape.measure(std::mem::take(&mut meter.now));
+                meter.since = cur.frame;
+            }
+            // **A merge** is a new world: what came before it was another
+            // group's, so the replay and the rest begin again from it.
+            if session.merges != *merges {
+                *merges = session.merges;
+                **cur = session.world.clone();
+                let seat = session.my_slot().unwrap_or(0);
+                eprintln!("online: a group of {} now", session.members().len());
+                begin_again(sim, seat, 0);
+                sim.ledger.sit(seat);
+                sim.ledger.begin(&sim.cur);
+            }
+        }
         _ => {}
     }
 }
@@ -792,6 +943,7 @@ struct Frame<'a> {
     ledger: &'a mut regions::Ledger,
     scape: &'a mut crate::sound::Soundscape,
     keeping: &'a mut crate::bag::Keeping,
+    coach: &'a mut crate::tutorial::Coach,
 }
 
 /// Who plays where in a session.
@@ -833,6 +985,7 @@ fn tick(
         ledger,
         scape,
         keeping,
+        coach,
     } = world;
     let Line {
         desynced,
@@ -951,6 +1104,8 @@ fn tick(
                     // And kept: what was picked up and fed, by frame, so a
                     // re-advance corrects what a prediction got wrong.
                     keeping.record(before, &inputs, after, me);
+                    // And tallied, in a tutorial hall: this seat's own checks.
+                    crate::tutorial::observe(coach, before, after, me);
                 };
             if seating.lineup {
                 net::handle_requests_seated(cur, requests, ledger, seating.seats, watch);
@@ -991,7 +1146,10 @@ fn tick(
 
 /// A frame was drawn online: how long it took, for the link's record.
 pub fn drawn(sim: &mut crate::Sim, wall: std::time::Duration) {
-    if let Driver::Online { meter, .. } | Driver::Room { meter, .. } = &mut sim.driver {
+    if let Driver::Online { meter, .. }
+    | Driver::Room { meter, .. }
+    | Driver::Groups { meter, .. } = &mut sim.driver
+    {
         meter.drawn(wall);
     }
 }
@@ -1064,6 +1222,13 @@ mod tests {
             let world = crate::start_world(&opts, crate::Dummy::Human);
             assert_eq!(world.present(), players as usize, "{players} seated");
         }
+        // A room made in the town is in the valley, and is played in
+        // groups (`start`); a hunt's is one fight.
+        let opts = room_settings(&practice, 3);
+        assert!(crate::start_world(&opts, crate::Dummy::Human).valley.on);
+        let mut hunt = room_settings(&practice, 2);
+        hunt.set("hunt", "ridgeback");
+        assert!(!crate::start_world(&hunt, crate::Dummy::Human).valley.on);
         // And back to two after a match for four.
         let four = crate::start_world(&room_settings(&practice, 4), crate::Dummy::Human);
         let opts = room_settings(&four, 2);

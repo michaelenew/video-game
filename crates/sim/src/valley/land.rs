@@ -73,6 +73,33 @@ pub struct Pad {
     /// Where on the map its door is: the one place a trodden way may cut
     /// its rim.
     pub door: (Fx, Fx),
+    /// **A ledge at its door, and no slope up to it** (2026-10-22): a room
+    /// raised over the land round it and reached by jumping, not walking
+    /// (`layout::Room::station`). Its rim is cut at its floor's height for
+    /// [`LEDGE`] round its door -- a landing outside the doorway -- and the
+    /// land under it falls away as its rim's cliff all round, not as an
+    /// embankment anybody could walk up.
+    pub ledge: bool,
+}
+
+/// How far round a raised room's door its ledge is cut through its rim, at
+/// the least: past its bank's crest and the fall behind it, so the ledge's
+/// outer edge is a drop and not a lip. A rim with a tall foot -- a cave's
+/// walls -- falls further, and its ledge reaches further ([`ledge_reach`]).
+pub const LEDGE: Fx = Fx::from_int(12);
+
+/// **How far round its door a raised room's ledge is cut**: past its rim's
+/// bank and the band held up behind its crest, and as far again as the
+/// crest takes to fall to the floor, and a metre -- or [`LEDGE`], whichever
+/// is further.
+pub fn ledge_reach(rim: &crate::arena::rim::Rim) -> Fx {
+    let foot = rim.foot.iter().copied().max().unwrap_or(0);
+    let crest = crate::arena::cm(foot + rim.bank);
+    rim.run()
+        .add(crate::arena::rim::HELD)
+        .add(crest.div(FALL))
+        .add(Fx::ONE)
+        .max(LEDGE)
 }
 
 /// How far from its door a way may cut a rim.
@@ -483,7 +510,17 @@ impl Land {
                         let mut grain = None;
                         let mut grain_here = || *grain.get_or_insert_with(|| rim.grain(lx, lz));
                         let out = rim.out_of(lx, lz);
+                        let to_door = crate::math::wide_len(V3::new(
+                            x.sub(p.door.0),
+                            Fx::ZERO,
+                            z.sub(p.door.1),
+                        ));
+                        // A raised room's ledge: its floor's height round
+                        // its door, through the bank -- the bank's own ground
+                        // and the rim it holds up over the valley alike.
+                        let ledge = p.ledge && to_door.raw() < ledge_reach(rim).raw();
                         let r = match out {
+                            Some(_) if ledge => Fx::ZERO,
                             Some((d, foot)) => foot.add(rim.rise_with(d, grain_here())),
                             None => Fx::ZERO,
                         };
@@ -498,13 +535,11 @@ impl Land {
                             crest.sub(d.sub(band).mul(FALL))
                         };
                         // Only its own path, at its own door, cuts it.
-                        let to_door = crate::math::wide_len(V3::new(
-                            x.sub(p.door.0),
-                            Fx::ZERO,
-                            z.sub(p.door.1),
-                        ));
+                        let up = if ledge { up.min(Fx::ZERO) } else { up };
                         let up = p.y.add(up);
-                        let up = if to_door.raw() < DOORWAY.raw() {
+                        // A trodden way cuts a room's rim at its door; a
+                        // raised room's is cut by its ledge alone.
+                        let up = if to_door.raw() < DOORWAY.raw() && !p.ledge {
                             up.min(trail)
                         } else {
                             up
@@ -520,7 +555,9 @@ impl Land {
                     best_rise = r;
                     by_pad = Some(d);
                 }
-                fill = fill.max(p.y.sub(d.mul(BANK)));
+                if !p.ledge {
+                    fill = fill.max(p.y.sub(d.mul(BANK)));
+                }
             }
         }
         if fill.raw() > best.raw() {

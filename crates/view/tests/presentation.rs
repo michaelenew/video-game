@@ -1554,21 +1554,24 @@ fn on_a_ledge(grip: sim::state::Grip, clock: u8, since: u8, along: f32) -> PoseI
 fn a_body_on_a_ledge_hangs_shuffles_and_climbs_rather_than_falls() {
     use sim::state::Grip;
     use view::clips::Clip;
+    // What is drawn is the clip with the body's own secondary motion over it
+    // (`pose::secondary`), as everything is.
+    let drawn = |clip: Clip, frame: u32| view::pose::secondary(clip.at(frame)).channels;
     let hang = pose_for(on_a_ledge(Grip::Hang, 30, 30, 0.0));
-    assert_eq!(hang.channels, Clip::LedgeHang.at(30).channels);
+    assert_eq!(hang.channels, drawn(Clip::LedgeHang, 30));
     // The catch's settle is the hang too.
     let catch = pose_for(on_a_ledge(Grip::Catch, 3, 3, 0.0));
-    assert_eq!(catch.channels, Clip::LedgeHang.at(3).channels);
+    assert_eq!(catch.channels, drawn(Clip::LedgeHang, 3));
     // Along the wall to her right plays the shuffle forward, to her left
     // backward.
     let right = pose_for(on_a_ledge(Grip::Hang, 30, 3, 1.5));
-    assert_eq!(right.channels, Clip::LedgeShuffle.at(3).channels);
+    assert_eq!(right.channels, drawn(Clip::LedgeShuffle, 3));
     let left = pose_for(on_a_ledge(Grip::Hang, 30, 3, -1.5));
     let len = Clip::LedgeShuffle.length() as u32;
-    assert_eq!(left.channels, Clip::LedgeShuffle.at(len - 3).channels);
+    assert_eq!(left.channels, drawn(Clip::LedgeShuffle, len - 3));
     // The climb is on the simulation's clock, which counts from one.
     let climb = pose_for(on_a_ledge(Grip::Climb, 10, 60, 0.0));
-    assert_eq!(climb.channels, Clip::LedgeClimb.at(9).channels);
+    assert_eq!(climb.channels, drawn(Clip::LedgeClimb, 9));
     assert_ne!(climb.channels, Clip::JumpFall.at(0).channels);
 }
 
@@ -1604,16 +1607,19 @@ fn on_a_wall(left: bool, down: f32, kick: Option<f32>, frame: u32) -> PoseInput 
 #[test]
 fn a_body_on_a_wall_slide_is_pressed_to_it_rather_than_falling() {
     use view::clips::Clip;
+    // What is drawn is the clip with the body's own secondary motion over it
+    // (`pose::secondary`), as everything is.
+    let drawn = |pose: view::pose::Pose| view::pose::secondary(pose).channels;
     // Held still on the face: the press, frame 0.
     let still = pose_for(on_a_wall(true, 0.0, None, 37));
-    assert_eq!(still.channels, Clip::WallSlide.at(0).channels);
-    assert_ne!(still.channels, Clip::JumpFall.at(0).channels);
+    assert_eq!(still.channels, drawn(Clip::WallSlide.at(0)));
+    assert_ne!(still.channels, drawn(Clip::JumpFall.at(0)));
     // Going down it fast: the stick and slip, on the simulation's frame.
     let fast = pose_for(on_a_wall(true, 8.0, None, 37));
-    assert_eq!(fast.channels, Clip::WallSlide.at(37).channels);
+    assert_eq!(fast.channels, drawn(Clip::WallSlide.at(37)));
     // A wall on her right is the same slide in the mirror.
     let right = pose_for(on_a_wall(false, 8.0, None, 37));
-    assert_eq!(right.channels, Clip::WallSlide.at(37).mirrored().channels);
+    assert_eq!(right.channels, drawn(Clip::WallSlide.at(37).mirrored()));
     // Each its own shape, and none of them the fall's, so going on to a wall
     // or changing which side of her it is on is a fade, not a cut.
     let shape = |i: PoseInput| view::play::pose_and_shape(i).1;
@@ -1637,13 +1643,16 @@ fn a_body_on_a_wall_slide_is_pressed_to_it_rather_than_falling() {
 #[test]
 fn a_kick_off_the_wall_is_drawn_by_how_far_off_it_she_is() {
     use view::clips::Clip;
+    // What is drawn is the clip with the body's own secondary motion over it
+    // (`pose::secondary`), as everything is.
+    let drawn = |pose: view::pose::Pose| view::pose::secondary(pose).channels;
     // On the face, the kick's first frame; halfway out, a blend of the kick
     // into the flight it is handing over to.
     let on = pose_for(on_a_wall(true, 0.0, Some(0.0), 40));
-    assert_eq!(on.channels, Clip::WallKick.at(0).channels);
+    assert_eq!(on.channels, drawn(Clip::WallKick.at(0)));
     let half = pose_for(on_a_wall(true, 0.0, Some(0.5), 40));
-    assert_ne!(half.channels, Clip::WallKick.at(0).channels);
-    assert_ne!(half.channels, Clip::JumpFall.at(0).channels);
+    assert_ne!(half.channels, drawn(Clip::WallKick.at(0)));
+    assert_ne!(half.channels, drawn(Clip::JumpFall.at(0)));
 }
 
 /// One fighter in the air against a wall facing `-z`, sliding, and the

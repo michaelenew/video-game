@@ -93,14 +93,52 @@ const LEVEL_DATA: &[&str] = &[
     "spire.rs",
     "deep.rs",
     "ranges.rs",
+    // Where a sleeping range's herd wanders (`valley::sight`): how long a
+    // leg, how far from the middle its points are drawn -- where a creature
+    // stands while nobody is near, judged by looking at it from the road.
+    "sight.rs",
     "heights.rs",
+    // Where the stations stand and the routes of stones to and from them,
+    // sized against the jump envelope and judged by `tests/stations.rs`.
+    "stations.rs",
     "trees.rs",
     "gully.rs",
+    // The tutorial halls (`arena/hall.rs`): how long a room, how wide the
+    // hall, how tall a doorway's posts, where the dummy stands -- a building
+    // walked through, judged by `tests/tutorial.rs` doing every room's task.
+    "hall.rs",
 ];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
+    (
+        "pub const ROOM_CM: i32 = 2400",
+        "Level data, the halls': how long a tutorial room is along its hall \
+         (`sim::tutorial`), which says which room a body is in. A building, judged \
+         by walking it, as `arena/hall.rs` is.",
+    ),
+    (
+        "const TICK: i32 = 4",
+        "A coach's line, not a feel: the most a frame of something lingering (a \
+         curse's tick, a bleed) takes from the tutorial dummy, so it is not taken for \
+         a blow when the tutorial says whether a move landed. Changes no fight.",
+    ),
+    (
+        "pub const BLINKED: i32 = 3",
+        "A coach's line, not a feel: a dodge that carried her more than this in one \
+         frame was a teleport or a blink, for the tutorial's tick. Changes no fight.",
+    ),
+    (
+        "pub const SLID: i32 = 2",
+        "A coach's line, not a feel: a dodge that moved her less than this in one \
+         frame was a plain dodge, for the tutorial's tick. Changes no fight.",
+    ),
+    (
+        "pub const BARS_THIRD: i32 = 30",
+        "A coach's line, not a feel: the Dual mage's tutorial asks for both bars this \
+         full together. The blink's own threshold is the Oven's. Changes no fight.",
+    ),
     (
         "const MOST_FOLD: Fx = Fx::ratio(1, 4)",
         "Geometry, not a feel number: the furthest `sim::climb::plant` turns a leg to \
@@ -370,6 +408,10 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "V3::new(m.at.x, Fx::from_int(1000), m.at.z)",
         "The same: the floor under a mark, asked from above everything.",
+    ),
+    (
+        "V3::new(at.x, Fx::from_int(1000), at.z)",
+        "The same: the floor under a place's mark, for somebody going there alone.",
     ),
     (
         "pub const HALF: i32 = 400",

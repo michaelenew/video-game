@@ -6,9 +6,9 @@
 // No link is typed into an address bar here. The first tab presses Escape and
 // clicks Create a room; the link it shows is read back from the address bar
 // (where the game also puts it) and pasted into the second tab's Join box,
-// which the second tab reaches the same way. Both tabs must then be in the
-// match, the first as player one. The rooms are `?board=tabs`, for the same
-// reason as room-smoke.mjs.
+// which the second tab reaches the same way. Both tabs must then be in one
+// group (the room is the town's: `net::group`). The rooms are
+// `?board=tabs`, for the same reason as room-smoke.mjs.
 //
 // The menu is drawn by egui into the canvas, so its buttons have no DOM: they
 // are clicked by position. The positions are the menu's own layout (anchored
@@ -93,7 +93,7 @@ const deadline = Date.now() + 150_000;
 let a = '', b = '';
 while (Date.now() < deadline) {
   [a, b] = [await status(first), await status(second)];
-  if (a.includes('Online') && b.includes('Online')) break;
+  if (a.includes('in a group') && b.includes('in a group')) break;
   await first.waitForTimeout(1_000);
 }
 await second.screenshot({ path: `${prefix}-joined.png` });
@@ -101,8 +101,8 @@ await browser.close();
 console.log(`first tab:  ${a}`);
 console.log(`second tab: ${b}`);
 console.log(`screenshots: ${prefix}-menu.png ${prefix}-room.png ${prefix}-joined.png`);
-if (!a.includes('player one')) errors.push(`the tab that made the room should be player one; it says: ${a}`);
-if (!b.includes('player two')) errors.push(`the tab that joined should be player two; it says: ${b}`);
+if (!a.includes('in a group')) errors.push(`the tab that made the room should be in a group; it says: ${a}`);
+if (!b.includes('in a group')) errors.push(`the tab that joined should be in a group; it says: ${b}`);
 if (errors.length) {
   console.error(`${errors.length} problem(s):`);
   for (const e of errors.slice(0, 10)) console.error(`  ${e}`);

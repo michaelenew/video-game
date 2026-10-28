@@ -179,6 +179,21 @@ fn the_valley_starts_in_hearth_at_peace_and_the_ring_is_versus() {
 }
 
 /// Every creature beaten: every waystone lit, as `--open` has it.
+/// **The roaming herds put to rest**, as if each had just been beaten: for a
+/// test of walking, framing or falling, which a herd grazing on the road
+/// would interrupt (since 2026-10-22 they roam it). `tests/ranges.rs` and
+/// `tests/roam.rs` are where they are met.
+fn herds_resting(w: &mut World) {
+    if w.frame == 0 {
+        w.frame = 1;
+    }
+    for (k, r) in valley::ranges::RANGES.iter().enumerate() {
+        if r.roams() {
+            w.valley.rested[k] = 1;
+        }
+    }
+}
+
 fn open_journey() -> valley::Journey {
     valley::Journey {
         beaten: u32::MAX,
@@ -197,6 +212,11 @@ fn heading(axis: usize, sign: i32) -> u16 {
 }
 
 /// A fighter's feet on the valley's map.
+/// Centimetres as a length.
+fn cm_of(v: i32) -> Fx {
+    Fx::ratio(v, 100)
+}
+
 fn on_map(w: &World, i: usize) -> V3 {
     w.players[i].pos.add(w.map_origin())
 }
@@ -233,6 +253,7 @@ fn walk_to(w: &mut World, to: (Fx, Fx), frames: u32) -> Result<(), String> {
 #[test]
 fn the_whole_road_can_be_walked() {
     let mut w = World::arrive(CLASSES, open_journey(), valley::START, Some(0), 1);
+    herds_resting(&mut w);
     let mut seen = vec![w.arena];
     let legs = sim::valley::layout::road();
     assert_eq!(legs.len(), 2, "the road is two walks and the Waterfall");
@@ -291,13 +312,20 @@ fn the_whole_road_can_be_walked() {
 }
 
 /// **Every room can be walked into** from its junction on the road, by its
-/// side path (or bridge, or switchback), every waystone lit: and walking in
-/// starts its hunt -- or, in the Ring, its fight.
+/// side path -- or a station from its ledge -- every waystone lit: and
+/// walking in starts its hunt -- or, in the Ring, its fight.
 #[test]
 fn every_room_can_be_walked_into() {
     for r in &sim::valley::layout::ROOMS {
         let (reach, seam) = r.seam;
         let mut w = World::arrive(CLASSES, open_journey(), reach, Some(seam), 1);
+        // A station is jumped to (`tests/stations.rs` jumps its routes): the
+        // walk in starts on its ledge.
+        if r.station {
+            let l = sim::arena::stations::ledge_of(r.arena);
+            let o = w.map_origin();
+            w.players[0].pos = V3::new(cm_of(l.x), cm_of(l.top), cm_of(l.z)).sub(o);
+        }
         let path = sim::valley::layout::approach(r);
         for to in path {
             if let Err(e) = walk_to(&mut w, to, 1200) {
@@ -390,8 +418,8 @@ fn walking_out_of_the_town_gate_is_the_mouth_and_the_map_holds_still() {
 
 #[test]
 fn a_dark_waystone_shuts_its_pass_and_a_trophy_opens_it() {
-    let mut w = arrived(ArenaId::BANK, Some(2));
-    let zone = valley::place(ArenaId::BANK).unwrap().seams[2].zone;
+    let mut w = arrived(ArenaId::BANK, Some(1));
+    let zone = valley::place(ArenaId::BANK).unwrap().seams[1].zone;
     w.players[0].pos = standing_in(&zone, ArenaId::BANK);
     let walk = Input::looking_at(Input::W, 0, 0);
     for _ in 0..240 {
@@ -414,109 +442,109 @@ fn a_dark_waystone_shuts_its_pass_and_a_trophy_opens_it() {
     );
 }
 
-/// **A step out of the door is not giving up** (2026-10-12): backing out of
-/// a room mid-fight leaves its hunt going, the creature hurt and where it
-/// was, and walking back in finds it so. Only walking well away -- past
-/// `tuning::hunt_held_past` of the room's edge -- ends the hunt, unwon. The
-/// margin is less than the nearest road junction's distance from any room
-/// (16 m), so a hunt never holds somebody who is back on the road.
+/// **A step away is not giving up** (2026-10-12): backing off mid-fight
+/// leaves the hunt going, the creature hurt and where it was, and coming back
+/// finds it so. Walking well away -- out of its territory and past
+/// `tuning::hunt_held_past` -- is followed by a creature that hunts
+/// (exploration 0023). On the Snowfield's Ridgeback, which roams the
+/// Saddle's road since 2026-10-22 and is woken by coming near it.
 #[test]
 fn stepping_out_of_a_room_keeps_its_hunt_and_walking_away_is_followed() {
-    let r = sim::valley::layout::ROOMS
+    let r = valley::ranges::RANGES
         .iter()
-        .find(|r| r.arena == ArenaId::HIGHLANDS)
+        .find(|r| r.name == "Snowfield")
         .unwrap();
+    assert!(r.roams());
     let mut w = World::arrive(
         CLASSES,
         valley::Journey::default(),
-        r.seam.0,
-        Some(r.seam.1),
+        ArenaId::SADDLE,
+        None,
         2,
     );
-    let way = sim::valley::layout::approach(r);
-    for &to in &way {
-        walk_to(&mut w, to, 1200).unwrap();
-        if w.arena == ArenaId::HIGHLANDS {
-            break;
+    // Kept on her feet: a hunting Ridgeback knocks a body about.
+    let go = |w: &mut World, to: (Fx, Fx), frames: u32| {
+        for _ in 0..frames {
+            for p in w.players.iter_mut() {
+                p.health = p.health.max(1);
+            }
+            if walk_to(w, to, 1).is_ok() {
+                return;
+            }
         }
-    }
-    assert!(w.hunting() && w.valley.on && !w.pvp());
+        panic!("never got to {to:?}: at {:?}", on_map(w, 0));
+    };
+    // Twenty-five metres along the road from where it grazes: it wakes.
+    let mid = valley::sight::herd_middle(r, w.frame);
+    let near = (mid.x.sub(Fx::from_int(25)), mid.z);
+    let o = w.map_origin();
+    let y = sim::atlas::valley().relief_at(near.0, near.1);
+    w.players[0].pos = V3::new(near.0, y.add(Fx::ratio(1, 2)), near.1).sub(o);
+    w.advance(idle());
+    assert!(
+        w.hunting() && w.valley.on && !w.pvp(),
+        "coming near did not wake it"
+    );
+    assert_eq!(w.den_id(), r.arena);
     assert_eq!(w.monster().map(|m| m.species), Some(SpeciesId::RIDGEBACK));
     // Hurt it, so a fresh one would show.
     let hurt = w.monster().unwrap().health / 2;
     for m in w.monsters.iter_mut().flatten() {
         m.health = hurt;
     }
-    let room = sim::atlas::valley()
-        .placed(ArenaId::HIGHLANDS)
-        .copied()
-        .unwrap();
-    // Out of the door, a few metres: still the same hunt.
-    let door = way[way.len() - 1];
-    let before = way[way.len() - 2];
-    let out = {
-        let (dx, dz) = (before.0.sub(door.0), before.1.sub(door.1));
-        let d = V3::new(dx, Fx::ZERO, dz).normalized();
-        (
-            door.0.add(d.x.mul(Fx::from_int(12))),
-            door.1.add(d.z.mul(Fx::from_int(12))),
-        )
-    };
-    walk_to(&mut w, out, 1200).unwrap();
-    let feet = on_map(&w, 0);
-    assert!(!room.holds(feet.x, feet.z), "never left the room");
-    assert!(w.hunting(), "a step out of the door ended the hunt");
-    assert_eq!(w.arena, ArenaId::HIGHLANDS);
+    // A few metres further off: still the same hunt.
+    let back = (near.0.sub(Fx::from_int(12)), near.1);
+    go(&mut w, back, 600);
+    assert!(w.hunting(), "a step away ended the hunt");
     assert!(
         w.monster().unwrap().health <= hurt,
-        "the creature was healed by a step out of the door"
+        "the creature was healed by a step away"
     );
-    // And back in: the same creature, still hurt.
-    walk_to(&mut w, door, 1200).unwrap();
+    go(&mut w, near, 600);
     assert!(w.hunting());
     assert!(w.monster().unwrap().health <= hurt, "a fresh creature");
-    // Away, all the way back to the road: since 2026-10-19 (exploration
-    // 0023) a creature that hunts follows, out of its room by its door --
-    // it is no longer kept in its room -- and gives up only in time.
+    // Away down the road, west, through the pass to the road above the
+    // Waterfall: out of its territory, and it follows.
+    let home = sim::atlas::valley().placed(r.arena).copied().unwrap();
     let mut came_out = false;
-    for &to in way.iter().rev().skip(1) {
-        for _ in 0..1200 {
+    for to in [
+        (Fx::from_int(870), Fx::from_int(3)),
+        (Fx::from_int(829), Fx::ZERO),
+    ] {
+        for _ in 0..1500 {
             for p in w.players.iter_mut() {
                 p.health = p.health.max(1);
             }
-            if walk_to(&mut w, to, 1).is_ok() {
-                break;
-            }
+            let there = walk_to(&mut w, to, 1).is_ok();
             if let Some(m) = w.monster() {
                 let at = m.pos.add(w.map_origin());
-                came_out |= !room.holds(at.x, at.z);
+                came_out |= !home.holds(at.x, at.z);
+            }
+            if there {
+                break;
             }
         }
     }
-    // And stood on the road a while.
-    for _ in 0..900 {
+    for _ in 0..600 {
         for p in w.players.iter_mut() {
             p.health = p.health.max(1);
         }
         w.advance(idle());
         if let Some(m) = w.monster() {
             let at = m.pos.add(w.map_origin());
-            came_out |= !room.holds(at.x, at.z);
+            came_out |= !home.holds(at.x, at.z);
         }
     }
     let feet = on_map(&w, 0);
     assert!(
-        !room.holds_within(feet.x, feet.z, sim::tuning::hunt_held_past()),
-        "the road is within the hunt's margin: a hunt would hold a body back on the road"
+        !home.holds_within(feet.x, feet.z, sim::tuning::hunt_held_past()),
+        "still within the hunt's margin: at {feet:?}"
     );
     assert!(
         w.hunting(),
         "walking away ended the hunt of a creature that hunts"
     );
-    assert!(
-        came_out,
-        "the creature never came out of its room after them"
-    );
+    assert!(came_out, "the creature never came out after them");
     assert!(!w.valley.has_beaten(SpeciesId::RIDGEBACK));
 }
 
@@ -528,7 +556,14 @@ fn stepping_out_of_a_room_keeps_its_hunt_and_walking_away_is_followed() {
 fn a_change_of_frame_changes_nothing() {
     let atlas = sim::atlas::valley();
     let bank = atlas.placed(ArenaId::BANK).unwrap().at;
-    let den = atlas.placed(ArenaId::GNAWERS).unwrap().at;
+    // A place with an origin of its own: the Hillside, the Gnawers' range on
+    // the Bank.
+    let commons = sim::valley::ranges::RANGES
+        .iter()
+        .find(|r| r.name == "Hillside")
+        .unwrap()
+        .arena;
+    let den = atlas.placed(commons).unwrap().at;
     for class in sim::class::ALL_CLASSES {
         let mut w = World::arrive(
             [class; 2],
@@ -537,6 +572,7 @@ fn a_change_of_frame_changes_nothing() {
             Some(0),
             2,
         );
+        herds_resting(&mut w);
         // A while of everything, so every mechanic has been out.
         let script = |f: u32| {
             let bits = match f % 90 {
@@ -554,7 +590,7 @@ fn a_change_of_frame_changes_nothing() {
         }
         let mut moved = w.clone();
         moved.shift(bank.sub(den));
-        moved.arena = ArenaId::GNAWERS;
+        moved.arena = commons;
         // Two seconds in rather than four: the Champion's Rush covers enough
         // ground since 2026-10-12 (exploration 0015) that by four seconds this
         // script has him at the Bank's far edge, where a world framed in the
@@ -749,6 +785,7 @@ fn differs(a: &World, b: &World) -> String {
 fn the_valley_is_deterministic_across_a_crossing() {
     let run = || {
         let mut w = World::versus_in(CLASSES, valley::START);
+        herds_resting(&mut w);
         let zone = valley::place(ArenaId::HEARTH).unwrap().seams[0].zone;
         let feet = standing_in(&zone, ArenaId::HEARTH);
         for p in w.players.iter_mut() {
@@ -770,35 +807,37 @@ fn the_valley_is_deterministic_across_a_crossing() {
 
 #[test]
 fn a_won_hunt_goes_quiet_and_is_credited() {
-    let mut w = arrived(ArenaId::HIGHLANDS, Some(0));
+    let mut w = arrived(ArenaId::MIREBACK, Some(0));
     w.monster_mut().unwrap().health = 0;
     w.advance(idle());
     assert!(matches!(w.phase, Phase::RoundOver { .. }));
-    assert!(w.valley.has_beaten(SpeciesId::RIDGEBACK));
+    assert!(w.valley.has_beaten(SpeciesId::MIREBACK));
     for _ in 0..sim::tuning::round_over_frames() + 2 {
         w.advance(idle());
     }
-    assert_eq!(w.arena, ArenaId::HIGHLANDS);
+    assert_eq!(w.arena, ArenaId::MIREBACK);
     assert!(!w.hunting() && w.peaceful() && matches!(w.phase, Phase::Fighting));
     assert!(w.players[..w.present()].iter().all(|p| p.health > 0));
 }
 
+/// Lost, you wake outside: for a station, at the foot of the stones up to
+/// it, on the road.
 #[test]
 fn a_lost_hunt_wakes_you_outside() {
-    let mut w = arrived(ArenaId::HIGHLANDS, Some(0));
+    let mut w = arrived(ArenaId::MIREBACK, Some(0));
     for p in w.players.iter_mut() {
         p.health = 0;
     }
     for _ in 0..sim::tuning::round_over_frames() + 3 {
         w.advance(idle());
     }
-    assert_eq!(w.arena, ArenaId::PINEWOOD);
-    let marks = valley::place(ArenaId::PINEWOOD).unwrap().seams[3].marks;
+    assert_eq!(w.arena, ArenaId::SHELVES);
+    let marks = valley::place(ArenaId::SHELVES).unwrap().seams[1].marks;
     assert_eq!(
         (w.players[0].pos.x, w.players[0].pos.z),
         (marks[0].at.x, marks[0].at.z)
     );
-    assert!(!w.valley.has_beaten(SpeciesId::RIDGEBACK));
+    assert!(!w.valley.has_beaten(SpeciesId::MIREBACK));
 }
 
 #[test]
@@ -929,6 +968,7 @@ fn every_class_can_make_the_hops_nobody_can_go_round() {
 fn a_fall_into_a_lower_place_costs_the_same() {
     let drop = |frame: ArenaId| {
         let mut w = World::arrive(CLASSES, valley::Journey::default(), frame, None, 2);
+        herds_resting(&mut w);
         let origin = w.map_origin();
         let land = sim::atlas::valley().land.as_ref().unwrap();
         // Over the Saddle's meadow, twenty metres up.
@@ -1041,10 +1081,11 @@ fn every_class_climbs_a_crag() {
 }
 
 /// **Fast travel** (`Destination::Cairn`): from Hearth to every cairn on the
-/// map, both fighters stand on it, it is their checkpoint, and the world has
-/// moved to where it is -- and, a second later, nobody has fallen off it.
+/// map, whoever asked stands on it, it is their checkpoint, and -- a second
+/// later -- they have not fallen off it. Since 2026-10-25 nobody else goes:
+/// the other player is where they were, with the checkpoint they had.
 #[test]
-fn fast_travel_stands_everybody_on_any_cairn() {
+fn fast_travel_stands_whoever_asked_on_any_cairn() {
     let cairns = valley::cairns();
     assert!(cairns.len() > 10, "only {} cairns", cairns.len());
     assert!(cairns.len() <= 256, "a cairn is a byte on the wire");
@@ -1053,6 +1094,7 @@ fn fast_travel_stands_everybody_on_any_cairn() {
     for (k, &b) in cairns.iter().enumerate() {
         let top = valley::top_of(&atlas.solids[b as usize]);
         let mut w = World::arrive(CLASSES, open_journey(), valley::START, None, 2);
+        let stayed = on_map(&w, 1);
         let go = Input {
             travel: Travel::cairn(k as u8),
             ..Input::new(0)
@@ -1062,23 +1104,28 @@ fn fast_travel_stands_everybody_on_any_cairn() {
         for _ in 0..60 {
             w.advance(idle());
         }
-        for i in 0..2 {
-            let feet = on_map(&w, i);
-            let off = feet.sub(top);
-            let flat = off.x.abs().max(off.z.abs());
-            if flat.raw() > Fx::from_int(2).raw() || off.y.abs().raw() > Fx::ONE.raw() {
-                failed.push(format!(
-                    "cairn {k} ({}) at {:?}: fighter {i} is {:?} off it",
-                    atlas
-                        .place_at(top.x, top.z)
-                        .map_or("-", |p| p.arena.get().name),
-                    top,
-                    off
-                ));
-            }
-            if w.valley.cairn[i] != b as u16 + 1 {
-                failed.push(format!("cairn {k}: not fighter {i}'s checkpoint"));
-            }
+        let feet = on_map(&w, 0);
+        let off = feet.sub(top);
+        let flat = off.x.abs().max(off.z.abs());
+        if flat.raw() > Fx::from_int(2).raw() || off.y.abs().raw() > Fx::ONE.raw() {
+            failed.push(format!(
+                "cairn {k} ({}) at {:?}: fighter 0 is {:?} off it",
+                atlas
+                    .place_at(top.x, top.z)
+                    .map_or("-", |p| p.arena.get().name),
+                top,
+                off
+            ));
+        }
+        if w.valley.cairn[0] != b as u16 + 1 {
+            failed.push(format!("cairn {k}: not fighter 0's checkpoint"));
+        }
+        let moved = on_map(&w, 1).sub(stayed);
+        if moved.x.abs().max(moved.z.abs()).raw() > Fx::ONE.raw() {
+            failed.push(format!("cairn {k}: fighter 1 went too, {moved:?}"));
+        }
+        if w.valley.cairn[1] == b as u16 + 1 {
+            failed.push(format!("cairn {k}: it is fighter 1's checkpoint too"));
         }
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));

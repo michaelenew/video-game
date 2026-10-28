@@ -63,7 +63,7 @@ const desktopSays = (text) => log.some((l) => l.includes(text));
 let page_ = '';
 while (Date.now() < deadline) {
   page_ = await status();
-  if (page_.includes('Online') && desktopSays('online: you are player')) break;
+  if (page_.includes('in a group') && desktopSays('online: a group of 2')) break;
   if (desktop.exitCode !== null) break;
   await page.waitForTimeout(1_000);
 }
@@ -80,12 +80,12 @@ try {
 desktop.kill();
 await browser.close();
 
-const seat = log.find((l) => l.includes('online: you are player')) ?? '(never seated)';
+const seat = log.find((l) => l.includes('online: a group of')) ?? '(never in a group)';
 console.log(`page:    ${page_}`);
 console.log(`desktop: ${seat}`);
 console.log(`screenshots: ${prefix}-page.png ${prefix}-desktop.png; desktop log: ${prefix}-game.log`);
-if (!page_.includes('player one')) errors.push(`the page opened the room, so it should be player one; it says: ${page_}`);
-if (!seat.includes('player 2')) errors.push(`the desktop joined second, so it should be player 2; it says: ${seat}`);
+if (!page_.includes('in a group')) errors.push(`the page should be in a group with the desktop; it says: ${page_}`);
+if (!seat.includes('a group of 2')) errors.push(`the desktop should be in a group of two; it says: ${seat}`);
 if (page_.includes('DESYNC') || desktopSays('DESYNC')) errors.push('the two games disagreed: DESYNC');
 if (page_.includes('disconnected') || desktopSays('peer disconnected')) errors.push('the connection dropped during the match');
 if (errors.length) {

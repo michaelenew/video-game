@@ -108,12 +108,16 @@ pub mod spire;
 pub mod deep;
 
 pub mod heights;
+/// The creatures of odd ground as the middles of jump sections.
+pub mod stations;
 
 pub mod gully;
 
 pub mod stages;
 
 pub mod hills;
+
+pub mod hall;
 
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
@@ -202,6 +206,13 @@ impl ArenaId {
     /// trip to nowhere refused.
     pub const GORGE: ArenaId = ArenaId(59);
     pub const HENGE: ArenaId = ArenaId(61);
+    /// **The tutorial halls** (`hall`, `crate::tutorial`): one per class on
+    /// offer, after the valley's ranges.
+    pub const HALL_CHAMPION: ArenaId = ArenaId(72);
+    pub const HALL_REAVER: ArenaId = ArenaId(73);
+    pub const HALL_ELEMENTALIST: ArenaId = ArenaId(74);
+    pub const HALL_BLOOD: ArenaId = ArenaId(75);
+    pub const HALL_DUAL: ArenaId = ArenaId(76);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -211,8 +222,9 @@ impl ArenaId {
 }
 
 /// How many ids there are, registered or not: the valley's ranges are
-/// numbered from forty (`valley::ranges::FIRST`).
-pub const COUNT: usize = 64;
+/// numbered from forty (`valley::ranges::FIRST`), and past the first fourteen
+/// from sixty-four (`valley::ranges::MORE`).
+pub const COUNT: usize = 80;
 
 /// The most solids an arena **fought on alone** may have. Alone, every query
 /// walks all of them, several times a frame per body, so this is what keeps a
@@ -294,13 +306,16 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::DELTA => Some(&hills::DELTA),
         ArenaId::GORGE => Some(&hills::GORGE),
         ArenaId::HENGE => Some(&hills::HENGE),
-        ArenaId(n)
-            if n >= crate::valley::ranges::FIRST
-                && ((n - crate::valley::ranges::FIRST) as usize) < crate::valley::ranges::COUNT =>
-        {
-            Some(&crate::valley::ranges::ARENAS[(n - crate::valley::ranges::FIRST) as usize])
-        }
-        _ => None,
+
+        ArenaId::HALL_CHAMPION => Some(&hall::CHAMPION),
+        ArenaId::HALL_REAVER => Some(&hall::REAVER),
+        ArenaId::HALL_ELEMENTALIST => Some(&hall::ELEMENTALIST),
+        ArenaId::HALL_BLOOD => Some(&hall::BLOOD),
+        ArenaId::HALL_DUAL => Some(&hall::DUAL),
+        id => match crate::valley::ranges::index(id) {
+            Some(k) => Some(&crate::valley::ranges::ARENAS[k]),
+            None => None,
+        },
     }
 }
 

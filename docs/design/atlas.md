@@ -123,7 +123,7 @@ woods, rocks, and the fights in clearings off the road.
 - **A way** is a line of points, each with a floor height and a half-width:
   the floor is level across its width and eases from point to point. The
   road is each reach's `WAY` in turn, wide in the meadows (fifty metres) and
-  narrow at the passes; each room has a side path to it. Off a floor's edge
+  narrow at the passes; a room off the town has a road to it. Off a floor's edge
   the land rises: **foothills** first, a third as steep as they are long for
   sixteen metres, and then the **mountainside**, turning to a slope of 1.4.
 - **A pad** is a place that keeps its own floor: the town, the Ring, every
@@ -191,13 +191,21 @@ on ground metres up and is not a ceiling for being there.
 - **The town and the reaches share the map's coordinates**: a reach's origin
   is the map's, so its road, seams and crags are written where they are, and
   walking from one reach to the next moves nothing.
-- **A room** sits in a clearing off the road, at the end of a side path from
-  a junction to the middle of its near side. Its rim's bank rises straight
-  off its walls (a room without one has six metres of level ground round it)
-  and its doorway is cut through its wall where the path arrives
-  (`Plan::carves`). The Cliffs sit sunk with their plateau at the road's
-  height, reached over a bridge across the ravine round them; the Shrine is
-  at the top of a switchback twenty metres up the Saddle's north-east slope.
+- **A room** -- the Ring, the Long Valley -- sits in a clearing off the
+  town, at the end of a road from it to the middle of its near side. Its
+  rim's bank rises straight off its walls (a room without one has six metres
+  of level ground round it) and its doorway is cut through its wall where
+  the road arrives (`Plan::carves`).
+- **A station** (since 2026-10-22, [valley.md](valley.md) §1f) is a
+  creature's room raised over the land beside the road, reached by a route
+  of stones, not a side path: its pad has **a ledge** (`land::Pad::ledge`)
+  -- no embankment off it, so its rim's cliff falls to the land all round,
+  and its rim cut away at its floor's height round its door, out past the
+  crest's fall (`land::ledge_reach`), so the ledge's edge is a drop. Where
+  the land round one would be higher than its ledge, a pocket of meadow is
+  cut round it (`stations::MEADOWS`). The Cliffs sit sunk as they were,
+  their plateau at the road's height, reached across the ravine by stones
+  where the bridge was.
 - **A waystone's door** is a box across a pass, shut while the stone is dark.
 - **Crags, cairns, trees and boulders** are made by the layout, standing on
   the land wherever it is under them: a crag is a pillar of rock with ledges

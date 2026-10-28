@@ -187,160 +187,138 @@ fn phases(clip: Clip) -> (u16, u16, u16) {
 }
 
 // ---------------------------------------------------------------------------
-// Slash -- the poke
+// Reave -- the lunge
 // ---------------------------------------------------------------------------
 
-/// Five frames of startup, three active, eleven of recovery.
+/// Where a foot goes in the lunge, as an ankle: the lead foot far out ahead,
+/// the rear far back, both on the floor.
+fn lunge_feet(pose: Pose, reach: f32, rear_heel: f32) -> Pose {
+    let lead = ankle(Joint::FootR);
+    let back = ankle(Joint::FootL);
+    pose.plant_r([lead[0] * 1.15, ANKLE, reach])
+        .plant_l([back[0] * 1.2, ANKLE + pivot_lift(rear_heel), -reach * 0.85])
+        .toe_r(0.0)
+        .toe_l(rear_heel)
+}
+
+/// The ankle's height with the foot flat on the floor.
+const ANKLE: f32 = view::pose::ANKLE_ON_GROUND;
+
+/// Six frames of startup, three active, fourteen of recovery.
 ///
-/// A descending diagonal off the right shoulder, thrown from a stance that is
-/// already carrying the blade high. Five frames is a third of a second for the
-/// whole wind-up; there is no room for a swing back, so the startup gathers
-/// rather than winds, and the reach comes from the torso unwinding rather than
-/// from the arm travelling.
+/// The Reave is a finisher on the floor: a short dash with the sweet spot at
+/// the blade's tip. So it is a **fencing lunge**, rebuilt 2026-10-20 from the
+/// owner's word that she should lunge all the way out as she dashes and put
+/// the stabbing hand all the way forward: the body loads back over the rear
+/// leg, then the lead leg is thrown out a long stride ahead, the rear leg
+/// straightens behind, the hips drop and drive forward, the chest pitches over
+/// the lead knee, and the blade arm goes out straight from a shoulder rolled
+/// forward (the collarbone, which the arm could not reach past before it had
+/// one). The off arm is flung back as the counterweight. Held through the live
+/// frames -- the dash carries her -- and recovered by drawing the rear leg in.
+///
+/// The feet are in a stride the simulation does not take, which is honest here
+/// because the simulation is moving the whole body two and a half metres
+/// forward over these frames: a lunge is what a dash looks like when it ends in
+/// a point.
 fn poke() -> Recipe {
     let clip = Clip::ReaverPoke;
     let (_, contact, follow) = phases(clip);
     let last = clip.length() - 1;
-    // The gather is not a wind-up: it is where the blade already is, plus a
-    // sink onto the back foot. Three frames before contact, so the whole thing
-    // is inside the startup with a frame to spare on both sides.
-    let gather = contact.saturating_sub(3).max(1);
-    // Half the recovery is the blade coming back; the rest is standing up.
-    let settle = follow + (last - follow) / 3;
+    // Early in the startup: the blade travels the length of the arm into
+    // the stab, and over three frames that is faster than a hand moves.
+    let gather = contact.saturating_sub(4).max(2);
+    // The stab held at full length a beat into the recovery, then the
+    // rear leg drawn in.
+    let held = follow + (last - follow) / 4;
+    let settle = follow + (last - follow) * 3 / 5;
 
-    // The gather. The right hand comes up outside the right shoulder and the
-    // chest winds away from the line, the hips sink four centimetres and rock
-    // back onto the rear foot, and the lead heel comes off the floor. The
-    // shoulders carry all of it -- the pelvis barely turns -- because the feet
-    // are nailed down and every degree at the pelvis is a degree the legs have
-    // to answer for.
+    // Loaded: weight back over the rear leg, the blade drawn back by the
+    // ribs point-forward, the off hand out in front sighting the line.
     let cocked = footing(
         stance()
-            .hips(0.020, -0.088, -0.040)
-            .root(1.0, 2.0, 2.0)
-            .spine(2.0, -2.0, 20.0)
-            .chest(-3.0, 0.0, 22.0)
-            // The body has turned forty-four degrees off the line and the head
-            // gives thirty-four of it back. A fighter winding up is still
-            // looking at the person they are winding up at.
-            .head(-4.0, 3.0, -34.0)
-            // Spread past ninety is what puts the hand *above* the shoulder
-            // rather than out beside it, and that is the difference between a
-            // diagonal cut and a horizontal one. Sixty-one degrees of it in two
-            // frames is the fastest thing in the file and the reason the whole
-            // clip is CRISP: a looser arm would still be on its way up when the
-            // hitbox appeared.
-            .shoulder_r(-16.0, 70.0, -18.0)
-            .elbow_r(90.0)
-            .wrist_r(-18.0, 0.0, -10.0)
-            .shoulder_l(26.0, 18.0, -12.0)
-            .elbow_l(88.0)
-            .wrist_l(-10.0, 0.0, 0.0),
-        -8.0,
-        16.0,
-    );
-
-    // Contact, on the first active frame. The blade has come over the top and
-    // is crossing the line at chest height with the arm nearly straight; the
-    // hips have driven nine centimetres forward over the lead foot and the rear
-    // heel is up and pushing. This is the blade *entering*, not the end of the
-    // arc -- the hitbox is live for three frames and the cut keeps travelling
-    // through all of them.
-    let cut = footing(
-        stance()
-            .hips(-0.010, -0.086, 0.050)
-            // The torso is only half unwound here. Putting the whole unwind on
-            // the contact frame swings the hand across the midline before the
-            // hitbox appears -- the blade arrives having already finished its
-            // cut -- and it costs forty-six centimetres of hand travel in the
-            // single frame before contact. Half at contact and the rest through
-            // the active window is both the slower path and the truer one.
-            .root(6.0, -2.0, -8.0)
-            .spine(11.0, 2.0, -4.0)
-            .chest(6.0, 0.0, -10.0)
-            .head(-8.0, -2.0, 2.0)
-            .shoulder_r(34.0, 52.0, 18.0)
-            // Still half folded. The arm finishes straightening *through* the
-            // active window rather than before it, which is both how a cut
-            // actually extends and eight centimetres a frame off the hand's
-            // speed on the way in.
-            .elbow_r(60.0)
-            .wrist_r(-8.0, 0.0, 6.0)
-            .shoulder_l(2.0, 30.0, -6.0)
-            .elbow_l(66.0)
-            .wrist_l(-8.0, 0.0, 0.0),
-        0.0,
-        30.0,
-    );
-
-    // The end of the arc, on the first recovery frame. The blade has finished
-    // low and across to the left, the chest has kept turning under it, and the
-    // left arm has swung back and open as the counterweight -- which is where
-    // the recovery's length comes from and why the move is minus on block.
-    let through = footing(
-        stance()
-            .hips(-0.030, -0.104, 0.034)
-            .root(10.0, -7.0, -26.0)
-            .spine(18.0, 5.0, -16.0)
-            .chest(10.0, 2.0, -26.0)
-            .head(-6.0, -4.0, 22.0)
-            .shoulder_r(40.0, -12.0, 44.0)
-            .elbow_r(28.0)
-            .wrist_r(-16.0, 0.0, 12.0)
-            .shoulder_l(-14.0, 34.0, 0.0)
-            .elbow_l(48.0)
+            .hips(0.03, -0.12, -0.06)
+            .root(-4.0, 2.0, 14.0)
+            .spine(4.0, -2.0, 10.0)
+            .chest(2.0, 0.0, 14.0)
+            .head(-2.0, 2.0, -26.0)
+            .shoulder_r(40.0, 18.0, 10.0)
+            .elbow_r(100.0)
+            .wrist_r(-20.0, 0.0, 0.0)
+            .clavicle_r(-8.0, 4.0)
+            .shoulder_l(40.0, 14.0, -10.0)
+            .elbow_l(56.0)
             .wrist_l(-6.0, 0.0, 0.0),
-        2.0,
-        24.0,
+        -10.0,
+        20.0,
     );
 
-    // Gathering the blade back. The Reaver is light again well before it is
-    // square again: the hands come home first and the hips follow.
-    let gathering = footing(
+    // The lunge, on the first active frame: lead leg out ahead and bent,
+    // rear leg straight behind on the ball of its foot, hips down and over
+    // the lead knee, chest pitched forward and turned into the line, the
+    // blade arm straight out at the shoulder's height from a shoulder rolled
+    // all the way forward, and the off arm flung back and open.
+    // `extend` is how straight the blade arm is, `fling` how far back the off
+    // arm has been thrown: it goes on through the live frames, after the
+    // stab, as a counterweight does.
+    let lunge = |reach: f32, pitch: f32, extend: f32, fling: f32| {
+        let fold = 1.0 - extend;
+        lunge_feet(
+            Pose::rest()
+                .hips(0.0, -0.30, 0.06)
+                .root(pitch, 0.0, -14.0)
+                .spine(pitch * 0.6, 0.0, -10.0)
+                .chest(pitch * 0.3, 0.0, -12.0)
+                .head(-pitch * 0.9, 0.0, 30.0)
+                // Level out of a body pitched forward: the arm is measured
+                // from the chest, which has pitched by most of the lean.
+                .shoulder_r(88.0 + pitch * 1.7 - 50.0 * fold, 6.0 + 10.0 * fold, 0.0)
+                .elbow_r(4.0 + 80.0 * fold)
+                .wrist_r(-6.0, 0.0, 0.0)
+                .clavicle_r(26.0 * extend, 6.0)
+                .shoulder_l(40.0 - 88.0 * fling, 14.0 + 16.0 * fling, 0.0)
+                .elbow_l(56.0 - 42.0 * fling)
+                .wrist_l(10.0, 0.0, 0.0)
+                .clavicle_l(-10.0, 4.0),
+            reach,
+            28.0,
+        )
+    };
+
+    // Drawing the rear leg in under her, the blade coming back to guard.
+    let recovering = footing(
         stance()
-            .hips(0.006, -0.070, -0.010)
-            .root(4.0, -2.0, -16.0)
-            .spine(8.0, 1.0, -2.0)
-            .chest(4.0, 0.0, -6.0)
-            .head(-4.0, -1.0, 10.0)
-            .shoulder_r(20.0, 26.0, 16.0)
-            .elbow_r(66.0)
-            .wrist_r(-10.0, 0.0, 4.0)
-            .shoulder_l(6.0, 22.0, -4.0)
-            .elbow_l(58.0)
-            .wrist_l(-8.0, 0.0, 0.0),
+            .hips(0.0, -0.16, 0.04)
+            .root(10.0, 0.0, -8.0)
+            .spine(8.0, 0.0, -4.0)
+            .chest(4.0, 0.0, -4.0)
+            .head(-6.0, 0.0, 12.0)
+            .shoulder_r(44.0, 18.0, 6.0)
+            .elbow_r(64.0)
+            .wrist_r(-10.0, 0.0, 0.0)
+            .clavicle_r(8.0, 2.0)
+            .shoulder_l(-10.0, 26.0, 0.0)
+            .elbow_l(50.0)
+            .wrist_l(-6.0, 0.0, 0.0),
         0.0,
-        16.0,
+        18.0,
     );
 
     Recipe {
         clip,
         looseness: Looseness::CRISP,
-        notes: "Slash is the neutral tool and gets thrown a hundred times a \
-                round, so the whole clip is built around not rooting the \
-                silhouette: frame zero is exactly the locomotion stance on its \
-                own footing, the feet never leave their marks, and the lunge is \
-                nine centimetres of hips over a rear heel that comes up. The \
-                blade is already carried high in the stance, which is what makes \
-                a five-frame startup honest -- the gather on frame two is a sink \
-                and a wind of the chest, not a swing back the opponent could \
-                have read anyway. The cut from the gather to contact is LINEAR, \
-                and that is the one deliberate ugliness in the file: over three \
-                frames a smooth ease puts half the arc in the middle frame, \
-                which is thirty-one degrees of shoulder in one frame and reads \
-                as a pop. Contact is the blade *entering* the line, not the end \
-                of the arc -- the hitbox is live for three frames and the blade \
-                travels through all of them, finishing low and left on the first \
-                recovery frame. CRISP throughout: the arms still trail the \
-                shoulders by a frame and a half, which is all the follow-through \
-                a poke this fast can afford."
+        notes: "A fencing lunge, rebuilt 2026-10-20 from the owner's word:                 she should lunge all the way out as she dashes and put the                 stabbing hand all the way forward. Loaded back over the rear                 leg with the blade by the ribs and the off hand sighting the                 line; then, on the first active frame, the lead leg a long                 stride out ahead and bent, the rear leg straight behind on the                 ball of its foot, hips down and over the lead knee, chest                 pitched over it, the blade arm straight out from a shoulder                 rolled all the way forward (the collarbone's whole range), the                 off arm flung back. Held at full length through the live                 frames and a quarter of the recovery, deeper on the last, then                 the rear leg is drawn in. The stride is one the simulation does                 not take, and is honest because the simulation is carrying the                 whole body two and a half metres forward through it."
             .into(),
         keys: vec![
             Key::eased(0, ready(), Ease::SMOOTH),
-            Key::eased(gather, cocked, Ease::LINEAR),
-            Key::eased(contact, cut, Ease::LINEAR),
-            Key::eased(follow, through, Ease::OUT),
-            Key::eased(settle, gathering, Ease::SMOOTH),
+            Key::eased(gather, cocked, Ease::OUT),
+            // Halfway out, so the arm's whole length is spread over the
+            // startup's last frames rather than spent in one.
+            Key::eased((gather + contact) / 2, lunge(0.30, 9.0, 0.45, 0.15), Ease::LINEAR),
+            Key::eased(contact, lunge(0.50, 18.0, 1.0, 0.5), Ease::LINEAR),
+            Key::eased(follow, lunge(0.56, 22.0, 1.0, 1.0), Ease::OUT),
+            Key::eased(held, lunge(0.54, 20.0, 1.0, 1.0), Ease::SMOOTH),
+            Key::eased(settle, recovering, Ease::SMOOTH),
             Key::eased(last, ready(), Ease::SMOOTH),
         ],
     }
@@ -1133,20 +1111,25 @@ fn plunge() -> Recipe {
     // over, both arms driven straight down ahead of the head with the blades
     // under them, and the legs swept back and up behind -- a falcon's shape,
     // and the one silhouette in the kit that is longer than it is tall.
+    // Thrown long (2026-10-20): the arms all the way out ahead of the head
+    // from shoulders rolled forward and up, the legs trailing straight -- a
+    // spear, not a crouch.
     let stoop = legs(
         Pose::rest()
             .hips(0.0, -0.02, 0.06)
-            .root(34.0, 0.0, 0.0)
-            .spine(20.0, 0.0, 0.0)
-            .chest(10.0, 0.0, 0.0)
-            .head(-26.0, 0.0, 0.0)
-            .shoulder_l(52.0, 14.0, 0.0)
-            .elbow_l(14.0)
-            .wrist_l(-12.0, 0.0, 0.0)
-            .shoulder_r(52.0, 14.0, 0.0)
-            .elbow_r(14.0)
-            .wrist_r(-12.0, 0.0, 0.0),
-        -0.3,
+            .root(36.0, 0.0, 0.0)
+            .spine(18.0, 0.0, 0.0)
+            .chest(8.0, 0.0, 0.0)
+            .head(-30.0, 0.0, 0.0)
+            .shoulder_l(70.0, 10.0, 0.0)
+            .elbow_l(4.0)
+            .wrist_l(-10.0, 0.0, 0.0)
+            .clavicle_l(20.0, 16.0)
+            .shoulder_r(70.0, 10.0, 0.0)
+            .elbow_r(4.0)
+            .wrist_r(-10.0, 0.0, 0.0)
+            .clavicle_r(20.0, 16.0),
+        -0.25,
     );
 
     // Through the dive. Further over, and the knees coming back up under the
@@ -1156,17 +1139,19 @@ fn plunge() -> Recipe {
     let diving = legs(
         Pose::rest()
             .hips(0.0, 0.02, 0.06)
-            .root(30.0, 0.0, 0.0)
-            .spine(24.0, 0.0, 0.0)
-            .chest(12.0, 0.0, 0.0)
-            .head(-18.0, 0.0, 0.0)
-            .shoulder_l(40.0, 16.0, 0.0)
-            .elbow_l(18.0)
-            .wrist_l(-14.0, 0.0, 0.0)
-            .shoulder_r(40.0, 16.0, 0.0)
-            .elbow_r(18.0)
-            .wrist_r(-14.0, 0.0, 0.0),
-        0.55,
+            .root(32.0, 0.0, 0.0)
+            .spine(22.0, 0.0, 0.0)
+            .chest(10.0, 0.0, 0.0)
+            .head(-22.0, 0.0, 0.0)
+            .shoulder_l(58.0, 12.0, 0.0)
+            .elbow_l(6.0)
+            .wrist_l(-12.0, 0.0, 0.0)
+            .clavicle_l(18.0, 12.0)
+            .shoulder_r(58.0, 12.0, 0.0)
+            .elbow_r(6.0)
+            .wrist_r(-12.0, 0.0, 0.0)
+            .clavicle_r(18.0, 12.0),
+        0.3,
     );
 
     // Arrived: on the floor, on the stance's own marks, in the deepest crouch
@@ -1613,20 +1598,24 @@ fn gallows() -> Recipe {
     // The drop, on the first active frame: pitched over the blades, both arms
     // driven down ahead of the head, the knees still under the body so the
     // feet meet the floor rather than going through it.
+    // Thrown long (2026-10-20): both arms straight out along the cut from
+    // shoulders rolled forward, the body stretched behind them.
     let dropping = legs(
         Pose::rest()
             .hips(0.0, 0.02, 0.06)
             .root(30.0, 0.0, 0.0)
-            .spine(22.0, 0.0, 0.0)
-            .chest(12.0, 0.0, 0.0)
-            .head(-16.0, 0.0, 0.0)
-            .shoulder_l(70.0, 16.0, 0.0)
-            .elbow_l(16.0)
-            .wrist_l(-14.0, 0.0, 0.0)
-            .shoulder_r(70.0, 16.0, 0.0)
-            .elbow_r(16.0)
-            .wrist_r(-14.0, 0.0, 0.0),
-        0.4,
+            .spine(20.0, 0.0, 0.0)
+            .chest(10.0, 0.0, 0.0)
+            .head(-20.0, 0.0, 0.0)
+            .shoulder_l(84.0, 12.0, 0.0)
+            .elbow_l(4.0)
+            .wrist_l(-12.0, 0.0, 0.0)
+            .clavicle_l(22.0, 12.0)
+            .shoulder_r(84.0, 12.0, 0.0)
+            .elbow_r(4.0)
+            .wrist_r(-12.0, 0.0, 0.0)
+            .clavicle_r(22.0, 12.0),
+        0.3,
     );
 
     // Arrived, and buried: lower than the Plunge's landing and further over,

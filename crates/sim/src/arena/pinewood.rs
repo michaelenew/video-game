@@ -77,7 +77,7 @@ pub static PLACE: Place = Place {
     vents: &[],
 };
 
-const SEAMS: [Seam; 5] = [
+const SEAMS: [Seam; 3] = [
     // Back through the second pass to the Shelves.
     Seam {
         zone: Zone::cm([65200, 5100, 0], [66000, 6200, 1000]),
@@ -91,44 +91,18 @@ const SEAMS: [Seam; 5] = [
         waystone: None,
         says: "the Shelves",
     },
-    // The Den, south into a clearing: the Pair.
+    // The Hollows: the foot of the stones up to the cave, south of the road.
     Seam {
-        zone: Zone::cm([69800, 5200, -2300], [70600, 6300, -1400]),
-        to: ArenaId::PAIR,
-        at: 0,
-        marks: [
-            Mark::cm(70050, -1200, (70200, 0)),
-            Mark::cm(70350, -1200, (70200, 0)),
-        ],
-        gate: Gate::Open,
-        waystone: None,
-        says: "the Den: the Pair",
-    },
-    // The Hollows, north to the root caves: the Broodmother.
-    Seam {
-        zone: Zone::cm([73100, 5200, 2800], [73900, 6300, 3750]),
+        zone: Zone::cm([74950, 5700, -2600], [75750, 6400, -1800]),
         to: ArenaId::BROODMOTHER,
         at: 0,
         marks: [
-            Mark::cm(73350, 2600, (73500, 0)),
-            Mark::cm(73650, 2600, (73500, 0)),
+            Mark::cm(75200, -1500, (75200, -2200)),
+            Mark::cm(75500, -1500, (75500, -2200)),
         ],
         gate: Gate::Open,
         waystone: None,
         says: "the Hollows: the Broodmother",
-    },
-    // The Highlands, climbing south: the Ridgeback.
-    Seam {
-        zone: Zone::cm([76100, 5500, -2500], [76900, 6700, -1600]),
-        to: ArenaId::HIGHLANDS,
-        at: 0,
-        marks: [
-            Mark::cm(76350, -1400, (76500, 0)),
-            Mark::cm(76650, -1400, (76500, 0)),
-        ],
-        gate: Gate::Open,
-        waystone: None,
-        says: "the Highlands: the Ridgeback",
     },
     // On to the Saddle, through the third pass.
     Seam {

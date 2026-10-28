@@ -316,7 +316,9 @@ fn a_packet_of_inputs_is_small() {
         frame: 100,
         inputs: vec![Input::aimed(Input::W, 3); net::region::REDUNDANCY],
         regions: vec![RegionId::new(0, 0); 3],
+        until: 100,
     };
+    assert_eq!(net::region::Packet::decode(&p.encode()), Some(p.clone()));
     let n = p.encode().len();
     eprintln!(
         "inputs packet {n} bytes; a fighter {} bytes; a world {} bytes",
@@ -324,4 +326,97 @@ fn a_packet_of_inputs_is_small() {
         net::raw::WORLD
     );
     assert!(n <= 96, "{n} bytes a frame is more than a few dozen");
+}
+
+/// **Far peers hear a heartbeat, and are exact when they meet** (exploration
+/// 0029 §9). Two fighters start eighty metres apart on the small grid --
+/// far past where they could share a region before a heartbeat's promise
+/// runs out -- and walk into each other. While far, each sends the other a
+/// declaration a heartbeat instead of every input every frame; as they
+/// close they switch to inputs, and every zone each is in agrees with the
+/// truth at every frame, all the way through the meeting and the shove.
+#[test]
+fn far_peers_beat_and_are_exact_when_they_meet() {
+    use net::loopback::{Meter, Metered};
+    use std::sync::Arc;
+    small_grid();
+    let grid = Grid::tuned();
+    let z = Fx::from_int(-60);
+    let mut truth = World::with_classes([Class::Champion; 2]);
+    for (i, x) in [-40, 40].into_iter().enumerate() {
+        truth.players[i].pos = V3::new(Fx::from_int(x), Fx::ZERO, z);
+    }
+    let walk = |seat: usize, frame: u32| {
+        let aim = if seat == 0 { 0 } else { 1 << 15 };
+        Input::aimed(if frame < 560 { Input::W } else { 0 }, aim)
+    };
+    let mut regions: Vec<RegionId> = Vec::new();
+    for x in -46..=46 {
+        for dz in -4..=4 {
+            let id = grid.home(V3::new(Fx::from_int(x), Fx::ZERO, z.add(Fx::from_int(dz))));
+            if !regions.contains(&id) {
+                regions.push(id);
+            }
+        }
+    }
+    let meters = [Arc::new(Meter::default()), Arc::new(Meter::default())];
+    let wire = Wire::default();
+    let line = |k: usize| vec![(1 - k, Metered::new(wire.end(k), meters[k].clone()))];
+    let start = truth.clone();
+    let mut peers: Vec<Session<_>> = (0..2)
+        .map(|me| Session::new(me, grid, start.clone(), line(me)))
+        .collect();
+    let mut sums: Vec<Vec<u64>> = vec![
+        regions
+            .iter()
+            .map(|r| truth.region_checksum(&grid, *r))
+            .collect(),
+    ];
+    let mut early = 0;
+    let mut checked = 0;
+    for f in 1..=700u32 {
+        truth.advance([walk(0, f), walk(1, f)]);
+        sums.push(
+            regions
+                .iter()
+                .map(|r| truth.region_checksum(&grid, *r))
+                .collect(),
+        );
+        for p in peers.iter_mut() {
+            let next = p.world.as_ref().unwrap().frame + 1;
+            p.tick(walk(p.me, next));
+        }
+        if f == 60 {
+            early = meters[0].bytes().0;
+        }
+        if f % 20 == 0 {
+            for p in &peers {
+                checked += agrees(p, &regions, &sums);
+            }
+        }
+    }
+    oven::reset_to_baked();
+    let late = meters[0].bytes().0 - early;
+    eprintln!("far: {early} bytes in 60 frames; then {late} in 640; checked {checked} zone-frames");
+    // While far: a heartbeat every few frames, not a packet every frame.
+    assert!(
+        early < 60 * 20,
+        "{early} bytes in the first second, far apart: inputs went every frame"
+    );
+    let d = peers[0].world.as_ref().unwrap().players[0]
+        .pos
+        .sub(peers[0].world.as_ref().unwrap().players[1].pos)
+        .flat_len();
+    assert!(
+        d.raw() < Fx::from_int(4).raw(),
+        "they never met: {d:?} apart"
+    );
+    assert!(checked > 200, "only {checked} zone-frames checked");
+    for p in &peers {
+        assert_eq!(
+            p.disagreed, 0,
+            "peer {} found a desync: {:?}",
+            p.me, p.first_disagreement
+        );
+    }
 }

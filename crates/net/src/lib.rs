@@ -17,6 +17,7 @@ pub mod crowd;
 pub mod direct;
 pub mod drop_in;
 pub mod ggrs_glue;
+pub mod group;
 pub mod lobby;
 pub mod loopback;
 pub mod meet;

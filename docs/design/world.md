@@ -5,6 +5,11 @@ decided: 2026-09-30
 built: 2026-10-01 (W0), 2026-10-01 (W1, W2)
 ---
 
+*2026-10-22: in the valley as built, the creatures are no longer in rooms off
+the road: plain-ground ones are ranges beside it, odd-ground arenas are
+stations on jump sections, and the Highlands are gone (the Ridgeback is met on
+four ranges). See [valley.md](valley.md) §1, §1b and §1f.*
+
 # The world — a rudimentary one
 
 The creatures in [bestiary.md](bestiary.md) need somewhere to live and a reason

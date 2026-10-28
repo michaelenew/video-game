@@ -64,6 +64,40 @@ pub struct Input {
     /// confirmed and rolled back like a button, and `World::advance` acts on it
     /// on the same frame on both machines. See `docs/design/arenas.md`.
     pub travel: Travel,
+    /// **A knob of the Oven moved in a match**: nothing, nearly always. On
+    /// the wire for the reason `travel` is -- a rule changed on one machine
+    /// on the frame its player let go of a slider is a different game from
+    /// the next frame on -- and taken into the world as the frame is made
+    /// (`crate::oven::Edits`).
+    pub tune: Tune,
+}
+
+/// One knob set to one value: `cell` is the knob's [`crate::oven::Knob::cell`]
+/// plus one, and nought is no edit, which is what the default is.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
+pub struct Tune {
+    pub cell: u16,
+    pub raw: i32,
+}
+
+impl Tune {
+    pub const NONE: Tune = Tune { cell: 0, raw: 0 };
+
+    /// The knob numbered `cell` set to `raw`.
+    pub const fn set(cell: u16, raw: i32) -> Tune {
+        Tune {
+            cell: cell.wrapping_add(1),
+            raw,
+        }
+    }
+
+    /// The knob and its value, if this is an edit.
+    pub const fn edit(self) -> Option<(u16, i32)> {
+        match self.cell {
+            0 => None,
+            c => Some((c - 1, self.raw)),
+        }
+    }
 }
 
 /// Where a [`Input::travel`] request goes. One byte, and a second for seats.
@@ -183,8 +217,11 @@ impl Travel {
     /// The high byte's mark of a feeding.
     const FED: u16 = 0x80;
     const HUNT: u16 = 0x80;
-    /// `01aa aaaa`: no creature, in arena `a`.
+    /// `01aa aaaa`: no creature, in arena `a` -- its low six bits, the rest
+    /// in the high byte.
     const ARENA: u16 = 0x40;
+    const ARENA_LOW: u16 = 0x3F;
+    const ARENA_SHIFT: u16 = 6;
     /// `001s sccc`: seat `s` (its low two bits) becomes class `c` (three:
     /// there are six), the seat's higher bits in the high byte. It was `001s
     /// cccc` while there were two seats; [`Travel::from_two_seats`] reads a
@@ -221,14 +258,14 @@ impl Travel {
         Travel(Travel::HUNT | t << Travel::TEMPER_SHIFT | (species.0 as u16 & Travel::SPECIES))
     }
 
-    /// Go to an arena with nobody in it to hunt: a jump course. An id past
-    /// what six bits hold is no request.
+    /// Go to an arena with nobody in it to hunt: a jump course, a stage, a
+    /// tutorial hall. The id's low six bits are in the byte and the rest in
+    /// the high byte, so an id under sixty-four is written as it always was
+    /// -- and one past it (the halls) is not silently no request, which it
+    /// was until 2026-10-23.
     pub const fn arena(id: crate::arena::ArenaId) -> Travel {
-        if id.0 as u16 > !Travel::ARENA & !Travel::HUNT & Travel::LOW {
-            Travel::NONE
-        } else {
-            Travel(Travel::ARENA | id.0 as u16)
-        }
+        let id = id.0 as u16;
+        Travel(Travel::ARENA | (id & Travel::ARENA_LOW) | (id >> Travel::ARENA_SHIFT) << 8)
     }
 
     /// Credit a creature to the valley's journey. A species past what the
@@ -356,6 +393,14 @@ impl Travel {
                 class: crate::class::ALL_CLASSES[index],
             });
         }
+        // An arena, its id's high bits in the high byte.
+        if low & Travel::HUNT == 0 && low & Travel::ARENA != 0 {
+            let id = (low & Travel::ARENA_LOW) | high << Travel::ARENA_SHIFT;
+            if id > u8::MAX as u16 {
+                return None;
+            }
+            return Some(Destination::Arena(crate::arena::ArenaId(id as u8)));
+        }
         // A high byte on anything but a class change is no request at all.
         if high != 0 && self.0 & (Travel::HUNT | Travel::ARENA | Travel::CLASS) != Travel::CLASS {
             return None;
@@ -386,9 +431,6 @@ impl Travel {
                     class: crate::class::ALL_CLASSES[index],
                 })
             }
-            b if b & Travel::HUNT == 0 && b & Travel::ARENA != 0 => Some(Destination::Arena(
-                crate::arena::ArenaId((b & !Travel::ARENA) as u8),
-            )),
             b if b & Travel::HUNT != 0 => Some(Destination::Hunt(
                 SpeciesId((b & Travel::SPECIES) as u8),
                 ((b >> Travel::TEMPER_SHIFT) & Travel::TEMPER) as u8,
@@ -466,6 +508,7 @@ impl Input {
             aim: 0,
             pitch: 0,
             travel: Travel::NONE,
+            tune: Tune::NONE,
         }
     }
 
@@ -476,6 +519,7 @@ impl Input {
             aim,
             pitch: 0,
             travel: Travel::NONE,
+            tune: Tune::NONE,
         }
     }
 
@@ -486,6 +530,7 @@ impl Input {
             aim,
             pitch,
             travel: Travel::NONE,
+            tune: Tune::NONE,
         }
     }
 
@@ -554,6 +599,11 @@ impl Input {
 
     pub const fn looking(self, aim: u16, pitch: i16) -> Input {
         Input { aim, pitch, ..self }
+    }
+
+    /// The same input, moving a knob of the Oven.
+    pub const fn tuning(self, tune: Tune) -> Input {
+        Input { tune, ..self }
     }
 
     /// The same input, asking to go somewhere else.

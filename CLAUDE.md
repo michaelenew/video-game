@@ -248,7 +248,7 @@ is already struggling. One rollback burst gets a quarter of the frame, one
 **Add to the `no floats, no deps, no I/O` list: no allocation.** A simulation
 frame, and the whole path from snapshot to screen in `view`, must not touch the
 heap — an allocator is a lock with a tail, and it is what turns one frame in a
-thousand into a millisecond. That check and the 22 KiB cap on `World` are the
+thousand into a millisecond. That check and the 26 KiB cap on `World` are the
 ones that matter: they give the same answer on every machine, whereas the three
 timing budgets run at 5–40x the measured cost and will only catch a change of
 *kind* — an accidental quadratic, an unbounded scan, a blocking call.
@@ -376,6 +376,26 @@ is the one place the simulation's transitions are read as sounds, and
 something sounds like in the game crate, stop: it goes in a patch. The
 reasoning is [`docs/design/sound.md`](docs/design/sound.md).
 
+## A character is a script, not a file
+
+Every class but the Bulwark is drawn by a skinned model,
+`crates/game/assets/<class>.glb` (`game::models`), and **that file is built,
+never edited**: `art/<class>/build.py`, run under Blender as a Python module
+(`art/blender.sh`, `./scripts/setup-tools.sh art`), from MakeHuman's CC0
+body. A class is a spec -- a body recipe, an outfit, a palette -- on one
+builder (`art/lib/character.py`), and its clothes are cut with one set of
+tools (`art/lib/wardrobe.py`); a fix to either is true of every class. The
+joints are the game's twenty-one
+(`view::skeleton`), named as `Joint::name` names them and set each frame from
+the skin `apply_poses` solves, so a change to the skeleton is a rebuild there.
+Judge a character lit, in the game (F6 walks round one up close;
+`SHOT_PORTRAIT` for a screenshot). **The owner's rules for a character's
+look and motion, and the recipe for painting one, are
+[`docs/design/cast-look.md`](docs/design/cast-look.md): follow it rather than
+rediscovering them.** The reasoning, what failed and
+what is left is [exploration/0024](docs/design/exploration/0024_a_character_done_properly.md);
+the commands are [`art/README.md`](art/README.md).
+
 ## Tools that are not on every machine
 
 Four things this repository does need tools a fresh machine does not have: the
@@ -386,7 +406,8 @@ to the browser build is checked) needs Playwright and its Chromium, and **a
 desktop joining a page's room** (`./scripts/room-desktop.sh`, how a change to
 `net::native` is checked) needs all of those and mosquitto.
 `./scripts/setup-tools.sh web`, `shot`, `browser`, `broker` or `all` installs
-them, once, and is the only place the steps are written. A fifth, `desktop`,
+them, once, and is the only place the steps are written. (`art`, which only
+rebuilding a character's model needs, is there too.) A fifth, `desktop`,
 is not a tool but the one system library the **desktop build** itself needs
 on Linux: ALSA's headers, for the game's sound; a build error naming
 `alsa-sys` is that. The Pages workflow runs it, and so does every cloud

@@ -168,6 +168,114 @@ pub fn look(id: SpeciesId) -> &'static Look {
     }
 }
 
+/// **How a species' body is built** (`crate::contour`, exploration 0027):
+/// the contours its parts are grown in, where its own say differs from what
+/// `crate::grown` infers from the part's shape and bone, and the dials every
+/// part shares. Found beside the look, as a tint is, so a species that says
+/// nothing is grown by inference.
+#[derive(Clone, Copy, Debug)]
+pub struct Build {
+    /// How much flesh over the structure (0 ribs and bellies show, 1 hidden).
+    pub fat: f32,
+    /// How pronounced the muscle is where a contour has any.
+    pub muscle: f32,
+    /// How much of a limb is a column rather than a taper: 1 a graviportal
+    /// animal (an elephant), 0 a cursorial one (a horse).
+    pub heavy: f32,
+    /// Parts contoured by the species' own word, by index.
+    pub contours: &'static [(usize, crate::contour::Contour)],
+    /// **What the sculpted target taught** (2026-10-23, exploration 0030):
+    /// the choices that made the hand-made body read as a monster, stated so
+    /// a grown one makes them too. How far a barrel hangs below its box, as a
+    /// share of its depth: a deep chest, the belly low between the legs.
+    pub belly: f32,
+    /// How much thicker a leg is than its box: a column the body comes down
+    /// over.
+    pub girth: f32,
+    /// How thick the carapace is over the back, in metres (0: none): grown
+    /// off the skin wherever it is armoured, in scutes, parting where a weak
+    /// point stands.
+    pub armour: f32,
+    /// How big a scute is across the back, in metres.
+    pub scute: f32,
+    /// How tall the spines either side of a weak strip down the back stand,
+    /// in metres (0: none).
+    pub spines: f32,
+    /// How long the horns over the eyes are, in metres (0: none); with them
+    /// come brow nubs, a nose horn and tusks.
+    pub horns: f32,
+    /// How many toes a foot has, each with its claw: a dog's paw
+    /// (`horns::paws`); 0 for none.
+    pub claws: u8,
+    /// **What the Galewing and the Mantis taught** (2026-10-24, exploration
+    /// 0031), each a rule over the species table (`crate::anatomy`).
+    /// What a foot is: a paw (`claws` toes), a bird's talons, an insect's
+    /// tarsus.
+    pub foot: Foot,
+    /// How long a feather is, against the Galewing's (0: no feathers). A
+    /// feathered body's wings are a slab carrying flight feathers past it,
+    /// its flat tail a fan of them, and its skin is plumage.
+    pub feathers: f32,
+    /// A hooked beak on the front of the head, the head's share it takes
+    /// (0: none); and a crest of feathers swept back off the crown.
+    pub beak: f32,
+    pub crest: f32,
+    /// How far apart the rings of a segmented body are, in metres (0: not
+    /// segmented); its skin is chitin.
+    pub chitin: f32,
+    /// How long the spines under a raptorial arm are, in metres (0: none).
+    pub grip: f32,
+    /// How long the antennae are, in metres (0: none).
+    pub antennae: f32,
+    /// How big a compound eye is across, in metres (0: none).
+    pub eyes: f32,
+}
+
+/// What a foot is (`Build::foot`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Foot {
+    /// A dog's: a palm and toes (`horns::paws`).
+    Paw,
+    /// A bird of prey's: three toes forward and one back, each a talon.
+    Talon,
+    /// An insect's: the tarsus, beaded along the floor, with its two claws.
+    Tarsus,
+}
+
+impl Build {
+    pub const DEFAULT: Build = Build {
+        fat: 0.5,
+        muscle: 0.5,
+        heavy: 0.5,
+        contours: &[],
+        belly: 0.15,
+        girth: 1.0,
+        armour: 0.0,
+        scute: 0.8,
+        spines: 0.0,
+        horns: 0.0,
+        claws: 0,
+        foot: Foot::Paw,
+        feathers: 0.0,
+        beak: 0.0,
+        crest: 0.0,
+        chitin: 0.0,
+        grip: 0.0,
+        antennae: 0.0,
+        eyes: 0.0,
+    };
+}
+
+/// A species' [`Build`]: its own, or the default.
+pub fn build(id: SpeciesId) -> &'static Build {
+    match id {
+        SpeciesId::RIDGEBACK => &ridgeback::BUILD,
+        SpeciesId::GALEWING => &galewing::BUILD,
+        SpeciesId::MANTIS => &mantis::BUILD,
+        _ => &Build::DEFAULT,
+    }
+}
+
 /// A species' [`Tint`], if it has one.
 pub fn tint(id: SpeciesId) -> Option<&'static Tint> {
     match id {

@@ -76,8 +76,10 @@ const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 48;
 /// traded old ground for new on every touch; a hundred and twenty-eight is
 /// 1,280 bytes more. None of it goes over the network -- a peer is sent
 /// inputs -- so its only cost is the copy, and a ring of nine is under 200
-/// KiB.
-const SNAPSHOT_CAP: usize = 22 * 1024;
+/// KiB. **Twenty-six for eight fighter slots** (2026-10-26, the owner's
+/// call: exploration 0029, eight to a fight): 2,608 bytes of four more
+/// fighters, the pools they fill held at four fighters' worth.
+const SNAPSHOT_CAP: usize = 26 * 1024;
 
 /// Frames per timed run. Ten seconds of play, so a move's whole lifecycle --
 /// startup, active, recovery, and whatever it leaves on the field -- is inside
@@ -452,8 +454,9 @@ fn far_from_home(c: Class) -> World {
         MAX_PLAYERS as u8,
     );
     w.valley.keep.carry_egg(0, SpeciesId::RIDGEBACK);
-    // The road through the Bank, a hundred metres and more from the range;
-    // the creatures thirty metres back along it.
+    // The road down through the Mouth, out of their territory on the Bank
+    // (they roam its meadow, road and all, since 2026-10-22); the creatures
+    // thirty metres back along it.
     let o = w.map_origin();
     let ground = w.terrain();
     let at = |x: i32, z: i32| {
@@ -465,10 +468,10 @@ fn far_from_home(c: Class) -> World {
         sim::V3::new(p.x, ground.floor_below(p), p.z)
     };
     for (i, p) in w.players.iter_mut().enumerate() {
-        p.pos = at(25500 - 150 * i as i32, 300);
+        p.pos = at(21000 - 150 * i as i32, -1700);
     }
     for (k, m) in w.monsters.iter_mut().flatten().enumerate() {
-        m.pos = at(28500 + 300 * k as i32, 900);
+        m.pos = at(24000 + 300 * k as i32, -800);
     }
     for _ in 0..3 {
         w.advance([Input::default(); 2]);
@@ -789,6 +792,7 @@ fn input_script(frames: u32) -> Vec<[Input; 2]> {
                     aim: (r >> 16) as u16,
                     pitch: ((r >> 32) as i16) / 8,
                     travel: Default::default(),
+                    tune: Default::default(),
                 }
             })
         })

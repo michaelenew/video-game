@@ -44,6 +44,19 @@ pub const REDUNDANCY: usize = 8;
 /// before it waits: GGRS's prediction window.
 pub const WINDOW: u32 = 8;
 
+/// **How often a peer too far to matter hears from me**, in frames: a
+/// declaration with no inputs, and a promise (`Packet::Inputs::until`) that
+/// what it declares holds that far ahead (exploration 0029 §9). Every frame
+/// to everybody was most of what the session sent.
+pub const HEARTBEAT: u32 = 6;
+
+/// How far ahead a heartbeat's promise reaches: two beats, so the next one
+/// is in hand before the last runs out.
+pub const PROMISE: u32 = 2 * HEARTBEAT;
+
+/// The trip a heartbeat is allowed, in frames, when deciding who is far.
+const LATENCY: u32 = 18;
+
 /// How often a region's outcome is sent to the neighbours, in frames.
 pub const OUTCOME_EVERY: u32 = 4;
 
@@ -69,6 +82,10 @@ pub enum Packet {
         frame: u32,
         inputs: Vec<Input>,
         regions: Vec<RegionId>,
+        /// The declaration holds through this frame: `frame` itself every
+        /// frame to a peer near enough to need my inputs, and further ahead
+        /// in a heartbeat to one too far to (exploration 0029 §9).
+        until: u32,
     },
     /// A region's checksum zone at a confirmed frame: the fighters in it.
     Outcome {
@@ -114,10 +131,12 @@ impl Packet {
                 frame,
                 inputs,
                 regions,
+                until,
             } => {
                 b.push(K_INPUTS);
                 b.push(*seat);
                 b.extend_from_slice(&frame.to_le_bytes());
+                b.push(until.saturating_sub(*frame).min(255) as u8);
                 b.push(inputs.len() as u8);
                 for i in inputs {
                     b.extend_from_slice(&i.bits.to_le_bytes());
@@ -201,6 +220,7 @@ impl Packet {
             K_INPUTS => {
                 let seat = u8_(take(1)?);
                 let frame = u32_(take(4)?);
+                let until = frame + u8_(take(1)?) as u32;
                 let n = u8_(take(1)?) as usize;
                 let mut inputs = Vec::with_capacity(n);
                 for _ in 0..n {
@@ -222,6 +242,7 @@ impl Packet {
                     frame,
                     inputs,
                     regions,
+                    until,
                 })
             }
             K_OUTCOME => {
@@ -295,6 +316,9 @@ struct Known {
     inputs: Box<[Option<(u32, Input)>; TAPE]>,
     /// The newest input heard: what a missing one is predicted as.
     last: Option<(u32, Input)>,
+    /// The newest frame its declarations hold through: its newest, or what
+    /// a heartbeat promised past it.
+    through: u32,
 }
 
 /// How many declarations are kept: the tape's reach and the window.
@@ -328,18 +352,46 @@ fn declare(history: &mut Vec<(u32, Vec<RegionId>)>, frame: u32, regions: Vec<Reg
     true
 }
 
+/// **Is a peer too far to need my inputs** before a heartbeat's promise
+/// runs out? The speed of light says: it stands within membership of every
+/// region it declared, so it is at least the farthest of those gaps less
+/// membership from me; we share a region only within two memberships and a
+/// hexagon's width; and over the promise and a trip each of us closes at
+/// most the grid's speed. Never far before it has declared anything.
+fn far(grid: &Grid, me: sim::math::V3, theirs: &[(u32, Vec<RegionId>)]) -> bool {
+    let Some((_, regions)) = theirs.last() else {
+        return false;
+    };
+    let m = grid.membership();
+    let Some(apart) = regions
+        .iter()
+        .map(|r| grid.gap(*r, me).sub(m))
+        .max_by_key(|d| d.raw())
+    else {
+        return false;
+    };
+    let t = sim::fixed::Fx::from_int((PROMISE + LATENCY) as i32)
+        .div(sim::fixed::Fx::from_int(sim::TICK_HZ as i32));
+    let closing = grid.speed.mul(t).mul(sim::fixed::Fx::from_int(2));
+    let share = m.add(m).add(grid.size).add(grid.size);
+    apart.sub(closing).raw() > share.raw()
+}
+
 impl Known {
     fn new() -> Known {
         Known {
             declared: Vec::new(),
             inputs: Box::new([None; TAPE]),
             last: None,
+            through: 0,
         }
     }
 
-    /// The newest frame it has declared for, if any.
+    /// The newest frame what it has declared holds through, if it has
+    /// declared anything: its newest declaration, or further ahead where a
+    /// heartbeat promised it.
     fn newest(&self) -> Option<u32> {
-        self.declared.last().map(|(f, _)| *f)
+        self.declared.last().map(|(f, _)| (*f).max(self.through))
     }
 
     fn input_at(&self, frame: u32) -> Option<Input> {
@@ -411,6 +463,8 @@ pub struct Session<L: Line> {
     pub agreed: u32,
     pub disagreed: u32,
     pub first_disagreement: Option<(u8, RegionId, u32)>,
+    /// The frame each peer last had a heartbeat from me.
+    beat: [u32; MAX_PLAYERS],
 }
 
 impl<L: Line> Session<L> {
@@ -450,6 +504,7 @@ impl<L: Line> Session<L> {
             agreed: 0,
             disagreed: 0,
             first_disagreement: None,
+            beat: [0; MAX_PLAYERS],
         }
     }
 
@@ -540,11 +595,14 @@ impl<L: Line> Session<L> {
                     frame,
                     inputs,
                     regions,
+                    until,
                 } => {
                     let seat = seat as usize;
                     if seat >= MAX_PLAYERS {
                         continue;
                     }
+                    let k = &mut self.known[seat];
+                    k.through = k.through.max(until);
                     let now = self.world.as_ref().map(|w| w.frame);
                     // A declaration for a frame already played that changes
                     // who that frame needed: play it again from there.
@@ -690,6 +748,7 @@ impl<L: Line> Session<L> {
             return false;
         };
         let next = world.frame + 1;
+        let me = world.players[self.me].pos.add(world.map_origin());
         // My input for the frame about to be made, and the word to the
         // members of my regions.
         self.mine[next as usize % TAPE] = Some((next, input));
@@ -709,14 +768,29 @@ impl<L: Line> Session<L> {
             frame: newest,
             inputs,
             regions: mine.clone(),
+            until: newest,
+        }
+        .encode();
+        let beat = Packet::Inputs {
+            seat: self.me as u8,
+            frame: newest,
+            inputs: Vec::new(),
+            regions: mine.clone(),
+            until: newest + PROMISE,
         }
         .encode();
         for (seat, line) in self.lines.iter_mut() {
-            // Everybody hears where I am (the declaration); the members
-            // need the inputs, and the rest ignore them -- one packet, since
-            // the declaration is what makes a member.
-            let _ = seat;
-            line.send(&packet);
+            // **Near enough to need my inputs** -- or not heard from yet --
+            // hears them every frame, with where I am. **Too far** hears
+            // where I am once a heartbeat, with a promise it holds: it
+            // cannot share a region with me before the promise runs out.
+            let far = far(&self.grid, me, &self.known[*seat].declared);
+            if !far {
+                line.send(&packet);
+            } else if newest >= self.beat[*seat] + HEARTBEAT {
+                self.beat[*seat] = newest;
+                line.send(&beat);
+            }
         }
 
         // Rollback: anything changed behind us is played again.
@@ -875,17 +949,25 @@ impl<L: Line> Session<L> {
             let packet = Packet::Outcome {
                 region,
                 frame: f,
-                fighters,
+                fighters: fighters.clone(),
             }
             .encode();
             let neighbours = region.neighbours();
             let mut sent = 0;
+            // As far from a peer's regions as its strip reaches: past that
+            // nothing in the outcome is anything it simulates.
+            let strip = self.grid.membership().add(self.grid.horizon());
+            let grid = self.grid;
             for (seat, line) in self.lines.iter_mut() {
                 let k = &self.known[*seat];
                 let theirs = k.declared.last().map_or(&[][..], |(_, r)| r.as_slice());
                 let next_door = theirs
                     .iter()
-                    .any(|r| *r == region || neighbours.contains(r));
+                    .any(|r| *r == region || neighbours.contains(r))
+                    && fighters.iter().any(|(_, p)| {
+                        let at = p.pos.add(origin);
+                        theirs.iter().any(|r| grid.gap(*r, at).raw() <= strip.raw())
+                    });
                 let settled = declared_at(&k.declared, f.saturating_sub(SETTLE)).contains(&region);
                 if next_door && !settled {
                     sent += 1;
@@ -997,6 +1079,7 @@ mod tests {
                 Input::looking_at(5, 6, -7).travelling(Travel(0x123)),
             ],
             regions: vec![RegionId::new(-1, 2), RegionId::new(0, 0)],
+            until: 1012,
         };
         assert_eq!(Packet::decode(&p.encode()), Some(p));
         let w = World::with_classes([sim::class::Class::Bulwark; 2]);

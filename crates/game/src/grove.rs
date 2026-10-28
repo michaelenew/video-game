@@ -124,7 +124,7 @@ fn ring_at(n: usize, r: f32, detail: f32) -> usize {
 /// nearest part of it, at which it is drawn with less. Up close everything;
 /// past [`LEVELS`]`[0]` what is finer than [`detail_at`] that distance shows;
 /// past `[1]` the same at that one. A hard switch (`docs/design/exploration/
-/// 0024_distant_detail.md`, LOD-1): what goes at a step is finer than the
+/// 0028_distant_detail.md`, LOD-1): what goes at a step is finer than the
 /// screen shows there, so the step is not seen.
 pub const LEVELS: [f32; 3] = [100.0, 250.0, 450.0];
 

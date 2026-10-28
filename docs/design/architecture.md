@@ -95,7 +95,7 @@ What catches drift is the pair of checks that give the same answer on every mach
   allocator is shared mutable state with a lock and a tail, and it is the classic source of
   the one frame in a thousand that takes a millisecond. The path from snapshot to screen in
   `view` is held to the same rule.
-- **A `World` stays under 22 KiB.** Rollback copies one every frame and keeps a ring of nine,
+- **A `World` stays under 26 KiB.** Rollback copies one every frame and keeps a ring of nine,
   so the snapshot is the one structure whose *size* is a running cost rather than a one-off.
   The cap keeps the ring inside L2. Raising it means every frame and every rollback got
   heavier, so it wants a reason the way an Oven exemption does. It was 4 KiB until four
@@ -107,7 +107,12 @@ What catches drift is the pair of checks that give the same answer on every mach
   190 KiB. **22 KiB since 2026-10-19**, the owner's call again: her territory's table went
   from 48 patches to 128 (1,280 bytes), because 48 was full within a minute of play and a
   long fight traded old ground for new on every touch. None of the snapshot is sent to a
-  peer -- only inputs are -- so its cost is the copy; nine are under 200 KiB.
+  peer -- only inputs are -- so its cost is the copy; nine are under 200 KiB. **26 KiB since
+  2026-10-26**, the owner's call (exploration 0029, NET-2: eight to a fight): eight fighter
+  slots where there were four, 2,608 bytes, with the pools fighters fill -- effects, bolts,
+  gusts, shards -- held at what four measured out at (`state::POOLED_FOR`) rather than
+  doubling with the slots. Thirteen copies (the twelve-frame window and the one in hand) are
+  about 330 KiB.
 
 ### Where the 20 KiB goes (measured 2026-10-14, with `size_of`)
 
@@ -1035,6 +1040,27 @@ saves nor restores them. But two peers running different rules would diverge sil
 exactly like a netcode bug. The tuning hash is folded into `World::checksum`, so a mismatched
 Oven is a desync on the first frame — an error message instead of a mystery.
 
+### The Oven moves in a match (2026-10-25)
+
+That made moving a slider in a match a desync: the knob changed on one machine on the frame
+its player let go, and nowhere else. **A knob moved in a match is asked for on the wire**:
+`Input::tune` names it (`oven::Knob::cell`, every knob in one flat numbering) and its value,
+`NetInput`'s second word carries it, and the frame that carries it puts it in the world
+(`World::edits`, `oven::Edits`, at most `oven::MATCH_EDITS` knobs). Before every frame,
+`oven::adopt` lays the world's edits over the Oven the match began with -- which both
+machines agreed on to start it -- so the rule changes on the same frame everywhere, and a
+rollback to before the edit runs those frames on the old rule again. The checksum hashes the
+edits with the world and the Oven *under* them (`oven::base_hash`): straight after a
+rollback's load the live store is another world's. A tape writes an edit as
+`@frame tune seat cell value` (format four), so a replay plays it too.
+
+The palette sends rather than sets whenever the world is a match's or carries one's edits
+(`palette::Moved`), one edit a tick, the slider showing where it was let go while the edit
+is on its way. Training sets the store directly, as before, with no limit on how many knobs
+move. *Revert* is off in a match (every knob at once is more than a match holds; each one's
+↺ still works). `sim/tests/match_edits.rs` and `net/tests/synctest_edits.rs` hold it, each
+alone in its file because the store is the process's.
+
 ### Class pickers
 
 A click-to-cycle button beside your health bar, showing your class. **F8**, and on
@@ -1276,7 +1302,7 @@ Everything below builds and passes today.
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
 | **Sound** | **Derived from the fight's own numbers, `crates/sound`; `cargo run -p sound --example sheet` renders every sound** — see [sound.md](sound.md) |
 | **Replays** | **`Y` / `--record` save the fight's inputs; `cargo run -p hunt --bin replay` judges them; `--replay` plays them back** — see [replays.md](replays.md) |
-| **Skeleton** | **Sixteen joints, per-class builds, joint limits, two-bone IK** — see [animation.md](animation.md) |
+| **Skeleton** | **Twenty-one joints, per-class builds, joint limits, two-bone IK** — see [animation.md](animation.md) |
 | **Animation factory** | **`cargo run -p anim --bin bake`**; `--bin preview` draws a clip as a PNG |
 | **Animation hub** | **F9** — every clip, live: timeline, spline editor, joint sliders, save and bake |
 | Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BIND_POSE=1` freezes the rig at rest |

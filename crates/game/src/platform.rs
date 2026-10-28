@@ -415,6 +415,14 @@ mod host {
 
 #[cfg(target_arch = "wasm32")]
 mod host {
+    /// A text file written for a person to look at (a sheet from a test):
+    /// there is no filesystem in a page, so it says so and writes nothing.
+    /// Only a test writes a sheet, and there are none in a page.
+    #[allow(dead_code)]
+    pub fn write_to(_p: &std::path::Path, _text: &str, what: &str) {
+        web_sys::console::warn_1(&format!("no filesystem in a page: {what} not written").into());
+    }
+
     /// One key, so a second prototype on the same origin does not overwrite
     /// this one's settings.
     const STORAGE_KEY: &str = "arena.settings";
@@ -675,6 +683,10 @@ pub use host::{
     save_settings, save_trophies, say, show_room,
 };
 
+/// A sheet a test draws, written where a person can look at it.
+#[cfg(test)]
+pub use host::write_to;
+
 // ---------------------------------------------------------------------------
 
 /// Whether this build can draw the line round a silhouette.
@@ -707,6 +719,23 @@ pub fn draws_splats() -> bool {
 /// A platform capability, like [`draws_outlines`], not a setting.
 pub fn bakes_shadows() -> bool {
     !cfg!(target_arch = "wasm32")
+}
+
+/// **Where the files the game reads as it goes are** (2026-10-21): the
+/// characters' models (`crate::models`), which were compiled into the
+/// program and are now read when a seat first plays the class.
+///
+/// A desktop build reads the checkout's `crates/game/assets`, by the path
+/// it was compiled from: the launchers build from a checkout and run there,
+/// and a run started from anywhere (`./target/debug/game`, a screenshot)
+/// still finds them. A page reads `assets/` beside itself, which
+/// `crates/web/build-game.sh` fills.
+pub fn asset_root() -> String {
+    if cfg!(target_arch = "wasm32") {
+        "assets".to_string()
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/assets").to_string()
+    }
 }
 
 /// **How much memory the game holds**, for `--profile`'s census. On Linux,

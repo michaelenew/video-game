@@ -260,7 +260,9 @@ fn bite() -> Recipe {
 fn stomp() -> Recipe {
     let ready = Pose::standing();
     // The fastest thing it does, so the tell has to be *big* rather than long:
-    // one foreleg comes up past the shoulder while the weight rocks back.
+    // one foreleg comes up past the shoulder while the weight rocks back. Its
+    // knee folds the way a walking leg's does, the foot reaching forward
+    // (2026-10-23: it once hung back, and the leg hinged both ways).
     let raised = Pose::standing()
         .hips(-0.06, 0.04, 0.0)
         .root(5.0, 0.0, -2.0)
@@ -268,7 +270,7 @@ fn stomp() -> Recipe {
         .neck(9.0, 0.0)
         .plant(0, -0.10, 0.0)
         .plant_hind(-0.42, 0.0)
-        .leg(1, 66.0, -74.0);
+        .leg(1, 48.0, 30.0);
     let driven = Pose::standing()
         .hips(0.04, -0.09, 0.0)
         .root(-5.0, 0.0, 1.5)
@@ -433,7 +435,7 @@ fn slam() -> Recipe {
         .neck(16.0, 0.0)
         .tail_lift(26.0)
         .plant_hind(-0.30, 0.0)
-        .forelegs(-34.0, -46.0);
+        .forelegs(-22.0, 48.0);
     let reared = Pose::standing()
         .hips(-0.55, 0.34, 0.0)
         .root(44.0, 0.0, 0.0)
@@ -443,7 +445,9 @@ fn slam() -> Recipe {
         .head(-16.0, 0.0, 0.0)
         .tail_lift(50.0)
         .plant_hind(-0.24, 0.0)
-        .forelegs(-58.0, -78.0);
+        // Pawing the air: upper legs down along the belly, forearms folded
+        // up in front of the chest -- the knee bending the way it walks.
+        .forelegs(-34.0, 86.0);
     // Down. Everything reverses at once, which is why this is the move you
     // leave the back for rather than the one you brace against.
     // The crash goes a metre further than the legs' own length asks, so the
@@ -749,9 +753,11 @@ fn stumble() -> Recipe {
         .plant_hind(-0.42, 0.45)
         .plant(1, 0.42, 0.45)
         // The kneeling leg is keyed as angles because it is the one leg that
-        // is *not* on the floor; the shin folds back to nearly horizontal so
-        // that a lower leg over two metres long does not go through it.
-        .leg(0, 30.0, -112.0);
+        // is *not* on the floor: the upper leg angled back under the chest
+        // and the forearm folded forward to nearly flat, the way a dog lies
+        // down, so a lower leg over two metres long does not go through the
+        // floor -- and the knee bends the way it walks (2026-10-23).
+        .leg(0, -30.0, 112.0);
     let down = Pose::standing()
         .hips(0.05, -1.62, 0.0)
         .root(-13.0, 0.0, 9.0)
@@ -762,7 +768,7 @@ fn stumble() -> Recipe {
         .tail(6.0, -10.0)
         .plant_hind(-0.50, 0.55)
         .plant(1, 0.55, 0.55)
-        .leg(0, 42.0, -134.0);
+        .leg(0, -42.0, 134.0);
     Recipe::new(
         Clip::Stumble,
         vec![
@@ -798,7 +804,7 @@ fn topple() -> Recipe {
         .chest(-6.0, 0.0, 8.0)
         .neck(-26.0, 22.0)
         .head(20.0, 0.0, 0.0)
-        .forelegs(28.0, -40.0)
+        .forelegs(18.0, 36.0)
         .hindlegs(40.0, -56.0)
         .leg_spread(0, 26.0)
         .leg_spread(1, 26.0)
@@ -835,7 +841,7 @@ fn dead() -> Recipe {
         .chest(-8.0, 0.0, 10.0)
         .neck(-34.0, 30.0)
         .head(26.0, 0.0, 0.0)
-        .forelegs(34.0, -34.0)
+        .forelegs(22.0, 30.0)
         .hindlegs(46.0, -50.0)
         .leg_spread(0, 30.0)
         .leg_spread(1, 30.0)
