@@ -342,7 +342,7 @@ pub fn beam(commands: &mut Commands, beings: &Beings, from: (Entity, Vec3), to: 
 /// plate polished steel. The world has nothing for them to reflect.
 pub const LUSTRE: [crate::still::Lustre; 2] = [
     crate::still::Lustre {
-        gloss: Vec4::new(1100.0, 3.0, 0.0, 0.0),
+        gloss: Vec4::new(1700.0, 4.0, 0.0, 0.0),
         sheen: Vec4::new(70.0, 25.0, 200.0, 4.5),
     },
     crate::still::Lustre {

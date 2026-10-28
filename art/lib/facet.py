@@ -262,3 +262,65 @@ def limb_radius(body, r, a, b, at, gap=0.0):
     # Not the very largest: at the elbow a few of the forearm's vertices
     # are the biceps folded over it.
     return float(np.percentile(flat[m], 92)) + gap
+
+
+def flesh_line(body, r, a, b, t0, t1, lateral):
+    """A frame down the middle of a limb's flesh between ``t0`` and ``t1`` of
+    the bone ``a`` -> ``b``, and the limb's radius about it at any share
+    of the bone: the bone is not the middle of a thigh (the hip joint is
+    inside it, the knee outside), and a ring round the bone had to stand
+    as wide as the hips to reach the thigh's far side (2026-10-28).
+    Returns ``(frame, radius(t, gap), bone_length)``, the frame's ``y`` up
+    the limb and its origin at ``t0``'s middle; ``h`` along it is metres
+    from there."""
+    p = plates.body_points(body)
+    own = p[g.weights_of(body)[:, J[a]] > 0.4]
+    axis = r.dir(a, b)
+    length = float(np.linalg.norm(r.o[b] - r.o[a]))
+
+    def middle(t):
+        c = r.o[a] + (r.o[b] - r.o[a]) * t
+        m = np.abs((own - c) @ axis) < 0.025
+        q = own[m]
+        return 0.5 * (q.min(axis=0) + q.max(axis=0)) if len(q) else c
+
+    c0, c1 = middle(t0), middle(t1)
+    down = (c1 - c0) / np.linalg.norm(c1 - c0)
+    up = -down
+    x = np.asarray(lateral, float) - up * np.dot(lateral, up)
+    x /= np.linalg.norm(x)
+    z = np.array([0.0, 0.0, 1.0]) - x * x[2] - up * up[2]
+    z /= np.linalg.norm(z)
+    frame = Frame(c0, x, up, z)
+    span = float(np.linalg.norm(c1 - c0))
+
+    def radius(t, gap=0.0):
+        c = c0 + down * span * (t - t0) / (t1 - t0)
+        rel = own - c
+        along = rel @ down
+        flat = np.linalg.norm(rel - np.outer(along, down), axis=1)
+        m = np.abs(along) < 0.025
+        return float(np.percentile(flat[m], 92)) + gap if m.any() else 0.05 + gap
+
+    def h(t):
+        return -span * (t - t0) / (t1 - t0)
+
+    def toward(t, phi, gap=0.0, spread=20.0):
+        """How far the flesh reaches from the middle at ``t`` in the
+        direction ``phi`` (degrees from ``x`` toward ``z``, as
+        ``round_limb``), plus ``gap``: a limb is oval, and a round ring
+        sized to its deepest side stands off its narrow ones."""
+        c = c0 + down * span * (t - t0) / (t1 - t0)
+        rel = own - c
+        along = rel @ down
+        m = np.abs(along) < 0.025
+        flat = rel[m] - np.outer(along[m], down)
+        ang = np.degrees(np.arctan2(flat @ z, flat @ x))
+        dist = np.linalg.norm(flat, axis=1)
+        near = np.abs((ang - phi + 180) % 360 - 180) < spread
+        if not near.any():
+            return radius(t, gap)
+        return float(dist[near].max()) + gap
+
+    radius.toward = toward
+    return frame, radius, h

@@ -29,7 +29,9 @@ CLASS = "Champion"
 # turned the whole body lavender (the first two builds). Iron that is iron:
 # grey, metal, its edges worn bright. A kilt of black wool.
 COLOURS = {
-    "skin": (0.009, 0.007, 0.013),
+    # Deep, not pure, black: at 0.009 the light drew no shape on him at all
+    # and in the game he was a silhouette (2026-10-28).
+    "skin": (0.04, 0.032, 0.05),
     "iron": (0.30, 0.29, 0.28),
     "kilt": (0.028, 0.02, 0.022),
     "hide": (0.035, 0.024, 0.02),
@@ -45,7 +47,7 @@ GLOW = (0.72, 0.42, 1.0)
 # None for now: the base mesh is sculpted already.
 SCULPT = 0.0
 SCULPT_SHARE = 1.0
-METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.48)}
+METAL = {"iron": (1.0, 0.38), "skin": (0.0, 0.4)}
 # Violet light painted on: in the shade, and on every ridge of the muscle.
 ART = {
     "shade_tint": (1.2, 0.7, 2.2),

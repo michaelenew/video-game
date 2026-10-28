@@ -1,18 +1,10 @@
-"""What the dark being wears: a viking's kit, reworked, in iron.
+"""What the dark being wears: nothing but his eyes, for now.
 
-The owner's reference, 2026-10-26, matched piece by piece: a warrior bare
-to the waist so the obsidian body shows everywhere; on top of each shoulder
-a small spiked plate of iron fanned out past it, a wider one under it, the
-deltoid bare (``facet``); two heavy chains slung across the chest from
-shoulder to shoulder; a broad belt of black hide with an iron boss and a
-spike; a kilt of hide panels past the knee; and **metal bands that look
-like metal** -- a long faceted bracer on each forearm, a studded band round
-its middle, a forged cuff at the wrist (``hard``). The upper arm bare. Bald,
-the face bare. No horns.
-
-No cracks yet (the owner, 2026-10-26): they come back from a script that
-works out a fracture pattern, angular as broken glass is, with light shining
-out of it as a blacklight would.
+The owner, 2026-10-28: "Just use the blender mesh directly for the dark one,
+nothing extra - get rid of all the ornaments". The pieces below -- the
+viking's iron after the 2026-10-26 reference: spiked plates on the
+shoulders, chains across the chest, bracers, a belt with a boss, a kilt --
+stay written, out of the ``WARDROBE``, for when any of them comes back.
 """
 
 import bpy
@@ -175,18 +167,18 @@ def kilt(body, r):
 
 
 def eyes_dark(body, r):
-    """Eyes with a faint violet light in them."""
+    """Plain eyes in his sockets, no light in them."""
     from wardrobe import eyes
-    out = eyes(body, r, iris="eye")
-    for ob in out:
-        grp = ob.vertex_groups.new(name="edge")
-        grp.add(list(range(len(ob.data.vertices))), 0.5, "REPLACE")
-    return out
+    return eyes(body, r, iris="eye")
 
 
 GARMENTS = {"irons": irons, "pauldrons": pauldrons, "chain": chain, "waist": waist, "kilt": kilt,
             "eyes": eyes_dark}
-WARDROBE = list(GARMENTS)
+# Nothing on him but his eyes: Blender's body as it is, no ornament (the
+# owner, 2026-10-28: "Just use the blender mesh directly for the dark one,
+# nothing extra - get rid of all the ornaments"). The pieces stay written
+# for when any comes back.
+WARDROBE = ["eyes"]
 
 
 def dress(body, r, only=None):

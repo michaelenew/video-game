@@ -49,7 +49,24 @@ def load(name="human_base_mesh_male"):
         at += n
     eyes = d["eyes"].astype(np.float64)
     eyes = np.c_[g.b2g(eyes[:, :3]), eyes[:, 3]]
-    return verts, faces, d["uvs"].astype(np.float64), face_uvs, eyes
+    return verts, faces, _one_tile(d["uvs"].astype(np.float64), d["counts"]), face_uvs, eyes
+
+
+def _one_tile(uvs, counts):
+    """The base mesh's UVs are laid over four tiles side by side (``u`` from
+    0 to 4); the painter has one square. Each tile is packed into a quarter
+    of it, two by two -- each face by the tile its middle is in, so no face
+    is split. Left on four, three tiles were painted over the first, and a
+    band of the leg came out across the back."""
+    out = uvs.copy()
+    at = 0
+    for n in counts:
+        f = slice(at, at + n)
+        tile = int(np.clip(np.floor(uvs[f, 0].mean()), 0, 3))
+        out[f, 0] = ((uvs[f, 0] - tile) + tile % 2) / 2
+        out[f, 1] = (uvs[f, 1] + tile // 2) / 2
+        at += n
+    return out
 
 
 def _smooth(e0, e1, x):

@@ -12,9 +12,16 @@ import mh
 
 BODY = mh.macro(gender="male", age="young", muscle=0.7, weight=0.3, proportions=1.0,
                 races={"caucasian": 0.3, "african": 0.35, "asian": 0.35}) + [
-    ("torso/torso-vshape-incr.target", 0.5),
+    ("torso/torso-vshape-incr.target", 1.0),
+    # In hard at the waist and hips, so the plate can be: it stands clear
+    # of the body, and a waist no narrower than his could not narrow (the
+    # owner, 2026-10-28: "narrower waist, wider shoulders, less clunky").
+    ("measure/measure-waist-circ-decr.target", 1.0),
+    ("measure/measure-hips-circ-decr.target", 1.0),
 ] + [(f"armslegs/{s}-{part}-incr.target", w) for s in "lr" for part, w in (
     ("upperarm-muscle", 0.8), ("upperarm-shoulder-muscle", 0.8), ("lowerarm-muscle", 0.6))]
 
-GIRTH = {}
+# Slim legs, so the plate on them is: plate is the limb's own size, and on
+# MakeHuman's thighs the cuisses stood as columns (2026-10-28).
+GIRTH = {"thigh.l": 0.86, "thigh.r": 0.86, "shin.l": 0.9, "shin.r": 0.9}
 HEAD_SCALE = 0.95
