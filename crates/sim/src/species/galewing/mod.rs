@@ -37,7 +37,7 @@ pub mod flight;
 pub mod mind;
 mod tuned;
 
-use crate::beast::{Bone, ClipDecl, Leg, NO_PARENT, Part, bone, breakables, part, v};
+use crate::beast::{Bone, ClipDecl, Leg, NO_PARENT, Part, bone, breakables, part, paw, v};
 use crate::fixed::Fx;
 use crate::oven::KnobDecl;
 use crate::species::{MoveDecl, Species, SpeciesId, Stock};
@@ -69,7 +69,9 @@ pub mod bones {
     pub const THIGH_R: usize = 13;
     pub const SHIN_R: usize = 14;
 
-    pub const COUNT: usize = 15;
+    pub const FOOT_L: usize = 15;
+    pub const FOOT_R: usize = 16;
+    pub const COUNT: usize = 17;
 }
 
 use bones::*;
@@ -91,15 +93,21 @@ pub const BONES: [Bone; COUNT] = [
     bone("shin.l", THIGH_L, v((1, 10), (-10, 10), (0, 1)), -1),
     bone("thigh.r", ROOT, v((-2, 10), (-5, 10), (6, 10)), 1),
     bone("shin.r", THIGH_R, v((1, 10), (-10, 10), (0, 1)), 1),
+    // The feet (2026-10-24): the second joint every leg has, below which
+    // the foot stays level on the ground (`Bone::paw`). Last, and with no
+    // part of their own.
+    paw("foot.l", SHIN_L, v((5, 100), (-85, 100), (0, 1)), -1),
+    paw("foot.r", SHIN_R, v((5, 100), (-85, 100), (0, 1)), 1),
 ];
 
 /// The left and right bones a mirrored clip swaps.
-pub const MIRROR: [(usize, usize); 5] = [
+pub const MIRROR: [(usize, usize); 6] = [
     (SHOULDER_L, SHOULDER_R),
     (ARM_L, ARM_R),
     (HAND_L, HAND_R),
     (THIGH_L, THIGH_R),
     (SHIN_L, SHIN_R),
+    (FOOT_L, FOOT_R),
 ];
 
 /// The bones the head's tracking is spread across. The last is where it

@@ -14,6 +14,8 @@
 //!                            Thigh ───┴─── Thigh   Shoulder ─┴─ Shoulder
 //!                              |            |          |          |
 //!                            Shin         Shin      Forearm    Forearm
+//!                              |            |          |          |
+//!                           Hindpaw     Hindpaw    Forepaw    Forepaw
 //! ```
 //!
 //! Two generated files sit beside this one: `baked.rs`, its pose table
@@ -23,7 +25,7 @@
 pub(crate) mod baked;
 mod tuned;
 
-use crate::beast::{Bone, ClipDecl, Leg, NO_PARENT, Part, bone, breakables, part, v};
+use crate::beast::{Bone, ClipDecl, Leg, NO_PARENT, Part, bone, breakables, part, paw, v};
 use crate::fixed::Fx;
 use crate::oven::KnobDecl;
 use crate::species::{MoveDecl, Species, SpeciesId, Stock};
@@ -57,8 +59,12 @@ pub mod bones {
     pub const SHIN_L: usize = 15;
     pub const THIGH_R: usize = 16;
     pub const SHIN_R: usize = 17;
+    pub const FOREPAW_L: usize = 18;
+    pub const FOREPAW_R: usize = 19;
+    pub const HINDPAW_L: usize = 20;
+    pub const HINDPAW_R: usize = 21;
 
-    pub const COUNT: usize = 18;
+    pub const COUNT: usize = 22;
 }
 
 use bones::*;
@@ -120,14 +126,31 @@ pub const BONES: [Bone; COUNT] = [
     bone("shin.l", THIGH_L, v((15, 100), (-220, 100), (0, 1)), -1),
     bone("thigh.r", ROOT, v((-25, 100), (-55, 100), (92, 100)), 1),
     bone("shin.r", THIGH_R, v((15, 100), (-220, 100), (0, 1)), 1),
+    // **The paws** (2026-10-24): every leg folds twice, a knee and then a
+    // wrist or an ankle half a metre off the floor, and below that the paw
+    // stays flat on the ground however the leg above it swings (`Bone::paw`).
+    // Last in the table, and with no part of their own: the breakable feet
+    // are the whole lower leg, which is what a fighter on the floor reaches,
+    // and a paw is where that leg meets the ground rather than a new target.
+    paw(
+        "forepaw.l",
+        FOREARM_L,
+        v((10, 100), (-180, 100), (0, 1)),
+        -1,
+    ),
+    paw("forepaw.r", FOREARM_R, v((10, 100), (-180, 100), (0, 1)), 1),
+    paw("hindpaw.l", SHIN_L, v((6, 100), (-172, 100), (0, 1)), -1),
+    paw("hindpaw.r", SHIN_R, v((6, 100), (-172, 100), (0, 1)), 1),
 ];
 
 /// The left and right bones a mirrored clip swaps.
-pub const MIRROR: [(usize, usize); 4] = [
+pub const MIRROR: [(usize, usize); 6] = [
     (SHOULDER_L, SHOULDER_R),
     (FOREARM_L, FOREARM_R),
     (THIGH_L, THIGH_R),
     (SHIN_L, SHIN_R),
+    (FOREPAW_L, FOREPAW_R),
+    (HINDPAW_L, HINDPAW_R),
 ];
 
 /// The bones the head's tracking is spread across, base to tip.

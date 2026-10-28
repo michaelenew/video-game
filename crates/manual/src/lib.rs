@@ -125,6 +125,10 @@ pub const SECTIONS: &[Section] = &[
                 "The Shadow Reaver, the Champion and the Blood mage painted over: brushstrokes riding their clothes, each one a point on the skin carried by the skeleton and drawn square to the eye, so the brushwork moves with the body and never slides or squashes as they turn. Clothes only for now, and at a hem or a cuff a stroke frays past the edge like a cloak turning to flame. The other classes are drawn as without it. The reasoning and what was tried is docs/design/exploration/0025_painted_in_motion.md.",
             ),
             e(
+                "cargo run -p game --release -- --grown-creatures",
+                "Draw the Ridgeback's body grown by rule from its species table, rather than the body sculpted by hand that is its target (art/ridgeback/build.py): the parts made fuller than their boxes, a carapace grown off the skin wherever the table says armour and parting round the weak points, spines, horns, claws and quills by rule, and the fine detail -- creased hide, pitted stone, a glowing lava crust on the soft places -- worked out in the skin's shader. To compare the two; docs/design/exploration/0030_a_target_body.md. The grown body also stands in for the sculpted one in the moment before its file has loaded.",
+            ),
+            e(
                 "cargo run -p game --release -- --box-creatures",
                 "Draw every creature as the boxes the simulation collides against, as they were before the Ridgeback's body was grown over its skeleton: one smooth skinned body from its parts, a hide painted by rule (a darker back, a paler belly, bands, armour plates), and its weak points left glowing on it. Its boxes are what you hit and stand on either way; F1 draws them.",
             ),
@@ -911,6 +915,10 @@ pub const SECTIONS: &[Section] = &[
                 "Re-bake every creature's pose table from its recipes in crates/anim/src/beast/<species>/, each into its own crates/sim/src/species/<species>/baked.rs. Its parts are simulation geometry, so this one writes into crates/sim. --species <name> for just one.",
             ),
             e(
+                "cargo run -p anim --bin export_beast -- <species>",
+                "Write a creature's skeleton and part boxes at rest, as the game's rig places them, to target/art/<species>.json: what a body formed by hand is sculpted over (art/<species>/build.py, art/blender.sh to run it). docs/design/exploration/0030_a_target_body.md.",
+            ),
+            e(
                 "cargo run -p anim --bin preview_beast -- <clip>",
                 "Draw a creature as a contact sheet PNG, into target/beast-preview: the creature from the side, from above, and every frame overlaid. --all for every clip, --states for the poses the simulation produces rather than the baked ones, --species <name> for a creature other than the Ridgeback. Green is a surface you can stand on, red is a weak point, and the dashed line is how high a full hop reaches.",
             ),
@@ -1110,6 +1118,30 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_PORTRAIT=seat,angle,distance,height",
                 "Take the camera off the fight and put it distance metres from that seat's fighter (0 is player one), angle degrees round from straight in front of them, looking at height metres above their feet -- how a character is looked at as a piece of art: SHOT_PORTRAIT=0,25,2.4,1.0 is the Shadow Reaver head to foot, 0,20,0.9,1.62 her face. Pair it with DEMO=0 and SHOT_FRAME, and --look brushed for the painted picture.",
+            ),
+            e(
+                "GROWN_OBJ=1 cargo test -p game --bin game grown_obj",
+                "Write the grown Ridgeback's mesh to target/grown.obj, to look at outside the game: what --grown-creatures draws, before the skin's detail. GROWN_OBJ=<species> (galewing, mantis, ...) writes that species' to target/grown_<species>.obj.",
+            ),
+            e(
+                "GROWN_LINES=1 cargo test -p game --bin game grown_lines",
+                "Grow every stage of the crossbreed lines (exploration 0032: each formed creature fed toward the next, and one backcrossed) to target/lines/<line>_<stage>.obj, coloured, with target/lines/lines.tsv saying what each stage is; art/blender.sh art/lineage.py renders them into strips.",
+            ),
+            e(
+                "BRED_DUMP=1 cargo test -p game --bin game bred_dump",
+                "Print the bred Ridgeback's, Galewing's and Mantis's parts: each box's middle, half-size and axis, for comparing a bred body with its species table. BRED_DUMP=<line>:<stage> prints one stage of a crossbreed line instead, with its hand edits.",
+            ),
+            e(
+                "BRED_GAIT=<line>:<stage>,... cargo test -p game --bin game bred_gait",
+                "Write a crossbreed stage's (or cast:<Name>, one of the cast's genomes) body boxes at eight points of its slowest gait to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
+            ),
+            e(
+                "BRED_ATTACK=<line>:<stage>,... cargo test -p game --bin game bred_attack",
+                "Write each damaging move of a crossbreed stage (or cast:<Name>) as its body boxes at five points from rest through windup and strike to target/gait/, the striking parts yellow and a cried move's cry in the name; art/blender.sh art/gait.py renders them as strips.",
+            ),
+            e(
+                "GROWN_STAGES=0,3,6",
+                "With GROWN_LINES: grow those stages of the lines alone. A stage with hand edits (game::touch, exploration 0033) is written twice, the breeder's body as <line>_<stage>_raw.obj beside the edited one.",
             ),
             e(
                 "SHOT_BEAST=angle,distance,height",

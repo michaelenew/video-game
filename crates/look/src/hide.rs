@@ -91,6 +91,72 @@ impl Hide {
     }
 }
 
+/// **The rest of a monster's hide** (2026-10-23, exploration 0030): the
+/// stone of its carapace, the dark in the grooves between scutes, the moss
+/// and lichen on what faces the sky, the char beside a weak point and the
+/// heat in it, and the horn of its spines and claws -- the palette the
+/// sculpted Ridgeback was painted in, derived from the one colour a species
+/// names, so a grown body of any species gets it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Carapace {
+    pub stone: Rgb,
+    pub stone_warm: Rgb,
+    pub stone_dark: Rgb,
+    pub groove: Rgb,
+    pub moss: Rgb,
+    pub lichen: Rgb,
+    pub char: Rgb,
+    pub ember: Rgb,
+    pub ember_deep: Rgb,
+    pub horn_root: Rgb,
+    pub horn_tip: Rgb,
+}
+
+impl Carapace {
+    /// The carapace of a creature named for `flank`, whose weak points are
+    /// `weak` (both sRGB). Stone is the flank bleached nearly to bone and
+    /// warmed; it is pale because a dark carapace on a dark hide is one
+    /// silhouette, and the read is the two against each other.
+    pub fn of(flank: Rgb, weak: Rgb) -> Carapace {
+        let f = Lch::of(flank);
+        let stone = Lch {
+            l: 0.86,
+            c: (f.c * 0.4).min(0.04),
+            ..f
+        }
+        .toward_hue(0.2, 0.5);
+        let ember = Lch::of(weak);
+        Carapace {
+            stone: stone.rgb(),
+            stone_warm: stone.lighter(-0.02).vivid(2.2).toward_hue(0.18, 0.6).rgb(),
+            stone_dark: stone.lighter(-0.2).rgb(),
+            groove: stone.lighter(-0.72).rgb(),
+            moss: Lch {
+                l: 0.52,
+                c: 0.055,
+                h: 0.32,
+            }
+            .rgb(),
+            lichen: Lch {
+                l: 0.72,
+                c: 0.07,
+                h: 0.2,
+            }
+            .rgb(),
+            char: f.lighter(-0.3).vivid(0.6).rgb(),
+            ember: Lch { l: 0.72, ..ember }.vivid(1.2).rgb(),
+            ember_deep: Lch { l: 0.38, ..ember }.rgb(),
+            horn_root: f.lighter(-0.28).vivid(0.6).rgb(),
+            horn_tip: Lch {
+                l: 0.92,
+                c: 0.035,
+                h: 0.22,
+            }
+            .rgb(),
+        }
+    }
+}
+
 /// Smoothstep from `a` to `b` (either way round).
 fn smooth(a: f32, b: f32, x: f32) -> f32 {
     let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
@@ -113,6 +179,16 @@ mod tests {
         assert!(l(h.band) < l(h.back));
         assert!(l(h.belly) - l(h.back) > 0.2, "{h:?}");
         assert!(l(h.ridge) > l(h.flank) && l(h.crease) < l(h.back));
+    }
+
+    #[test]
+    fn a_carapace_is_paler_than_the_hide_it_grows_on_and_dark_in_its_grooves() {
+        let flank = [0.42, 0.34, 0.26];
+        let h = Hide::of(flank);
+        let c = Carapace::of(flank, [0.86, 0.32, 0.22]);
+        assert!(l(c.stone) > l(h.flank) + 0.2);
+        assert!(l(c.groove) < l(h.back));
+        assert!(l(c.horn_tip) > l(c.horn_root) + 0.4);
     }
 
     #[test]

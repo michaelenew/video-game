@@ -554,10 +554,16 @@ pub fn feed(body: &Genome, trophy: &Trophy, _rng: &mut Rng) -> Outcome {
         g.sliders.set(s, v.add(d.sliders.get(s).sub(v).mul(share)));
     }
     for i in 0..STATIONS {
-        if let (Some(mine), Some(theirs)) = (g.limbs[i].as_mut(), d.limbs[i])
-            && mine.build == theirs.build
-        {
-            let share = pull.limbs.mul(fx(1, 2));
+        // Every pair the two share closes on the donor's proportions, a
+        // quarter as fast while it is still another kind of limb -- held
+        // back until the build matched, a wing that became a scythe kept a
+        // wing's thickness for ever (exploration 0033).
+        if let (Some(mine), Some(theirs)) = (g.limbs[i].as_mut(), d.limbs[i]) {
+            let share = if mine.build == theirs.build {
+                pull.limbs.mul(fx(1, 2))
+            } else {
+                pull.limbs.mul(fx(1, 8))
+            };
             mine.length = unit(mine.length.add(theirs.length.sub(mine.length).mul(share)));
             mine.girth = unit(mine.girth.add(theirs.girth.sub(mine.girth).mul(share)));
         }
@@ -729,14 +735,41 @@ fn step_toward(
             let i = (k - 7) as usize;
             match (g.limbs[i].as_mut(), d.limbs[i]) {
                 (Some(mine), Some(theirs)) => {
+                    // A limb that becomes another kind meets that kind
+                    // halfway in its proportions.
+                    if mine.build != theirs.build || mine.role != theirs.role {
+                        mine.length = mine.length.add(theirs.length).mul(fx(1, 2));
+                        mine.girth = mine.girth.add(theirs.girth).mul(fx(1, 2));
+                    }
                     mine.role = theirs.role;
                     mine.build = theirs.build;
                     mine.tip = theirs.tip;
                 }
                 (None, Some(theirs)) => {
+                    // It arrives half grown -- but a leg arriving beside
+                    // legs already standing comes long enough to stand
+                    // with them, three quarters of the shortest, never
+                    // longer than the donor's: at half, a crossbred
+                    // mantis's new middle pair hung under it as a nub
+                    // and it stood on its hind pair alone (exploration
+                    // 0034).
+                    let walks = |l: &LimbPair| l.role.grounded();
+                    let mut length = theirs.length.mul(fx(1, 2));
+                    if walks(&theirs)
+                        && let Some(least) = g
+                            .limbs
+                            .iter()
+                            .flatten()
+                            .filter(|l| walks(l))
+                            .map(|l| l.length)
+                            .min()
+                    {
+                        length = length.max(least.mul(fx(3, 4)).min(theirs.length));
+                    }
+                    let k = length.div(theirs.length.max(fx(1, 100)));
                     g.limbs[i] = Some(LimbPair {
-                        length: theirs.length.mul(fx(1, 2)),
-                        girth: theirs.girth.mul(fx(1, 2)),
+                        length,
+                        girth: theirs.girth.mul(k),
                         ..theirs
                     });
                 }

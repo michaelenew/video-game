@@ -451,6 +451,9 @@ pub enum Fix {
     TipWithoutTail,
     /// A maw on a body too small to swallow anything.
     MawTooSmall,
+    /// A middle walking pair longer than both its neighbours: no longer
+    /// than the longer of them.
+    MiddleOutgrown,
     /// A merged head on a body that walks upright.
     MergedUpright,
 }
@@ -573,6 +576,32 @@ fn pass(g: &mut Genome, fixes: &mut Fixes) {
         Stance::Lowslung | Stance::Limbless => {}
     }
 
+    // **A middle walking pair no longer than the longer of its
+    // neighbours** (exploration 0035). The pairs either side stand the
+    // body at their height, so a longer one between them crouched deep and
+    // stepped its knee out round the next -- a body a walking animal does
+    // not have. A spider's legs fan out instead, and are let be.
+    let walks = |l: &super::LimbPair| {
+        matches!(l.role, Role::Walk | Role::Both) && l.build != Build::Spindle
+    };
+    let pairs: [Option<super::LimbPair>; STATIONS] = g.limbs;
+    for j in 1..STATIONS - 1 {
+        let Some(mid) = pairs[j].filter(walks) else {
+            continue;
+        };
+        let before = (0..j).rev().find_map(|k| pairs[k]).filter(walks);
+        let after = (j + 1..STATIONS).find_map(|k| pairs[k]).filter(walks);
+        if let (Some(a), Some(b)) = (before, after) {
+            let most = a.length.max(b.length);
+            if mid.length > most {
+                if let Some(l) = g.limbs[j].as_mut() {
+                    l.length = most;
+                }
+                fixes.push(Fix::MiddleOutgrown);
+            }
+        }
+    }
+
     // The minors fit the plan.
     if g.segments.tail == Tail::None && g.minors.tail_tip != TailTip::Plain {
         g.minors.tail_tip = TailTip::Plain;
@@ -655,11 +684,18 @@ pub fn flight_margin(g: &Genome) -> Fx {
     let Some((_, wing)) = g.pairs().find(|(_, p)| p.role == Role::Wing) else {
         return Fx::from_int(-1);
     };
+    // Armour is weight a wing has to lift: a plated beast that has just
+    // grown wings does not take off on them (exploration 0034).
+    let armour = match (g.minors.hide, g.minors.back) {
+        (Hide::Plates | Hide::Shell, _) | (_, Back::Burden) => fx(2, 5),
+        _ => Fx::ZERO,
+    };
     wing.length
         .mul(fx(3, 2))
         .add(Fx::ONE.sub(g.sliders.mass).mul(fx(4, 5)))
         .sub(g.sliders.size.mul(fx(3, 5)))
         .sub(fx(9, 10))
+        .sub(armour)
 }
 
 pub fn assess(g: &Genome) -> Assessment {

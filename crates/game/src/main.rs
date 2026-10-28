@@ -18,13 +18,18 @@
 //! in-game with Tab. Names are matched loosely: bulwark, champion, reaver,
 //! elementalist, blood, dual.
 
+mod anatomy;
+// Grows bred bodies; the game does not draw a morph with one yet (exploration 0032).
 mod arenas;
 mod bag;
 mod bake;
 mod beast;
 mod blades;
+#[allow(dead_code)]
+mod bred;
 mod brushwork;
 mod cairns;
+mod carapace;
 mod claimed;
 mod coat;
 mod contour;
@@ -41,6 +46,7 @@ mod grove;
 mod grown;
 mod heel;
 mod hill;
+mod horns;
 mod hub;
 mod hud;
 mod impact;
@@ -72,6 +78,8 @@ mod squeeze;
 mod still;
 mod stream;
 mod swing;
+#[allow(dead_code)]
+mod touch;
 mod town;
 mod trophies;
 mod tutorial;
@@ -443,6 +451,7 @@ fn main() {
                 (
                     sighted::update,
                     beast::place,
+                    beast::install_models,
                     beast::paint_parts,
                     beast::pose_bodies,
                 )

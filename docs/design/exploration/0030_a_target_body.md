@@ -1,0 +1,217 @@
+# 0030 — A target body: the Ridgeback formed by hand
+
+The owner (2026-10-23), on the contoured grown body of exploration 0027:
+*"Better, and it works probably better in motion than stillframe, but it
+still reads like a trash bag over some hay. I think we need a target for the
+algorithms to move toward rather than trying to build ground up on the
+algorithm. Take the current model, form it by hand into a creature you might
+find in Monster Hunter or Dark Souls — something intricate, interesting, with
+flare and details, clear posture, well-shaped form on the tail, feet, joints,
+head, body. We'll refine that first, then update the algorithms to get there
+without manual effort."*
+
+So this is the target, not the method. It is built the way the cast is — a
+script, never a file edited by hand — so it can be changed, rebuilt and,
+most of all, *read*: every choice that makes it look like an animal is a
+line with a reason beside it, and the next step is to turn those lines into
+rules a grown body follows.
+
+## Round one, and why it was not it
+
+The first target (commit 5f329768) was forms lofted in numpy, unioned into one
+skin, with plates, horns and nails on it and colour in its vertices. The
+owner: *"Conceptually fine, but school art project armadillo dog is not the
+vibe here. This needs to read like something you'd find in a triple A game."*
+It was right. What separates the two is not one idea but three, and round one
+had none of them:
+
+1. **Proportion and design.** A uniform body on four tubes, against a
+   front-heavy mass with a designed head.
+2. **Detail at three scales.** Big masses, then muscle groups and plate
+   groups, then wrinkles, scale, cracks and chips. A game gets the last from
+   a sculpt of millions of polygons *baked* into textures on a light mesh;
+   vertex colour on 117,000 triangles cannot hold it.
+3. **Materials that read as different things**: stone, hide, horn, heat.
+
+## Round two: sculpted and baked
+
+```
+cargo run -p anim --bin export_beast -- ridgeback
+art/blender.sh art/ridgeback/build.py            # about ten minutes; --fast for a draft in six
+```
+
+**The design** is a living ruin, after Shadow of the Colossus and Monster
+Hunter's elders: a front-heavy grazer that bites, the barrel deepest under the
+shoulders and the withers a hump, a domed back of thick shingled scutes split
+down the middle by a seam of heat, dorsal spines tallest over the shoulders
+for a crown to its silhouette, a mantle of spikes flaring over each shoulder,
+a low head with horns that sweep back and curl up and a row of nubs along
+each brow, a jaw with tusks and teeth, shins banded like an armadillo's,
+three hooked claws a foot, and a tail ending in an armoured club that the
+spray of quills fans from.
+
+**The pipeline** (`art/lib/beast.py`, `art/ridgeback/build.py`):
+
+1. **Forms** -- tubes of superellipse sections, muscles running down them --
+   unioned by a voxel remesh into a coarse skin.
+2. **Carapace** -- a `Plan` says where armour is (back and mantle, collars,
+   helm and cheeks, tail, shins) as distances inside each region's edge,
+   measured on the body's own axes. Each region is a closed shell grown off
+   the skin: its thickness full over a scute, sunk in a crisp groove between
+   scutes, rising toward each scute's back edge so it lies over the next
+   (shingled), a keel down its middle, a chunky rim. The scutes are cellular
+   noise laid on the body's own along-and-round coordinates with little
+   jitter, so they fall in rows, largest along the spine, mirrored.
+3. **The sculpt** -- skin and shells unioned at 1.2 cm into about two million
+   triangles, carrying which is which through the remesh. Then the detail,
+   all vectorised noise: on the hide a crazed crease network, folds at the
+   joints and round the neck, pebbled scale down the legs, a belly of
+   transverse scales; on the stone erosion, grit, pits, long cracks and chips
+   at the grooves; on the soft places a crust split by fissures, as cooling
+   lava is; on the face nostrils, sunken eye sockets and the line of the mouth.
+4. **Paint** on the sculpt's vertices: a striped hide paler beneath, mud up
+   the legs; pale bone-stone, each scute its own tint, dark in its grooves,
+   moss and lichen on what faces the sky, charred beside the ridge; **edge
+   wear and cavity from the sculpt's own curvature** -- convex edges rubbed
+   pale, hollows dark -- which is most of what makes a surface read as a
+   material. The glow is the fissures, and the scute seams beside the ridge,
+   as if its heat showed through the joins.
+5. **The bake** -- the coarse union decimated to 60,000 triangles plus the
+   hard pieces is unwrapped, and Cycles reads the sculpt onto it: normals,
+   colour, glow and roughness, its occlusion multiplied in, through a cage
+   pushed out centimetres for the body and millimetres for a thin spike.
+   Every texel the creature does not cover is filled from the nearest that
+   it does (push-pull), because a far creature is drawn from the texture's
+   smaller copies and black between the islands darkened the whole animal.
+6. **The file** -- one skinned primitive, the four maps in it as JPEGs, the
+   joints the species' bones.
+
+## In the game
+
+`game::grown::model_of` names the file; `beast::setup_bodies` loads its mesh
+and its material through Bevy's glTF loader (so a page gets it as a desktop
+does), the grown body standing in until both arrive, and
+`beast::install_models` puts it in place, its textures squeezed into the
+GPU's compressed formats as the cast's are. The part each vertex belongs to
+rides in the second texture coordinates, so a broken foot darkens where it is
+(`grown::own_colours`). The boxes are still what is hit and stood on; F1 draws
+them. `--grown-creatures` draws the algorithm's body instead, to compare.
+
+About 102,000 triangles and four 2048 textures, 10 MB.
+
+![In the game](../gallery/0030_ridgeback_in_game.jpg)
+![In the studio, close](../gallery/0030_ridgeback_near.jpg)
+
+Judged lit, in the game: it was too dark three times running in a game whose
+sky light is blue and whose sun was behind the camera's subject. The studio
+flatters by a lot; the palette is warmer and brighter than looks right there.
+
+## What the algorithm has to learn from it
+
+1. **Hard and soft are different things.** A grown body is one smooth field;
+   this is a soft skin with shells grown off it where a plan says armour, and
+   their crisp grooves, shingled overlaps and rims are most of what reads as
+   "monster" rather than "blob". The `Plan` here -- regions as distances on
+   the body's own axes, scutes as cellular noise in its own coordinates -- is
+   written so a species table could state it.
+2. **Detail lives in a sculpt, and reaches the game as textures.** The grown
+   body can make the same sculpt (it is a field already) and the same bake.
+3. **Paint from curvature and occlusion** as much as from facing.
+4. **Silhouette parts are geometry with rules** -- rows of spines along a
+   back, a crown, a collar of spikes, nails round a pad, quills off a club.
+
+## The grown body, toward the target (2026-10-24)
+
+The owner: *"make the proc gen version produce as close to this as you
+can."* The grown body (`game::grown`, `--grown-creatures`) now makes each of
+the four lessons above from the species table, with no hand at all:
+
+![The formed target (left) and the grown body (right), from the same angles](../gallery/0030_formed_and_grown.jpg)
+
+- **Fuller forms** (`Build::belly`, `girth`): a barrel hangs below its box,
+  so the chest is deep; a leg is a column thicker than its box. On the way, a
+  bug that had always been there: a part's contour was laid along its box's
+  longest side, and the Ridgeback's barrel is wider than it is long, so the
+  torso had been a tube lying *across* the body -- much of the "trash bag".
+  A part's long axis follows its bone now (`along_bone`).
+- **The carapace** (`game::carapace`, `Build::armour`, `scute`) is
+  thickness taken off the field: over a part's top, further round where a
+  leg hangs from it (the mantle, the haunch), down the front and outside of a
+  lower leg, and **parting round every weak point** -- which is all the rule
+  needs to give the ridge its trench and the nape its gap. Scutes are cellular
+  noise on the part's own axes, shingled, keeled, grooved, rimmed, blended
+  across neighbouring parts so a step from one part's armour to the next
+  never leaves the mesher a cliff (an early version had holes there).
+- **Hard parts by rule** (`game::horns`, `Build::spines`, `horns`, `claws`):
+  spines flanking a weak strip down the back, tallest toward the shoulders,
+  and down the tail; a collar where the armour ends over the part the
+  forelegs hang from; horns, brow nubs, a nose horn and tusks; claws round a
+  pad, with toes in the field under them; quills fanned off the end of the
+  tail the species' spray names, with a club in the field for them to grow
+  from; a jaw under a wedge skull; the soft places as crests of flesh.
+- **Paint by region** (`look::hide::Carapace`): pale stone derived from the
+  colour the species names, dark in its grooves, worn on its edges, moss on
+  what faces the sky, charred beside a weak point; horn dark to pale; and
+  occlusion read off the field itself.
+- **Detail at the pixel** (`skin.wgsl`, `still::Detail`), where the target
+  used baked textures: a grown body has no texture layout, so its rest-pose
+  position and what it is (stone, soft flesh, a hard part) ride in its two
+  sets of texture coordinates, and the skin works out creases and pebbling,
+  erosion, pits and cracks, and a lava crust whose fissures glow, from the
+  same cellular noise the sculpt used, bumping the normal by the screen's own
+  derivatives (Mikkelsen's surface gradient) and fading any detail finer than
+  two pixels so nothing sparkles. Packing four values into one number did not
+  survive the rasteriser's blending -- the horns came out speckled -- so it
+  carries one that does: stone 0 to 1, soft 2 to 3, a hard part -1.
+
+About 55,000 vertices, grown in about two and a half seconds; one piece,
+which `grown::tests` still holds it to.
+
+**Where it is still short of the target**: it follows the boxes, so the tail
+runs level and thick where the sculpt drooped it along its bones; the head is
+a rounded wedge rather than a modelled skull; the carapace reads as panels
+rather than the target's slabs, the grid being five centimetres; and the
+legs are still straight posts in both. (Round three answers the legs' muscle,
+the paws and the torn plates; the tail and the skull stand.)
+
+## Round three: two joints in a leg, a dog's paw, and detail (2026-10-24)
+
+The owner: *"we need to make sure the creatures have enough leg bones.
+Basically all animals have two joints in the legs ... the aesthetic of the
+ridgeback is more like a dog now and it needs more paw-like feet. Then the
+grown version needs probably another detailing pass."*
+
+- **A second joint** in every walking creature's legs, in the simulation:
+  a paw bone below a wrist or an ankle that stays level on the ground
+  (`sim::beast::Bone::paw`, `docs/design/monsters.md`, `sim/tests/paws.rs`).
+  Re-baking for it also brought the Galewing's and the Mantis's tables up to
+  date with their recipes, which had drifted.
+- **A dog's paw on the sculpt** (`art/ridgeback/build.py`, `paws`,
+  `toe_layout`): the leg narrows into the wrist, the pastern slopes forward
+  into a broad palm, four knuckled toes split by clefts with a short thick
+  claw off each, the pad at the back of a forelimb's wrist and a dewclaw up
+  its inside, dark pads underneath; skinned to the paw bones.
+- **The same paw grown** (`game::horns::paws`): one layout, from the foot's
+  box and the paw bone, read by both the field (a palm, a pastern, toes
+  joined tightly enough that the clefts stay clefts) and the claws. The lower
+  leg's flesh stops at the wrist, and below it the skin is handed from the
+  leg's bone to the paw's, eased across the joint.
+- **Detail**: the legs' muscle by rule off their two boxes (a foreleg's
+  deltoid, triceps and forearm; a hindleg's thigh, hamstring and calf); the
+  skull's brow, cheekbones and nasal ridge over the wedge; and each scute
+  domed, with grooves and rims wide enough for the mesher to see -- the old
+  ones were narrower than a cell and tore into fins along the back.
+
+![The sculpt with its paws](../gallery/0030_paws_sculpt.jpg)
+![The sculpted (top) and grown (bottom) Ridgeback in the game, and their feet](../gallery/0030_paws_in_game.jpg)
+
+## Still open
+
+- The legs are still long, straight columns: the rest pose is the skeleton's,
+  and the posture a concept artist would give it (a forward knee, a lifted
+  heel) belongs in its clips as much as its sculpt.
+- The scutes read as stone slabs; a more organic plate (osteoderm with a boss,
+  keratin sheath) is a second style to try.
+- The shin bands are blocky.
+- Smart UV projection still cuts the spines into many small islands; a
+  hand-written unwrap for a tube would pack better.

@@ -35,7 +35,7 @@ pub mod mind;
 pub mod sight;
 mod tuned;
 
-use crate::beast::{Bone, ClipDecl, Leg, NO_PARENT, Part, bone, breakables, part, v};
+use crate::beast::{Bone, ClipDecl, Leg, NO_PARENT, Part, bone, breakables, part, paw, v};
 use crate::fixed::Fx;
 use crate::oven::KnobDecl;
 use crate::species::{MoveDecl, Species, SpeciesId, Stock};
@@ -71,7 +71,11 @@ pub mod bones {
     pub const FEMUR_HR: usize = 17;
     pub const TIBIA_HR: usize = 18;
 
-    pub const COUNT: usize = 19;
+    pub const TARSUS_ML: usize = 19;
+    pub const TARSUS_MR: usize = 20;
+    pub const TARSUS_HL: usize = 21;
+    pub const TARSUS_HR: usize = 22;
+    pub const COUNT: usize = 23;
 }
 
 use bones::*;
@@ -102,10 +106,17 @@ pub const BONES: [Bone; COUNT] = [
     bone("tibia.hl", FEMUR_HL, v((0, 1), (-55, 100), (0, 1)), -1),
     bone("femur.hr", ROOT, v((-35, 100), (0, 1), (42, 100)), 1),
     bone("tibia.hr", FEMUR_HR, v((0, 1), (-55, 100), (0, 1)), 1),
+    // The tarsuss (2026-10-24): the second joint every leg has, below which
+    // the tarsus stays level on the ground (`Bone::paw`). Last, and with no
+    // part of their own.
+    paw("tarsus.ml", TIBIA_ML, v((0, 100), (-42, 100), (0, 1)), -1),
+    paw("tarsus.mr", TIBIA_MR, v((0, 100), (-42, 100), (0, 1)), 1),
+    paw("tarsus.hl", TIBIA_HL, v((0, 100), (-42, 100), (0, 1)), -1),
+    paw("tarsus.hr", TIBIA_HR, v((0, 100), (-42, 100), (0, 1)), 1),
 ];
 
 /// The left and right bones a mirrored clip swaps.
-pub const MIRROR: [(usize, usize); 7] = [
+pub const MIRROR: [(usize, usize); 9] = [
     (ARM_L, ARM_R),
     (BLADE_L, BLADE_R),
     (WING_L, WING_R),
@@ -113,6 +124,8 @@ pub const MIRROR: [(usize, usize); 7] = [
     (TIBIA_ML, TIBIA_MR),
     (FEMUR_HL, FEMUR_HR),
     (TIBIA_HL, TIBIA_HR),
+    (TARSUS_ML, TARSUS_MR),
+    (TARSUS_HL, TARSUS_HR),
 ];
 
 /// The bones the head's tracking is spread across. The head is where it

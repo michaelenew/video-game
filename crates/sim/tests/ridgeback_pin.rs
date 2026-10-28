@@ -210,12 +210,16 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// new -- both fighters' and the creature's positions, health and actions
 /// and every effect, every frame of every class's 2,400 (exploration 0029).
 const PINNED: [(Class, u64); 6] = [
+    // Moved 2026-10-23, deliberately: five clips bent a foreleg backward at
+    // the knee and now bend it the way it walks (`tests/knees.rs`), and a
+    // leg is collision geometry, so where it is in a slam or a stumble moves
+    // what four of these hunts run into. Re-pinned on the eight-slot build.
     (Class::Champion, 0x76340afe58c9dbeb),
-    (Class::Bulwark, 0x1eb09fbc999c0ed0),
-    (Class::ShadowReaver, 0xede34670f0e1f70a),
+    (Class::Bulwark, 0x23920af50987f830),
+    (Class::ShadowReaver, 0xd02d596836beb00d),
     (Class::BloodMage, 0x1d14548f46a90352),
-    (Class::DualMage, 0xb7d27bb21c4aa6d0),
-    (Class::Elementalist, 0x367bdc91e553e93e),
+    (Class::DualMage, 0xf7d9bd12eb4c7e88),
+    (Class::Elementalist, 0x295a65bab1fa58a2),
 ];
 
 #[test]

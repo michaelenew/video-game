@@ -35,6 +35,9 @@
 //! - **Wing**: a membrane: flat, with a thickened leading edge.
 //! - **Wedge**: a head: narrowing to the muzzle, a brow over the eyes, a
 //!   flatter jaw.
+//! - **Stalk** (2026-10-24, exploration 0031): an insect's thorax stood on
+//!   end: a bulb at the joint where the legs meet, a slender stalk, and a
+//!   flare at the far end under what it carries.
 //!
 //! Nothing here touches what the simulation collides against: a contour is
 //! how the box is *drawn*, and the box stays the truth.
@@ -52,9 +55,10 @@ pub enum Kind {
     Keel,
     Wing,
     Wedge,
+    Stalk,
 }
 
-pub const KINDS: usize = 7;
+pub const KINDS: usize = 8;
 
 /// How a part is contoured: a point in the simplex of kinds, and two dials
 /// shared by every kind. Blend two with [`Contour::between`].
@@ -173,6 +177,7 @@ impl Contour {
                     Kind::Keel => 0.2,
                     Kind::Wing => 0.0,
                     Kind::Wedge => 0.35,
+                    Kind::Stalk => 0.9,
                 };
         }
         r
@@ -187,6 +192,7 @@ const KIND_LIST: [Kind; KINDS] = [
     Kind::Keel,
     Kind::Wing,
     Kind::Wedge,
+    Kind::Stalk,
 ];
 
 /// A bump centred at `c`, `w` wide, 1 at its middle, 0 outside.
@@ -223,6 +229,8 @@ fn radius(kind: Kind, t: f32, c: &Contour) -> f32 {
         Kind::Wing => 1.0 - 0.1 * t,
         // Narrowing to the muzzle.
         Kind::Wedge => 1.0 - 0.32 * smooth(0.15, 1.0, t),
+        // A bulb, a stalk, a flare.
+        Kind::Stalk => 0.3 + 0.7 * bell(t, 0.15, 0.32) + 0.3 * bell(t, 0.86, 0.16),
     }
 }
 
@@ -273,6 +281,8 @@ fn section(kind: Kind, t: f32, theta: f32, c: &Contour) -> f32 {
         Kind::Wedge => {
             1.0 + 0.06 * up.max(0.0).powf(3.0) * bell(t, 0.3, 0.25) - 0.05 * down.powf(2.0)
         }
+        // Flattened front to back where it flares, a shield's edge.
+        Kind::Stalk => 1.0 + 0.25 * side * bell(t, 0.86, 0.16),
     }
 }
 

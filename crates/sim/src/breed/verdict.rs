@@ -107,6 +107,11 @@ pub struct Reading {
     pub change: Fx,
     /// How much of that change shows a third of the way in, nought to one.
     pub early: Fx,
+    /// How far the trunk moved by the end of the windup, metres: the whole
+    /// body's tell (exploration 0034).
+    pub body: Fx,
+    /// The cry it gives instead, where the body cannot.
+    pub cry: Option<strike::Cry>,
     pub lane: Lane,
     pub range: Range,
     /// How far outside the body at rest the hit reaches, metres, and how
@@ -126,9 +131,17 @@ impl Reading {
         self.tell >= HUMAN_REACTION_FRAMES as i32
     }
 
-    /// The silhouette moves a lot, and early.
+    /// The silhouette moves a lot, and early -- and the whole body with it,
+    /// or a cry says what is coming (exploration 0034: a limb alone moving
+    /// is read too late).
     pub fn legible(&self, len: Fx) -> bool {
-        self.change >= len.mul(fx(1, 8)) && self.early >= fx(1, 2)
+        // A cry is heard from the windup's first frame, whatever the body
+        // shows: the owner's edge case, a move the body cannot tell
+        // (exploration 0035).
+        self.cry.is_some()
+            || (self.change >= len.mul(fx(1, 8))
+                && self.early >= fx(1, 2)
+                && self.body >= len.mul(strike::BODY_TELL))
     }
 
     /// Neither read on sight nor answered by where you stand.
@@ -210,6 +223,46 @@ pub fn apart(a: &Body, b: &Body) -> Fx {
     most
 }
 
+/// The trunk: what moves when the whole body does -- not a limb, a head or a
+/// tail alone.
+pub const TRUNK: [&str; 7] = [
+    "haunch",
+    "barrel",
+    "shoulders",
+    "segment",
+    "rump",
+    "thorax",
+    "abdomen",
+];
+
+/// How far the trunk moved between two bodies: the most any corner of a
+/// trunk part did, so a turn or a tilt counts as much as a shift -- the
+/// whole body's tell, which a player reads before any limb (exploration
+/// 0034).
+pub fn trunk_apart(a: &Body, b: &Body) -> Fx {
+    let mut most = Fx::ZERO;
+    for (i, pa) in a.parts().iter().enumerate() {
+        if !TRUNK.iter().any(|t| pa.name.starts_with(t)) {
+            continue;
+        }
+        let nth = a.parts()[..i].iter().filter(|p| p.name == pa.name).count();
+        let Some((j, _)) = b
+            .parts()
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.name == pa.name)
+            .nth(nth)
+        else {
+            continue;
+        };
+        let (ca, cb) = (a.corners(i), b.corners(j));
+        for k in 0..8 {
+            most = most.max(ca[k].sub(cb[k]).len());
+        }
+    }
+    most
+}
+
 /// The body's extent at rest: nose, rump, half its width, its top.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Extent {
@@ -258,6 +311,8 @@ pub fn read(g: &Genome, q: &Posture, rest: &Body, spec: &MoveSpec, m: &Motion) -
     } else {
         Fx::ZERO
     };
+    let body =
+        trunk_apart(&strike::body_at(g, q, m, spec, 0), &cocked).max(trunk_apart(rest, &cocked));
     let damaging = spec.damage > 0 && m.delivery != Delivery::None;
     let e = extent(rest, g.stance == super::Stance::Limbless);
     // Where the hit goes: the sphere reaching furthest outside the body
@@ -323,6 +378,8 @@ pub fn read(g: &Genome, q: &Posture, rest: &Body, spec: &MoveSpec, m: &Motion) -
         tell: spec.startup,
         change,
         early,
+        body,
+        cry: m.cry,
         lane,
         range,
         beyond,
@@ -423,8 +480,15 @@ pub fn judge(g: &Genome, q: &Posture) -> Verdict {
             v.answers += 1;
         }
         for b in 0..a {
+            // Told apart by eye, or by ear: two moves that cry differently
+            // are not alike, however alike they look.
+            let heard = matches!(
+                (ra.cry, damaging[b].and_then(|rb| rb.cry)),
+                (Some(x), Some(y)) if x != y
+            ) || ra.cry.is_some() != damaging[b].is_some_and(|rb| rb.cry.is_some());
             if let (Some(ca), Some(cb)) = (&cocked[a], &cocked[b])
                 && apart(ca, cb) < len.mul(fx(1, 10))
+                && !heard
             {
                 if v.lookalikes < v.lookalike.len() {
                     v.lookalike[v.lookalikes] = damaging[b].map(|rb| (rb.kind, ra.kind));
