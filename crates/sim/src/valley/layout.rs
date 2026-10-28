@@ -942,6 +942,14 @@ pub fn plan() -> Plan {
         &mut plan.drifts,
     );
     growth(&land, &crags, &mut plan.extras);
+    // The Sleeper's horns, as stone arching over its head: rock to stand on
+    // and walk under, drawn as the one piece of stone it is.
+    plan.arches = crate::valley::dragon::arches(&|x, z| land.bare_height(x, z));
+    let first = plan.extras.len();
+    for arch in &plan.arches {
+        crate::valley::dragon::arch_rock(arch, &mut plan.extras);
+    }
+    plan.hidden.push(first..plan.extras.len());
 
     plan.land = Some(land);
     plan

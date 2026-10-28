@@ -1,0 +1,3 @@
+# The Sleeper's horns, as stone: a horn a block of lines, each point
+# x z (map, cm), its height over the mountain (cm) and its radius (cm).
+# Written by scripts/sleeper/terrain.py.

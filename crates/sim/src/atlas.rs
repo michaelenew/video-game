@@ -177,6 +177,10 @@ pub struct Plan {
     /// **Updrafts on the map** (`crate::valley::Vent`), in map coordinates:
     /// ones made where a grown thing stands, not a place's table.
     pub vents: Vec<crate::valley::Vent>,
+    /// **Stone arches** (`crate::valley::dragon::arches`): the Sleeper's
+    /// horns, each a curve of points on the map and the stone's radius at
+    /// each, for the renderer. Their rock is in [`Plan::extras`], hidden.
+    pub arches: Vec<Vec<(V3, Fx)>>,
     /// The floor where no place is: far enough under every place that
     /// anything there has fallen out of the world.
     pub void: Fx,
@@ -240,6 +244,8 @@ pub struct Atlas {
     /// **Updrafts on the map** (`crate::valley::Vent`), in map coordinates,
     /// over and above every place's own table.
     pub vents: Vec<crate::valley::Vent>,
+    /// **Stone arches** on the map ([`Plan::arches`]).
+    pub arches: Vec<Vec<(V3, Fx)>>,
     grid: Grid,
 }
 
@@ -553,6 +559,7 @@ impl Atlas {
             trees: plan.trees.clone(),
             drifts: plan.drifts.clone(),
             vents: plan.vents.clone(),
+            arches: plan.arches.clone(),
             grid: Grid {
                 x0,
                 z0,

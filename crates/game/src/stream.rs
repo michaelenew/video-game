@@ -98,7 +98,8 @@ pub struct Stream {
     /// moved to where it is between the last two simulated frames, as
     /// everything that moves is.
     drifts: Vec<(Entity, Vec3)>,
-    /// Whether the map's own updrafts (`Atlas::vents`) are drawn: once.
+    /// Whether the map's own updrafts (`Atlas::vents`) and stone arches
+    /// (`Atlas::arches`) are drawn: once.
     vents: bool,
     /// The land's tiles by (column, row): the tile -- for one of a far block
     /// drawn whole, an entity that only carries its strokes, or
@@ -402,9 +403,32 @@ pub fn stream(
             st.drifts.push((e, mid));
         }
     }
-    // The map's own updrafts: drawn once, standing still.
+    // The map's own updrafts and stone arches: drawn once, standing still.
     if !st.vents {
         st.vents = true;
+        for arch in &atlas.arches {
+            let Some(&(start, _)) = arch.first() else {
+                continue;
+            };
+            // The palette of the place it is in, or of the reach whose
+            // stretch of the valley it is level with -- its mountains'.
+            let arena = atlas
+                .place_at(start.x, start.z)
+                .or_else(|| {
+                    atlas.places.iter().find(|p| {
+                        !p.pad && start.x.raw() >= p.lo.0.raw() && start.x.raw() <= p.hi.0.raw()
+                    })
+                })
+                .map_or(sim::arena::ArenaId::HEARTH, |p| p.arena);
+            let palette = look::palette::of(arena);
+            commands.spawn((
+                Mesh3d(meshes.add(crate::forms::arch(arch, &palette))),
+                MeshMaterial3d(white.clone()),
+                Transform::default(),
+                ChildOf(root),
+                Name::new("a stone arch"),
+            ));
+        }
         for v in &atlas.vents {
             let Some(place) = atlas.place_at(v.at.0, v.at.1).or(atlas.places.first()) else {
                 continue;

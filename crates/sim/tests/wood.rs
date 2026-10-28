@@ -240,13 +240,18 @@ fn every_tree_has_its_cairns_and_its_wood_is_drawn_not_boxed() {
         assert!(!t.cairns.is_empty(), "tree {k} has no cairn");
     }
     // The tree's own boxes are hidden from the renderer, which draws the
-    // tree; nothing else on the map is.
+    // tree; and the Sleeper's horn arch's rock, which it draws as the arch
+    // (`valley::dragon::arch_rock`); nothing else on the map is.
     let hidden = atlas.hidden.iter().filter(|h| **h).count();
     let mut wood_boxes = Vec::new();
     for t in &atlas.trees {
         trees::solids(t, &mut wood_boxes);
     }
-    assert_eq!(hidden, wood_boxes.len());
+    let mut arch_rock = Vec::new();
+    for a in &atlas.arches {
+        sim::valley::dragon::arch_rock(a, &mut arch_rock);
+    }
+    assert_eq!(hidden, wood_boxes.len() + arch_rock.len());
 }
 
 /// Every solid of the map near a point, on the map.

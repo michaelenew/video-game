@@ -50,6 +50,8 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// tower's height and where its stones jut (`tests/spire.rs`); the Deep's,
 /// a pit's depth and its warrens' levels (`tests/deep.rs`); and where the
 /// ranges are and how far their creatures let you come (`tests/ranges.rs`);
+/// and the Sleeper's body (`dragon.rs`), a dragon's shape laid on the
+/// mountains and judged by looking at it from the road and the High Plane;
 /// and how the Wood's trees grow -- the shape of a kind of tree, how far its
 /// tiers are apart and how thick a limb is to be stood on (`tests/wood.rs`);
 /// and a gully's, how far apart its walls and how long its drop, sized
@@ -82,6 +84,7 @@ const LEVEL_DATA: &[&str] = &[
     "strike.rs",
     "verdict.rs",
     "land.rs",
+    "dragon.rs",
     "layout.rs",
     "rim.rs",
     "hearth.rs",

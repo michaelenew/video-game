@@ -39,6 +39,7 @@ use crate::math::V3;
 use crate::species::SpeciesId;
 use crate::state::MAX_PLAYERS;
 
+pub mod dragon;
 pub mod land;
 pub mod layout;
 pub mod open;

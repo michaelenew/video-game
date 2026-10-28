@@ -1960,6 +1960,23 @@ fn slow_motion(clock: &mut TickClock, slow: u32) -> u32 {
     u32::from(k == 0)
 }
 
+/// `SHOT_EYE=x,y,z,tx,ty,tz` puts the camera at (x, y, z) looking at
+/// (tx, ty, tz), in metres in the place the world is in, whatever the
+/// fighter is doing: a capture of something no fighter's camera frames,
+/// such as the Sleeper from over the High Plane's edge
+/// (`docs/design/valley.md` §1f). What is loaded follows the camera, so the
+/// land round it is drawn.
+fn shot_eye() -> Option<(Vec3, Vec3)> {
+    static EYE: std::sync::OnceLock<Option<(Vec3, Vec3)>> = std::sync::OnceLock::new();
+    *EYE.get_or_init(|| {
+        let v: Vec<f32> = platform::env("SHOT_EYE")?
+            .split(',')
+            .filter_map(|v| v.trim().parse().ok())
+            .collect();
+        (v.len() == 6).then(|| (Vec3::new(v[0], v[1], v[2]), Vec3::new(v[3], v[4], v[5])))
+    })
+}
+
 fn env_f32(key: &str) -> Option<f32> {
     platform::env_parsed(key)
 }
@@ -8431,6 +8448,12 @@ fn drive_camera(
                 tf.look_at(at, Vec3::Y);
                 inside.0 = 0.0;
             }
+        }
+        // `SHOT_EYE`: the camera anywhere, looking at a point -- last, so
+        // it wins over the rest.
+        if let Some((eye, at)) = shot_eye() {
+            tf.translation = eye;
+            tf.look_at(at, Vec3::Y);
         }
         if settings.is_changed() {
             if let Projection::Perspective(p) = projection.as_mut() {

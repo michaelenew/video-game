@@ -550,6 +550,101 @@ always was.
 Not built from world.md §2: the Crossing (the herd's escort mode stays a
 `--hunt hornback-escort` fight).
 
+### 1f · The Sleeper (2026-10-22)
+
+The owner: "take one of the mountains, make it a sleeping terrestrial
+dragon. Make it subtle, mostly art for now. The dragon itself should
+essentially be the mountain, and its dragon-like features should be just
+discernible only from certain angles. Maybe it wakes up eventually."
+
+**The mountain east of the High Plane is a beast asleep**
+(`sim::valley::dragon`). It is the land, not a creature and not a box: a
+height added to the mountain wherever its body lies, before the land's
+noise and crags go over it, so it wears the same rock and snow as the
+range round it, and what is drawn is what a foot would stand on.
+
+**It is laid out for one view: from the High Plane, looking down**
+(2026-10-27; the owner, after the curled beast "still doesn't read at all
+like a creature even if you know"). At this size, among crags as big as
+its own features and in the Pinewood's fog (nothing past 600 m), a beast
+lying in the range reads from nowhere in particular. It reads where one of
+its outlines is against something lower, and the one place players look
+*down* on these mountains is the High Plane. So:
+
+- it lies **stretched out on its belly**, as a crocodile basks -- the back
+  long with a lazy bend, the chin on its folded forearms, the hind legs
+  sprawled, the tail sweeping round to its right -- because from above a
+  curled animal is a round mass (the curl was tried: laid as land it was a
+  drum with a ring on it) and a stretched one is a lizard;
+- it lies **broadside below the plane's east edge**, nose north, centred
+  at (840, 380): looked at end-on it foreshortens into a wedge, and any
+  nearer the plane's own flank -- a table mountain's, falling a metre a
+  metre for 130 m -- hides it;
+- **the range is carved down round it** to a smooth snow hollow at 110 m,
+  its crags fading out across the hollow, so its body stands clear of
+  what is round it and its rocky flanks draw its outline;
+- **its plates are smaller asleep** than standing, so the body, not a row
+  of summits, is the shape.
+
+From the Pinewood road and the Saddle the ridge in front hides it; from
+the plane's edge you look down onto its back. `python3
+scripts/sleeper/vista.py` previews the land from those places in seconds
+(after `cargo run --release -p look --example sleeper`).
+
+**Its shape is a creature built for it** (2026-10-23). The way here, for
+the record: a table of joints posed like a statue; a tarrasque of mounds
+that read "like a sick dog"; then a CC0 low-poly dragon (Drummyfish's,
+from OpenGameArt), its mesh posed and reshaped a request at a time --
+wings off, spikes smoothed, a T. rex's stance -- which the owner judged
+"goofy": "figure out a better way to make this look like a big
+threatening terrestrial lizard boss the size of a mountain ... there are
+myriad references out there". So it is now built the way a creature is
+designed, from what the giant reptiles of reference art share -- the
+tarrasque, Godzilla, a tyrannosaur's carriage, an ankylosaur's armour
+and club:
+
+1. **The beast** (`scripts/sleeper/beast.py`): a skeleton of fixed
+   proportions -- spine, neck, head, an eight-bone tail, two legs, two
+   arms -- and a pose is only which way each bone points, so standing and
+   asleep are the same animal. On it, flesh as smoothly blended volumes:
+   a broad heavy body, a barrel chest, a hump of shoulder, thighs like
+   drums, broad three-toed clawed feet, heavy clawed arms; a big, heavy
+   head built of wedges, not balls, with an underbite -- a heavy jaw on a
+   hinge, its rounded chin jutting past a short, set-back upper skull,
+   tusks rising from its corners outside the upper lip, so the profile
+   falls away from the chin to the brow -- brow shelves, cheek bosses,
+   teeth, and heavy ram's horns rooted
+   on the crown and curling down round the face, their tips forward by
+   the jaw. Armour kept crisp: two staggered rows of jagged plates down
+   the spine from the hips to the nape, tallest over the shoulders, knobs
+   on the flanks; the tail smooth, ending in a heavy club of bone. A
+   rough, rocky hide over all of it. The volumes are a distance field,
+   meshed by marching cubes (`pip install scikit-image`).
+2. **Its poses** (`beast.py`'s `STANDING` and `ASLEEP`, drawn by
+   `python3 scripts/sleeper/pose.py`): standing reared and hunched, the
+   head thrust forward and low with its jaws open, the arms hanging;
+   asleep stretched out on its belly (above). The curled pose it slept in
+   first is kept as `CURLED`.
+3. **The shape** (`scripts/sleeper/terrain.py`): the sleeping beast sized
+   to 340 m, kept at 90 % of its height, nose north, centred at (840,
+   380); the highest point of it over every 2 m cell; sunk 4 m; every wall
+   settled to a slope of 2.2 at most, as scree settles against a cliff;
+   softened a cell; and how far the range is carved round it, down to 110
+   m under its body and easing off over 90 m. It writes
+   `crates/sim/src/valley/sleeper.bin`, which the simulation reads. Its
+   horns are stone arches (`sleeper_arch.txt`): slim, springing from its
+   head and back into the hollow before their tips.
+4. **The sheet** (`cargo run --release -p look --example sleeper`, then
+   `python3 scripts/sleeper/sheet.py`): the beast asleep, its shape alone
+   on flat ground, and the mountain with it in, side by side from four
+   directions.
+
+`SHOT_EYE=544,314,380,840,140,380 SHOT_AT=700,0 GAME_ARGS="--arena
+pinewood --open"` is the game's camera at the plane's east edge, looking
+down on it.
+
+**Waking it** is not built (§6, item 8).
+
 ## 2 · The rules
 
 All of them are in `World::step_valley` and `sim::valley::open`, and all
@@ -889,3 +984,12 @@ for a pair who does not.** The five reaches are 974 m end to end with about
 11. **A herd falls asleep where it stood and is drawn next where its loop
     says**: one left awake and unroused jumps to its loop's place when
     everybody walks off, sixty metres away.
+12. **The Sleeper wakes?** (§1f; the owner: "maybe it wakes up
+    eventually. That'd be fun.") Nothing of it moves yet. What waking could
+    be, cheapest first: a breath -- mist off its nostrils on the frame
+    clock, renderer only; an eye that opens when somebody stands on the
+    High Plane's edge; then a shrug that sends rocks down its flanks, which
+    is the first thing that would be the simulation's. A dragon that gets up
+    is a creature the size of a mountain, and its body is the land: it
+    would need the land to be a function of the frame where it lies, the
+    way a drift is (`sim::drift`), which nothing is yet.
