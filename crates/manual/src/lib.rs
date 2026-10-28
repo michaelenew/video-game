@@ -1133,7 +1133,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "BRED_GAIT=<line>:<stage>,... cargo test -p game --bin game bred_gait",
-                "Write a crossbreed stage's (or cast:<Name>, one of the cast's genomes) body boxes at eight points of its slowest gait to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
+                "Write a crossbreed stage's (or cast:<Name>, one of the cast's genomes, or bred:<family>-<generation>, a body bred as the game breeds one) body boxes at eight points of its slowest gait to target/gait/, coloured by what each part is; art/blender.sh art/gait.py renders each gait as a strip of its cycle, side on over a top view, for judging whether it can move.",
+            ),
+            e(
+                "BRED_SURVEY=<families> cargo test -p game --bin game bred_survey -- --nocapture",
+                "Print a line for each body bred as the game breeds them (exploration 0035), six generations of each family: its stance, its head, whether it lies on its belly and what each limb pair is and does -- for picking bred:<family>-<generation> bodies to watch walk.",
             ),
             e(
                 "BRED_ATTACK=<line>:<stage>,... cargo test -p game --bin game bred_attack",

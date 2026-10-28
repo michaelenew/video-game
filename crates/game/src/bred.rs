@@ -662,6 +662,78 @@ mod dump {
 
 #[cfg(test)]
 mod gait {
+    /// A body bred as the game breeds one (sim `tests/strides.rs`, `bred`):
+    /// family `family` from a parent of the cast, `generation + 1`
+    /// generations each a cross with one of the cast, a trophy grafted on,
+    /// or a generation's drift.
+    fn bred_family(family: u64, generation: usize) -> sim::breed::Genome {
+        use sim::breed::archetypes::{self, CAST};
+        use sim::breed::cross::{self, Rates, Trophy};
+        let mut rng = sim::breed::Rng::new(0x5eed_0000 + family);
+        let mut g = *CAST[rng.below(CAST.len())].2;
+        for _ in 0..=generation {
+            let mate = *CAST[rng.below(CAST.len())].2;
+            g = match rng.below(3) {
+                0 => cross::breed(&g, &mate, &Rates::DEFAULT, &mut rng).genome,
+                1 => {
+                    let drops: Vec<_> = archetypes::drops(&mate).into_iter().flatten().collect();
+                    if drops.is_empty() {
+                        g
+                    } else {
+                        let kind = drops[rng.below(drops.len())];
+                        cross::graft(&g, &Trophy { kind, donor: mate }, &Rates::DEFAULT, &mut rng)
+                            .genome
+                    }
+                }
+                _ => cross::mutate(&g, &Rates::DEFAULT, &mut rng).genome,
+            };
+        }
+        g
+    }
+
+    /// `BRED_SURVEY=<families>`: one line a bred body -- its stance, what
+    /// it stands on, whether it lies on its belly -- for picking some to
+    /// watch walk.
+    #[test]
+    fn bred_survey() {
+        let Some(n) = crate::platform::env("BRED_SURVEY").and_then(|v| v.parse::<u64>().ok())
+        else {
+            return;
+        };
+        use sim::breed::posture;
+        for family in 0..n {
+            for generation in 0..6 {
+                let g = bred_family(family, generation);
+                let q = posture::posture(&g);
+                let legs: Vec<String> = (0..4)
+                    .filter_map(|i| {
+                        let l = g.limbs[i]?;
+                        let s = q.stations[i];
+                        Some(format!(
+                            "{i}:{:?}/{:?}{}",
+                            l.role,
+                            l.build,
+                            if s.wing_walks {
+                                "w"
+                            } else if s.grounded {
+                                "g"
+                            } else {
+                                "-"
+                            }
+                        ))
+                    })
+                    .collect();
+                eprintln!(
+                    "bred:{family}-{generation} {:?} head {:?} bellied {} {}",
+                    g.stance,
+                    g.head,
+                    q.bellied,
+                    legs.join(" ")
+                );
+            }
+        }
+    }
+
     /// `BRED_GAIT=<line>:<stage>` (or `cast:<Name>`): that stage's body boxes
     /// through a cycle of its slowest gait, `target/gait/<line>_<stage>_<gait>_<k>.obj`,
     /// coloured by what each part is -- for watching it move.
@@ -681,13 +753,20 @@ mod gait {
                 .iter()
                 .find(|c| line == "cast" && c.1 == k)
                 .map(|c| *c.2);
+            // `bred:<family>-<generation>`: a body bred as the game breeds.
+            let bred = (line == "bred")
+                .then(|| k.split_once('-'))
+                .flatten()
+                .and_then(|(f, g)| Some(bred_family(f.parse().ok()?, g.parse().ok()?)));
             let tag = if cast.is_some() {
                 format!("cast_{k}")
+            } else if bred.is_some() {
+                format!("bred_{k}")
             } else {
                 format!("{line}_{:02}", k.parse::<usize>().unwrap_or(0))
             };
             let k: usize = k.parse().unwrap_or(0);
-            let Some(g) = cast.or_else(|| {
+            let Some(g) = cast.or(bred).or_else(|| {
                 super::lines()
                     .into_iter()
                     .find(|l| l.name == line)
