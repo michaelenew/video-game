@@ -233,8 +233,9 @@ faceted plate framed in gold (`art/light_being`).
 
 **Each is half a being** (the owner, 2026-10-28). Each stands with its centre line to her side
 (`view::being::SIDE`) and only its outer half is drawn, fading into its own middle
-(`view::being::FADE`), so she stands in the gap between a dark half and a light one. Each is as
-tall as she is at the shoulder (`view::being::scale`).
+(`view::being::FADE`), so she stands in the gap between a dark half and a light one. Each is
+**twice her size with its shoulders at hers** (the owner, 2026-10-29; `view::being::scale`,
+`view::being::sink`), so the rest of it is below her floor -- and is not drawn.
 
 **Each half is its own bar, a gradient, arriving limb first.** A quarter of a bar is a quarter of a
 half, faint; the shoulder and the fist come first, then the arm between them and the torso, the
@@ -243,10 +244,10 @@ face. `view::being::presence` is that order and the skin shader (`skin.wgsl`, `s
 the same function on the GPU, laid over the being's own painted model: its edge drifts like smoke
 and the part still condensing glows in its force's light. Ascension is all of both.
 
-**It comes out of the seal**, a disc of rings and runes round her -- **at her waist** for now
-(`view::being::SEAL_AT`; the owner has not chosen between the waist and her feet, and
-`SHOT_SEAL=feet` shows the other) -- split down her middle, dark half on her left, light on her
-right. Nothing of either being is drawn below it. It is faintly there whatever the bars; each
+**It comes out of the seal**, a disc of rings and runes on the floor round her feet
+(`view::being::SEAL_AT`; the owner, 2026-10-29, after a ring at her waist was tried --
+`SHOT_SEAL=waist` shows it) -- split down her middle, dark half on her left, light on her right.
+Nothing of either being is drawn below it. It is faintly there whatever the bars; each
 half's runes light round from behind her toward the front as its bar fills.
 
 **It moves as itself, not as her puppet** (the owner, 2026-10-28: "it's bound, not a puppet, and

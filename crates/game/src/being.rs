@@ -3,8 +3,8 @@
 //!
 //! Each being is its own model -- the obsidian man, the knight -- under a
 //! root of its own ([`BeingRoot`]), standing to her side (the dark one's
-//! centre line to her left, the light one's to her right), as tall as she
-//! is at the shoulder, posed by its own animations off the simulation's
+//! centre line to her left, the light one's to her right), twice her size
+//! and sunk below her floor so its shoulders are at hers, posed by its own animations off the simulation's
 //! frame (`view::being::pose`): it strains at its binding, and her auto is
 //! its blow. It is drawn as its painted self, veiled (`still::Veil`,
 //! `skin.wgsl`): only its outer half, fading into its own middle; only as
@@ -104,6 +104,8 @@ pub struct Beings {
     /// its size it is drawn.
     skeletons: [Skeleton; 2],
     scales: [f32; 2],
+    /// How far below her floor each stands, so its shoulders are at hers.
+    sinks: [f32; 2],
     /// Her size against the reference body, which the being's distances
     /// (`view::being::SIDE`, ...) are written in.
     her_scale: f32,
@@ -144,6 +146,7 @@ fn setup(
     let her = skeleton_for(sim::Class::DualMage);
     let skeletons = [0, 1].map(view::being::skeleton);
     let scales = [0, 1].map(|k| view::being::scale(&her, &skeletons[k]));
+    let sinks = [0, 1].map(|k| view::being::sink(&her, &skeletons[k]));
     let seal_radius = view::being::seal_radius(&her);
     let seal = std::array::from_fn(|_| {
         materials.add(Spirit {
@@ -157,6 +160,7 @@ fn setup(
         seal,
         skeletons,
         scales,
+        sinks,
         her_scale: her.scale,
         seal_radius,
         seal_height: view::being::seal_height(&her, seal_at()),
@@ -375,7 +379,11 @@ pub fn place(
             } else {
                 out * view::being::SIDE * hs
             };
-            let root = feet + turn * Vec3::new(side, 0.0, -view::being::BEHIND * hs);
+            // Sunk so its shoulders are at hers; or, looked at whole,
+            // standing on her floor.
+            let sink = if whole > 0.0 { 0.0 } else { beings.sinks[k] };
+            let root =
+                feet + turn * Vec3::new(side, 0.0, -view::being::BEHIND * hs) - Vec3::Y * sink;
             stands[owner][k] = Some((root, turn));
             let at = |local: [f32; 3]| root + turn * (Vec3::from_array(local) * s);
             let outer = k == 0;
@@ -398,7 +406,7 @@ pub fn place(
                     if whole > 0.0 { 0.0 } else { 1.0 },
                     s,
                 ),
-                centre: root.extend(view::being::FADE * hs),
+                centre: (root + Vec3::Y * sink).extend(view::being::FADE * hs),
                 keep: (left * out).extend(seal_y),
                 shoulder: shoulder.extend(view::being::REACH * hs),
                 fist: fist.extend(0.0),

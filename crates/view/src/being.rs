@@ -24,8 +24,9 @@
 //! stands with its centre line to her side -- the dark one's to her left,
 //! the light's to her right ([`SIDE`]) -- and only its outer half is drawn,
 //! fading into its own middle ([`FADE`]), so she stands in the gap between
-//! a dark half and a light one. Each is as tall as she is at the shoulder
-//! ([`scale`]) and comes out of the seal ([`SEAL_AT`]): nothing of it below.
+//! a dark half and a light one. Each is twice her size ([`scale`]) with its
+//! shoulders at hers, so it stands sunk below her floor ([`sink`]) and
+//! comes out of the seal at her feet ([`SEAL_AT`]): nothing of it below.
 //! Each half is there as far as its own bar has filled, in [`presence`]'s
 //! order.
 //!
@@ -454,39 +455,52 @@ fn drawn(k: usize, p: Pose) -> Pose {
 
 /// How far behind her each being stands, in metres of her size: enough
 /// that she is in front of it rather than inside it.
-pub const BEHIND: f32 = 0.22;
+pub const BEHIND: f32 = 0.4;
 
 /// How far to her side each being's centre line is, in metres of her size:
 /// the dark being's to her left, the light's to her right (the owner,
 /// 2026-10-28: "the beings' body center lines probably need to be to the
 /// left and right of the dual mage's"). Each keeps only its outer half, so
 /// she stands in the gap between two halves.
-pub const SIDE: f32 = 0.3;
+pub const SIDE: f32 = 0.38;
 
 /// How wide each half's fade into its own middle is, in metres of her size
 /// ("each half should fade into the middle").
-pub const FADE: f32 = 0.09;
+pub const FADE: f32 = 0.16;
 
-/// How many times its own size a being built on `body` is drawn at, so that
-/// **its shoulders are at her shoulders' height** (the owner, 2026-10-28),
-/// both standing on her floor. Every height is read off the two skeletons.
-pub fn scale(her: &Skeleton, body: &Skeleton) -> f32 {
-    let shoulder = |sk: &Skeleton| {
-        solve(sk, &crate::pose::Pose::rest()).origin[crate::drawn_joint(Joint::ArmL).index()][1]
-    };
-    shoulder(her) / shoulder(body).max(0.05)
+/// How many times her height each being is (the owner, 2026-10-29: "roughly
+/// twice the scale of the dual mage itself").
+pub const SIZE: f32 = 2.0;
+
+fn shoulder_height(sk: &Skeleton) -> f32 {
+    solve(sk, &crate::pose::Pose::rest()).origin[crate::drawn_joint(Joint::ArmL).index()][1]
 }
 
-/// Where the seal is, and so where each being comes out of: round her
-/// waist, or on the floor round her feet. The owner has not chosen yet
-/// (2026-10-28, "either around the mage's waist or feet (not sure yet)").
+/// How many times its own size a being built on `body` is drawn at: twice
+/// her height ([`SIZE`]). Every height is read off the two skeletons.
+pub fn scale(her: &Skeleton, body: &Skeleton) -> f32 {
+    SIZE * her.total_height / body.total_height.max(0.05)
+}
+
+/// How far below her floor a being built on `body` stands, in metres, so
+/// that **its shoulders are at hers** (the owner, 2026-10-29: "The
+/// shoulders must be at the same height"). Twice her size, the rest of it
+/// is below her floor -- and is not drawn: it comes out of the seal there.
+pub fn sink(her: &Skeleton, body: &Skeleton) -> f32 {
+    scale(her, body) * shoulder_height(body) - shoulder_height(her)
+}
+
+/// Where the seal is, and so where each being comes out of: on the floor
+/// round her feet (the owner, 2026-10-29: "I want the seal to show at the
+/// dual mage's feet and the models of the beings to be truncated at the
+/// seal"), or round her waist, which was tried first.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SealAt {
     Waist,
     Feet,
 }
 
-pub const SEAL_AT: SealAt = SealAt::Waist;
+pub const SEAL_AT: SealAt = SealAt::Feet;
 
 /// How high the seal is, in metres: at her hip joint for the waist.
 pub fn seal_height(her: &Skeleton, at: SealAt) -> f32 {
@@ -496,8 +510,8 @@ pub fn seal_height(her: &Skeleton, at: SealAt) -> f32 {
     }
 }
 
-/// The seal's radius, in metres: round both beings' waists where they come
+/// The seal's radius, in metres: round both beings' bodies where they come
 /// out of it.
 pub fn seal_radius(her: &Skeleton) -> f32 {
-    (SIDE + 0.3) * her.scale
+    (SIDE + 0.55) * her.scale
 }

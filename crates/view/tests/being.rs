@@ -104,7 +104,7 @@ fn the_shoulder_and_fist_first_then_the_arm_and_torso_then_the_head() {
 }
 
 #[test]
-fn its_shoulders_are_at_hers_and_it_stands_to_her_side() {
+fn it_is_twice_her_size_with_its_shoulders_at_hers() {
     let her = skeleton_for(Class::DualMage);
     let shoulder = |sk: &view::skeleton::Skeleton| {
         solve(sk, &view::pose::Pose::rest()).origin[view::drawn_joint(Joint::ArmL).index()][1]
@@ -112,14 +112,24 @@ fn its_shoulders_are_at_hers_and_it_stands_to_her_side() {
     for k in 0..2 {
         let skeleton = being::skeleton(k);
         let s = being::scale(&her, &skeleton);
-        let at = s * shoulder(&skeleton);
+        // Twice her size, sunk below her floor so its shoulders are at hers.
+        let tall = s * skeleton.total_height;
+        assert!(
+            (tall / her.total_height - 2.0).abs() < 0.01,
+            "being {k} is {tall} tall to her {}",
+            her.total_height
+        );
+        let at = s * shoulder(&skeleton) - being::sink(&her, &skeleton);
+        assert!(being::sink(&her, &skeleton) > 0.5, "being {k} is not sunk");
         assert!(
             (at - shoulder(&her)).abs() < 0.005,
             "being {k}'s shoulder at {at}, hers at {}",
             shoulder(&her)
         );
     }
-    // The seal round her waist, under her shoulders.
+    // The seal at her feet, where they come out; at the waist, the other
+    // place it was tried, under her shoulders.
+    assert_eq!(being::SEAL_AT, being::SealAt::Feet);
     let seal = being::seal_height(&her, being::SealAt::Waist);
     assert!(seal > her.hip_height * 0.9 && seal < shoulder(&her));
     assert_eq!(being::seal_height(&her, being::SealAt::Feet), 0.0);
