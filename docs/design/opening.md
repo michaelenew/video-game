@@ -224,7 +224,9 @@ each has a floor answer (a dodge, a step out) and a better answer up off it:
 - **A slam that throws a shockwave** out along the floor, jumped or dodged
   (Mario Odyssey's teaching move).
 - **A move that takes the floor away** for a while: a quake that cracks it,
-  something that pools on it ([hazards.md](hazards.md) has floor hazards).
+  something that pools on it. Built for this fight: the game's floor
+  hazards today are things to step round on the ground, not reasons to
+  leave it.
 
 **What it does to you up high.** Being up cannot be free, or the fight is
 over at the first perch. **It swats what you are standing on.** A column
@@ -253,15 +255,20 @@ the arena (plain boxes for the columns and ledges) and the creature, and
 play it. The tower and the walk up are designed back from the fight once it
 works: each step of the climb teaches one thing the fight asks for.
 
-What already exists and can be used:
+**Nothing in the game today is a starting point for the substance.** The
+owner, 2026-10-29: *"Nothing in the game today has the right substance that I
+am looking for. Every fight and arena keeps you on the ground almost
+entirely."* No existing arena, creature, move set or hazard is to be adapted
+into this fight: the arena, the creature's moves and the way it pushes you up
+are designed new, from §2 and §6. Tuning an existing fight toward this would
+inherit the ground-bound shape that is the problem.
 
-- **The body.** The Ridgeback's skeleton, parts, legs and riding
-  ([species.md](species.md)). The Pair are already the same skeleton,
-  re-proportioned; the Warden can be too, made taller.
-- **Arenas as tables** ([arenas.md](arenas.md)), with columns and ledges as
-  solids, and `drift`s for anything that moves.
-- **Floor hazards** ([hazards.md](hazards.md)), for a move that takes the
-  floor away.
+What can be used is plumbing only, the formats things are written in rather
+than anything written in them:
+
+- **A creature is a table** ([species.md](species.md)) and **an arena is a
+  table** ([arenas.md](arenas.md)): the Warden and its shaft are new entries,
+  not changed copies of old ones.
 - **Reading what a player just did** off two frames (`tutorial::Seen`,
   [tutorials.md](tutorials.md) §2), to know when a step of the climb or a
   click has been learned.
@@ -269,9 +276,9 @@ What already exists and can be used:
   fight once a person has found it good, never before
   ([courses.md](courses.md) §0: *"You build, I play."*).
 
-What is new: **perches that break** (a solid removed, its rubble added); **a
-kit with pieces locked**, per player, in the opening only; and the creature's
-moves.
+Everything else is new: the arena and its perches, **perches that break** (a
+solid removed, its rubble added), the creature and its moves, and **a kit
+with pieces locked**, per player, in the opening only.
 
 **The test, in one question:** *in the blockout, do players leave the floor
 because they want to, rather than because they are told to?* If they do,
