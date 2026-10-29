@@ -107,6 +107,10 @@ const LEVEL_DATA: &[&str] = &[
     // hall, how tall a doorway's posts, where the dummy stands -- a building
     // walked through, judged by `tests/tutorial.rs` doing every room's task.
     "hall.rs",
+    // The opening's blockout (`arena/warden.rs`, `docs/design/opening.md`):
+    // how deep the shaft and the well are -- a place to be looked at, its
+    // sizes first guesses to be judged by eye and then by walking it.
+    "warden.rs",
 ];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an

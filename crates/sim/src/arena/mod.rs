@@ -119,6 +119,9 @@ pub mod hills;
 
 pub mod hall;
 
+/// The opening's blockout (`docs/design/opening.md`): look, do not fight.
+pub mod warden;
+
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
 /// The creature arenas share their creature's number, so nobody has to choose
@@ -213,6 +216,9 @@ impl ArenaId {
     pub const HALL_ELEMENTALIST: ArenaId = ArenaId(74);
     pub const HALL_BLOOD: ArenaId = ArenaId(75);
     pub const HALL_DUAL: ArenaId = ArenaId(76);
+    /// **The Warden's tower** (`warden`): a blockout of the opening, to be
+    /// looked at.
+    pub const WARDEN: ArenaId = ArenaId(77);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -312,6 +318,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::HALL_ELEMENTALIST => Some(&hall::ELEMENTALIST),
         ArenaId::HALL_BLOOD => Some(&hall::BLOOD),
         ArenaId::HALL_DUAL => Some(&hall::DUAL),
+        ArenaId::WARDEN => Some(&warden::ARENA),
         id => match crate::valley::ranges::index(id) {
             Some(k) => Some(&crate::valley::ranges::ARENAS[k]),
             None => None,

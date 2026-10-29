@@ -1096,6 +1096,22 @@ pub const SECTIONS: &[Section] = &[
                 "Stand player one at that point of the place the world is in (metres, decimals allowed), facing +x, so a capture can look at somewhere that is not a start: SHOT_AT=772,-4 with --arena pinewood --open is the foot of the Waterfall. A third number is the height to look down from. A round start puts fighters back on their marks, so in a fight or a course it does nothing.",
             ),
             e(
+                "SHOT_AT2=<x>,<z>",
+                "The same as SHOT_AT, for player two: two fighters stood where a capture wants them.",
+            ),
+            e(
+                "SHOT_FACE=<a>,<b>",
+                "Turn player one to face a degrees round from +x toward +z, and player two b: SHOT_FACE=180 faces player one along -x. After SHOT_AT and SHOT_AT2, which face +x.",
+            ),
+            e(
+                "SHOT_BARE=1",
+                "Hide the whole HUD, the crosshair too: a capture of the place and the fighters in it, with nothing laid over them.",
+            ),
+            e(
+                "SHOT_WARDEN=<x>,<z>,<yaw>,<pose>",
+                "In --arena warden, the opening's blockout (docs/design/opening.md), stand the Warden at (x, z) in metres, turned yaw degrees from facing +x, in a pose: stand, slam (both fists up), swat (its right arm out sideways at shoulder height) or down (felled). It is drawn, not built: nothing collides with it and it does not move. Without it, it stands in the middle of the shaft facing the gallery.",
+            ),
+            e(
                 "SHOT_EYE=<x>,<y>,<z>,<tx>,<ty>,<tz>",
                 "Put the camera at (x, y, z) looking at (tx, ty, tz), in metres in the place the world is in, whatever the fighter is doing -- a capture of something no fighter's camera frames, such as the Sleeper's horn arch: SHOT_EYE=560,300,470,690,240,370 SHOT_AT=700,0 with --arena pinewood --open. What is loaded follows the camera.",
             ),
@@ -1105,7 +1121,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_FALL=1",
-                "With SHOT_AT, leave player one in the air at that point and height, falling, rather than on whatever is under it -- a capture of a ledge being caught: SHOT_AT=20,6.55,10.4 SHOT_FALL=1 SHOT_FRAME=40 SHOT_YAW=-1.57 DEMO=0 with --arena range lands on the hang from the tower's north face.",
+                "With SHOT_AT, leave player one in the air at that point and height, falling, rather than on whatever is under it -- a capture of a ledge being caught: SHOT_AT=20,6.55,10.4 SHOT_FALL=1 SHOT_FRAME=40 SHOT_YAW=-1.57 DEMO=0 with --arena range lands on the hang from the tower's north face. SHOT_FALL=2 does the same for player two (with SHOT_AT2), and SHOT_FALL=12 for both.",
             ),
             e(
                 "SHOT_MOVE=<move>",

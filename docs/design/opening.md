@@ -280,6 +280,19 @@ Everything else is new: the arena and its perches, **perches that break** (a
 solid removed, its rubble added), the creature and its moves, and **a kit
 with pieces locked**, per player, in the opening only.
 
+**A first blockout exists, to look at** (2026-10-29): `--arena warden`
+(`sim::arena::warden`). The shaft, its columns, scaffolding, the stair of
+ledges up the north wall, the return ledge and the gallery; the well beside
+it with the cell, its bars and the ledges up to the gallery's door. **The
+Warden is drawn, not built**: boxes nothing collides with
+(`game::arenas::warden`), posed for a screenshot by `SHOT_WARDEN=x,z,yaw,pose`
+(`stand`, `slam`, `swat`, `down`), and it does nothing. Fighters are stood
+for a picture with `SHOT_AT` and `SHOT_AT2` (player two), turned with
+`SHOT_FACE`, left in the air with `SHOT_FALL` (`1`, `2` or `12`), and the
+HUD is hidden with `SHOT_BARE=1`. The pictures and the commands that made
+them are in [gallery/opening/](gallery/opening/README.md). Every number in
+it is a first guess, and none of it is tuned or tested for play.
+
 **The test, in one question:** *in the blockout, do players leave the floor
 because they want to, rather than because they are told to?* If they do,
 the identity holds and the rest of the opening follows from the fight. If
