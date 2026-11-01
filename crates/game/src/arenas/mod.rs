@@ -50,6 +50,8 @@ pub mod climb;
 
 pub mod stages;
 
+pub mod warden;
+
 /// One thing to look at that nothing collides with.
 #[derive(Clone, Copy, Debug)]
 pub struct Prop {
@@ -125,6 +127,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::DELTA => &stages::DELTA,
         ArenaId::GORGE => &stages::GORGE,
         ArenaId::HENGE => &stages::HENGE,
+        ArenaId::WARDEN => &warden::DRESSING,
         // A range is a pocket of the land: nothing laid on it but what grows
         // there. Until 2026-10-22 it fell through to the proving ground's
         // dressing, and a grey mat lay under every herd in the valley.
@@ -161,6 +164,8 @@ pub struct Sun;
 pub fn sun(id: ArenaId) -> Vec3 {
     match id {
         ArenaId::GALEWING => Vec3::new(1.5, 20.0, 1.0),
+        // Down the Warden's shaft: high enough to light its floor.
+        ArenaId::WARDEN => Vec3::new(2.0, 20.0, 1.0),
         _ => Vec3::new(6.0, 14.0, 5.0),
     }
 }
@@ -596,7 +601,13 @@ pub fn draw_place(
         }
     }
 
-    for prop in dressing.props {
+    // The Warden's blockout is posed at launch (`warden`), not a table.
+    let posed = if arena.id == ArenaId::WARDEN {
+        warden::props()
+    } else {
+        Vec::new()
+    };
+    for prop in dressing.props.iter().chain(posed.iter()) {
         // Past a rim, the rim's own woods and rocks stand instead
         // (`crate::land::draw_arena`, and the valley's land on the map).
         if let Some(rim) = arena.rim.filter(|r| !r.drop) {

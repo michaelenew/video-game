@@ -515,6 +515,7 @@ fn main() {
         // The window through what the camera passes through, on to where
         // the camera has just been put.
         .add_systems(Update, window::follow.after(drive_camera))
+        .add_systems(Update, shot_bare.after(crosshair::update))
         // The close look's orbit, read after the fight's look has been and
         // before the camera is placed from it.
         .add_systems(
@@ -1858,9 +1859,26 @@ fn shot_form(w: &mut World) {
 /// caught, `SHOT_AT=20,6.55,10.4` beside the range tower's north face with
 /// `--arena range`, `DEMO=0` and `SHOT_FRAME=40` lands on the hang.
 fn shot_at(w: &mut World) {
-    let Some(spec) = platform::env("SHOT_AT") else {
-        return;
-    };
+    // `SHOT_AT2` stands player two the same way, and `SHOT_FACE=a,b` turns
+    // each to face `a` and `b` degrees round from `+x` toward `+z`.
+    for (seat, key) in [(0, "SHOT_AT"), (1, "SHOT_AT2")] {
+        if let Some(spec) = platform::env(key) {
+            shot_at_seat(w, seat, &spec);
+        }
+    }
+    if let Some(spec) = platform::env("SHOT_FACE") {
+        for (seat, deg) in spec.split(',').enumerate().take(2) {
+            if let Ok(deg) = deg.trim().parse::<f32>() {
+                let (s, c) = deg.to_radians().sin_cos();
+                let fx = |v: f32| sim::Fx::from_raw((v * 65536.0).round() as i32);
+                w.players[seat].facing = sim::V3::new(fx(c), sim::Fx::ZERO, fx(s));
+            }
+        }
+    }
+}
+
+/// One fighter of [`shot_at`].
+fn shot_at_seat(w: &mut World, seat: usize, spec: &str) {
     let metres = |v: f32| sim::Fx::from_raw((v * 65536.0).round() as i32);
     let mut it = spec
         .split(',')
@@ -1873,8 +1891,10 @@ fn shot_at(w: &mut World) {
     // cave, the floor below that rather than the roof.
     let from = it.next().unwrap_or(sim::Fx::from_int(1000));
     let up = sim::V3::new(x, from, z);
-    if platform::env("SHOT_FALL").as_deref() == Some("1") {
-        let p = &mut w.players[0];
+    // `SHOT_FALL=1` leaves player one in the air, `2` player two, `12` both.
+    let seat_digit = char::from(b'1' + seat as u8);
+    if platform::env("SHOT_FALL").is_some_and(|f| f.contains(seat_digit)) {
+        let p = &mut w.players[seat];
         p.pos = up;
         p.vel = sim::V3::ZERO;
         p.grounded = false;
@@ -1891,7 +1911,7 @@ fn shot_at(w: &mut World) {
         .fold(ground.floor_below(up), |a, b| {
             if b.raw() > a.raw() { b } else { a }
         });
-    let p = &mut w.players[0];
+    let p = &mut w.players[seat];
     p.pos = sim::V3::new(up.x, y, up.z);
     p.vel = sim::V3::ZERO;
     p.facing = sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO);
@@ -1975,6 +1995,17 @@ fn shot_eye() -> Option<(Vec3, Vec3)> {
             .collect();
         (v.len() == 6).then(|| (Vec3::new(v[0], v[1], v[2]), Vec3::new(v[3], v[4], v[5])))
     })
+}
+
+/// `SHOT_BARE=1` hides every piece of the HUD: a screenshot of the place
+/// and the people in it, nothing laid over them.
+fn shot_bare(mut ui: Query<&mut Visibility, (With<Node>, Without<ChildOf>)>) {
+    if platform::env("SHOT_BARE").is_none() {
+        return;
+    }
+    for mut v in &mut ui {
+        *v = Visibility::Hidden;
+    }
 }
 
 fn env_f32(key: &str) -> Option<f32> {

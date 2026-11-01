@@ -233,6 +233,9 @@ pub fn of(id: ArenaId) -> Sky {
         ArenaId::HALL_BLOOD => Sky::over([0.96, 0.86, 0.86]),
         ArenaId::HALL_DUAL => Sky::over([0.86, 0.85, 0.98]),
 
+        // The Warden's tower: a warm late afternoon over the top of the shaft.
+        ArenaId::WARDEN => Sky::over([0.95, 0.86, 0.74]),
+
         _ => Sky::over([0.78, 0.87, 0.95]),
     }
 }
