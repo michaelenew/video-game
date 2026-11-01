@@ -1,6 +1,7 @@
 ---
-status: proposed — nothing here is built
+status: prototype — a look-only blockout (`--arena warden`); nothing is playable as a fight
 proposed: 2026-10-29
+prototype: 2026-10-29
 ---
 
 # The opening — a prison, a climb, and the first fight
