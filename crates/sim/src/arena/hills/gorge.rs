@@ -3,6 +3,7 @@
 
 #![allow(unused_imports)]
 
+use super::super::relief::Bump;
 use super::super::rim::Rim;
 use super::super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
 use super::{round, slab, whole};
@@ -138,3 +139,7 @@ const GORGE_WAYS: [Way; 4] = [
         ],
     ),
 ];
+
+/// The floor's relief (`arena::relief`): smooth hills and hollows, no boxes.
+/// Kept clear of the point, the starts and the rim.
+pub const BUMPS: [Bump; 0] = [];

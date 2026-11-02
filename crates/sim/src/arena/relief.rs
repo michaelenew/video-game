@@ -118,6 +118,12 @@ pub fn of(id: ArenaId) -> &'static [Bump] {
         ArenaId::GNAWERS => &COMMONS,
         ArenaId::SANDMAW => &PAN,
         ArenaId::VEILSTALKER => &ASHWOOD,
+        // The King of the Hill maps keep theirs beside their tables.
+        ArenaId::QUARRY => &super::hills::quarry::BUMPS,
+        ArenaId::GLACIER => &super::hills::glacier::BUMPS,
+        ArenaId::DELTA => &super::hills::delta::BUMPS,
+        ArenaId::GORGE => &super::hills::gorge::BUMPS,
+        ArenaId::HENGE => &super::hills::henge::BUMPS,
         _ => &[],
     }
 }

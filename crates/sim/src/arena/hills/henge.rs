@@ -3,6 +3,7 @@
 
 #![allow(unused_imports)]
 
+use super::super::relief::Bump;
 use super::super::rim::Rim;
 use super::super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
 use super::{round, slab, whole};
@@ -123,3 +124,7 @@ const HENGE_WAYS: [Way; 3] = [
     ),
     Way::new("way 2", (-3300, 0, -1300), &[(-1500, 0, -1300), (0, 45, 0)]),
 ];
+
+/// The floor's relief (`arena::relief`): smooth hills and hollows, no boxes.
+/// Kept clear of the point, the starts and the rim.
+pub const BUMPS: [Bump; 0] = [];

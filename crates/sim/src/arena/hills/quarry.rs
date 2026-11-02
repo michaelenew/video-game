@@ -3,6 +3,7 @@
 
 #![allow(unused_imports)]
 
+use super::super::relief::Bump;
 use super::super::rim::Rim;
 use super::super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
 use super::{round, slab, whole};
@@ -135,3 +136,7 @@ const QUARRY_WAYS: [Way; 6] = [
         &[(0, 0, 1650), (0, 0, 1350), (0, 45, 300)],
     ),
 ];
+
+/// The floor's relief (`arena::relief`): smooth hills and hollows, no boxes.
+/// Kept clear of the point, the starts and the rim.
+pub const BUMPS: [Bump; 0] = [];

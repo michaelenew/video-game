@@ -3,6 +3,7 @@
 
 #![allow(unused_imports)]
 
+use super::super::relief::Bump;
 use super::super::rim::Rim;
 use super::super::{Area, Arena, ArenaId, Bounds, Mark, Material, Region, Solid, Spawns};
 use super::{round, slab, whole};
@@ -125,3 +126,7 @@ const GLACIER_WAYS: [Way; 5] = [
     Way::new("way 3", (-1600, 0, 0), &[(1600, 0, 0)]),
     Way::new("way 4", (-3400, 0, 1950), &[(-900, 0, 1950)]),
 ];
+
+/// The floor's relief (`arena::relief`): smooth hills and hollows, no boxes.
+/// Kept clear of the point, the starts and the rim.
+pub const BUMPS: [Bump; 0] = [];
