@@ -275,7 +275,9 @@ behind her (`view::being::ARMS_SEAL_*`), facing the way she faces, split down he
 way. The same two beings, the same size and the same height, stand behind it, and nothing of them
 is drawn on their side of it: at rest and straining they are unseen, and on an auto the being's
 arm bursts through the seal to her left (dark) or her right (light), most of an arm through
-(`view/tests/being.rs`), as faint or as solid as its bar. Which form stays is the owner's call.
+(`view/tests/being.rs`), as faint or as solid as its bar. The arm and hand are drawn nearly twice
+the being's own size about its shoulder (`view::being::ARMS_ARM_SCALE`): they are all of it that is
+seen, so they have to be substantial (the owner, 2026-11-02). Which form stays is the owner's call.
 
 Why the wings went (the owner, 2026-10-25): they did not read as a powerful celestial being
 getting closer to breaking out. Why the one big being behind her went (2026-10-28): halved, the

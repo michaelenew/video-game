@@ -448,7 +448,25 @@ pub fn place(
                 view::skeleton::Joint::ArmR
             })
             .index()]);
-            let fist = at(skin.box_of(skeleton, view::hand_joint(outer)).0);
+            let mut fist_local = skin.box_of(skeleton, view::hand_joint(outer)).0;
+            if arms {
+                // Its outer arm and hand much bigger, about its shoulder: in
+                // this form they are all of it that is seen.
+                let side = |j: Joint| view::drawn_joint(if outer { j } else { j.opposite() });
+                let s_at = skin.origin[side(Joint::ArmL).index()];
+                if let Some(rig) = rigs.being[owner][k] {
+                    for j in [Joint::ArmL, Joint::ForearmL, Joint::HandL] {
+                        let i = side(j).index();
+                        if let Ok(mut tf) = bones.get_mut(rig[i]) {
+                            tf.translation =
+                                Vec3::from_array(view::being::bigger_arm(s_at, skin.origin[i]));
+                            tf.scale = Vec3::splat(view::being::ARMS_ARM_SCALE);
+                        }
+                    }
+                }
+                fist_local = view::being::bigger_arm(s_at, fist_local);
+            }
+            let fist = at(fist_local);
             let head = at(skin.box_of(skeleton, Joint::Head).0);
             veils[owner][k] = Some(Veil {
                 fill: Vec4::new(

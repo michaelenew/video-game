@@ -235,7 +235,12 @@ fn fist_through_seal(k: usize, pose: &view::pose::Pose) -> f32 {
     let skeleton = being::skeleton(k);
     let s = being::scale(&her, &skeleton);
     let solved = solve(&skeleton, pose);
-    let fist = solved.box_of(&skeleton, view::hand_joint(k == 0)).0;
+    let shoulder =
+        solved.origin[view::drawn_joint(if k == 0 { Joint::ArmL } else { Joint::ArmR }).index()];
+    let fist = being::bigger_arm(
+        shoulder,
+        solved.box_of(&skeleton, view::hand_joint(k == 0)).0,
+    );
     fist[2] * s - being::ARMS_DEPTH * her.scale
 }
 
@@ -247,7 +252,7 @@ fn in_the_arms_form_only_the_blow_comes_through_the_seal() {
             let through = fist_through_seal(k, &being::strain(k, clock));
             assert!(
                 through < 0.0,
-                "being {k}'s fist is through the seal at rest, {through} m"
+                "being {k}'s fist is through the seal at rest, {through} m (clock {clock})"
             );
         }
         // Its blow bursts most of an arm through.

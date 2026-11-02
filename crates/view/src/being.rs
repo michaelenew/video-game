@@ -437,7 +437,7 @@ pub fn strain(k: usize, clock: u32) -> Pose {
     let p = rest(k)
         .chest(-3.0 - 2.0 * breath - 6.0 * tug, -7.0 * tug, -8.0 * tug)
         .spine(0.0, -5.0 * tug, 0.0)
-        .shoulder_l(-14.0 * tug, REST_SPREAD[k] + 12.0 * tug, 0.0)
+        .shoulder_l(-38.0 * tug, REST_SPREAD[k] + 12.0 * tug, 0.0)
         .elbow_l(REST_ELBOW + 55.0 * tug)
         .clavicle_l(-6.0 - 12.0 * tug, 2.0 * breath + 9.0 * tug)
         .wrist_l(18.0 * tug, 0.0, 0.0)
@@ -518,12 +518,24 @@ pub const ARMS_SEAL_UNDER_SHOULDER: f32 = 0.1;
 /// How far behind the seal each being's shoulder is, in metres of her size:
 /// far enough that its chest stays behind the seal while it strains, near
 /// enough that its blow comes most of an arm through.
-pub const ARMS_DEPTH: f32 = 0.4;
+pub const ARMS_DEPTH: f32 = 0.6;
 
 /// How far to her side each being's centre line is in the arms' form:
 /// its outer shoulder is then well out to her side, where its arm comes
 /// through.
 pub const ARMS_SIDE: f32 = 0.24;
+
+/// How many times its own size each being's outer arm and hand are drawn in
+/// the arms' form, about its shoulder: the arm is all of it that is seen, so
+/// it has to be substantial (the owner, 2026-11-02: "Make the arms and hands
+/// way bigger for the arms form").
+pub const ARMS_ARM_SCALE: f32 = 1.9;
+
+/// A point of being `k`'s outer arm, posed, where the arms' form draws it:
+/// `shoulder + (p - shoulder) * ARMS_ARM_SCALE`.
+pub fn bigger_arm(shoulder: [f32; 3], p: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|i| shoulder[i] + (p[i] - shoulder[i]) * ARMS_ARM_SCALE)
+}
 
 /// The arms' seal's middle, above her floor.
 pub fn arms_seal_height(her: &Skeleton) -> f32 {
