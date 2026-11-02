@@ -218,7 +218,11 @@ const GLACIER_WAYS: [Way; 12] = [
         (-1200, 0, 3400),
         &[(-1200, 60, 2650), (-1900, 800, 2650)],
     ),
-    Way::new("onto the floe at its dock", (-1900, 800, 1800), &[(-1200, 800, 1800)]),
+    Way::new(
+        "onto the floe at its dock",
+        (-1900, 800, 1800),
+        &[(-1200, 800, 1800)],
+    ),
     Way::new(
         "the open floor to the dome's stair, onto the point",
         (-5200, 0, 200),
