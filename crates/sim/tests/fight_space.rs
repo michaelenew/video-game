@@ -43,18 +43,25 @@ fn hill_map(m: &Measure, name: &str, r: Fx, j: Fx, fails: &mut Vec<String>) {
         ));
     }
     at_least("its top level", name, m.top(), of(7, 2, j), fails);
+    if m.ways_to_centre < 3 {
+        fails.push(format!(
+            "{name}: {} ways to the point, the rule wants 3",
+            m.ways_to_centre
+        ));
+    }
+    // A stretched map (`arena::hills::sizes`) is its base pulled out across
+    // the floor, so its structure leaves the contest for out of reach as it
+    // grows -- the thing it is there to let a person feel (fight-spaces.md
+    // §6). It is held to everything but where its structure is.
+    if sim::arena::hills::sizes::base_of(m.id).is_some() {
+        return;
+    }
     let all: usize = m.rings.iter().sum();
     let [core, contest, away] = m.rings;
     if core * 5 > all || contest * 3 < all || away * 4 < all {
         fails.push(format!(
             "{name}: structure core/contest/out of reach is {core}/{contest}/{away} of {all}; \
              the rule wants at most a fifth, at least a third, at least a quarter"
-        ));
-    }
-    if m.ways_to_centre < 3 {
-        fails.push(format!(
-            "{name}: {} ways to the point, the rule wants 3",
-            m.ways_to_centre
         ));
     }
 }
