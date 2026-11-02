@@ -275,7 +275,8 @@ fn draw(
             if !new {
                 continue;
             }
-            let Some(piece) = crate::effect_piece(&e, part).or_else(|| crate::effect_piece(&e, 0))
+            let Some(piece) =
+                crate::effect_piece(&e, part, None).or_else(|| crate::effect_piece(&e, 0, None))
             else {
                 continue;
             };

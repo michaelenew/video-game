@@ -133,6 +133,15 @@ pub struct Beings {
     pub beam_light: Handle<StandardMaterial>,
 }
 
+/// Where each seat's beings' outer hands are, dark then light, in the arms
+/// form (`view::being::Form::Arms`) and nowhere else: what her long holds
+/// are drawn from there -- the storm cloud over the dark being's palm, the
+/// sun-disk before the light being's, and the bolt and the blast out of them
+/// ("From the seal the hand, from the hand the strike", 2026-11-02). Drawn
+/// only: the hit test still strikes from over her head (`sim::aim::overhead`).
+#[derive(Resource, Default)]
+pub struct CastingHands(pub [[Option<Vec3>; 2]; MAX_PLAYERS]);
+
 /// One of a seat's beings' painted materials (the seat, then 0 dark or 1
 /// light): the veil `place` sets on it each frame.
 #[derive(Component)]
@@ -147,6 +156,7 @@ impl Plugin for BeingPlugin {
             Shader::from_wgsl(include_str!("being.wgsl"), "game/src/being.wgsl"),
         );
         app.add_plugins(MaterialPlugin::<Spirit>::default())
+            .init_resource::<CastingHands>()
             .add_systems(PreStartup, setup)
             .add_systems(Startup, spawn);
     }
@@ -366,6 +376,7 @@ pub fn place(
     rigs: Res<crate::models::Rigs>,
     beings: Res<Beings>,
     mut materials: ResMut<Assets<Spirit>>,
+    mut hands: ResMut<CastingHands>,
     mut skins: ResMut<Assets<crate::still::SkinMaterial>>,
     painted: Query<(&BeingSkin, &MeshMaterial3d<crate::still::SkinMaterial>)>,
     mut roots: Query<(&BeingRoot, &mut Transform, &mut Visibility), Without<Seal>>,
@@ -382,6 +393,7 @@ pub fn place(
     // Each seat's seal: where its middle is, how it is turned, and its radius.
     let mut seal_at_: [Option<(Vec3, Quat, f32)>; MAX_PLAYERS] = [None; MAX_PLAYERS];
     let arms = form() == view::being::Form::Arms;
+    hands.0 = [[None; 2]; MAX_PLAYERS];
     for owner in 0..MAX_PLAYERS {
         let p = &sim.cur.players[owner];
         let Some(being) = view::being::being(p).filter(|_| sim.cur.is_present(owner)) else {
@@ -467,6 +479,9 @@ pub fn place(
                 fist_local = view::being::bigger_arm(s_at, fist_local);
             }
             let fist = at(fist_local);
+            if arms && whole == 0.0 {
+                hands.0[owner][k] = Some(fist);
+            }
             let head = at(skin.box_of(skeleton, Joint::Head).0);
             veils[owner][k] = Some(Veil {
                 fill: Vec4::new(

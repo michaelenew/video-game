@@ -265,3 +265,56 @@ fn in_the_arms_form_only_the_blow_comes_through_the_seal() {
         );
     }
 }
+
+#[test]
+fn in_the_arms_form_its_hand_brings_her_long_holds_through_the_seal() {
+    use sim::moves::dual as d;
+    for (k, kind) in [(0, d::CHAIN_LIGHTNING), (1, d::DISK_RAY)] {
+        let frames = sim::moves::frames(Class::DualMage, kind);
+        let held = being::pose(
+            k,
+            &being::Moment {
+                kind: Some(kind),
+                at: frames.0 - 1,
+                frames,
+                clock: 0,
+            },
+        );
+        let through = fist_through_seal(k, &held);
+        assert!(
+            through > 0.3,
+            "being {k}'s hand is only {through} m through the seal"
+        );
+        // The other being is not throwing it.
+        let other = being::pose(
+            1 - k,
+            &being::Moment {
+                kind: Some(kind),
+                at: frames.0 - 1,
+                frames,
+                clock: 0,
+            },
+        );
+        assert!(
+            fist_through_seal(1 - k, &other) < 0.0,
+            "being {} throws the other's spell",
+            1 - k
+        );
+    }
+    // The cloud's hand is raised over its shoulder.
+    let frames = sim::moves::frames(Class::DualMage, d::CHAIN_LIGHTNING);
+    let raised = being::pose(
+        0,
+        &being::Moment {
+            kind: Some(d::CHAIN_LIGHTNING),
+            at: frames.0 - 1,
+            frames,
+            clock: 0,
+        },
+    );
+    let (hand, shoulder, _) = hand_and_shoulder(0, &raised);
+    assert!(
+        hand[1] > shoulder[1] + 0.3,
+        "the storm's hand is not raised"
+    );
+}

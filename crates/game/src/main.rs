@@ -4201,6 +4201,7 @@ fn curse_spot(w: &World, body: usize, index: u8) -> Option<(Vec3, f32)> {
 fn place_spells(
     sim: Res<Sim>,
     look: Res<EffectLook>,
+    hands: Res<being::CastingHands>,
     mut emits: ResMut<swing::Emits>,
     camera: Query<&GlobalTransform, With<MainCamera>>,
     mut meshes: Query<(
@@ -4215,12 +4216,13 @@ fn place_spells(
     let eye = camera.single().map(|c| c.translation()).unwrap_or(Vec3::Y);
     let same_frame = sim.prev.map_origin() == sim.cur.map_origin();
     for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
-        let Some(piece) = spell_piece(&sim.cur, tag.owner, tag.part) else {
+        let from = hands.0[tag.owner];
+        let Some(piece) = spell_piece(&sim.cur, tag.owner, tag.part, from) else {
             *vis = Visibility::Hidden;
             continue;
         };
         let then = same_frame
-            .then(|| spell_piece(&sim.prev, tag.owner, tag.part))
+            .then(|| spell_piece(&sim.prev, tag.owner, tag.part, from))
             .flatten();
         let moved = then.map(|t| piece.at - t.at);
         let piece = between(then, piece, alpha);
@@ -4260,7 +4262,11 @@ fn place_spells(
 /// growing over the startup, so the person opposite can read where it lands
 /// and when. **The active frames are the spell** -- drawn at the volume the hit
 /// test uses (`sim::state::hitbox`), so what is seen striking is what strikes.
-fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
+///
+/// `hands`: where the beings' hands are, in their arms form
+/// (`being::CastingHands`) -- Chain lightning's cloud and the Disk ray's disk
+/// and blast are drawn from them; otherwise from over her head.
+fn spell_piece(w: &World, owner: usize, part: usize, hands: [Option<Vec3>; 2]) -> Option<Piece> {
     use sim::moves::dual as d;
     use sim::state::Action;
     let p = &w.players[owner];
@@ -4498,18 +4504,23 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         }
         // **The storm cloud**, full over her head through the wind-up and
         // as the bolts leave it. The bolts are the effects'.
-        d::CHAIN_LIGHTNING => hold_gathering(w, p, kind, if startup { through } else { 1.0 }, part),
+        d::CHAIN_LIGHTNING => {
+            hold_gathering(w, p, kind, if startup { through } else { 1.0 }, part, hands)
+        }
         // **The disk**, full over her head through the wind-up; on the active
         // frames the blast runs from it to the point, drawn down the line the
         // hit test uses.
-        d::DISK_RAY if startup => hold_gathering(w, p, kind, through, part),
+        d::DISK_RAY if startup => hold_gathering(w, p, kind, through, part, hands),
         d::DISK_RAY => {
             let v = volume?;
-            let (from, to) = (fx3(v.from), fx3(v.to));
+            let (from, to) = (
+                overhead_from(p, kind, hands).0.unwrap_or(fx3(v.from)),
+                fx3(v.to),
+            );
             let swell = 1.0 + 0.25 * (w.frame as f32 * 0.9).sin();
             let r = v.radius.to_f32_for_render();
             match part {
-                k if k < 15 => hold_gathering(w, p, kind, 1.0, k),
+                k if k < 15 => hold_gathering(w, p, kind, 1.0, k, hands),
                 15 => Some(rod(Skin::Light, from, to, r * 0.6)),
                 16 => Some(rod(Skin::Sun, from, to, r * swell)),
                 17 => Some(floating_in(Skin::Light, to, r * 1.8 * swell)),
@@ -4519,7 +4530,7 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         // **The cascade** (2026-10-13): her autos thrown one into the next
         // down the line the hit test strikes along, to the disk at its end.
         d::FLURRY_DASH if !startup => flurry_piece(w, p, part, Some(left)),
-        d::FLURRY_DASH => hold_gathering(w, p, kind, through, part),
+        d::FLURRY_DASH => hold_gathering(w, p, kind, through, part, hands),
         _ => None,
     }
 }
@@ -4679,6 +4690,29 @@ fn flurry_piece(
     }
 }
 
+/// Where a long hold of `kind` is drawn from, and how big, when a being's
+/// hand holds it (the arms form, `being::CastingHands`): the storm cloud
+/// over the dark being's palm, the disk just before the light being's.
+/// `(None, 1.0)` otherwise: over her head, at full size.
+fn overhead_from(
+    p: &sim::state::Player,
+    kind: u8,
+    hands: [Option<Vec3>; 2],
+) -> (Option<Vec3>, f32) {
+    use sim::moves::dual as d;
+    let face = Vec3::new(
+        p.facing.x.to_f32_for_render(),
+        0.0,
+        p.facing.z.to_f32_for_render(),
+    )
+    .normalize_or(Vec3::Z);
+    match kind {
+        d::CHAIN_LIGHTNING => (hands[0].map(|h| h + Vec3::Y * 0.9), 0.55),
+        d::DISK_RAY => (hands[1].map(|h| h + face * 0.45), 0.6),
+        _ => (None, 1.0),
+    }
+}
+
 /// **A long hold, `full` of the way to coming out** (2026-10-12): Chain
 /// lightning's storm cloud churning over her head, the Disk ray's disk opening
 /// there, or the Flurry dash's two forces wound round her hands.
@@ -4688,9 +4722,11 @@ fn hold_gathering(
     kind: u8,
     full: f32,
     part: usize,
+    hands: [Option<Vec3>; 2],
 ) -> Option<Piece> {
     use sim::moves::dual as d;
-    let over = fx3(sim::aim::overhead(p.pos));
+    let (at_hand, size) = overhead_from(p, kind, hands);
+    let over = at_hand.unwrap_or_else(|| fx3(sim::aim::overhead(p.pos)));
     let height = sim::tuning::body_height().to_f32_for_render();
     let waist = fx3(p.pos) + Vec3::Y * height * 0.55;
     let spin = w.frame as f32;
@@ -4702,7 +4738,7 @@ fn hold_gathering(
         d::CHAIN_LIGHTNING => {
             const PUFFS: usize = 18;
             const WISPS: usize = 10;
-            let reach = 1.0 + 2.0 * full;
+            let reach = (1.0 + 2.0 * full) * size;
             let drift = spin * 0.004;
             if part < PUFFS {
                 let k = part as f32;
@@ -4747,7 +4783,7 @@ fn hold_gathering(
             )
             .normalize_or(Vec3::Z);
             let side = Vec3::new(-face.z, 0.0, face.x);
-            let open = 0.25 + 0.75 * full;
+            let open = (0.25 + 0.75 * full) * size;
             match part {
                 0 => Some(plate(Skin::Sun, over, face, 1.35 * open, 0.06)),
                 1 => Some(hoop(Skin::Light, over, face, 1.7 * open)),
@@ -4833,6 +4869,7 @@ fn mark_piece(p: &sim::state::Player) -> Option<Piece> {
 fn place_effects(
     sim: Res<Sim>,
     look: Res<EffectLook>,
+    hands: Res<being::CastingHands>,
     mut emits: ResMut<swing::Emits>,
     camera: Query<&GlobalTransform, With<MainCamera>>,
     mut meshes: Query<(
@@ -4848,7 +4885,8 @@ fn place_effects(
     let same_frame = sim.prev.map_origin() == sim.cur.map_origin();
     for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
         let effect = sim.cur.effects[tag.slot];
-        let piece = effect.and_then(|e| effect_piece(&e, tag.part));
+        let from = effect.and_then(|e| bolt_from_hand(&sim.cur, &e, &hands));
+        let piece = effect.and_then(|e| effect_piece(&e, tag.part, from));
         let Some(mut piece) = piece else {
             *vis = Visibility::Hidden;
             continue;
@@ -4859,7 +4897,7 @@ fn place_effects(
             .filter(|t| {
                 same_frame && effect.is_some_and(|e| t.kind == e.kind && t.age + 1 == e.age)
             })
-            .and_then(|t| effect_piece(&t, tag.part));
+            .and_then(|t| effect_piece(&t, tag.part, from));
         let moved = then.map(|t| piece.at - t.at);
         piece = between(then, piece, alpha);
         if let Some(leaves) = piece.trail {
@@ -5347,7 +5385,28 @@ fn floating_in(skin: Skin, at: Vec3, radius: f32) -> Piece {
     }
 }
 
-fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+/// Chain lightning's first bolt leaves the cloud; in the arms form the cloud
+/// is over the dark being's palm (`overhead_from`), so the bolt is drawn from
+/// there. Later links leave the body they struck, as before.
+fn bolt_from_hand(
+    w: &World,
+    effect: &sim::effects::Effect,
+    hands: &being::CastingHands,
+) -> Option<Vec3> {
+    if effect.slot != sim::moves::dual::CHAIN_LIGHTNING {
+        return None;
+    }
+    let p = w.players.get(effect.owner as usize)?;
+    let cloud = fx3(sim::aim::overhead(p.pos));
+    if fx3(effect.home).distance(cloud) > 1.0 {
+        return None;
+    }
+    overhead_from(p, effect.slot, hands.0[effect.owner as usize]).0
+}
+
+/// `from`: where a bolt of Chain lightning is drawn from instead of where it
+/// leapt (`bolt_from_hand`).
+fn effect_piece(effect: &sim::effects::Effect, part: usize, from: Option<Vec3>) -> Option<Piece> {
     use sim::effects::{EffectKind, GRASP_ARMS, LOTUS_BLADES};
 
     let at = fx3(effect.pos);
@@ -5761,7 +5820,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             // the far side is drawn, so the white shows round the black.
             if effect.slot == sim::moves::dual::CHAIN_LIGHTNING {
                 const STROKES: usize = BOLT_STROKES;
-                let from = fx3(effect.home);
+                let from = from.unwrap_or_else(|| fx3(effect.home));
                 let hash = |n: f32| ((n * 12.9898).sin() * 43758.547).fract() - 0.5;
                 let strike = (effect.age / 2) as f32 * 7.0;
                 let span = (at - from).length();
@@ -8376,7 +8435,7 @@ mod tests {
         // The disc it came out of, as `World::advance` sets it on the spawn.
         effect.reach = sim::moves::get(sim::Class::BloodMage, sim::state::SLOT_MECHANIC).radius;
         assert!(
-            effect_piece(&effect, 0).is_none(),
+            effect_piece(&effect, 0, None).is_none(),
             "a bare spike is drawn with a skirt"
         );
         // Erupted from a pool, it has the skirt: the disc it hit across,

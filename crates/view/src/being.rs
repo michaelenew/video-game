@@ -314,7 +314,12 @@ pub const LIGHT_AUTO: u8 = 4;
 ///   its shoulder and drives it through, at her frames -- the arm landing
 ///   as her ball leaves, which is where the ball starts (behind and outside
 ///   her shoulder, `orb, starts behind her`).
-/// - **The other being's blow, it turns from**, and **her spells, it
+/// - **Her long holds are its hand's** (the owner, 2026-11-02: "From the
+///   seal the hand, from the hand the strike"): Chain lightning's cloud
+///   gathers over the dark being's raised hand and its bolt leaves as the
+///   hand chops down; the Disk ray's disk stands in front of the light
+///   being's open palm and its blast leaves it.
+/// - **The other being's blow, it turns from**, and **her other spells, it
 ///   channels**: its arm up and out, the hand open.
 /// - **Between, it strains** ([`strain`]): a thing held, pulling against
 ///   what holds it.
@@ -342,6 +347,24 @@ pub fn pose(k: usize, m: &Moment) -> Pose {
             wind.blend(&blow, ease(((t - (s - 1.0)) / 1.5).min(1.0)))
         } else {
             blow.blend(&own, ease((t - s - a) / r))
+        }
+    } else if let Some((caster, cast, strike)) = held_spell(kind) {
+        // Its side's long hold: from the seal the hand, from the hand the
+        // strike. The hand comes up through the wind-up and holds what it
+        // is gathering; it strikes as the spell comes out. The other being
+        // strains on.
+        if caster != k {
+            return own;
+        }
+        let cast = side(cast(k));
+        let strike = side(strike(k));
+        let rise = (s * 0.4).max(1.0);
+        if t < s {
+            own.blend(&cast, ease(t / rise))
+        } else if t < s + a {
+            cast.blend(&strike, ease(((t - s) / 2.0).min(1.0)))
+        } else {
+            strike.blend(&own, ease((t - s - a) / r))
         }
     } else if kind == DARK_AUTO || kind == LIGHT_AUTO {
         // The other one's blow: it is not its own to throw. It turns from
@@ -396,6 +419,70 @@ fn blow(k: usize) -> Pose {
         .clavicle_l(8.0, 2.0)
         .wrist_l(-28.0, 0.0, 0.0)
         .head(-4.0, 0.0, 6.0)
+}
+
+/// The two long holds a being throws with its own hand: which being, the
+/// pose it holds through the wind-up, and the one it strikes in.
+fn held_spell(kind: u8) -> Option<(usize, fn(usize) -> Pose, fn(usize) -> Pose)> {
+    use sim::moves::dual as d;
+    match kind {
+        d::CHAIN_LIGHTNING => Some((0, storm_raised, storm_struck)),
+        d::DISK_RAY => Some((1, sun_held, sun_loosed)),
+        _ => None,
+    }
+}
+
+/// **Chain lightning, gathering**: its hand raised high and forward through
+/// the seal,
+/// fingers spread, the storm cloud churning over its palm; it leans back,
+/// looking up at it.
+fn storm_raised(k: usize) -> Pose {
+    rest(k)
+        .chest(-9.0, 4.0, -4.0)
+        .shoulder_l(128.0, 26.0, 0.0)
+        .elbow_l(22.0)
+        .clavicle_l(10.0, 16.0)
+        .wrist_l(-30.0, 0.0, 0.0)
+        .head(-16.0, 0.0, 0.0)
+}
+
+/// **Chain lightning, struck**: the hand chopped forward and down out of the
+/// cloud, sending the bolt.
+fn storm_struck(k: usize) -> Pose {
+    rest(k)
+        .root(5.0, 0.0, 0.0)
+        .chest(7.0, 0.0, 4.0)
+        .shoulder_l(118.0, 18.0, 0.0)
+        .elbow_l(6.0)
+        .clavicle_l(14.0, 6.0)
+        .wrist_l(20.0, 0.0, 0.0)
+        .head(4.0, 0.0, 0.0)
+}
+
+/// **The Disk ray, opening**: its arm thrust straight out through the seal,
+/// the palm open toward where she faces, the sun-disk standing in front of
+/// it.
+fn sun_held(k: usize) -> Pose {
+    rest(k)
+        .chest(-2.0, -2.0, -6.0)
+        .shoulder_l(94.0, 20.0, 0.0)
+        .elbow_l(8.0)
+        .clavicle_l(12.0, 4.0)
+        .wrist_l(-72.0, 0.0, 0.0)
+        .head(-3.0, 0.0, 0.0)
+}
+
+/// **The Disk ray, loosed**: the blast leaving the palm drives the arm back
+/// a little and the body with it.
+fn sun_loosed(k: usize) -> Pose {
+    rest(k)
+        .root(-4.0, 0.0, 0.0)
+        .chest(-6.0, -2.0, -8.0)
+        .shoulder_l(98.0, 20.0, 0.0)
+        .elbow_l(18.0)
+        .clavicle_l(4.0, 4.0)
+        .wrist_l(-80.0, 0.0, 0.0)
+        .head(-5.0, 0.0, 0.0)
 }
 
 /// Turned from the other being's blow: the chest away, the arm drawn in.
