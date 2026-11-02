@@ -381,6 +381,57 @@ pub fn dress(
             true,
         );
     }
+    // A versus stage's boxes that move (`sim::versus::Stage::drifts`):
+    // drawn at their first stop, and put where they are every frame by
+    // [`move_drifts`].
+    for (k, d) in sim::versus::drifts(arena.id).iter().enumerate() {
+        let e = draw_solid(
+            &mut commands,
+            &mut meshes,
+            &d.solid,
+            Vec3::ZERO,
+            true,
+            &look,
+            (&white, &see),
+            Under::Scenery,
+            true,
+        );
+        let mid = Vec3::new(
+            fx(d.solid.min.x) + fx(d.solid.max.x),
+            fx(d.solid.min.y) + fx(d.solid.max.y),
+            fx(d.solid.min.z) + fx(d.solid.max.z),
+        ) * 0.5;
+        commands.entity(e).insert(StageDrift { k, mid });
+    }
+}
+
+/// **One of a versus stage's drifts**, by its index in the stage's table,
+/// and where its middle is drawn at its first stop.
+#[derive(Component)]
+pub struct StageDrift {
+    k: usize,
+    mid: Vec3,
+}
+
+/// **Put a stage's drifts where the simulation has them**, between the last
+/// frame and this one as the clock says, exactly as the valley's are
+/// (`crate::stream`).
+pub fn move_drifts(sim: Res<crate::Sim>, mut drifts: Query<(&StageDrift, &mut Transform)>) {
+    let list = sim::versus::drifts(sim.cur.arena);
+    if list.is_empty() || sim.cur.valley.on {
+        return;
+    }
+    let alpha = sim.clock.alpha();
+    let v3 = |v: sim::V3| Vec3::new(fx(v.x), fx(v.y), fx(v.z));
+    for (d, mut t) in &mut drifts {
+        if let Some(drift) = list.get(d.k) {
+            let (a, b) = (
+                v3(drift.offset(sim.prev.frame)),
+                v3(drift.offset(sim.cur.frame)),
+            );
+            t.translation = d.mid + a.lerp(b, alpha);
+        }
+    }
 }
 
 /// **A place, less its boxes**: its floor and the regions on it, its props,

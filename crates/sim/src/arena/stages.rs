@@ -18,7 +18,7 @@ use super::hills::whole;
 use super::{Arena, ArenaId, Bounds, Mark, Material, Solid, Spawns};
 use crate::fixed::Fx;
 use crate::math::V3;
-use crate::versus::{Kind, Stage};
+use crate::versus::{Kind, Stage, Way};
 
 use Material::{Ash, Grass, Rock, Sand, Snow, Stone};
 
@@ -73,6 +73,9 @@ pub static ANVIL_STAGE: Stage = Stage {
     theme: "A basalt anvil over a sea of embers: hovering slabs, a horn at each end",
     pit: Some(2500),
     hill: None,
+    vents: &[],
+    drifts: &[],
+    ways: &ANVIL_WAYS,
 };
 
 const ANVIL_SOLIDS: [Solid; 6] = whole(
@@ -127,6 +130,9 @@ pub static ZIGGURAT_STAGE: Stage = Stage {
     theme: "A temple's top in the sky: three tiers to a crown, a stone off each side",
     pit: Some(2500),
     hill: None,
+    vents: &[],
+    drifts: &[],
+    ways: &ZIGGURAT_WAYS,
 };
 
 const ZIGGURAT_SOLIDS: [Solid; 7] = whole(
@@ -180,6 +186,9 @@ pub static CALDERA_STAGE: Stage = Stage {
     theme: "A floating crater: a lip broken four ways, a drum in the middle",
     pit: Some(2500),
     hill: None,
+    vents: &[],
+    drifts: &[],
+    ways: &CALDERA_WAYS,
 };
 
 const CALDERA_SOLIDS: [Solid; 10] = whole(
@@ -234,6 +243,9 @@ pub static TWIN_ISLES_STAGE: Stage = Stage {
     theme: "Two snowy isles at dawn: a narrow bridge, stones hung over the gap",
     pit: Some(2500),
     hill: None,
+    vents: &[],
+    drifts: &[],
+    ways: &TWIN_ISLES_WAYS,
 };
 
 const TWIN_ISLES_SOLIDS: [Solid; 7] = whole(
@@ -251,3 +263,22 @@ const TWIN_ISLES_SOLIDS: [Solid; 7] = whole(
         Solid::cm([-200, 4330, 350], [200, 4380, 750], Grass),
     ],
 );
+
+const ANVIL_WAYS: [Way; 3] = [
+    Way::new("way 0", (600, 4000, -500), &[(600, 4370, 0)]),
+    Way::new("way 1", (-500, 4000, 0), &[(-1650, 3900, 0)]),
+    Way::new("way 2", (-500, 4000, 0), &[(0, 4045, 0)]),
+];
+
+const ZIGGURAT_WAYS: [Way; 2] = [
+    Way::new("way 0", (0, 4000, 600), &[(0, 3850, 1300)]),
+    Way::new("way 1", (-850, 4000, 0), &[(-450, 4100, 0), (0, 4200, 0)]),
+];
+
+const CALDERA_WAYS: [Way; 1] = [Way::new("way 0", (-600, 4000, -600), &[(0, 4125, 0)])];
+
+const TWIN_ISLES_WAYS: [Way; 3] = [
+    Way::new("way 0", (-700, 4000, 550), &[(0, 4380, 550)]),
+    Way::new("way 1", (-1000, 4000, 300), &[(-1000, 4100, -300)]),
+    Way::new("way 2", (-900, 4000, 0), &[(0, 4000, 0), (900, 4000, 0)]),
+];

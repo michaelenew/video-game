@@ -499,10 +499,6 @@ fn a_hill_game_is_deterministic() {
 // Every route walked
 // ---------------------------------------------------------------------------
 
-/// A route walked: the arena, where the walk starts, and its waypoints, all
-/// in centimetres.
-type Route = (ArenaId, (i32, i32, i32), &'static [(i32, i32, i32)]);
-
 /// How long the walker holds a jump: to the top of a held hop.
 const HOLD: u32 = 30;
 
@@ -592,184 +588,20 @@ fn walk(
     Ok(())
 }
 
-/// Every climb and every hidden way on the three hill maps, walked by the
-/// class with the shortest jump: nobody is shut out of high ground in a
-/// team game. Each map is turned half a turn about its middle, so one half
-/// walked is both.
+/// **Every way every stage promises** (`versus::Stage::ways`) -- each climb,
+/// crossing and hidden way on a hill map, each height on a floating stage --
+/// walked by every class that moves (`sim::class::MOVERS`). Since
+/// 2026-11-02 the hill maps are walked by the five rather than the
+/// Bulwark, which is not on offer (`docs/design/fight-spaces.md` §5).
 #[test]
-fn every_way_on_a_hill_map_is_walked_by_the_shortest_jump() {
-    let routes: &[Route] = &[
-        // Quarry: the point; the north bench by its stair, and by the
-        // ledge from the point's side; the tor; the cutting end to end, and
-        // out of it through the slot onto the point.
-        (ArenaId::QUARRY, (-2500, 0, 0), &[(0, 45, 0)]),
-        (
-            ArenaId::QUARRY,
-            (-2300, 0, 1350),
-            &[(-1600, 130, 1350), (-1330, 270, 1350), (-700, 400, 1350)],
-        ),
-        (
-            ArenaId::QUARRY,
-            (800, 0, 500),
-            &[(800, 200, 1075), (800, 400, 1650)],
-        ),
-        (
-            ArenaId::QUARRY,
-            (-1500, 0, -1500),
-            &[(-2000, 220, -1500), (-2300, 450, -1500)],
-        ),
-        (ArenaId::QUARRY, (-1700, 0, 1650), &[(1700, 0, 1650)]),
-        (
-            ArenaId::QUARRY,
-            (-1700, 0, 1650),
-            &[(0, 0, 1650), (0, 0, 1350), (0, 45, 300)],
-        ),
-        // Glacier: the dome by its stair and by the ledge; the shelf by its
-        // stair; the melt cave under the point; the cave under the shelf.
-        (
-            ArenaId::GLACIER,
-            (-1600, 0, 700),
-            &[(-900, 150, 700), (-300, 300, 700)],
-        ),
-        (
-            ArenaId::GLACIER,
-            (0, 0, 1700),
-            &[(0, 150, 1050), (0, 300, 500)],
-        ),
-        (
-            ArenaId::GLACIER,
-            (-3700, 0, 1350),
-            &[(-3400, 180, 1350), (-3150, 360, 1350), (-2700, 550, 1650)],
-        ),
-        (ArenaId::GLACIER, (-1600, 0, 0), &[(1600, 0, 0)]),
-        (ArenaId::GLACIER, (-3400, 0, 1950), &[(-900, 0, 1950)]),
-        // Delta: the dyke from either face; the aqueduct by its stair, to
-        // its broken end; the sluice from the south lane to the breach and
-        // onto the point; through the breach.
-        (
-            ArenaId::DELTA,
-            (-2600, 0, 1000),
-            &[(-2050, 150, 1000), (-1600, 300, 1000)],
-        ),
-        (
-            ArenaId::DELTA,
-            (-600, 0, -1100),
-            &[(-1150, 150, -1100), (-1600, 300, -1100)],
-        ),
-        (
-            ArenaId::DELTA,
-            (-3700, 0, 1500),
-            &[
-                (-3300, 180, 1500),
-                (-3100, 360, 1500),
-                (-2700, 570, 1500),
-                (300, 570, 1500),
-            ],
-        ),
-        (
-            ArenaId::DELTA,
-            (-1600, 0, -2600),
-            &[(-1600, 0, -500), (-1600, 0, 0), (0, 45, 0)],
-        ),
-        (ArenaId::DELTA, (-2800, 0, 0), &[(0, 45, 0)]),
-        // Gorge: the point along the river; the north cliff-top by its
-        // west ledges and by its east ones, then across the bridge over the
-        // point to the south cliff-top; the cave from the bay to its mouth
-        // by the point.
-        (ArenaId::GORGE, (-2800, 0, 0), &[(0, 45, 0)]),
-        (
-            ArenaId::GORGE,
-            (-2300, 0, 400),
-            &[(-2300, 230, 780), (-2300, 700, 1400)],
-        ),
-        (
-            ArenaId::GORGE,
-            (1500, 0, 400),
-            &[
-                (1500, 230, 780),
-                (1500, 700, 1400),
-                (0, 700, 1200),
-                (0, 700, 0),
-                (0, 700, -1300),
-            ],
-        ),
-        (
-            ArenaId::GORGE,
-            (-3400, 0, 700),
-            &[
-                (-3400, 0, 1450),
-                (-150, 0, 1450),
-                (-150, 0, 700),
-                (0, 45, 200),
-            ],
-        ),
-        // Henge: the west stone by its stair, along the lintel over the
-        // point and on to the north stone; the north stone from outside;
-        // the barrow end to end and on to the point.
-        (
-            ArenaId::HENGE,
-            (-2200, 0, 0),
-            &[
-                (-1600, 230, 0),
-                (-1400, 470, 0),
-                (-1100, 700, 0),
-                (-500, 700, 0),
-                (0, 700, 0),
-                (0, 700, 1100),
-            ],
-        ),
-        (
-            ArenaId::HENGE,
-            (0, 0, 2200),
-            &[(0, 230, 1600), (0, 470, 1400), (0, 700, 1100)],
-        ),
-        (
-            ArenaId::HENGE,
-            (-3300, 0, -1300),
-            &[(-1500, 0, -1300), (0, 45, 0)],
-        ),
-    ];
+fn every_way_on_every_stage_is_walked_by_every_mover() {
     let mut failed = Vec::new();
-    for (id, from, route) in routes {
-        if let Err(e) = walk(*id, Class::Bulwark, *from, route) {
-            failed.push(e);
-        }
-    }
-    assert!(failed.is_empty(), "{}", failed.join("\n"));
-}
-
-/// The high places on the floating stages, walked by every class that moves
-/// (`sim::class::MOVERS`).
-#[test]
-fn every_height_on_a_floating_stage_is_reached() {
-    let routes: &[Route] = &[
-        (ArenaId::ANVIL, (600, 4000, -500), &[(600, 4370, 0)]),
-        (ArenaId::ANVIL, (-500, 4000, 0), &[(-1650, 3900, 0)]),
-        (ArenaId::ZIGGURAT, (0, 4000, 600), &[(0, 3850, 1300)]),
-        (ArenaId::ANVIL, (-500, 4000, 0), &[(0, 4045, 0)]),
-        (
-            ArenaId::ZIGGURAT,
-            (-850, 4000, 0),
-            &[(-450, 4100, 0), (0, 4200, 0)],
-        ),
-        (ArenaId::CALDERA, (-600, 4000, -600), &[(0, 4125, 0)]),
-        (ArenaId::TWIN_ISLES, (-700, 4000, 550), &[(0, 4380, 550)]),
-        (
-            ArenaId::TWIN_ISLES,
-            (-1000, 4000, 300),
-            &[(-1000, 4100, -300)],
-        ),
-        (
-            ArenaId::TWIN_ISLES,
-            (-900, 4000, 0),
-            &[(0, 4000, 0), (900, 4000, 0)],
-        ),
-    ];
-    let mut failed = Vec::new();
-    for class in sim::class::MOVERS {
-        for (id, from, route) in routes {
-            if let Err(e) = walk(*id, class, *from, route) {
-                failed.push(format!("{class:?}: {e}"));
+    for stage in versus::STAGES {
+        for way in stage.ways {
+            for class in sim::class::MOVERS {
+                if let Err(e) = walk(stage.arena, class, way.from, way.route) {
+                    failed.push(format!("{class:?}, {}: {e}", way.says));
+                }
             }
         }
     }

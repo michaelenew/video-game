@@ -108,6 +108,43 @@ pub struct Stage {
     pub pit: Option<i32>,
     /// The capture point, on a King of the Hill map.
     pub hill: Option<Hill>,
+    /// **Its updrafts** (2026-11-02, `docs/design/fight-spaces.md`): columns
+    /// of rising air, read by the same movement as the valley's
+    /// (`crate::valley::vents` falls back to these) -- a way up to a tier
+    /// that is not a stair, and on a floating stage a way back from a
+    /// knock off the edge.
+    pub vents: &'static [crate::valley::Vent],
+    /// **Its boxes that move** (2026-11-02): lifts and ferries, exactly the
+    /// valley's (`crate::drift`) -- where one is is a function of the frame,
+    /// so nothing about it is in the snapshot.
+    pub drifts: &'static [crate::drift::Drift],
+    /// **The ways it promises** (2026-11-02): every climb, crossing and
+    /// hidden way the map is built to have, each walked end to end by every
+    /// class that moves (`tests/versus.rs`), and counted by the fight-space
+    /// rules (`tests/fight_space.rs`).
+    pub ways: &'static [Way],
+}
+
+/// **A way across a stage**: stood at `from`, walking to each point of
+/// `route` in turn -- forward held, jumping when the next point is higher
+/// or the walk is blocked. Points are centimetres, `(x, y, z)`, `y` the
+/// height the feet arrive at.
+#[derive(Clone, Copy, Debug)]
+pub struct Way {
+    /// What it is, for a failure's message and the audit.
+    pub says: &'static str,
+    pub from: (i32, i32, i32),
+    pub route: &'static [(i32, i32, i32)],
+}
+
+impl Way {
+    pub const fn new(
+        says: &'static str,
+        from: (i32, i32, i32),
+        route: &'static [(i32, i32, i32)],
+    ) -> Way {
+        Way { says, from, route }
+    }
 }
 
 /// Which mode a stage is played in.
@@ -142,6 +179,16 @@ pub static STAGES: [&Stage; 9] = [
 /// The stage an arena is, if it is one.
 pub fn of(arena: ArenaId) -> Option<&'static Stage> {
     STAGES.iter().copied().find(|s| s.arena == arena)
+}
+
+/// The updrafts of the stage an arena is, if it is one; none otherwise.
+pub fn vents(arena: ArenaId) -> &'static [crate::valley::Vent] {
+    of(arena).map_or(&[], |s| s.vents)
+}
+
+/// The drifts of the stage an arena is, if it is one; none otherwise.
+pub fn drifts(arena: ArenaId) -> &'static [crate::drift::Drift] {
+    of(arena).map_or(&[], |s| s.drifts)
 }
 
 /// The stage after this arena in [`STAGES`], wrapping; the first from
