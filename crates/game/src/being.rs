@@ -84,6 +84,18 @@ impl Material for Spirit {
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Blend
     }
+
+    /// Both faces: the arms' seal stands upright facing the way she faces,
+    /// and is mostly seen from behind her.
+    fn specialize(
+        _pipeline: &bevy::pbr::MaterialPipeline<Self>,
+        descriptor: &mut bevy::render::render_resource::RenderPipelineDescriptor,
+        _layout: &bevy::render::mesh::MeshVertexBufferLayoutRef,
+        _key: bevy::pbr::MaterialPipelineKey<Self>,
+    ) -> Result<(), bevy::render::render_resource::SpecializedMeshPipelineError> {
+        descriptor.primitive.cull_mode = None;
+        Ok(())
+    }
 }
 
 /// The root one of a seat's beings hangs off (the seat, then 0 dark or 1
@@ -112,6 +124,9 @@ pub struct Beings {
     seal_radius: f32,
     /// How high the seal is off her floor.
     seal_height: f32,
+    /// The arms' form's seal: its middle above her floor, and its radius.
+    arms_seal_height: f32,
+    arms_seal_radius: f32,
     /// A shaft of light out of one of the dark being's rifts (`beam`): a
     /// unit frustum, narrow at the crack, and the light it is drawn in.
     pub beam_mesh: Handle<Mesh>,
@@ -164,6 +179,8 @@ fn setup(
         her_scale: her.scale,
         seal_radius,
         seal_height: view::being::seal_height(&her, seal_at()),
+        arms_seal_height: view::being::arms_seal_height(&her),
+        arms_seal_radius: view::being::ARMS_SEAL_RADIUS * her.scale,
         beam_mesh: meshes.add(beam_mesh()),
         beam_light: lights.add(StandardMaterial {
             base_color: Color::LinearRgba(LinearRgba::rgb(0.7, 0.35, 1.0) * BEAM_LIGHT),
@@ -327,6 +344,17 @@ pub fn seal_at() -> view::being::SealAt {
     }
 }
 
+/// What of the beings is shown: `view::being::FORM`, or `SHOT_BEINGS=arms`
+/// or `halves` to look at the other. Read once.
+pub fn form() -> view::being::Form {
+    static FORM: std::sync::OnceLock<view::being::Form> = std::sync::OnceLock::new();
+    *FORM.get_or_init(|| match crate::platform::env("SHOT_BEINGS").as_deref() {
+        Some("arms") => view::being::Form::Arms,
+        Some("halves") => view::being::Form::Halves,
+        _ => view::being::FORM,
+    })
+}
+
 /// Stand each seat's beings beside her, pose each by its own animation,
 /// lay her seal, and tell each being's veil how much of it there is.
 ///
@@ -351,6 +379,9 @@ pub fn place(
     let mut veils: [[Option<Veil>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
     let mut stands: [[Option<(Vec3, Quat)>; 2]; MAX_PLAYERS] = [[None; 2]; MAX_PLAYERS];
     let mut seal_looks: [Option<SpiritLook>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    // Each seat's seal: where its middle is, how it is turned, and its radius.
+    let mut seal_at_: [Option<(Vec3, Quat, f32)>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    let arms = form() == view::being::Form::Arms;
     for owner in 0..MAX_PLAYERS {
         let p = &sim.cur.players[owner];
         let Some(being) = view::being::being(p).filter(|_| sim.cur.is_present(owner)) else {
@@ -364,7 +395,26 @@ pub fn place(
         // Character space has the facing at +Z, and a drawn body's left at
         // +X (`view::hand_joint` says why): the dark side.
         let left = turn * Vec3::X;
-        let seal_y = feet.y + beings.seal_height;
+        let ahead = turn * Vec3::Z;
+        // The seal: on the floor round her feet, its plane the floor; or, the
+        // arms' form, upright behind her facing the way she faces.
+        let (seal_c, seal_turn, seal_r, cut_n) = if arms {
+            (
+                feet + Vec3::Y * beings.arms_seal_height
+                    - ahead * view::being::ARMS_SEAL_BEHIND * hs,
+                turn * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+                beings.arms_seal_radius,
+                ahead,
+            )
+        } else {
+            (
+                feet + Vec3::Y * (beings.seal_height + SEAL_LIFT),
+                Quat::IDENTITY,
+                beings.seal_radius,
+                Vec3::Y,
+            )
+        };
+        seal_at_[owner] = Some((seal_c, seal_turn, seal_r));
         let o = view::being::ORDER;
         for k in 0..2 {
             let skeleton = &beings.skeletons[k];
@@ -374,16 +424,21 @@ pub fn place(
             // Toward the half it keeps: the dark being's left, the light's
             // right -- away from her, either side.
             let out = if k == 0 { 1.0 } else { -1.0 };
-            let side = if whole > 0.0 {
-                0.0
+            let (wide, back) = if arms {
+                // Its shoulder ARMS_DEPTH behind the seal (its rest shoulder
+                // is on its own centre plane, near enough).
+                (
+                    view::being::ARMS_SIDE,
+                    view::being::ARMS_SEAL_BEHIND + view::being::ARMS_DEPTH,
+                )
             } else {
-                out * view::being::SIDE * hs
+                (view::being::SIDE, view::being::BEHIND)
             };
+            let side = if whole > 0.0 { 0.0 } else { out * wide * hs };
             // Sunk so its shoulders are at hers; or, looked at whole,
             // standing on her floor.
             let sink = if whole > 0.0 { 0.0 } else { beings.sinks[k] };
-            let root =
-                feet + turn * Vec3::new(side, 0.0, -view::being::BEHIND * hs) - Vec3::Y * sink;
+            let root = feet + turn * Vec3::new(side, 0.0, -back * hs) - Vec3::Y * sink;
             stands[owner][k] = Some((root, turn));
             let at = |local: [f32; 3]| root + turn * (Vec3::from_array(local) * s);
             let outer = k == 0;
@@ -407,7 +462,8 @@ pub fn place(
                     s,
                 ),
                 centre: (root + Vec3::Y * sink).extend(view::being::FADE * hs),
-                keep: (left * out).extend(seal_y),
+                keep: (left * out).extend(0.0),
+                cut: cut_n.extend(cut_n.dot(seal_c)),
                 shoulder: shoulder.extend(view::being::REACH * hs),
                 fist: fist.extend(0.0),
                 head: head.extend(0.16 * s),
@@ -423,7 +479,9 @@ pub fn place(
                 1.0,
             ),
             left: left.extend(1.0),
-            feet: (feet + Vec3::Y * beings.seal_height).extend(beings.seal_radius),
+            feet: seal_c.extend(seal_r),
+            // The seal's other axis: ahead on the floor, up when upright.
+            head: (if arms { Vec3::Y } else { ahead }).extend(0.0),
             order: Vec4::new(o.first, o.body, o.head, o.soft),
             reach: Vec4::new(view::being::REACH, whole, 0.0, 0.0),
             ..default()
@@ -458,9 +516,10 @@ pub fn place(
         if *seen != want {
             *seen = want;
         }
-        if let Some(look) = look {
-            tf.translation = look.feet.truncate() + Vec3::Y * SEAL_LIFT;
-            tf.scale = Vec3::new(beings.seal_radius, 1.0, beings.seal_radius);
+        if let (Some(look), Some((at, turn, r))) = (look, seal_at_[seal.0]) {
+            tf.translation = at;
+            tf.rotation = turn;
+            tf.scale = Vec3::new(r, 1.0, r);
             if let Some(m) = materials.get_mut(&beings.seal[seal.0]) {
                 m.look = look;
             }

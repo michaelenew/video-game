@@ -141,8 +141,11 @@ mod shade {
         pub fill: Vec4,
         /// A point on its centre line, and how wide the fade into it is.
         pub centre: Vec4,
-        /// Unit, toward the half that is kept; and the seal's height.
+        /// Unit, toward the half that is kept.
         pub keep: Vec4,
+        /// The seal's plane: its normal, toward what is drawn, and how far
+        /// along it the plane is (nothing on the far side of it is drawn).
+        pub cut: Vec4,
         /// The half's shoulder and fist, and how far from them a point
         /// arrives with the body (`view::being::REACH`, in metres).
         pub shoulder: Vec4,

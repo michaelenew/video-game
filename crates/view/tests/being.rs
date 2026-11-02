@@ -227,3 +227,36 @@ fn only_the_class_with_bars_has_a_being() {
         );
     }
 }
+
+/// How far in front of the seal the being's striking fist is, in metres, in
+/// the arms' form: positive is through it, where it is drawn.
+fn fist_through_seal(k: usize, pose: &view::pose::Pose) -> f32 {
+    let her = skeleton_for(Class::DualMage);
+    let skeleton = being::skeleton(k);
+    let s = being::scale(&her, &skeleton);
+    let solved = solve(&skeleton, pose);
+    let fist = solved.box_of(&skeleton, view::hand_joint(k == 0)).0;
+    fist[2] * s - being::ARMS_DEPTH * her.scale
+}
+
+#[test]
+fn in_the_arms_form_only_the_blow_comes_through_the_seal() {
+    for (k, kind) in [(0, being::DARK_AUTO), (1, being::LIGHT_AUTO)] {
+        // Standing and straining, its fist stays behind the seal: unseen.
+        for clock in (0..600).step_by(10) {
+            let through = fist_through_seal(k, &being::strain(k, clock));
+            assert!(
+                through < 0.0,
+                "being {k}'s fist is through the seal at rest, {through} m"
+            );
+        }
+        // Its blow bursts most of an arm through.
+        let (s, _, _) = sim::moves::frames(Class::DualMage, kind);
+        let landed = being::pose(k, &auto_moment(kind, s + 2));
+        let through = fist_through_seal(k, &landed);
+        assert!(
+            through > 0.6,
+            "being {k}'s blow comes only {through} m through the seal"
+        );
+    }
+}

@@ -53,18 +53,18 @@ fn seal(in: VertexOutput) -> FragmentOutput {
     let p = in.world_position.xyz;
     let c = spirit.feet.xyz;
     let radius = spirit.feet.w;
-    let rel = vec2<f32>(p.x - c.x, p.z - c.z) / radius;
+    // In the seal's own plane: across it toward her left (the dark side),
+    // and along its other axis -- ahead of her on the floor, up when it
+    // stands upright behind her (`head`).
+    let rel = vec2<f32>(dot(p - c, spirit.left.xyz), dot(p - c, spirit.head.xyz)) / radius;
     let r = length(rel);
     if (r > 1.0) {
         discard;
     }
-    let left = normalize(vec2<f32>(spirit.left.x, spirit.left.z));
-    // Her facing: up crossed with her left.
-    let ahead = vec2<f32>(left.y, -left.x);
-    let side = dot(rel, left);
+    let side = rel.x;
     let dark = smoothstep(-0.01, 0.01, side);
-    // Round each half from behind her (0) to in front of her (1).
-    let around = atan2(abs(side), -dot(rel, ahead)) / PI;
+    // Round each half from its back or bottom (0) to its front or top (1).
+    let around = atan2(abs(side), -rel.y) / PI;
     let fill = mix(spirit.fill.y, spirit.fill.x, dark);
     let asc = spirit.fill.z;
     let t = globals.time;

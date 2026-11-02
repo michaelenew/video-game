@@ -490,6 +490,46 @@ pub fn sink(her: &Skeleton, body: &Skeleton) -> f32 {
     scale(her, body) * shoulder_height(body) - shoulder_height(her)
 }
 
+/// **What of the beings is shown** (the owner, 2026-11-02, asking for a
+/// second example to set beside the first):
+///
+/// - [`Form::Halves`]: each being's outer half, beside her, out of the seal
+///   on the floor at her feet.
+/// - [`Form::Arms`]: only their arms. The seal is a great upright circle
+///   behind her, facing the way she faces, and the beings stand behind it;
+///   nothing of them is drawn on their side of it, so at rest they are
+///   unseen, and on an auto the arm bursts through it to her left or her
+///   right ("the arms burst through either the left or the right side of
+///   that seal ... for the autos").
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Form {
+    Halves,
+    Arms,
+}
+
+pub const FORM: Form = Form::Halves;
+
+/// The arms' seal: how far behind her it stands, and its radius, in metres
+/// of her size; its middle a little under her shoulders.
+pub const ARMS_SEAL_BEHIND: f32 = 0.45;
+pub const ARMS_SEAL_RADIUS: f32 = 1.15;
+pub const ARMS_SEAL_UNDER_SHOULDER: f32 = 0.1;
+
+/// How far behind the seal each being's shoulder is, in metres of her size:
+/// far enough that its chest stays behind the seal while it strains, near
+/// enough that its blow comes most of an arm through.
+pub const ARMS_DEPTH: f32 = 0.4;
+
+/// How far to her side each being's centre line is in the arms' form:
+/// its outer shoulder is then well out to her side, where its arm comes
+/// through.
+pub const ARMS_SIDE: f32 = 0.24;
+
+/// The arms' seal's middle, above her floor.
+pub fn arms_seal_height(her: &Skeleton) -> f32 {
+    shoulder_height(her) - ARMS_SEAL_UNDER_SHOULDER * her.scale
+}
+
 /// Where the seal is, and so where each being comes out of: on the floor
 /// round her feet (the owner, 2026-10-29: "I want the seal to show at the
 /// dual mage's feet and the models of the beings to be truncated at the

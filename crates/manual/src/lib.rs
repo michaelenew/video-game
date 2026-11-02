@@ -1068,6 +1068,10 @@ pub const SECTIONS: &[Section] = &[
                 "Draw one of the Dual mage's two beings on its own, whole and painted, standing on her floor rather than rising out of the seal -- how each is looked at before they are halved. Pair it with SHOT_PORTRAIT to walk round it.",
             ),
             e(
+                "SHOT_BEINGS=arms|halves",
+                "Show the Dual mage's beings the other way: only their arms, bursting through a great upright seal behind her on her autos, or their outer halves beside her, out of the seal at her feet.",
+            ),
+            e(
                 "SHOT_SEAL=waist|feet",
                 "Put the Dual mage's seal, and where her beings come out of it, on the floor round her feet or round her waist, to compare the two.",
             ),

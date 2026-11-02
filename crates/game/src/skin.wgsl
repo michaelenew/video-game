@@ -29,6 +29,7 @@ struct Veil {
     fill: vec4<f32>,
     centre: vec4<f32>,
     keep: vec4<f32>,
+    cut: vec4<f32>,
     shoulder: vec4<f32>,
     fist: vec4<f32>,
     head: vec4<f32>,
@@ -77,8 +78,8 @@ fn veil_alpha(p: vec3<f32>) -> f32 {
     // Its outer half, fading into its own middle.
     let d = dot(p - veil.centre.xyz, veil.keep.xyz);
     a = a * smoothstep(0.0, veil.centre.w, d + drift * 0.5 * veil.centre.w);
-    // Out of the seal: nothing below it.
-    a = a * smoothstep(veil.keep.w, veil.keep.w + 0.06 * s, p.y + drift * 0.05 * s);
+    // Out of the seal: nothing on its far side.
+    a = a * smoothstep(veil.cut.w, veil.cut.w + 0.06 * s, dot(p, veil.cut.xyz) + drift * 0.05 * s);
     return a;
 }
 
