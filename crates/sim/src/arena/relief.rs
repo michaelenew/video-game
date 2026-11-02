@@ -113,6 +113,9 @@ const ASHWOOD: [Bump; 9] = [
 
 /// An arena's bumps. Empty for a flat floor, which is most of them.
 pub fn of(id: ArenaId) -> &'static [Bump] {
+    if let Some(stretched) = super::hills::sizes::relief_of(id) {
+        return stretched;
+    }
     match id {
         ArenaId::HORNBACK => &MEADOW,
         ArenaId::GNAWERS => &COMMONS,

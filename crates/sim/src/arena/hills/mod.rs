@@ -115,6 +115,7 @@ pub mod glacier;
 pub mod gorge;
 pub mod henge;
 pub mod quarry;
+pub mod sizes;
 
 pub use delta::{DELTA, DELTA_STAGE};
 pub use glacier::{GLACIER, GLACIER_STAGE};

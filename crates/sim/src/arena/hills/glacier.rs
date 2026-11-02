@@ -130,3 +130,9 @@ const GLACIER_WAYS: [Way; 5] = [
 /// The floor's relief (`arena::relief`): smooth hills and hollows, no boxes.
 /// Kept clear of the point, the starts and the rim.
 pub const BUMPS: [Bump; 0] = [];
+
+// The tables a stretched map is made from (`super::sizes`).
+pub(super) const SOLIDS: [Solid; 27] = GLACIER_SOLIDS;
+pub(super) const REGIONS: [Region; 4] = GLACIER_REGIONS;
+pub(super) const VENTS: [crate::valley::Vent; 0] = [];
+pub(super) const DRIFTS: [crate::drift::Drift; 0] = [];

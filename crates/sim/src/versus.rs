@@ -163,18 +163,33 @@ impl Stage {
     }
 }
 
-/// Every stage, duels first, in the order the picker steps through them.
-pub static STAGES: [&Stage; 9] = [
-    &crate::arena::stages::ANVIL_STAGE,
-    &crate::arena::stages::ZIGGURAT_STAGE,
-    &crate::arena::stages::CALDERA_STAGE,
-    &crate::arena::stages::TWIN_ISLES_STAGE,
-    &crate::arena::hills::QUARRY_STAGE,
-    &crate::arena::hills::GLACIER_STAGE,
-    &crate::arena::hills::DELTA_STAGE,
-    &crate::arena::hills::GORGE_STAGE,
-    &crate::arena::hills::HENGE_STAGE,
-];
+/// Every stage, duels first, in the order the picker steps through them:
+/// each King of the Hill map big, bigger and biggest (`arena::hills::sizes`),
+/// so `Shift+N` flips through one map's sizes before the next map.
+pub static STAGES: [&Stage; 19] = {
+    use crate::arena::hills::{self, sizes};
+    [
+        &crate::arena::stages::ANVIL_STAGE,
+        &crate::arena::stages::ZIGGURAT_STAGE,
+        &crate::arena::stages::CALDERA_STAGE,
+        &crate::arena::stages::TWIN_ISLES_STAGE,
+        &hills::QUARRY_STAGE,
+        &sizes::QUARRY_BIGGER_STAGE,
+        &sizes::QUARRY_BIGGEST_STAGE,
+        &hills::GLACIER_STAGE,
+        &sizes::GLACIER_BIGGER_STAGE,
+        &sizes::GLACIER_BIGGEST_STAGE,
+        &hills::DELTA_STAGE,
+        &sizes::DELTA_BIGGER_STAGE,
+        &sizes::DELTA_BIGGEST_STAGE,
+        &hills::GORGE_STAGE,
+        &sizes::GORGE_BIGGER_STAGE,
+        &sizes::GORGE_BIGGEST_STAGE,
+        &hills::HENGE_STAGE,
+        &sizes::HENGE_BIGGER_STAGE,
+        &sizes::HENGE_BIGGEST_STAGE,
+    ]
+};
 
 /// The stage an arena is, if it is one.
 pub fn of(arena: ArenaId) -> Option<&'static Stage> {

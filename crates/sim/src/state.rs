@@ -2297,7 +2297,11 @@ impl World {
             self.raise_drifts(&mut g);
             g
         } else {
-            Terrain::bare(self.arena.get())
+            // A versus stage's drifts are raised as the map's are
+            // (`versus::Stage::drifts`); anywhere else there are none.
+            let mut g = Terrain::bare(self.arena.get());
+            self.raise_drifts(&mut g);
+            g
         };
         if self.lore.owner.is_none() {
             return ground;
