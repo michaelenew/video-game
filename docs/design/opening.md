@@ -1,13 +1,14 @@
 ---
-status: prototype — a look-only blockout (`--arena warden`); nothing is playable as a fight
+status: plan (stage 1 of delivery.md) -- the first blockout is superseded (§7)
 proposed: 2026-10-29
 prototype: 2026-10-29
+replanned: 2026-11-02
 ---
 
 # The opening — a prison, a climb, and the first fight
 
-How a new player meets the game: where they wake, how the kit is handed to
-them, and the first fight they are built toward. Written from a conversation
+How a new player meets the game: where they wake, the way out to the first
+fight, and that fight. Written from a conversation
 with the owner on 2026-10-29. It serves [intent](intent.md), and it is also
 the first test of a **combat identity** (§2) that the intent leaves unsaid.
 
@@ -23,7 +24,10 @@ The owner, on what is wrong with how the game starts now:
   appearing in a bland village center does not."* The model is the start of
   Dark Souls or Tears of the Kingdom: a place that tells you your situation.
 - **There have been explicit requests to introduce the clicks one at a
-  time.** A whole kit at once is too much to take in.
+  time.** A whole kit at once is too much to take in. *Introduce* is the
+  word: the owner, 2026-11-02, *"Every character has all their tools, we
+  don't take any of those away."* Clicks are taught one at a time, never
+  locked (§3).
 
 And on what the hook has to be. The owner's children's games
 (`michaelenew/kids-games`) worked because the first minutes had one clear
@@ -45,8 +49,10 @@ Two things are therefore wanted from the opening at once:
 1. **The world reacts, materially, as you get through each challenge.** Things
    break, open and fall. A panel ticking a box is not the reward
    ([tutorials.md](tutorials.md)'s halls stay as reference, not as the hook).
-2. **Each new piece of the kit is a jump in power you can feel.** The Mecha
-   Forge feeling, made out of moves the game already has.
+2. **Room to breathe before the test.** The owner, 2026-11-02, on the first
+   blockout: *"exit cell -> you have no room -> do 4 cramped jumps (some
+   optional) -> enter boss area. That's not dark souls. It needs a run up,
+   it needs some kind of freedom before you get into the fight."*
 
 ## 1 · What the opening is for
 
@@ -94,129 +100,79 @@ The Asylum Demon already makes the point. The fight a player wins **starts
 with a dive from a ledge** that takes a large share of its health: where you
 stand decides the fight. That is the moment this opening is built around.
 
-## 3 · The kit, handed out one piece at a time
+## 3 · The kit: whole, and taught a click at a time
 
-The opening hands the kit over in order, and each piece is a reward. Nothing
-new is designed: every move exists, and the whole kit is in hand by the end
-of the opening's first stretch. It is also a first, gentle trial of the
-progression the owner likes best, *unlocking new parts of the character*
-([intent](intent.md) §4), with none of that idea's input-budget worry,
-because nothing is added.
+**Every class has its whole kit from the first frame** (the owner,
+2026-11-02; [level-design.md](level-design.md), L6). The first draft of this
+document locked the clicks and the class movement and handed them out as
+rewards; that is withdrawn, and so is everything that leaned on it.
 
-**The rule that makes it work: a click arrives as itself, and its takeoff
-arrives with the movement.** Most of a class's height comes from its
-takeoffs, `space` + a click (the Reaver's Gallows, the Elementalist's Earth
-jump, the Champion's Pole drive), and from its own movement tool. A click
-handed over early is its tap, its hold and its move in the air; its takeoff
-stays locked until the movement unlock (§5, step 6). The dive in the air
-(Plunge, Landfall, the air swing) is part of the click, not the takeoff, and
-is needed early: it is how you hit from above.
+What stays is the request that prompted it: the clicks are **introduced**
+one at a time. On the way to the fight (§5) there are a few small
+encounters, each one plainly suited to one click, with a line on screen
+naming it -- something to hit up close for the left click, something out of
+reach for a thrown or ranged one, something above you for a takeoff. Each
+is optional and over in seconds, and nothing is locked if you skip it.
 
-| Step | What is in hand |
-| --- | --- |
-| The cell and the climb | **The moves every class shares**: walk, run, jump (and holding it), wall slide and wall jump, ledge catch, dodge |
-| Partway up | **One click**, its tap, hold and air move, no takeoff |
-| The first fight | The same. A small kit, completely learned |
-| Its reward | **The class's movement**: every takeoff, and the class's own movement tool |
-| After it | **The other clicks and keys**, one per short stretch, each shown by a small fight or obstacle that needs it |
+## 4 · Scale, against the whole kit
 
-Per class, a first guess:
+With every tool in hand the movers reach a long way: the stone launch
+17-25 m ([courses.md](courses.md) §1a), the Reaver 50-75 m through the Whirl
+(courses.md §0), a run and jump 7-9 m level. **No creature can be built big
+enough that its back is out of reach**, and the first draft's case for a
+creature "about two Ridgebacks" tall (that the shared moves alone could not
+reach its back) no longer holds.
 
-| Class | First click | The movement unlock |
-| --- | --- | --- |
-| Champion | Left, the sword | The takeoffs (the Pole drive above all) and the Rush |
-| Shadow Reaver | Left, the finishers: Reave, and Plunge from the air | Gallows (the takeoff), the dash and the dash jump |
-| Elementalist | **Open** (OPENING-3): her stones are both an attack and a climb | Earth jump and the structure jumps |
-| Blood mage | Whatever her first click is when this is built | Her movement tool, whatever it is then |
-| Dual mage | The same | The same |
+So the fight is not hard because the soft place is far up. It is hard
+because of what the Warden does to you on the way and while you are there
+(§6): the floor it owns, the perches it swats, the back it shakes. Its size
+is chosen for how it looks and for how much room it gives a fight on its
+back -- a guess of fifteen metres to the top of its back, set by play
+(OPENING-4) -- and written beside the reach tables
+([level-design.md](level-design.md), L7; [monster-design.md](monster-design.md), M5).
 
-**The Blood mage and the Dual mage are left loose on purpose.** The owner
-expects both movement tools to change, so the opening should not be fitted to
-what they are now. The test they need is a single one: that with only the
-shared moves and one click, the climb (§5) is still a climb for them. The
-Dual mage floats by nature (her gravity is ×0.8, and her hangs in the air are
-the longest), so she is the one to check first.
+## 5 · The plan: the way to the tower
 
-**Where the reduced kit applies.** Only in the opening. The tutorial halls
-and versus keep the whole kit, and a returning player can skip the opening
-(OPENING-5).
+**Stage 1 of [delivery.md](delivery.md)** -- a plan, with distances, for the
+owner to react to before anything is built. The map is
+[gallery/opening/plan.svg](gallery/opening/plan.svg).
 
-## 4 · Why the creature does not have to be enormous
+Distances are along the direct way, at a run (about 7 m/s); exploring makes
+all of it longer.
 
-The owner's worry: *"it's possible to cover a lot of height very quickly, and
-if the run up the tower needs to be a challenge this thing needs to be many
-times the height of the Ridgeback today ... The Ridgeback can be mounted
-trivially by every real class with a lot of room left over."*
+| | Where | From the cell | What it is for |
+| --- | --- | --- | --- |
+| 1 | **The cell** | 0 m | Your circumstance. The door is already torn off its hinges -- the Warden's work, before you have seen it. |
+| 2 | **The cut** | 0-30 m | A passage out through the rock, ten metres wide and open overhead, rising gently to daylight. Room for the camera (L3); walls of rock (L4). |
+| 3 | **The yard** | 30-180 m | **The run-up and the freedom** (L1). A broad, ruined terrace on the mountainside, 150 m long and about 100 m wide: low broken walls, a fallen statue, a lookout over the gorge, a collapsed watchtower to climb for the view. Mountain rising on one side, the gorge on the other. The click encounters (§3) are here, each off the straight line. |
+| 4 | **The sight of it** | from 30 m | **The tower across the gorge**, sixty metres tall, from the moment you step out of the cut, and the whole way after (L2). |
+| 5 | **The causeway** | 180-260 m | A stone causeway across the gorge, twelve metres wide, rising gently to the tower. Halfway, the Warden is seen through a breach in the tower's wall, and heard. Dread on a wide, safe road. |
+| 6 | **The keep's rim** | 260 m | You come in **at the top**: a broad rampart round the fight, fifteen to eighteen metres up, and the Warden below. The fight starts with a dive off it (§2, the Asylum Demon's opening) -- or with dropping down any way you like. |
+| 7 | **The fight** | -- | §6, in a round floor fifty metres across, walled by the rock the keep is cut into (L4). |
 
-That is true with the whole kit, and most of that reach is in the class
-tools: the stone launch 17–25 m ([courses.md](courses.md) §1a,
-[tutorials.md](tutorials.md) §2), the Reaver 50–75 m through the Whirl
-(courses.md §0). **The shared moves alone reach much less, and have a
-ceiling**:
+About forty seconds straight there; minutes if you look round, which is the
+point.
 
-- A standing full hop peaks at 2.7 m on the heaviest class and 6.0 m on the
-  floatiest ([monsters.md](monsters.md) §1); a run and jump goes 7–9 m
-  level (courses.md §1a).
-- A wall jump rises about 0.6 of the class's takeoff, each one after it in
-  the same airtime rises ×0.7 of the last, and the same wall works again
-  only from lower down. *"A chimney or a corner can still be climbed a
-  little; it cannot be climbed forever"* ([controls.md](controls.md),
-  walls).
-- Three of the five classes have no answer to a 9 m rise without their tools
-  (courses.md §1a). The Ridgeback's back is out of reach from the floor for
-  five of the six classes (monsters.md §1).
+**How it would be built** (stage 2, after the owner has seen this): one
+arena whose ground is a height function, as the King of the Hill maps'
+hills are, with a rim for its edges and few boxes -- the rock, the gorge and
+the terrace are land, not stacked boxes ([level-design.md](level-design.md),
+L4). In two slices, each checked and handed over on its own
+([delivery.md](delivery.md), D2):
 
-So **with the kit held back, a creature of about two Ridgebacks**, its soft
-place some 10–12 m up, in a shaft where the walls and perches decide how you
-go up, **is a real threat on the way up and a real fight at the bottom.**
-Its exact size is a number to set by play, not here (OPENING-4).
-
-This also sets how creatures scale. The first is sized against the small kit
-and later ones (the Siegeshell) against the whole one. **The Ridgeback
-feeling small once your movement is unlocked is the point, not a flaw**:
-it is how you feel the power you were given.
-
-## 5 · The opening, step by step
-
-A sketch, to be found by play. The owner is not a storyteller
-([intent](intent.md) §5), so the place below is a *circumstance*, not a
-story: what is happening to you, with as little said as possible, the way
-an Undead Asylum cell says it.
-
-1. **The cell.** You wake at the bottom of a tower prison cut into a cliff, a
-   place for keeping things. Something enormous lives in the tower's central
-   shaft (*the Warden*, a placeholder name). Before you can do anything, it
-   strikes the tower and **your cell wall cracks open**. That is your way
-   out, and the first time the world moves because of you.
-2. **The climb out.** You climb through the broken tower, one shared move at
-   a time: the jump, holding it, the wall slide and wall jump, the ledge
-   catch, the dodge. **The margins are wide.** This is
-   [intent](intent.md) §3, danger that feels larger than it is, not a jump
-   course to grind. A fall stands you a short way back. The Warden is seen
-   through gaps and windows the whole way, close, and once or twice it
-   reaches in and takes away the way you were about to use.
-3. **The first click.** Partway up, the first click is given (by what, and
-   how, is OPENING-6), and small things that live in the prison show what it
-   does, in two or three hits each.
-4. **The first meeting.** The climb comes out onto a gallery over the
-   Warden's floor, and it is there. **You can fight it**, and a good player
-   might win; the cards are plainly stacked against you, and there is a way
-   out up the far wall, as obvious as the Asylum Demon's door.
-5. **The return, from above.** The way out leads round and back to a ledge
-   over the floor. **The fight opens with a dive onto it** (§6).
-6. **The reward: your movement.** You beat it and are given the class's
-   movement (§3). **The world shows you at once what it means**: the shaft
-   you crawled up, or a gap you could not cross, is one jump now.
-7. **The view out.** Out of the top of the tower, the land and something to
-   go toward. What that is belongs to a storyteller, and is OPENING-7.
-8. **Then the rest of the kit**, a click or a key per short stretch, each one
-   paid off.
+1. **The way there**: cell, cut, yard, causeway and keep, with no creature.
+   Walked end to end by the five movers, the camera check along it, the
+   starts clear (D3).
+2. **The Warden**, as a creature that is whole by
+   [monster-design.md](monster-design.md) M1 -- body, hit parts, moves with
+   telegraphs, the hunter's report -- in the keep.
 
 ## 6 · The first fight
 
-**The arena.** The bottom of the shaft: a round floor of broken stone, the
-wall rising all round, and things to get up on: **columns, scaffolding,
-chains, ledges** at heights the shared moves reach in two or three steps.
+**The arena.** The keep's floor: round, fifty metres across, walled by
+rock. Around it, things to get up on: **thick stone piers** at the height
+of the Warden's back and above it, and **high ledges** on the walls (about
+16-20 m) for the ranged classes.
 
 **What it does.** It owns the floor. Its moves are aimed at the ground, so
 each has a floor answer (a dodge, a step out) and a better answer up off it:
@@ -230,75 +186,68 @@ each has a floor answer (a dodge, a step out) and a better answer up off it:
   leave it.
 
 **What it does to you up high.** Being up cannot be free, or the fight is
-over at the first perch. **It swats what you are standing on.** A column
-struck falls, a scaffold struck breaks. That tells you to move on, and
-**the arena changes**: every perch it breaks is one fewer, and the rubble
-is a new ramp, often onto it.
+over at the first perch. **It swats what you are standing on.** A pier
+struck breaks. That tells you to move on, and **the arena changes**: every
+perch it breaks is one fewer, and the rubble is a new way up, often onto
+it. On its back it bucks and shakes.
 
-**Where it is soft.** Up high: on its back, at the nape, wherever a dive from
-a perch lands. A dive from above is the big damage, as the opening dive is.
-Its rhythm is therefore:
+**Bringing it down: the back, not the feet** (the owner, 2026-11-02).
 
-1. Hold out on the floor.
-2. Get up: a column, the scaffolding, the wall.
-3. Dive onto the soft place.
-4. Move on before it swats where you are.
+- **Its feet take reduced damage.** Hitting them is the floor's way and the
+  slow one.
+- **Its back takes real damage**, and that damage fills a **stagger**. When
+  the stagger fills it staggers and **falls**: whoever is on its back comes
+  down with it (and lands without fall damage), and with it down there is
+  a window for more hits, for everybody, from the floor.
+
+**For the ranged classes** (proposed, OPENING-2): the soft place on its back
+is open **only from above** -- the plates and shoulders cover it from below
+and from the side, by their shape, so the aim model's straight line from
+the hand meets armour first from the floor (`aim::first_along`), and no rule
+for ranged attacks is needed. Melee classes reach it on its back; ranged
+ones from the high ledges and piers, where it swats them. Back damage
+fills the stagger whoever deals it.
 
 **The contract.** The [bestiary](bestiary.md)'s, unchanged: every threat
 announced before it lands, every opening real, a loss the player's and never
 the creature's. *Tough*, in the intent's sense: a fight you do not win the
 first time and can see yourself winning.
 
-## 7 · Building it, and the test
-
-**Build the fight first.** Not the tower, not the cell: a rough blockout of
-the arena (plain boxes for the columns and ledges) and the creature, and
-play it. The tower and the walk up are designed back from the fight once it
-works: each step of the climb teaches one thing the fight asks for.
+## 7 · The first blockout, and why it is superseded
 
 **Nothing in the game today is a starting point for the substance.** The
 owner, 2026-10-29: *"Nothing in the game today has the right substance that I
 am looking for. Every fight and arena keeps you on the ground almost
 entirely."* No existing arena, creature, move set or hazard is to be adapted
-into this fight: the arena, the creature's moves and the way it pushes you up
-are designed new, from §2 and §6. Tuning an existing fight toward this would
-inherit the ground-bound shape that is the problem.
+into this fight. What can be used is plumbing: a creature is a table
+([species.md](species.md)), an arena is a table ([arenas.md](arenas.md)),
+`tutorial::Seen` reads what a player just did, and the scripted hunter
+measures a fight ([bestiary.md](bestiary.md) §8).
 
-What can be used is plumbing only, the formats things are written in rather
-than anything written in them:
+**The first blockout** (`--arena warden`, 2026-10-29, still in the game for
+reference) was a tower: a cell at the bottom of a well, four tight ledges up
+it, a gallery into a shaft, and the Warden drawn as boxes nothing collides
+with. From play (the owner, 2026-11-02) and the checks written since, it
+breaks these standards:
 
-- **A creature is a table** ([species.md](species.md)) and **an arena is a
-  table** ([arenas.md](arenas.md)): the Warden and its shaft are new entries,
-  not changed copies of old ones.
-- **Reading what a player just did** off two frames (`tutorial::Seen`,
-  [tutorials.md](tutorials.md) §2), to know when a step of the climb or a
-  click has been learned.
-- **The scripted hunter** ([bestiary.md](bestiary.md) §8), to measure the
-  fight once a person has found it good, never before
-  ([courses.md](courses.md) §0: *"You build, I play."*).
+- **L1**: no run-up and no freedom -- cell, cramped jumps, boss room.
+- **L3, L4**: walls two metres thick, which the camera passes through
+  (it holds off only boxes eight metres thick and twenty broad, by the
+  Oven's knobs), so walls were cut away round the fighter and the camera
+  landed on the cliff behind them and jumped. The camera check fails it:
+  `cargo run -p view --example camcheck -- warden "30,0,2; 24,0,2; ..."`
+  reports jumps up the well and at the gallery door. Thickening the outer
+  walls to eight metres removed the large jumps, which is how the cause was
+  confirmed.
+- **L9, M1**: the Warden was a picture in a place you could load, so the
+  owner found a creature with no collision, no hit parts and no moves.
+- **L6**: it assumed the kit would be locked.
+- **L10**: it was judged from cameras placed by hand
+  ([gallery/opening/](gallery/opening/README.md)), which hid all of the
+  above.
 
-Everything else is new: the arena and its perches, **perches that break** (a
-solid removed, its rubble added), the creature and its moves, and **a kit
-with pieces locked**, per player, in the opening only.
-
-**A first blockout exists, to look at** (2026-10-29): `--arena warden`
-(`sim::arena::warden`). The shaft, its columns, scaffolding, the stair of
-ledges up the north wall, the return ledge and the gallery; the well beside
-it with the cell, its bars and the ledges up to the gallery's door. **The
-Warden is drawn, not built**: boxes nothing collides with
-(`game::arenas::warden`), posed for a screenshot by `SHOT_WARDEN=x,z,yaw,pose`
-(`stand`, `slam`, `swat`, `down`), and it does nothing. Fighters are stood
-for a picture with `SHOT_AT` and `SHOT_AT2` (player two), turned with
-`SHOT_FACE`, left in the air with `SHOT_FALL` (`1`, `2` or `12`), and the
-HUD is hidden with `SHOT_BARE=1`. The pictures and the commands that made
-them are in [gallery/opening/](gallery/opening/README.md). Every number in
-it is a first guess, and none of it is tuned or tested for play.
-
-**The test, in one question:** *in the blockout, do players leave the floor
-because they want to, rather than because they are told to?* If they do,
-the identity holds and the rest of the opening follows from the fight. If
-they do not, the blockout says what is missing, and much more cheaply than
-a valley would.
+It stays only so the next blockout can be compared with it; the plan in §5
+replaces it.
 
 ## 8 · Open
 
@@ -306,24 +255,26 @@ Answer by ID.
 
 - **OPENING-1: is "the monster owns the floor" what people enjoy in the
   movement?** It was agreed for the intro fight. Whether the pull of the
-  movement is that, or speed, flow, or style, the blockout should show.
-- **OPENING-2: one fight for every class, or one built around a starting
-  class?** The draft is one fight, built from the shared moves, so that each
-  class's movement is only a faster way up. This keeps [courses.md](courses.md)
-  §0's rule that the main route is every class's.
-- **OPENING-3: the Elementalist's first click.** Earth is her first click
-  and also her climb. A stone with its takeoff locked may still be a step to
-  stand on. Hand her fire first, or earth without its takeoff, and check the
-  climb.
-- **OPENING-4: the Warden's size.** About two Ridgebacks, the soft place
-  10–12 m up, is the guess. It is set by play, against the shared moves of
-  the five classes that move (`sim::class::MOVERS`).
+  movement is that, or speed, flow, or style, the fight should show.
+- **OPENING-2: ranged classes and the back.** Proposed in §6: the soft
+  place open only from above, by the shape of its plates; ranged classes
+  shoot down from high ledges and piers; ranged back damage fills the
+  stagger as melee's does. Is that the way, and should the Elementalist's
+  own stones count as perches?
+- **OPENING-4: the Warden's size.** Fifteen metres to the top of its back is
+  the guess, for the look and the room on its back, not for reach.
 - **OPENING-5: skipping the opening.** A returning player, a second player
   joining, someone who has played it on another machine. And how the opening
   is played by two people at once.
-- **OPENING-6: how a piece of the kit is given.** Found, taken back,
-  remembered, woken? It should be the world reacting, not a screen. The
-  answer is part of the story.
+- **OPENING-6: how the clicks are introduced.** The plan is small optional
+  encounters in the yard, one suited to each click, with a line naming it.
 - **OPENING-7: what is outside the tower, and what the valley becomes.** The
   owner does not want the valley as progression. What replaces it is not
   decided here; this document only covers the start.
+- **OPENING-8: in from above, or a first meeting on its floor?** The plan
+  enters at the keep's rim and opens with the dive. The Asylum Demon's way
+  is a first meeting on the floor you flee, then a return from above; that
+  is a longer loop and wants a reason to flee that is not a locked door.
+- **OPENING-9: what is found off the line in the yard.** There is no reward
+  system to hand anything out. A view, a glimpse of the Warden, a hint of
+  the story are the candidates until there is.

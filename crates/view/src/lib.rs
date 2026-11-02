@@ -9,6 +9,7 @@
 
 pub mod arms;
 pub mod baked;
+pub mod camcheck;
 pub mod camera;
 pub mod clips;
 pub mod dodge;

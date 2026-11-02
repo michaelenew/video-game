@@ -1,5 +1,12 @@
 # Gallery — the opening, blocked out
 
+> **Superseded, 2026-11-02.** This blockout broke the standards written
+> since ([level-design.md](../../level-design.md)): no run-up (L1), walls
+> too thin for the camera (L3, L4), a creature that was only a picture (L9,
+> M1), and every picture below taken from a camera placed by hand (L10),
+> which hid all of it. The plan that replaces it is
+> [opening.md](../../opening.md) §5 and [plan.svg](plan.svg).
+
 Headless captures of `--arena warden` (2026-10-29), for
 [opening.md](../../opening.md): the walk up to the first fight and the fight
 itself, with fighters stood where each beat puts them. **A blockout**: the

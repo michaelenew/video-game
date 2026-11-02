@@ -4,6 +4,20 @@ Read [`docs/design/README.md`](docs/design/README.md) first — it is the map. T
 design documents are the specification; the code is meant to match them, and
 when it does not, one of the two is wrong and both get fixed.
 
+## Building a place, a creature or anything broad: the standards
+
+**Unless otherwise instructed, anything new a person will load -- a place,
+a creature, a section of the world -- is built and handed over to three
+standards:** [`docs/design/level-design.md`](docs/design/level-design.md)
+(L1-L10), [`docs/design/monster-design.md`](docs/design/monster-design.md)
+(M1-M6) and [`docs/design/delivery.md`](docs/design/delivery.md) (D1-D6):
+plan before building, a play check before handing over (every route walked,
+`cargo run -p view --example camcheck`, `tests/spawns.rs`, the hunter for a
+fight, screenshots from the fighter's own camera), and a report. **Unless
+otherwise instructed, the summary after implementing anything says "I
+followed these principles for this:" and names them by ID**, with a phrase
+each on how, and any set aside and on whose instruction (D6).
+
 Below are the rules that are load-bearing enough that breaking them has cost
 real time more than once. Each has a test that enforces it, named in the rule.
 
