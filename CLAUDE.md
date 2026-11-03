@@ -213,6 +213,23 @@ everything that is not movement are unchanged. Enforced by the traversal tests
 themselves (`tests/waterfall.rs`, `heights.rs`, `spire.rs`, `deep.rs`,
 `wood.rs`, `valley.rs`), which loop over `MOVERS`.
 
+## A fight space is measured in moves, not metres
+
+**A place to fight is sized against the classes, in their own units**
+([`docs/design/fight-spaces.md`](docs/design/fight-spaces.md), the owner
+2026-11-02: "everyone just stands in the middle ... the koth levels are just
+tiny relative to each class's mobility options"). `sim::fightspace` works out
+a **reach** (the movers' second-longest pointed reach, 25 m) and a **jump**
+(their shortest full held jump, 3.9 m) by running the classes, and measures a
+place against them: how much of it is out of reach of its middle, how many
+levels a jump and a half apart, where its structure is, what in it moves you.
+A new fight space, or a change to one, is checked with
+`cargo run --release -p sim --bin fightspace` before it is looked at; spend
+the 64 boxes on big shapes and let relief, updrafts and drifts
+(`versus::Stage::vents`, `Stage::drifts`) do the rest. Enforced for every
+versus stage by `crates/sim/tests/fight_space.rs`; every way a stage
+promises (`Stage::ways`) is walked by every mover in `tests/versus.rs`.
+
 ## Tuning: every magnitude is a knob in the Oven
 
 Feel numbers live in the Oven (`crates/sim/src/oven.rs`), are edited in the

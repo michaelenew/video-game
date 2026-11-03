@@ -96,12 +96,19 @@ fn every_registered_arena_is_well_formed() {
         // alone as well, by `--hunt`, and is.
         let only_on_the_map =
             sim::valley::place(a.id).is_some_and(|p| !matches!(p.kind, sim::valley::Kind::Room(_)));
+        // A five-point map is long, and budgeted as the busiest fight there
+        // is (`arena::MAX_SOLIDS_FRONT`, `tests/budget.rs`).
+        let cap = if sim::versus::of(a.id).is_some_and(|s| s.front.is_some()) {
+            arena::MAX_SOLIDS_FRONT
+        } else {
+            arena::MAX_SOLIDS
+        };
         assert!(
-            only_on_the_map || a.solids.len() <= arena::MAX_SOLIDS,
+            only_on_the_map || a.solids.len() <= cap,
             "{} has {} solids, over the {} every query is budgeted for",
             a.name,
             a.solids.len(),
-            arena::MAX_SOLIDS
+            cap
         );
         assert!(a.regions.len() <= arena::MAX_REGIONS, "{}", a.name);
         let b = a.bounds;

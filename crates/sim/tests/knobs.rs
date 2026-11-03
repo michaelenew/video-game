@@ -111,6 +111,22 @@ const LEVEL_DATA: &[&str] = &[
     // how deep the shaft and the well are -- a place to be looked at, its
     // sizes first guesses to be judged by eye and then by walking it.
     "warden.rs",
+    // **The fight-space yardsticks** (`fightspace.rs`, its module and its
+    // bin; `docs/design/fight-spaces.md`): how much room a top needs to be
+    // a level, a level as a jump and a half, the core as two fifths of a
+    // reach -- the rules a place is *measured* by, judged by
+    // `tests/fight_space.rs` and by looking. Nothing in a fight reads them.
+    "fightspace.rs",
+    // The King of the Hill maps (`arena/hills/`): where a bench, a giant's
+    // top or a lift stands, and how a map is stretched to bigger and
+    // biggest (`sizes.rs`) -- level data judged by `tests/versus.rs`
+    // walking every way on every size, and by `tests/fight_space.rs`.
+    "quarry.rs",
+    "glacier.rs",
+    "delta.rs",
+    "gorge.rs",
+    "henge.rs",
+    "sizes.rs",
 ];
 
 /// Magnitudes that are deliberately not knobs. The reason is the point: an

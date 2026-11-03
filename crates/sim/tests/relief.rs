@@ -39,8 +39,18 @@ fn relief_is_gentle_everywhere() {
         }
         let climbs =
             sim::valley::place(a.id).is_some_and(|p| matches!(p.kind, sim::valley::Kind::Reach));
+        // A King of the Hill map's relief is its ramps and mounds
+        // (`docs/design/fight-spaces.md` F8): no steeper anywhere than the
+        // land a body still walks up (`tuning::terrain_steepest`), and no
+        // taller than its top level.
+        let versus = sim::versus::of(a.id).is_some();
         let (step, most) = if climbs {
             (Fx::ratio(1, 4), Fx::from_int(40))
+        } else if versus {
+            (
+                sim::tuning::terrain_steepest().mul(Fx::ratio(1, 2)),
+                Fx::from_int(16),
+            )
         } else {
             (Fx::ratio(1, 10), Fx::ONE)
         };

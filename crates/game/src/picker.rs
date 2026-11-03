@@ -583,6 +583,10 @@ mod tests {
             let hill = sim::versus::of(a).unwrap().hill.is_some();
             assert_eq!(w.hill.on, hill);
             assert_eq!(crate::hud::hill_line(&w.hill).is_empty(), !hill);
+            // A five-point map starts a game on its line, and says so.
+            let front = sim::versus::of(a).unwrap().front.is_some();
+            assert_eq!(w.front.on, front);
+            assert_eq!(crate::hud::front_line(&w.front).is_empty(), !front);
         }
         for s in sim::versus::STAGES {
             assert!(seen.contains(&s.arena));

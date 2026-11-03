@@ -116,6 +116,7 @@ pub mod gully;
 pub mod stages;
 
 pub mod hills;
+pub mod kilnworks;
 
 pub mod hall;
 
@@ -219,6 +220,22 @@ impl ArenaId {
     /// **The Warden's tower** (`warden`): a blockout of the opening, to be
     /// looked at.
     pub const WARDEN: ArenaId = ArenaId(77);
+    /// **Every King of the Hill map, bigger and biggest** (`hills::sizes`,
+    /// `docs/design/fight-spaces.md` §6): the same map stretched across the
+    /// floor by five quarters and by three halves, every height kept.
+    pub const QUARRY_BIGGER: ArenaId = ArenaId(80);
+    pub const QUARRY_BIGGEST: ArenaId = ArenaId(81);
+    pub const GLACIER_BIGGER: ArenaId = ArenaId(82);
+    pub const GLACIER_BIGGEST: ArenaId = ArenaId(83);
+    pub const DELTA_BIGGER: ArenaId = ArenaId(84);
+    pub const DELTA_BIGGEST: ArenaId = ArenaId(85);
+    pub const GORGE_BIGGER: ArenaId = ArenaId(86);
+    pub const GORGE_BIGGEST: ArenaId = ArenaId(87);
+    pub const HENGE_BIGGER: ArenaId = ArenaId(88);
+    pub const HENGE_BIGGEST: ArenaId = ArenaId(89);
+    /// **The Kilnworks** (`kilnworks`, `docs/design/versus.md` §3a): the
+    /// first five-point map.
+    pub const KILNWORKS: ArenaId = ArenaId(90);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -229,8 +246,9 @@ impl ArenaId {
 
 /// How many ids there are, registered or not: the valley's ranges are
 /// numbered from forty (`valley::ranges::FIRST`), and past the first fourteen
-/// from sixty-four (`valley::ranges::MORE`).
-pub const COUNT: usize = 80;
+/// from sixty-four (`valley::ranges::MORE`); the stretched hill maps from
+/// eighty; the five-point maps from ninety.
+pub const COUNT: usize = 96;
 
 /// The most solids an arena **fought on alone** may have. Alone, every query
 /// walks all of them, several times a frame per body, so this is what keeps a
@@ -241,6 +259,13 @@ pub const COUNT: usize = 80;
 /// town and reaches -- is not held to it: there a query reads the few tiles
 /// near it, and the map can hold as many boxes as anybody draws.
 pub const MAX_SOLIDS: usize = 64;
+
+/// The most solids a **five-point map** may have (`versus::Kind::Front`,
+/// 2026-11-03): a long map of buildings, catwalks and pillars, fought on
+/// alone like any versus stage, and measured as the busiest fight there is
+/// in `tests/budget.rs` (four on it). Raise it only with that scenario in
+/// budget.
+pub const MAX_SOLIDS_FRONT: usize = 160;
 
 /// The most floor regions an arena may have, for the same reason.
 pub const MAX_REGIONS: usize = 32;
@@ -312,6 +337,17 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::DELTA => Some(&hills::DELTA),
         ArenaId::GORGE => Some(&hills::GORGE),
         ArenaId::HENGE => Some(&hills::HENGE),
+        ArenaId::QUARRY_BIGGER => Some(&hills::sizes::QUARRY_BIGGER),
+        ArenaId::QUARRY_BIGGEST => Some(&hills::sizes::QUARRY_BIGGEST),
+        ArenaId::GLACIER_BIGGER => Some(&hills::sizes::GLACIER_BIGGER),
+        ArenaId::GLACIER_BIGGEST => Some(&hills::sizes::GLACIER_BIGGEST),
+        ArenaId::DELTA_BIGGER => Some(&hills::sizes::DELTA_BIGGER),
+        ArenaId::DELTA_BIGGEST => Some(&hills::sizes::DELTA_BIGGEST),
+        ArenaId::GORGE_BIGGER => Some(&hills::sizes::GORGE_BIGGER),
+        ArenaId::GORGE_BIGGEST => Some(&hills::sizes::GORGE_BIGGEST),
+        ArenaId::HENGE_BIGGER => Some(&hills::sizes::HENGE_BIGGER),
+        ArenaId::HENGE_BIGGEST => Some(&hills::sizes::HENGE_BIGGEST),
+        ArenaId::KILNWORKS => Some(&kilnworks::ARENA),
 
         ArenaId::HALL_CHAMPION => Some(&hall::CHAMPION),
         ArenaId::HALL_REAVER => Some(&hall::REAVER),

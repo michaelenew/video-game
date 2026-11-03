@@ -1771,6 +1771,10 @@ pub struct World {
     /// sides' clocks, and who is waiting to stand back up. Off, and not
     /// hashed, on every arena that has no hill.
     pub hill: crate::versus::Koth,
+    /// **A game on a five-point map** (`crate::versus::Front`): who owns
+    /// each point, the captures under way, the round's clock and the
+    /// respawns. All zero, and not hashed, anywhere else.
+    pub front: crate::versus::Front,
     /// **Versus rounds open with a pick** ([`Phase::Picking`]), and the
     /// classes are locked for the round after it. Set by the game for play
     /// ([`World::drafting`]) and carried through every trip; off in a world
@@ -1833,6 +1837,7 @@ impl World {
             loose: [None; crate::keep::LOOSE],
             picked: [None; MAX_PLAYERS],
             hill: crate::versus::Koth::NONE,
+            front: crate::versus::Front::NONE,
             draft: false,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -2297,7 +2302,11 @@ impl World {
             self.raise_drifts(&mut g);
             g
         } else {
-            Terrain::bare(self.arena.get())
+            // A versus stage's drifts are raised as the map's are
+            // (`versus::Stage::drifts`); anywhere else there are none.
+            let mut g = Terrain::bare(self.arena.get());
+            self.raise_drifts(&mut g);
+            g
         };
         if self.lore.owner.is_none() {
             return ground;
@@ -2852,7 +2861,7 @@ impl World {
     pub fn allies(&self, i: usize) -> u8 {
         let mut bits = 0;
         for j in 0..MAX_PLAYERS {
-            let side = self.hill.on && crate::versus::side(i) == crate::versus::side(j);
+            let side = self.teams() && crate::versus::side(i) == crate::versus::side(j);
             // Anybody it may not hurt, where some may be hurt: nobody but a
             // hall's dummy and those learning beside it (`World::foes`).
             let spared = self.pvp() && !self.foes(i, j);
@@ -2884,7 +2893,13 @@ impl World {
         if self.hall_of(a).is_some() || self.hall_of(b).is_some() {
             return false;
         }
-        self.fights() && !(self.hill.on && crate::versus::side(a) == crate::versus::side(b))
+        self.fights() && !(self.teams() && crate::versus::side(a) == crate::versus::side(b))
+    }
+
+    /// **Is this a fight between two sides** rather than everybody against
+    /// everybody: King of the Hill and a five-point map.
+    pub fn teams(&self) -> bool {
+        self.hill.on || self.front.on
     }
 
     /// The first creature, for the code and tools that are about one: the
@@ -2937,11 +2952,65 @@ impl World {
         }
     }
 
+    /// **One frame of a five-point map** (`crate::versus::Front`): the dead
+    /// wait and stand back up a point behind their side's front, each point
+    /// counts who is on it, and a side owning all five -- or holding more
+    /// when the clock runs out -- wins the round.
+    fn step_the_front(&mut self) {
+        let Some(line) = crate::versus::of(self.arena).and_then(|s| s.front) else {
+            return;
+        };
+        for i in 0..MAX_PLAYERS {
+            if !self.is_present(i) || self.players[i].health > 0 {
+                self.front.respawn[i] = 0;
+                continue;
+            }
+            if self.front.respawn[i] == 0 {
+                self.front.respawn[i] = t::hill_respawn().max(1);
+                continue;
+            }
+            self.front.respawn[i] -= 1;
+            if self.front.respawn[i] == 0 {
+                let marks = [
+                    line.spawn(0, self.front.spawn_at(0)),
+                    line.spawn(1, self.front.spawn_at(1)),
+                ];
+                self.stand_on(i, Mark::seat(&marks, i));
+            }
+        }
+        let on: [Option<usize>; MAX_PLAYERS] = std::array::from_fn(|i| {
+            let p = &self.players[i];
+            if !self.is_present(i) || p.health <= 0 {
+                return None;
+            }
+            line.points.iter().position(|h| h.holds(p.pos))
+        });
+        if let Some(side) = self.front.step(on) {
+            let present = self.present();
+            if side != NOBODY {
+                for (i, p) in self.players.iter_mut().enumerate().take(present) {
+                    if crate::versus::side(i) == side {
+                        p.rounds_won += 1;
+                    }
+                }
+            }
+            self.phase = Phase::RoundOver {
+                winner: side,
+                left: t::round_over_frames(),
+            };
+        }
+    }
+
     /// Stand fighter `i` up fresh on their start mark, as a round does:
     /// what a respawn on the hill is.
     fn stand_on_mark(&mut self, i: usize) {
+        let mark = Mark::seat(&self.terrain().spawns.versus, i);
+        self.stand_on(i, mark);
+    }
+
+    /// Stand fighter `i` up fresh on `mark`, on whatever is under it.
+    fn stand_on(&mut self, i: usize, mark: Mark) {
         let here = self.terrain();
-        let mark = Mark::seat(&here.spawns.versus, i);
         let p = &mut self.players[i];
         let (wins, class) = (p.rounds_won, p.class);
         *p = Player {
@@ -2969,6 +3038,7 @@ impl World {
         self.course = [crate::course::Run::default(); MAX_PLAYERS];
         // So does a game on the hill: locked, nobody's, both clocks full.
         self.hill = crate::versus::Koth::start(self.arena);
+        self.front = crate::versus::Front::start(self.arena);
         let here = self.arena();
         // The hunt's lore starts again with the round: nothing on the floor,
         // nothing heard, every defended thing whole and back at its start.
@@ -4572,6 +4642,10 @@ impl World {
                 self.step_the_hill();
                 return;
             }
+            if self.front.on {
+                self.step_the_front();
+                return;
+            }
         }
 
         // Knockout check last, so the killing blow is fully applied first.
@@ -4882,6 +4956,20 @@ impl World {
         }
         // The hill, only where there is one: every other fight hashes as it
         // did before there were hills.
+        // The five points, likewise only where there are five.
+        if self.front.on {
+            let f = &self.front;
+            h.write_u32(0xF125);
+            h.write_u32(f.locked as u32);
+            h.write_u32(f.clock);
+            for k in 0..crate::versus::POINTS {
+                h.write_u32(f.owner[k] as u32 | (f.capper[k] as u32) << 8);
+                h.write_u32(f.progress[k]);
+            }
+            for w in f.respawn {
+                h.write_u32(w as u32);
+            }
+        }
         if self.hill.on {
             let k = &self.hill;
             h.write_u32(0x4111);

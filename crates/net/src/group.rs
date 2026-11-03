@@ -319,14 +319,26 @@ pub struct Heard {
 struct Incoming {
     frame: u32,
     parts: Vec<Option<Vec<u8>>>,
+    /// The frame of the last world this put together, if any: a world is
+    /// taken once. Its sender goes on sending it until it hears it was
+    /// taken, so a late copy of one of its chunks still arrives after it is
+    /// in -- and with the parts kept, that one chunk would complete the same
+    /// world again, and a group that had merged and split since would merge
+    /// again on a stale world (found 2026-11-03, when the world grew past
+    /// twenty-five chunks and the timing of the last resend moved).
+    done: Option<u32>,
 }
 
 impl Incoming {
     fn take(&mut self, frame: u32, index: u16, total: u16, bytes: Vec<u8>) -> Option<World> {
+        if self.done == Some(frame) {
+            return None;
+        }
         if self.parts.len() != total as usize || self.frame != frame {
             *self = Incoming {
                 frame,
                 parts: vec![None; total as usize],
+                done: self.done,
             };
         }
         if let Some(p) = self.parts.get_mut(index as usize) {
@@ -334,6 +346,8 @@ impl Incoming {
         }
         if self.parts.iter().all(Option::is_some) {
             let all: Vec<u8> = self.parts.iter().flatten().flatten().copied().collect();
+            self.parts.clear();
+            self.done = Some(frame);
             return raw::world_from(&all);
         }
         None
@@ -991,6 +1005,12 @@ impl<L: Line> Session<L> {
             if !leaving.is_empty() {
                 for id in leaving {
                     self.gone.push((id, f + 1));
+                    // What I last heard from them is from before we were one
+                    // group: while they were members they sent me inputs, not
+                    // heartbeats, so it says where they stood when we met --
+                    // near enough to call them straight back (found
+                    // 2026-11-03). Wait for a heartbeat from where they are.
+                    self.heard.remove(&id);
                 }
                 self.splits += 1;
                 if f < self.world.frame {
