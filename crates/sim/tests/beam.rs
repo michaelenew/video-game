@@ -13,7 +13,6 @@
 use sim::class::{Class, Mechanic};
 use sim::moves::elementalist::keys;
 use sim::state::Action;
-use sim::tuning as t;
 use sim::{Fx, Input, V3, World, aim};
 
 /// The Bolt, her auto: the weak push, on `Q` since 2026-10-09.
@@ -121,10 +120,51 @@ fn crosshair_onto_the_other_fighter(w: &World) -> Option<i16> {
     })
 }
 
-/// Is it on a stone standing at `stone`?
-fn on_the_stone(stone: V3, seen: &aim::Sighted) -> bool {
-    let span = t::structure_radius().add(metres(0.2));
-    seen.met == aim::Met::Solid && seen.at.sub(stone).flat_len().raw() <= span.raw()
+/// The pitch whose crosshair passes through a stone standing at `stone`,
+/// meeting it where `want` accepts.
+///
+/// **Her stones are not on the aiming ray** (2026-11-03): the ray goes through
+/// them to the place behind, so "the crosshair is on the stone" cannot be read
+/// off [`aim::Sighted`]. It is the camera's own line meeting the stone, read
+/// off the eye the ray starts from -- the thing the player sees.
+fn crosshair_through(w: &World, stone: V3, want: impl Fn(V3) -> bool) -> Option<i16> {
+    let field = sim::stones::gather(&w.players);
+    let s = field
+        .iter()
+        .flatten()
+        .find(|s| s.at.sub(stone).flat_len().raw() < metres(0.05).raw())
+        .copied()?;
+    (-700..800).find_map(|step| {
+        let pitch = tenths(step);
+        let look = Input::looking_at(0, LOOK_RIGHT, pitch);
+        let p = &w.players[0];
+        let eye = sim::camera::eye_under(p.pos, look, p.aloft, p.clear, &w.terrain());
+        let d = sim::math::ray_hits_cylinder(
+            eye,
+            look.look_dir(),
+            s.at,
+            s.radius(),
+            s.standing_height(),
+        )?;
+        want(eye.add(look.look_dir().scale(d))).then_some(pitch)
+    })
+}
+
+/// The pitch whose shot meets her first stone along its path, on a line
+/// `want` accepts (its direction).
+fn shot_into_the_stone(w: &World, want: impl Fn(V3) -> bool) -> Option<i16> {
+    (-700..800).find_map(|step| {
+        let pitch = tenths(step);
+        let look = Input::looking_at(0, LOOK_RIGHT, pitch);
+        let (path, met) = with_scene(w, |scene| {
+            let path = aim::skillshot_path(0, look, beam_reach(), scene);
+            (
+                path,
+                aim::first_along(path, Fx::ZERO, 0, scene, sim::bolt::targets()),
+            )
+        });
+        (matches!(met, Some(aim::Contact::Stone { .. })) && want(path.dir())).then_some(pitch)
+    })
 }
 
 fn stones_of(w: &World) -> Vec<sim::class::Structure> {
@@ -149,8 +189,8 @@ fn the_drawn_beam_goes_on_through_her_stone() {
     run(&mut w, 30, 0, 0);
     let stone = stones_of(&w)[0].at;
 
-    let pitch = crosshair_onto(&w, |seen| on_the_stone(stone, seen))
-        .expect("no angle put the crosshair on the stone");
+    let pitch =
+        crosshair_through(&w, stone, |_| true).expect("no angle put the crosshair on the stone");
 
     let mut seen = None;
     for _ in 0..30 {
@@ -247,8 +287,8 @@ fn a_fighter_in_front_of_a_stone_does_not_shield_it() {
     run(&mut w, 2, RAISE, 0);
     run(&mut w, 30, 0, 0);
     let stone = stones_of(&w)[0].at;
-    let pitch = crosshair_onto(&w, |seen| on_the_stone(stone, seen))
-        .expect("no angle put the crosshair on the stone");
+    let pitch =
+        crosshair_through(&w, stone, |_| true).expect("no angle put the crosshair on the stone");
     // Halfway between her and it, on the line.
     let mid = w.players[0].pos.add(stone).scale(Fx::ratio(1, 2));
     w.players[1].pos = V3::new(mid.x, Fx::ZERO, mid.z);
@@ -302,8 +342,10 @@ fn a_wall_ends_the_line() {
 fn a_stone_goes_where_on_it_you_were_pointing() {
     // "Along the ground if aiming down, an impulse up into the air if aiming
     // up." With the shot leaving her chest and ending where the crosshair is,
-    // that is one rule rather than two: the reticle on the upper part of a
-    // stone is a line angled upward, and the stone takes that line.
+    // that is one rule rather than two: the stone takes the line it was shot
+    // along. Since 2026-11-03 her stones are not on the aiming ray, so the
+    // line ends at the place behind the stone, and "aiming up" is a shot
+    // whose line rises as it clips the stone.
     let raised = || {
         let mut w = elementalist();
         run(&mut w, 2, RAISE, 0);
@@ -325,15 +367,9 @@ fn a_stone_goes_where_on_it_you_were_pointing() {
         None
     };
 
-    let start = raised();
-    let stone = stones_of(&start)[0].at;
-    let hand = sim::aim::origin(start.players[0].pos).y;
-
     let mut up = raised();
-    let high = crosshair_onto(&up, |seen| {
-        on_the_stone(stone, seen) && seen.at.y.raw() > hand.add(metres(0.25)).raw()
-    })
-    .expect("no angle put the crosshair on the stone above the height she casts from");
+    let high = shot_into_the_stone(&up, |dir| dir.y.raw() > metres(0.1).raw())
+        .expect("no angle sent a rising shot into the stone");
     let lifted = kicked(&mut up, high).expect("the crosshair was on the stone and the shot missed");
     assert!(
         lifted.vel.y.raw() > 0,
@@ -341,10 +377,8 @@ fn a_stone_goes_where_on_it_you_were_pointing() {
     );
 
     let mut level = raised();
-    let low = crosshair_onto(&level, |seen| {
-        on_the_stone(stone, seen) && seen.at.y.sub(hand).abs().raw() < metres(0.12).raw()
-    })
-    .expect("no angle put the crosshair level with her hand on the stone");
+    let low = shot_into_the_stone(&level, |dir| dir.y.abs().raw() < metres(0.02).raw())
+        .expect("no angle sent a level shot into the stone");
     let flat = kicked(&mut level, low).expect("the crosshair was on the stone and the shot missed");
     assert!(
         flat.vel.y.raw() <= 0,

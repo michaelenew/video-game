@@ -213,6 +213,75 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-11-03 — the Elementalist off the ledge: tilt, columns, lips and falls
+
+**Changed**
+- **Air steering has a floor: `Steering, the walk keys reach at least` 1.7
+  m/s** (new) -- the Shadow Reaver's own steering, so the class that steers
+  best is untouched. The walk keys in the air carry a body to at least that speed
+  along the way it holds, whatever its class's own steering (Elementalist 1,
+  Bulwark 0.9, Champion 1.2, Blood mage 1.3, Dual mage 1.4, Shadow Reaver
+  1.7). How fast they get there -- the air acceleration times the class's
+  steering -- is unchanged. Tried first, and reverted the same day: every
+  class's steering 2.5x. It let the Shadow Reaver, the Elementalist and the
+  Dual mage make the turn-arounds of the Heights and the Spire without their
+  walls (`tests/heights.rs`, `tests/spire.rs`), and walk out of the Cliffs
+  over its rim (`tests/rim.rs`). With the air acceleration cut to 14/2.5 to
+  keep the rate of a turn, the Reaver and the Dual mage still made them: it is
+  the top speed back, not the turn, that the courses are sized against. A
+  floor of 2.5 still let the Reaver and the Dual mage make those turns, and a
+  floor of 2 let a body walk out of the Cliffs (`tests/rim.rs`); 1.7 is the
+  most the levels as built allow. More than that is a change to the courses
+  as well as to the air.
+- **The Updraft in the air pushes once, by its tilt.** `Updraft, steered by her
+  walk` (40 m/s²) and `Updraft, steered up to` (14 m/s while the column blew)
+  became `Updraft, the tilt is read over` (6 frames) and `Updraft, in the air,
+  pushed along her walk up to` (12 m/s), with a new `Updraft, the tilt is read
+  from before the press` (6 frames). The tilt is the best average of the walk
+  keys over any 6-frame run from 6 frames before the press to the frame the
+  column comes out (`state::updraft_tilt`); the push is that share of 12 m/s.
+- **Valley updrafts hold a body**: `Updraft, bleeds a body's flat speed` 3 a
+  second and `Updraft, draws a body to its middle` 6 m/s² at the rim, less
+  nearer in. Sized so a body flown into a 1.5 m column at 4 m/s stops inside
+  it, and every class still walks out at its full air speed (the walk keys add
+  14 m/s² times the class's steering, which beats the drag and the pull at the
+  rim for all six).
+- **Anything that lifts a body in the air calls off a slam in its startup**
+  (Landfall, the Plunge, the Descent, Meteor, Shockwave, the Bulwark's air
+  Slam): a valley updraft, an Updraft's column, a Thermal.
+- **The Thermal no longer zeroes the fall's start**, which made her immune to
+  fall damage until she next stood on something.
+- **Coming down on a lip lands on it** (`arena::resolve_among`): feet that were
+  at or above a box's top a frame ago are put on it, however little of the
+  body is over it.
+- **A ledge is caught in a move's recovery**, and the catch ends the recovery.
+- **Aiming**: the Elementalist's structures are off every aiming ray, attacks
+  included (`docs/design/aiming.md`).
+- **A jump is a press, not a hold**: `Jump, a press before landing still
+  jumps for` 6 frames (new). The ground jump, and the leap off a creature's
+  back, need space pressed within the last 6 frames (`state::jump_pressed`);
+  held down through a landing, space no longer throws her straight back off.
+  Before this the jump was level-triggered on purpose, so a held space hopped
+  again on landing. **Kept for a footing carrying her up**: a held space still
+  jumps off a stone erupting under her or a lift on its way up, because that is
+  the structure jump -- the double (`tests/stones.rs`, the game's rehearsal)
+  is space held as the stones come up under her.
+
+**Why** From play, three replays on the Great Wood and the Glacier, and a fourth note: landing on a small platform with space
+still held from the jump that got her there threw her straight off it again,
+in whatever direction the keys said. Popped
+straight up by an earth jump at 40 m/s she drifted at most 1 m/s holding a key
+for the whole flight; now 1.7. The air Updraft's push was every frame the key stayed down
+after a 14-frame wind-up, so it overshot or undershot by however long the key
+happened to be held. A Thermal at 23 m cost 1 point landing; a plain Updraft
+from 21 m cost 527. Of the falls past an edge near enough to touch it, most
+had the body against the box with its top between her feet and her chest and
+fell off the side: a fall moves a quarter of a metre a frame, and the push out
+of the box took whichever way was shallower, so anything less than that over
+the top went off the side.
+
+**Verdict** open -- to be played.
+
 ### 2026-10-22 — the dodge is a fifth longer and a fifth further, for the dive roll
 
 **Changed**

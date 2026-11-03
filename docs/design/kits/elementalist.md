@@ -195,7 +195,15 @@ holds each as a property; the numbers are in [../feel-log.md](../feel-log.md).
 - **The Updraft takeoff goes half again as high, and steers.** From the floor
   and in the air. While her column blows and she is off the floor, the
   direction she holds pushes her that way (`Updraft, steered by her walk`, up
-  to `Updraft, steered up to`).
+  to `Updraft, steered up to`). **Replaced 2026-11-03 by the tilt** (from
+  play: it overshot and undershot by however long the key stayed down): the
+  Updraft thrown in the air pushes her once, as the column comes out, by the
+  best share of any `Updraft, the tilt is read over` frames -- from `Updraft,
+  the tilt is read from before the press` frames before the press to then --
+  that a walk key was held, times `Updraft, in the air, pushed along her walk
+  up to` (`state::updraft_tilt`). A tap is a nudge, a held key the whole push.
+  The Thermal's push along a carpet, and the Updraft from the floor, are as
+  they were.
 
 ### `Q` and `E` cut a recovery — 2026-10-21
 

@@ -1406,10 +1406,20 @@ fn a_pillar_aimed_at_her_stone_lands_on_the_floor_behind_it() {
         .find_map(|step| {
             let pitch = (step * 65536 / 3600) as i16;
             let look = Input::looking_at(0, LOOK_RIGHT, pitch);
-            let seen = with_scene(&w, |scene| sim::aim::sight(0, look, reach, scene));
-            let gap = V3::new(seen.at.x.sub(spot.x), Fx::ZERO, seen.at.z.sub(spot.z)).flat_len();
-            (seen.at.y.raw() > metres(0.5).raw() && gap.raw() < stone.radius().raw())
-                .then_some(pitch)
+            // The aiming ray goes through her stones (2026-11-03), so "on
+            // the stone" is the camera's line meeting it, read off the eye.
+            let p = &w.players[0];
+            let eye = sim::camera::eye_under(p.pos, look, p.aloft, p.clear, &w.terrain());
+            let _ = reach;
+            sim::math::ray_hits_cylinder(
+                eye,
+                look.look_dir(),
+                spot,
+                stone.radius(),
+                stone.standing_height(),
+            )
+            .filter(|d| eye.add(look.look_dir().scale(*d)).y.raw() > metres(0.5).raw())
+            .map(|_| pitch)
         })
         .expect("no pitch put the crosshair on the stone");
     strike(&mut w, pitch, 0);

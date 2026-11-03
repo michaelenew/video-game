@@ -9,11 +9,13 @@
 //! > thing it meets. That point is what the player is pointing at, and the
 //! > ability goes there.**
 //!
-//! That ray meets **terrain, structures, and the ability's own max-range
-//! sphere** — one list, a property of the world rather than of the ability
-//! doing the aiming. Whatever it reaches first wins. **One difference:** to an
-//! *attack*, the top of a structure is not ground, because it is a place to put
-//! things rather than a floor to shoot across — see [`sight_for_attack`].
+//! That ray meets **terrain and the ability's own max-range sphere** — one
+//! list, a property of the world rather than of the ability doing the aiming.
+//! Whatever it reaches first wins. **The Elementalist's structures are not on
+//! it**, for any ability (2026-11-03): the ray goes through her stones to the
+//! place behind, so nobody's stones move anybody's aim. What else stands in the
+//! field -- a Bulwark's planted shield -- is, and to an *attack* its top is not
+//! ground — see [`sight_for_attack`].
 //!
 //! **Bodies are not on that list.** Neither other fighters nor the creature.
 //! The ray is answering *which place is the player pointing at*, and a body is
@@ -47,9 +49,9 @@
 //! - Hit the ground, and the target is that spot raised straight up to the
 //!   height the ability leaves the caster at. The shot flies level over the
 //!   place the crosshair is on rather than diving into the dirt.
-//! - Hit anything else — terrain that is not ground, a structure (its top
-//!   included), or the max-range sphere — and the target is the point of
-//!   intersection exactly.
+//! - Hit anything else — terrain that is not ground, a planted shield (its
+//!   top included), or the max-range sphere — and the target is the point of
+//!   intersection exactly. Her stones are not on the ray to hit.
 //! - Either way the ability travels in a straight line from the caster to that
 //!   point, and that line is its whole reach.
 //!
@@ -505,21 +507,23 @@ pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
     sight_over(who, look, reach, scene, true)
 }
 
-/// [`sight`] for an **attack**: the same ray, on which a stone is never
-/// ground -- its lid is as solid as its side.
+/// [`sight`] for an **attack**: the same ray, on which what stands in the
+/// field is never ground -- its lid is as solid as its side.
 ///
-/// Neither is it for placing, since 2026-10-02: [`grounded_path`] takes the
-/// Elementalist's stones off its ray altogether. For a shot the stone stays on
-/// the ray, but as a wall rather than a floor. A skillshot
+/// **The Elementalist's stones are not on either ray**, since 2026-11-03 for
+/// attacks and 2026-10-02 for placing (see [`nearest_terrain`]); what this
+/// still decides is a Bulwark's planted shield. Its history, for stones: they
+/// stayed on an attack's ray as a wall rather than a floor. A skillshot
 /// that meets ground is raised to the middle of a fighter standing there, and
 /// somebody standing just in front of a stone puts the crosshair through them
 /// and onto its lid, a body's height up: raised another half a body from there,
 /// the shot went clean over their head. Cataclysm whiffed that way at point
 /// blank. So a stone is met exactly where the crosshair touches it, like a wall.
 ///
-/// It stays on the ray rather than coming off it, because where on a stone you
-/// point is a mechanic: the Bolt kicks one along the line it was shot along, so
-/// aiming high on the face sends it up (`tests/beam.rs`).
+/// Then, from play on 2026-11-03, it came off the ray altogether: high on a
+/// ledge, a crosshair through a stone at the floor below aimed at the stone, a
+/// dead zone nobody meant. The Bolt still kicks a stone it passes through along
+/// the line it was shot along ([`first_along`] finds it on the path).
 pub fn sight_for_attack(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
     sight_over(who, look, reach, scene, false)
 }
@@ -598,7 +602,8 @@ fn near_clip(eye: V3, dir: V3, cast: V3) -> Fx {
     cast.sub(eye).dot(dir).sub(t::body_radius()).max(Fx::ZERO)
 }
 
-/// The first piece of terrain -- the floor, the arena's solids, the stones --
+/// The first piece of terrain -- the floor, the arena's solids, a planted shield,
+/// never one of the Elementalist's structures --
 /// between `near` and `limit` along the ray, and whether it faces up.
 fn nearest_terrain(
     eye: V3,
@@ -627,7 +632,19 @@ fn nearest_terrain(
         let hit = crate::math::ray_hits_solid(eye, dir, &solid, Fx::ZERO);
         keep(hit, facing(hit, eye, dir, solid.max.y));
     }
-    for stone in scene.stones.iter().flatten() {
+    // **The Elementalist's structures are not on the ray at all**, for any
+    // ability (the owner, 2026-11-03, from play: standing high on a ledge and
+    // raining shots down, a crosshair through a stone at the floor below aimed
+    // at the stone's top instead -- a dead zone nobody meant, and one that
+    // anybody's stones could put in anybody's aim). The ray goes through them
+    // to the place behind. What a shot runs into on its way is still
+    // [`first_along`]'s question. A Bulwark's planted shield stays: it is not
+    // one of her structures.
+    for (index, slot) in scene.stones.iter().enumerate() {
+        let Some(stone) = slot else { continue };
+        if is_structure(scene, index) {
+            continue;
+        }
         let hit = stone_hit(eye, dir, stone);
         let met = match lids {
             true => facing(hit, eye, dir, stone.top()),
@@ -760,12 +777,18 @@ fn grounded(who: usize, look: Input, reach: Fx, scene: &Scene, keep: bool) -> Pa
 fn past_structures(scene: &Scene) -> Field {
     let mut open = *scene.stones;
     for (index, slot) in open.iter_mut().enumerate() {
-        let owner = &scene.players[index / crate::class::MAX_STRUCTURES];
-        if matches!(owner.mechanic, crate::class::Mechanic::Structures(_)) {
+        if is_structure(scene, index) {
             *slot = None;
         }
     }
     open
+}
+
+/// Is slot `index` of the field one of an Elementalist's structures, rather
+/// than something else standing in it (a Bulwark's planted shield)?
+fn is_structure(scene: &Scene, index: usize) -> bool {
+    let owner = &scene.players[index / crate::class::MAX_STRUCTURES];
+    matches!(owner.mechanic, crate::class::Mechanic::Structures(_))
 }
 
 /// The line a **skillshot** flies along: from the caster's ability origin to
@@ -800,9 +823,9 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
             };
             standing_middle(ground, stand.height)
         }
-        // A wall, a stone -- lid or side -- the edge of the range: the point
-        // itself, because that is the thing the player is looking at. See
-        // [`sight_for_attack`] for why a stone's lid is not ground here.
+        // A wall, a planted shield -- lid or side -- the edge of the range:
+        // the point itself, because that is the thing the player is looking
+        // at. See [`sight_for_attack`] for why a lid is not ground here.
         Met::Solid | Met::Reach => seen.at,
     };
     Path { from, to }
