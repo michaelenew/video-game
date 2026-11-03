@@ -220,6 +220,8 @@ pub fn of(id: ArenaId) -> Sky {
         // a high summer sky.
         ArenaId::GORGE => Sky::over([0.80, 0.88, 0.92]),
         ArenaId::HENGE => Sky::over([0.84, 0.88, 0.97]),
+        // A brick works in ruins: warm haze off the kilns.
+        ArenaId::KILNWORKS => Sky::over([0.92, 0.84, 0.74]),
         ArenaId::DELTA => Sky {
             reach: 700.0,
             ..Sky::over([0.82, 0.90, 0.84])

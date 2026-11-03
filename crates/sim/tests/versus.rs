@@ -35,12 +35,21 @@ fn hill_of(id: ArenaId) -> versus::Hill {
 
 #[test]
 fn every_stage_is_registered_and_named_for_what_it_is() {
-    // Four duels; five hill maps, each big, bigger and biggest.
-    assert_eq!(versus::STAGES.len(), 19);
+    // Four duels; five hill maps, each big, bigger and biggest; one
+    // five-point map.
+    assert_eq!(versus::STAGES.len(), 20);
     let duels = versus::STAGES.iter().filter(|s| s.kind == Kind::Duel);
     let hills = versus::STAGES.iter().filter(|s| s.kind == Kind::Hill);
     assert_eq!(duels.clone().count(), 4);
     assert_eq!(hills.clone().count(), 15);
+    let fronts = versus::STAGES.iter().filter(|s| s.kind == Kind::Front);
+    assert_eq!(fronts.clone().count(), 1);
+    // A five-point map stands on ground with a rim, and has a line of
+    // points rather than one.
+    for s in fronts {
+        assert!(s.pit.is_none() && s.hill.is_none() && s.front.is_some());
+        assert!(s.arena.get().rim.is_some());
+    }
     for s in versus::STAGES {
         let a = arena::lookup(s.arena).expect("registered");
         assert!(a.creature.is_none(), "{}", a.name);

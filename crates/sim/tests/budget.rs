@@ -307,7 +307,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 21] {
+fn scenarios() -> [Scenario; 22] {
     [
         // The valley, one map of eighteen places: the Saddle, with every
         // other place's boxes in tiles around it, and a creature's room in it.
@@ -349,6 +349,14 @@ fn scenarios() -> [Scenario; 21] {
                 .max_by_key(|s| s.arena.get().solids().len() + 4 * s.drifts.len() + s.vents.len())
                 .map_or(sim::arena::ArenaId::QUARRY, |s| s.arena);
             World::versus_in([c; 4], busiest)
+        }),
+        // Four on the five-point map: the most boxes a fight fought alone
+        // may have (`arena::MAX_SOLIDS_FRONT`), every query walking all of
+        // them, the line's five points asked of every body every frame.
+        ("four on the five-point map", |c| {
+            let mut w = World::versus_in([c; 4], sim::arena::ArenaId::KILNWORKS);
+            w.front.locked = 0;
+            w
         }),
         ("hunt", |c| World::hunt([c; 2])),
         ("two creatures", |c| {

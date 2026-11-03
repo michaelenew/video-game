@@ -20,7 +20,8 @@
 //!   sparring bot plays, and its class ([`dummy`]). A duel always has it. The
 //!   number keys still pick what it does; this is where somebody who was
 //!   never told finds it.
-//! - **Versus stages**: a button for every floating duel stage and every
+//! - **Versus stages**: a button for every floating duel stage, every
+//!   five-point map, and every
 //!   King of the Hill map (`sim::versus`), the one you are on lit. A trip
 //!   on the wire, as `Shift+N` is, so the other player comes too
 //!   ([`stages`]).
@@ -390,6 +391,21 @@ fn stages(ui: &mut egui::Ui, sim: &mut crate::Sim) {
             }
         });
     }
+    // Five points: a button a map.
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new("Five points").strong());
+        for s in STAGES.iter().filter(|s| s.kind == Kind::Front) {
+            let here = sim.cur.arena == s.arena;
+            if ui
+                .selectable_label(here, s.arena.get().name)
+                .on_hover_text(s.theme)
+                .clicked()
+                && !here
+            {
+                go = Some(s.arena);
+            }
+        }
+    });
     let line = match sim::versus::of(sim.cur.arena) {
         Some(s) => s.theme,
         None => "Knock them off the edge, or hold the point. Shift+N steps through them too.",
