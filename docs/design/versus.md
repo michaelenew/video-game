@@ -1,5 +1,5 @@
 ---
-status: built 2026-10-21, unplayed
+status: built 2026-10-21; the stages rebuilt bigger 2026-11-02 (fight-spaces.md), unplayed
 ---
 
 # Versus modes — floating stages and King of the Hill
@@ -21,7 +21,7 @@ All of it is `sim::versus` (the rules), `sim::arena::stages` and
 for each; `Shift+N` in game steps through all nine (`N` alone is still the
 jump courses); and `--arena <name>` / `?arena=<name>` starts on one:
 `anvil`, `ziggurat`, `caldera`, `twin_isles`, `quarry`, `glacier`, `delta`,
-`gorge`, `henge`. The mode comes from the map, as it does in Team Fortress
+`gorge`, `henge` (and each hill map's `bigger_` and `biggest_`). The mode comes from the map, as it does in Team Fortress
 2: there is no separate mode switch.
 
 ## 1 · The rules
@@ -114,106 +114,159 @@ alike. Everywhere else each seat keeps its own colour, as before.
 
 ## 2 · The floating duel stages (`arena/stages.rs`)
 
-Each is **tight** -- twenty-odd metres across, so nobody runs for long -- has
-**a few changes of height** of a metre or two, and is turned half a turn
-about its middle, so both starts are the same start. Every island hangs (a
-ceiling under it as well as a floor on it, as the jump courses' do), and the
-marks stand on the island's top (`Mark::up_cm`). The renderer draws them
-over a drop (`drop: true`), with land and woods far below.
+**Rebuilt 2026-11-02 to [fight-spaces.md](fight-spaces.md)**: each main
+island is still under a reach across (25 m), because the edge is the point of
+a ring-out stage. What they gained is *pieces*: islands across real gaps,
+spread over about 47 m, starts 21–22 m apart, a high level 8.4 m over the
+starts, lifts and ferries that move, and **a recovery**: two narrow updrafts
+per stage beside an edge, which a fighter knocked off can steer into and ride
+back up. Every island hangs (a ceiling under it as well as a floor on it),
+the marks stand on the island's top (`Mark::up_cm`), and each is turned half
+a turn about its middle, so both starts are the same start. The renderer
+draws them over a drop (`drop: true`), with land and woods far below.
 
 | Stage | Theme | What is in it |
 | --- | --- | --- |
-| **Anvil** (`anvil`) | A basalt slab over a sea of embers at dusk | 20 × 13 m face; a low boss in the middle; two stone slabs hovering with 3.3 m of air under them to fight down from; off each end **the horn**, a rock of its own across a 4 m gap and a metre lower than the face |
-| **Ziggurat** (`ziggurat`) | A temple's top risen into the desert sky | Three tiers a metre each -- court, terrace, a 4 m crown -- so whoever holds the crown fights downhill; an obelisk at two corners; a stepping stone hung 3.5 m off each long side, 1.5 m down |
-| **Caldera** (`caldera`) | A volcano's crater torn loose | 20 m square ash floor inside a 1.2 m lip that stands only at the corners: six metres of nothing at the middle of each side, four ways out; a drum of rock in the middle |
-| **Twin Isles** (`twin_isles`) | Two snowy islands at dawn | Two 10 × 14 m isles seven metres apart, a 3 m bridge between them; a knoll on each; a stone hung over the gap north and south of the bridge with 3.3 m of air under it, a way across that is not the bridge |
+| **Anvil** (`anvil`) | A basalt anvil over a sea of embers at dusk | A 23 × 14 m face with a narrower waist under it; a low boss in the middle; a 3 m basalt block each side for cover. **A hammer** over each half: a 6 × 5.5 m slab 8.4 m up, climbed by two hovering stones (2.7 m, then 5.4 m) or reached by **a lift** off the face's long side. **The horn** off each end: its own rock across a 5.5 m gap, a metre lower. **A recovery updraft** beside each long side |
+| **Ziggurat** (`ziggurat`) | A temple's top risen into the desert sky | A 23 × 17 m court; three 2.7 m tiers to a 5 m crown 8.4 m up; **a dais** each side, a slab flat on the court that lifts you to the crown's height, then a level jump onto it. An obelisk at two corners. **A stele** off each long side: an island 7 m out and 3 m down, jumped down to, with **a ferry** across the gap as the way back. **A recovery updraft** off each end |
+| **Caldera** (`caldera`) | A volcano's crater torn loose | A 22 m square ash floor inside a 2 m lip that stands only at the corners: 8 m openings on four sides. **The plug blown out**: two slabs 8.4 m up with 5 m of sky between them over the middle. **The vent still breathes**: an updraft out of the crater floor throws you up past them. Each slab is climbed from a corner of the lip by a hovering boulder, or reached by **a lift** out of the side gap. **An ejecta island** 6 m off the east and west gaps, 2 m down. **A recovery updraft** beside the corners |
+| **Twin Isles** (`twin_isles`) | Two snowy islands at dawn | Two 10.5 × 15 m isles 8 m apart, joined by a 3 m bridge. **An ice arch** 8.4 m over the bridge, climbed by two seracs on each isle (2.7 m and 5.4 m, cover too). Hung stones north and south of the bridge with 3.3 m of air under them, and under them **an ice floe** drifting across the gap. **A skerry** 5 m off each far end, a metre down. A low knoll on each isle. **A recovery updraft** off each isle's outer side |
 
-## 3 · The King of the Hill maps (`arena/hills.rs`)
+## 3 · The King of the Hill maps (`arena/hills/`)
 
-Every map is **turned half a turn about its middle** ((x, z) to (-x, -z)), so
-each side has exactly what the other has; its table is the middle's solids
-and one half's, and `hills::whole` turns the half for the other side. What
-each is built to have, from Team Fortress 2's King of the Hill maps and
-nothing copied from any one of them:
+**Rebuilt 2026-11-02 to [fight-spaces.md](fight-spaces.md)**, after the
+owner: "everyone just stands in the middle and spams abilities". Every map
+is now **128 × 92 m** (five reaches by three and a half), its starts **58 m**
+from the point, with **three levels** -- the floor, a middle level at 6.5–8 m,
+a top at 14.5–16 m -- **updrafts and lifts** to climb by, and structure in
+every ring round the point: the point itself, the perches that can hit it,
+and cover and high ground out past a reach. Each map is still turned half a
+turn about its middle ((x, z) to (-x, -z)), so each side has exactly what the
+other has; one file a map, its table the middle's solids and one half's.
 
-- **High ground over the point**, close enough to fight down from.
-- **A way in nobody sees**: a tunnel or covered passage -- the one kind of
-  confined space on the map.
-- **Open air everywhere else**: from either start to the point and to every
-  high place there is a way that never goes under a roof, through at most one
-  or two narrow places.
+**Every map comes in three sizes** (`arena::hills::sizes`): as built
+(*big*), **bigger** (stretched across the floor by five quarters: 160 ×
+115 m, starts 72 m out) and **biggest** (by three halves: 192 × 138 m, starts
+87 m out). Every height is kept, so every stair, ledge and level is what it
+was; the point stays four metres across; a walkway over the point keeps its
+width; and every way the map promises is walked on all three sizes. `Shift+N`
+steps through a map's three sizes before the next map, and the Esc menu has a
+row a map: *big · bigger · biggest*. `--arena bigger_quarry`,
+`biggest_henge` and so on. The plans of all fifteen are
+[gallery/hill-sizes.png](gallery/hill-sizes.png).
+
+What each is built to have, from Team Fortress 2's King of the Hill maps and
+nothing copied from any one of them, now held by `tests/fight_space.rs`:
+
+- **High ground over the point**, and higher ground past a reach from it.
+- **A way in nobody sees**: a tunnel, a cave, a covered channel.
+- **At least three ways onto the point**, of different kinds, and ways off it.
+- **Something that moves you**: an updraft or a lift.
 - **No buildings**: the cover is rocks, cut blocks, stones and banks.
-- **Every climb a jump the shortest jumper makes** (2.7 m at the top of a
-  held jump): a team game shuts nobody out of high ground. This is not a
-  movement section (CLAUDE.md's Bulwark rule is about those), so the
-  Bulwark walks every route in the test.
-
-Each is about 75 × 55 m, inside a rim. Where high ground backs onto the
-rim (the Glacier's shelves, the Gorge's cliff-tops) the rim's bank starts at
-that height, so walking off the back of it is walking onto the bank and not
-into a crease below it.
+- **Every way walked by all five movers** (`sim::class::MOVERS`). Until
+  2026-11-02 every climb was sized to the Bulwark's 2.7 m jump; it is not on
+  offer, and the maps could not be tall while it was the yardstick.
 
 ### The Quarry (`quarry`)
 
-A worked-out stone quarry. **The point** is on a cut plinth in the middle of
-the pit's floor. North and south, **two benches** -- terraces four metres up,
-twelve from the point -- are the high ground: each is climbed by a two-step
-stair at its own side's end, and by a ledge on its face toward the point.
-Through each bench at its foot runs **the cutting**, a tunnel the length of
-it (3 × 3 m, 24 m long), and halfway along it opens onto the point through
-**the slot**, a gap cut down through the bench: the hidden way onto the
-point, and a hole to drop through from the top. Behind each bench a lane runs
-in the open; the floor between the benches is open and strewn with cut
-blocks; a **tor** by each start is a 4.5 m perch.
+A terraced stone quarry. **The point** is on a cut plinth on **the pit
+floor**, under open sky. North and south, the quarry's faces climb in two
+benches the length of the pit: **the lower bench** at 6.5 m and **the upper
+bench** at 14.5 m against the rim. In the middle each face **juts** out toward
+the point: its lower bench 14 m from the point, the contest's high ground; its
+upper bench 26 m back, just out of a reach, overlooking everything. Through
+the foot of each jut runs **the cutting**, a tunnel 4 × 4.5 m and 40 m long;
+halfway along **the slot** opens straight onto the point -- the hidden way in,
+and a hole to drop through from the bench. **A crane jib** sticks out from the
+upper bench over the slot, 14.5 m up, to be knocked off. **The hoist** on each
+jut lifts you from the lower bench to the upper on an 11-second cycle. **Two
+gantries** cross the pit from jut to jut 16 m either side of the point, 6.5 m
+up, each on a pier to hide behind. Each side climbs the face on its left by
+**the steps** at its own end, and the face on its right by **a spoil ramp**
+and **an updraft** up the upper bench; an updraft or a ledge on each jut's
+face is the quick way up off the point. Out past a reach: a great cut block
+to climb, a tor, spoil heaps, a low wall before each start.
 
 ### The Glacier (`glacier`)
 
 A snowfield under a glacier's snout. The point is on **the dome**, a hump of
-ice three metres up in the middle, climbed by an ice stair at one end of each
-long face and a ledge in the middle of each. Under the dome runs **the melt
-cave**, east to west -- a sneak from one half of the field to the other
-beneath the defenders' feet. Each side's own high ground is **an ice shelf**
-five and a half metres up along the rim on its left, climbed from its start,
-whose edge looks down on the dome across a gap you can drop from; under each
-shelf **another cave** runs from the start out toward the dome. Seracs,
-boulders and blocks of ice stand about the open field.
+old ice 4.6 m up, climbed by a stair of ice at each side's corner, a ledge in
+the middle of the north and south faces, and a step down from the gate serac.
+Under each end of the dome runs **a melt cave**, 4 m tall -- the hidden way --
+ending under a hole in the dome's top beside the point, where **the geyser**,
+an updraft, throws whoever steps in up onto the point. Each side's high
+ground is **the snout** on its left: **the shelf** 8 m up (a rock stair from
+the start, **the cornice** to catch, or **a calving lift**) and **the ridge**
+behind it 16 m up (a stair of ice on the shelf, or **the moulin**, a shaft
+through the shelf whose updraft carries you to the ridge's lip). From the
+shelf's front **an ice bridge** crosses 7.2 m over the approach to **the gate
+serac** (8 m); beside it **its twin** (11 m), a 2 m chimney to kick up
+between; from the gate a 5.6 m step drops toward the dome -- the high road
+onto the point. **A floe** docks at the shelf's east end and slides out over
+the dome's flank and back. South of the dome stands **the sentinel**, a 9 m
+serac with a 5 m shoulder and an updraft up its face. Out past a reach: a
+leaning serac, a block of ice, a moraine boulder, a snow wall before each
+start, drifts of snow, and crevasses in the corners.
 
 ### The Delta (`delta`)
 
-A river's mouth among reeds. The point is on a low island ringed by **four
-standing stones**. Each side's half is crossed by **a dyke**, an earth bank
-three metres high -- open at a lane at each end and at **the breach** in its
-middle, the map's one choke, straight at the point -- climbed by steps on
-either face. The dyke's south length hides **the sluice**, a covered channel
-inside it from the south lane to the breach: the hidden way onto the point.
-Over the north lane runs a broken **aqueduct**, the side's high road, 5.7 m
-up from its start to a broken end over the point's north flank. Reeds, a
-hummock and a fallen arch are cover.
+A river mouth with its waterworks in ruins. The point is on a low island,
+ringed by four standing stones taller than a jump, under open sky. Eighteen
+metres out each side runs **the dyke**, an earth bank 6.5 m high the width of
+the map -- the middle level -- cut in its middle by **the breach**, ten metres
+of open floor straight at the point. Across the breach's mouth **the sluice
+gate**, a timber gate that sinks flush with the floor and rises on a 12.5 s
+clock, shuts the breach and carries whoever stands on it up onto the dyke; the
+two sides' gates run half a cycle apart. Inside the dyke's south length runs
+**the sluice**, a covered channel 4.2 m tall -- the hidden way -- fed by **the
+old lock**, an 8 m trench from the start's flank with an updraft in it. Over
+the north half runs **the aqueduct**, the high road, at 14.5 m, from the top of
+**the water tower** out of reach near the start, across **a 3 m break** to
+jump, on over the dyke and the point's flank on tall piers with arches to
+fight under, to a broken end past the point. The tower is climbed by an
+updraft up its back or by **the water-lift**, a stone float rising against its
+face; the aqueduct by steps from the dyke or by **the spout**, an updraft up
+the pier nearest the point -- the way up and out of the point. Mud banks, a
+knoll and reed islands roll the floor; a fallen span is cover by the point.
 
 ### The Gorge (`gorge`)
 
-A river gorge twenty metres wide between cliffs seven metres high, the
-sides' starts at its two ends. The point is on a gravel bar in the river,
-and **a plank bridge** crosses the gorge straight over it, four body heights
-up (its planks 6.3–7 m over the bar), from one cliff-top to the other: a
-walkway to fight down onto the point from, and to be knocked off. Each
-cliff-top is a long terrace of open high ground, climbed out of the gorge by
-two ledges at each end. Inside the north cliff runs **the cave**, in from a
-bay by the west start and out of a mouth in the cliff beside the point --
-the hidden way; the south cliff's is the east side's. The gorge floor is
-open, with boulders.
+A river canyon fought up and down three levels. The floor is the gorge
+bottom, 28 m wide, the river down its middle and a side's start at each end;
+**the point** is on a gravel bar in the river, barely proud of the water.
+West of it stand **the stacks**, three rock pillars 2.4, 4.2 and 5.6 m tall,
+a perch line over the point. Seven metres up **a terrace** 14 m deep runs
+along each cliff; **the plank bridge** crosses from terrace to terrace
+straight over the point -- the one thing over it -- and **a rock arch**
+crosses again 28 m out at each side's own end. Each terrace is climbed by
+**a stair** of blocks, by **the hoist**, a timber crib that rises out of the
+shingle 12 m from the point to the terrace lip, and on the north by **the
+cave's skylight**. **The cliff-tops** are 15 m up and 28 m out: high ground
+past a reach, with a tor each, climbed by **a thermal** up the cliff from the
+bay beside a start, another from the terrace, and a stair of blocks. **A
+cable car** crosses between the cliff-tops at each side's end, high over the
+gorge. **The cave** runs inside the north terrace from the bay by the west
+start, 35 m, 5 m wide and 4.5 m tall, out of a mouth beside the point: the
+hidden way, with a skylight to drop through and an updraft back up.
 
 ### The Henge (`henge`)
 
-A giant's stone circle on a grass down. Four standing stones seven metres
-tall stand nine metres from the point, north, south, east and west, and
-**two lintels** cross between them over it in a cross, four body heights
-up: a walkway over the point from every side. Each stone is climbed by a
-stair of three blocks on its outer face; the west stone is the west side's,
-the east the east side's, north and south nobody's. Out by each start a
-**long barrow** has a passage through it that comes out beside the south (or
-north) stone -- the hidden way. A ring of smaller stones stands about for
-cover.
+A giant's stone circle on a rolling grass down. The point is a worn altar
+slab nearly flush with the chalk. Twenty metres out six great stones, seven
+metres tall, carry **a ring road of lintels**, four metres wide with
+eight-metre gaps under it to walk through. North and south the ring is broken
+by **two giant trilithons**, neutral ground: fifteen-metre uprights a gate
+apart, their tops the highest ground on the map. One **long lintel** crosses
+over the point from the west stone to the east: the high road onto the point,
+to drop from or be knocked off. The ring road is climbed by a two-block stair
+on your own west stone, or by an updraft against a stone's outer face; the
+giants' tops by **corbels** jutting from a giant at one end of your arc, a
+**ley-line updraft** up a giant's face at the other, and a ley line on each
+giant's outer face straight from the down. Out past a reach: an avenue of
+standing stones from each start, an outer ring of smaller stones, **a long
+barrow** on each side's south flank whose 4.4 m passage comes out by the
+circle -- the hidden way -- and whose roof is a perch, and **a dolmen** on
+the north flank, climbed by an updraft or a propped stone.
 
 ## 4 · Checked by
 
@@ -232,9 +285,11 @@ cover.
   clock run, the round won; contested; a capture taken back before the other
   side starts its own; overtime; a second capper faster; the knocked out
   stood back up at their start; a side cannot hurt its own; determinism;
-- **every way on every hill map walked** -- each climb, each tunnel and the
-  hidden way onto the point -- by the Bulwark, the class with the shortest
-  jump; and every height on the floating stages by every class that moves.
+- **every way every stage promises walked** (`Stage::ways`) -- each climb,
+  lift, tunnel and hidden way onto the point, on all three sizes of every
+  hill map, and every height and lift on the floating stages -- by every
+  class that moves; and every stage held to the fight-space rules
+  (`tests/fight_space.rs`).
 
 The arenas also pass every check every arena does (`tests/arena.rs`,
 `four.rs`, `rim.rs`). The game's side is `game::hill` (the point drawn on its

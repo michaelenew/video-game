@@ -1,5 +1,5 @@
 ---
-status: proposed 2026-11-02; the King of the Hill maps and the floating stages rebuilt to it, unplayed
+status: proposed 2026-11-02; the King of the Hill maps (in three sizes) and the floating stages rebuilt to it, unplayed
 ---
 
 # Fight spaces — room to fight
@@ -175,12 +175,44 @@ second half, that the stages did not have.
 
 ## 6 · The revisions
 
-What each level became is in [versus.md](versus.md) §2–§3; the numbers
-before and after are `--bin fightspace`'s, and are kept here.
+What each level became is [versus.md](versus.md) §2–§3; the numbers, from
+`--bin fightspace` (R the reach, J the jump):
 
-*(Filled in as each map is rebuilt.)*
+| Place | Before | After |
+| --- | --- | --- |
+| Quarry | 76 × 58 m, start 1.3 R, 1 level, rings 4/20/6, nothing moves you | 128 × 92 m, start 2.3 R, levels 0 / 6.5 / 14.5 m, rings 2/22/24, 4 updrafts, 2 lifts, 12 ways |
+| Glacier | 76 × 56 m, 1.3 R, 1 level, 3/10/14 | 128 × 92 m, 2.3 R, 0 / 8 / 16 m, 5/20/24, 6 updrafts, 4 drifts, 12 ways |
+| Delta | 80 × 56 m, 1.4 R, 1 level, 4/18/10 | 128 × 92 m, 2.3 R, 0 / 6.5 / 14.5 m, 4/22/22, 8 updrafts, 4 drifts, 13 ways |
+| Gorge | 76 × 52 m, 1.3 R, 2 levels, 1/26/2 | 128 × 92 m, 2.3 R, 0 / 7 / 15 m, 3/18/26, 6 updrafts, 4 drifts, 11 ways |
+| Henge | 76 × 56 m, 1.3 R, 2 levels, 3/20/8 | 128 × 92 m, 2.3 R, 0 / 7 / 15 m, 3/26/32, 10 updrafts, 9 ways |
+| Duel stages | 19–37 m of pieces, starts 12–18 m apart, 1 level | ~47 m of pieces, starts 21–22 m apart, a level 8.4 m up, lifts, ferries and two recovery updrafts each |
+
+**Big, bigger, biggest** (2026-11-02, from the owner: "aiming for big /
+bigger / biggest on each of their scale ups so I can flip through with my
+friends"): every hill map also comes stretched across the floor by 5/4
+(160 × 115 m, start 2.8 R) and 3/2 (192 × 138 m, start 3.4 R), every height
+kept (`arena::hills::sizes`). **What stretching taught, before anybody
+played it**: a plain stretch empties the contest ring. The perches that were
+12–20 m from the point are 18–30 m out at the biggest size, so most of the
+structure goes past a reach and the point is left with nothing in range of
+it (the Biggest Gorge's rings are 1/6/40). So the stretched maps are held to
+every rule *but* the ring split. That is the thing to watch in play: if the
+biggest size feels empty in the middle and the big one feels crowded, the
+answer is a map that is *biggest* at its edges and *big* round its point,
+not a bigger map.
+
+Found while building, and fixed for every stage: a stage's drifts were moved
+and drawn but never raised into the ground off the valley's map, so nobody
+could stand on one (`World::terrain`); and a step a hop takes, under
+something low over the point, catches that thing's edge -- the Henge's altar
+and the Gorge's bar sit 12 cm proud of the floor for it.
 
 ## 7 · Next
+
+- **Spreading people out** is [exploration 0036](exploration/0036_spreading_people_out.md):
+  room alone does not move the score, and a game fought inside 25 m will not
+  spread out by range. A moving hill and perches that capture are the first
+  two things to try.
 
 - **The proving ground** is 1.1 R square, and is where every measuring test
   stands (`arenas.md` §1a), so it is not resized; a 1v1 that wants room is a
