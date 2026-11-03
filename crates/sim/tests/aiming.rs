@@ -636,10 +636,13 @@ fn a_skillshot_ends_on_whatever_the_crosshair_is_on() {
     // keeps coming back: a ray from the *chest* along the *look angle* is
     // parallel to the crosshair's ray and never meets it, so the reticle sits
     // on one thing and the shot goes past it -- by more the further away it is.
+    //
+    // Against the dais (`x` 5 to 9, a metre and a half tall): her stones are
+    // not on the aiming ray since 2026-11-03, so the solid the crosshair
+    // meets is the arena's.
     let mut w = elementalist();
-    // A stone to the side of straight ahead, so a parallel ray would miss it
-    // and a converging one cannot.
-    stone_at(&mut w, V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8)));
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-13), Fx::ZERO, Fx::from_int(-13));
 
     let mut checked = 0;
     for step in 0..40 {
@@ -667,14 +670,13 @@ fn a_skillshot_ends_on_whatever_the_crosshair_is_on() {
 
 #[test]
 fn an_attack_at_somebody_in_front_of_a_stone_reaches_them() {
-    // To an attack, a stone's lid stopped being ground on 2026-09-26. Somebody
-    // standing just in front of one put the crosshair through them and onto
-    // its lid, a body's height up; the shot was raised to the middle of a
-    // fighter standing on *that*, and went over their head. Cataclysm whiffed
-    // that way at point blank. Now the lid is met exactly, like a wall.
-    //
-    // Placing still reads the lid as ground, because the top of a stone is
-    // where the next one goes.
+    // To an attack, a stone's lid stopped being ground on 2026-09-26.
+    // Somebody standing just in front of one put the crosshair through them
+    // and onto its lid, a body's height up; the shot was raised to the middle
+    // of a fighter standing on *that*, and went over their head. Cataclysm
+    // whiffed that way at point blank. Since 2026-11-03 the stone is not on
+    // the ray at all: the crosshair through them and the stone goes to the
+    // floor behind, and the shot crosses them on its way there.
     let mut w = elementalist();
     let theirs = V3::new(Fx::from_int(-1), Fx::ZERO, Fx::from_int(8));
     w.players[1].pos = theirs;
@@ -683,10 +685,10 @@ fn an_attack_at_somebody_in_front_of_a_stone_reaches_them() {
     let mut crossed = 0;
     for step in 0..40 {
         let look = Input::looking_at(0, 0, down(step));
-        let (placing, path, over) = with_scene(&w, |scene| {
+        let (on_them, path, over) = with_scene(&w, |scene| {
             let path = aim::skillshot_path(0, look, Fx::from_int(14), scene);
             (
-                aim::sight(0, look, Fx::from_int(14), scene),
+                aim::pointing_at(0, look, theirs, Fx::ZERO, scene),
                 path,
                 aim::first_along(
                     path,
@@ -697,9 +699,9 @@ fn an_attack_at_somebody_in_front_of_a_stone_reaches_them() {
                 ),
             )
         });
-        // Only the looks where the crosshair was on the stone's lid, which
-        // is where it used to go wrong.
-        if placing.met != aim::Met::Ground || placing.at.y.raw() == 0 {
+        // Only the looks where the crosshair was on them and the stone was
+        // behind them, which is where it used to go wrong.
+        if !on_them || path.to.x.raw() <= 0 {
             continue;
         }
         crossed += 1;
@@ -713,7 +715,7 @@ fn an_attack_at_somebody_in_front_of_a_stone_reaches_them() {
     }
     assert!(
         crossed > 0,
-        "the sweep never put the crosshair on the stone's lid"
+        "the sweep never put the crosshair on them with the stone behind"
     );
 }
 

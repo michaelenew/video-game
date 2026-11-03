@@ -320,9 +320,40 @@ pub fn terrain_slide() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TerrainSlide)).max(Fx::ZERO)
 }
 
+/// **How many frames a press of space is good for**: pressed this soon
+/// before the feet arrive, she jumps on landing. A space held longer than
+/// this lands and stays landed. See `state::jump_pressed`.
+pub fn jump_buffer() -> u32 {
+    oven::scalar(Scalar::JumpBuffer).clamp(0, 30) as u32
+}
+
+/// **The least speed the walk keys alone carry a body to in the air**, in
+/// metres a second, whatever its class's own steering (2026-11-03, from
+/// play: popped straight up, the Elementalist could drift a metre a second
+/// at most and could not steer her own landing). Only how far the keys can
+/// take her is raised: how fast they turn her round stays the class's own
+/// (`air_accel` times its steering), which is what the courses' turn-arounds
+/// are sized against. See `state::air_accelerate`.
+pub fn air_drift_floor() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirDriftFloor)).max(Fx::ZERO)
+}
+
 /// How fast an updraft carries a body up.
 pub fn vent_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VentRise)).max(Fx::ZERO)
+}
+
+/// **What an updraft's column takes off a body's flat speed**, as a share a
+/// second: a body flown in keeps a little of its momentum, not all of it.
+pub fn vent_drag() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VentDrag)).max(Fx::ZERO)
+}
+
+/// **How hard an updraft draws a body to its middle**, in metres a second
+/// each second at the column's rim and less nearer in. Gentle next to air
+/// control, so the walk still takes a body out when it means to go.
+pub fn vent_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VentPull)).max(Fx::ZERO)
 }
 
 /// How fast the falling water of a waterfall pushes a body in it down
@@ -3726,15 +3757,24 @@ pub fn air_ball_sink() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirBallSink)).max(Fx::ZERO)
 }
 
-/// How hard the direction she holds pushes her while her Updraft blows, in
-/// metres a second, a second.
-pub fn updraft_steer() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::UpdraftSteer)).max(Fx::ZERO)
+/// **The tilt** (2026-11-03): how many frames make one reading of her walk
+/// for the Updraft thrown in the air. The push is the best share of any run
+/// this long, round the press, that she held a direction -- so a tap is a
+/// little and a held key is all of it. See `state::updraft_tilt`.
+pub fn updraft_tilt_window() -> u32 {
+    oven::scalar(Scalar::UpdraftTiltWindow).clamp(1, 30) as u32
 }
 
-/// The most speed that push gives her along the way she holds.
-pub fn updraft_steer_cap() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::UpdraftSteerCap)).max(Fx::ZERO)
+/// How many frames before the Updraft's press the tilt starts reading her
+/// walk: a key pressed a moment before the click still counts.
+pub fn updraft_tilt_before() -> u32 {
+    oven::scalar(Scalar::UpdraftTiltBefore).clamp(0, 16) as u32
+}
+
+/// The push the Updraft gives her in the air along the walk she held, in
+/// metres a second, at a full tilt. A share of the tilt is that share of it.
+pub fn updraft_air_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftAirPush)).max(Fx::ZERO)
 }
 
 /// How fast Fissure's surge runs along its line, in metres a second.

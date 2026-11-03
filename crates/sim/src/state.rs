@@ -642,6 +642,11 @@ pub struct Player {
     /// uppercut's extra leap does: it is worth height, and a held button that
     /// spent it every frame would make the leap automatic rather than timed.
     pub space_held: bool,
+    /// **Frames since space was last pressed** -- its press edge, not its
+    /// hold -- saturating at the top. What the ground jump is buffered by
+    /// ([`jump_pressed`]): a press a few frames before the feet arrive still
+    /// jumps on landing; a space held down through a landing does not.
+    pub space_ago: u8,
     /// The uppercut's extra leap has been spent this carry. Cleared when an
     /// uppercut starts and whenever the feet are back on the floor.
     pub leap_used: bool,
@@ -993,6 +998,12 @@ pub struct Player {
     /// the free height, so this never leaves zero there and the pinned hunts
     /// hash exactly as they did. See `World::land`.
     pub fall_over: Fx,
+    /// **The walk keys of the last 32 frames**, four bits a frame -- W, A, S,
+    /// D, newest in the lowest bits. What the Updraft thrown in the air reads
+    /// its tilt from ([`updraft_tilt`]): how much of a short stretch round the
+    /// press a direction was held, so a tap is a nudge and a held key is the
+    /// whole push. In the snapshot, because a rollback re-reads it.
+    pub walk_log: u128,
     /// Frames left before each of this class's moves may be thrown again.
     ///
     /// **Per move, and only ever the one you just threw** -- which is what
@@ -1458,11 +1469,15 @@ impl Player {
 /// (Vines went on 2026-10-16: ledges catch and walls are jumped off now, and
 /// a vine was a place to get stuck in.)
 fn ride_the_air(p: &mut Player, ground: &Terrain) {
-    if !p.grounded && crate::valley::vent_on(ground, p.pos) {
+    if !p.grounded
+        && let Some(middle) = crate::valley::vent_middle(ground, p.pos)
+    {
         let rise = t::vent_rise();
         if p.vel.y.raw() < rise.raw() {
             p.vel.y = rise;
         }
+        lifted_out_of_a_slam(p);
+        draw_to_the_middle(p, middle);
     }
     if !p.grounded && crate::valley::sheet_on(ground, p.pos) {
         let push = t::falls_push().neg();
@@ -1471,6 +1486,46 @@ fn ride_the_air(p: &mut Player, ground: &Terrain) {
         }
         p.jump_hold = 0;
     }
+}
+
+/// **Lifted, a slam is over** (the owner, 2026-11-03, from play: caught in
+/// an updraft's column during Landfall, she was carried up and then made to
+/// finish the plunge once the column let her go). Anything that raises a
+/// body in the air -- a valley updraft, an Updraft's column, a Thermal --
+/// ends a move that waits for the floor ([`lands_on_the_floor`]) while it
+/// is still in its startup: the slam is called off and she is free to act.
+/// Once it has landed it is a landing, and nothing here touches it.
+fn lifted_out_of_a_slam(p: &mut Player) {
+    if p.grounded {
+        return;
+    }
+    if let Action::Startup { kind, .. } = p.action
+        && lands_on_the_floor(p.class, kind)
+    {
+        p.action = Action::Free;
+        p.slam_fall = Fx::ZERO;
+    }
+}
+
+/// **An updraft holds a body near its middle** (the owner, 2026-11-03, from
+/// play: "I keep all my horizontal momentum when I enter one then have to
+/// guess at where I am in the pillar"). Inside a column the flat speed bleeds
+/// off (`tuning::vent_drag`, a share a second) and the body is drawn toward
+/// the axis, harder the further out it is (`tuning::vent_pull`, metres a
+/// second each second at the column's rim). Both are gentle next to air
+/// control, so the walk keys still take her out of it when she means to go.
+fn draw_to_the_middle(p: &mut Player, middle: (Fx, Fx, Fx)) {
+    let (cx, cz, radius) = middle;
+    let keep = Fx::ONE.sub(t::vent_drag().mul(DT)).max(Fx::ZERO);
+    p.vel.x = p.vel.x.mul(keep);
+    p.vel.z = p.vel.z.mul(keep);
+    if radius.raw() <= 0 {
+        return;
+    }
+    // Per metre out from the axis, so the pull is `vent_pull` at the rim.
+    let per = t::vent_pull().div(radius).mul(DT);
+    p.vel.x = p.vel.x.add(cx.sub(p.pos.x).mul(per));
+    p.vel.z = p.vel.z.add(cz.sub(p.pos.z).mul(per));
 }
 
 /// What touching down this frame costs: `was` the body as the frame found
@@ -1573,6 +1628,7 @@ impl Default for Player {
             shadow_queued: 0,
             held_by: NOBODY,
             space_held: false,
+            space_ago: u8::MAX,
             leap_used: false,
             blinked: NO_POOL,
             bleeding: 0,
@@ -1626,6 +1682,7 @@ impl Default for Player {
             curse_clock: 0,
             breaking: NO_STONE,
             fall_over: Fx::ZERO,
+            walk_log: 0,
         }
     }
 }
@@ -3824,11 +3881,12 @@ impl World {
                 }
                 // The Updraft from the floor is a takeoff, and it is worth
                 // more than a jump: higher, and a push along her run.
-                if p.class == Class::Elementalist
-                    && kind == moves::elementalist::UPDRAFT
-                    && p.grounded
-                {
-                    updraft_off_the_floor(&mut self.players[i], input);
+                if p.class == Class::Elementalist && kind == moves::elementalist::UPDRAFT {
+                    if p.grounded {
+                        updraft_off_the_floor(&mut self.players[i], input);
+                    } else {
+                        updraft_in_the_air(&mut self.players[i], input);
+                    }
                 }
             }
             // `E` on the Reaver: the second body goes out, or comes home
@@ -7048,6 +7106,21 @@ pub fn move_dir(aim: Fx, ax: i32, az: i32) -> V3 {
 /// A quarter turn in `Fx`, matching `Input::QUARTER_TURN`.
 const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
 
+/// **Is the jump asked for this frame**: space down, and pressed no more than
+/// `tuning::jump_buffer` frames ago. A press is a jump; a hold is not -- held
+/// through a landing, space does not throw her straight back off the
+/// platform she just reached. Every jump off a footing asks this, the ground
+/// and a creature's back alike.
+///
+/// **Except off a footing that is carrying her up**: a stone erupting under
+/// her feet, a lift on its way up. The structure jump is space held as the
+/// stone comes up under her, and the stone throwing her is the point of it,
+/// not a landing she meant to stay on; a held space still jumps off it.
+pub fn jump_pressed(p: &Player, input: Input) -> bool {
+    input.has(Input::SPACE)
+        && (p.space_ago as u32 <= t::jump_buffer() || (p.grounded && p.vel.y.raw() > 0))
+}
+
 /// Advance whatever the fighter is already doing.
 ///
 /// `None` means they are free to choose, which is the one branch that differs
@@ -7195,6 +7268,17 @@ fn step_player(
     // frame it was meant to come back.
     let out = p.abilities_out(who, scene);
     p.tick_repeat_locks(&out);
+    // The walk keys, kept for the tilt ([`Player::walk_log`]).
+    p.walk_log = (p.walk_log << 4) | ((input.bits >> 4) & 0xF) as u128;
+    // Space's press edge, kept for the jump's buffer ([`Player::space_ago`]),
+    // up here above the rider's branch so a press on a creature's back
+    // counts. The edge is read off `space_held`, which both branches write
+    // after this.
+    p.space_ago = if input.has(Input::SPACE) && !p.space_held {
+        0
+    } else {
+        p.space_ago.saturating_add(1)
+    };
     // A spent click counts again once it has come up (`Player::spent_clicks`).
     p.spent_clicks &= input.bits;
     // **What the floor does to the feet** (bestiary P4): a dodge from inside
@@ -7260,7 +7344,12 @@ fn step_player(
     }
     if p.aboard() {
         match ridden(p, herd) {
-            Some(beast) => return step_rider(p, who, input, beast, scene, &out),
+            Some(beast) => {
+                // The hold, kept here too, so the next press edge is read
+                // against this frame on the back as it is on foot.
+                p.space_held = input.has(Input::SPACE);
+                return step_rider(p, who, input, beast, scene, &out);
+            }
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
             None => p.mount = monster::NO_MOUNT,
@@ -7301,11 +7390,13 @@ fn step_player(
     // edge has to be recomputed from the snapshot, not remembered outside it.
     let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
     p.mechanic_held = input.has(Input::MECHANIC);
-    // The jump button's press edge, for the one thing that needs one. The
-    // ordinary jump stays level-triggered -- holding space through a landing
-    // should hop again -- but the uppercut's extra leap is worth height, and a
-    // held button would spend it on the first frame it was available rather
-    // than on the frame the player chose.
+    // The jump button's press edge. **The ground jump is buffered off it,
+    // not off the hold** (the owner, 2026-11-03, from play: "if you contact
+    // the ground with a held spacebar you jump frame 1 ... you can just spring
+    // off into the void the moment after you land"). A press is good for
+    // `tuning::jump_buffer` frames, so a press just before landing still
+    // jumps; a held button lands, and stays landed until it is pressed again.
+    // See [`jump_pressed`].
     let pressed_space = input.has(Input::SPACE) && !p.space_held;
     if !input.has(Input::SHIFT) {
         shadow::shift_spent(p, false);
@@ -7897,7 +7988,6 @@ fn step_player(
         p.vel.x = Fx::ZERO;
         p.vel.z = Fx::ZERO;
     }
-    steer_in_the_updraft(p, who, input, scene);
 
     // **Sliding down a wall** (`cling_to_the_wall`): against one last frame,
     // not rising, and nobody else's -- a fighter knocked into a wall or
@@ -7975,10 +8065,12 @@ fn step_player(
     // Not on the frame a banked dash jump fires: the dash jump below is that
     // press, and both would stack two takeoffs into one.
     let dash_jump = shadow::dash_jump_banked(p) && shadow::carrying_a_dash(p);
-    if input.has(Input::SPACE) && p.grounded && p.action.actionable() && !dash_jump {
+    if jump_pressed(p, input) && p.grounded && p.action.actionable() && !dash_jump {
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump).mul(foot.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
+        // Spent: the same press does not jump again on the next landing.
+        p.space_ago = u8::MAX;
     }
 
     // **The dash jump.** Pressed in the dash's last few frames
@@ -8378,7 +8470,8 @@ fn hold_to_the_wall(p: &mut Player, input: Input) {
 ///                          away from it is a body that means to go
 /// ```
 ///
-/// And only for a body free to act and not rising -- an edge passed on the
+/// And only for a body free to act -- or in a move's recovery, which the catch
+/// ends -- and not rising -- an edge passed on the
 /// way up is one a jump is clearing -- and not within `tuning::ledge_regrab`
 /// of letting go of one. Only an edge [`Terrain::ledge_near`] says a body fits
 /// beside, hanging; whether it can be climbed is asked when the climb is.
@@ -8387,7 +8480,7 @@ fn catch_a_ledge(p: &mut Player, input: Input, ground: &Terrain) {
         || p.grounded
         || p.aboard()
         || p.ledge_regrab > 0
-        || !p.action.actionable()
+        || !(p.action.actionable() || matches!(p.action, Action::Recovery { .. }))
         || p.health <= 0
         || p.vel.y.raw() > 0
         || p.slam.raw() > 0
@@ -8410,6 +8503,12 @@ fn catch_a_ledge(p: &mut Player, input: Input, ground: &Terrain) {
     else {
         return;
     };
+    // **A move's recovery is let go of for an edge** (2026-11-03, from
+    // play): the last frames of an air attack are her doing nothing but
+    // falling, and an edge passed then was an edge she watched go by.
+    if matches!(p.action, Action::Recovery { .. }) {
+        p.action = Action::Free;
+    }
     p.ledge = Ledge {
         edge,
         from: p.pos,
@@ -8916,8 +9015,9 @@ fn rise_window(p: &mut Player, input: Input, field: &Field) {
     ) {
         return;
     }
+    let jumping = jump_pressed(p, input);
     let r = &mut p.rise;
-    if p.grounded && input.has(Input::SPACE) {
+    if p.grounded && jumping {
         r.window = t::takeoff_window().min(u8::MAX as u16) as u8;
     } else {
         r.window = r.window.saturating_sub(1);
@@ -9623,7 +9723,7 @@ fn champion_takeoff_window(p: &Player) -> u16 {
 /// It can only ever be open around a real jump: standing on the floor with the
 /// jump button down *is* jumping, on the frame you are free to.
 fn arm_takeoff(p: &mut Player, input: Input) {
-    if p.class != Class::Champion || !p.grounded || !input.has(Input::SPACE) {
+    if p.class != Class::Champion || !p.grounded || !jump_pressed(p, input) {
         return;
     }
     if let Mechanic::Forms { takeoff, .. } = &mut p.mechanic {
@@ -10106,36 +10206,80 @@ fn updraft_off_the_floor(p: &mut Player, input: Input) {
     clamp_air_speed(p);
 }
 
-/// **Steered while her Updraft blows** (2026-10-18, from play): for as long
-/// as a column of hers stands and she is off the floor, the direction she
-/// holds pushes her that way at `tuning::updraft_steer`, up to
-/// `tuning::updraft_steer_cap` along it -- so the jump attack goes where she
-/// leans, not only up.
-fn steer_in_the_updraft(p: &mut Player, who: usize, input: Input, scene: &Scene) {
-    if p.class != Class::Elementalist || p.grounded {
+/// **The Updraft thrown in the air pushes her along her walk by its tilt**
+/// (the owner, 2026-11-03, from play: "the aerial air jumps ... feel really
+/// hard to control because they're all-or-nothing ... I think we need a way
+/// to mimic 'tilt' on a controller"). One push on the frame the column comes
+/// out, `tuning::updraft_air_push` at a full tilt and that share of it at a
+/// partial one, along the direction the tilt points by the camera as it is
+/// now. See [`updraft_tilt`] for how the keys become a tilt.
+///
+/// It replaced a steer that pushed her along whatever she held for as long
+/// as the column blew (2026-10-18 to 2026-11-03): every frame the key stayed
+/// down after the wind-up was more speed, so where she ended up was how long
+/// she happened to keep holding it -- overshot and undershot by a few frames
+/// either way.
+fn updraft_in_the_air(p: &mut Player, input: Input) {
+    let startup = moves::get(p.class, moves::elementalist::UPDRAFT).startup as u32;
+    let (ax, az) = updraft_tilt(p.walk_log, startup);
+    if ax == Fx::ZERO && az == Fx::ZERO {
         return;
     }
-    let (ax, az) = input.move_axis();
-    if ax == 0 && az == 0 {
-        return;
+    let aim = input.aim_turns();
+    let forward = V3::from_turns(aim);
+    let right = V3::from_turns(aim.add(QUARTER_TURN));
+    let tilt = forward.scale(az).add(right.scale(ax));
+    let push = t::updraft_air_push();
+    p.vel.x = p.vel.x.add(tilt.x.mul(push));
+    p.vel.z = p.vel.z.add(tilt.z.mul(push));
+    clamp_air_speed(p);
+}
+
+/// **The tilt**: the walk keys in `log` ([`Player::walk_log`]) read as a
+/// stick, `(across, forward)`, each between minus one and one and no longer
+/// than one together. The press was `ago` frames back.
+///
+/// Every run of `tuning::updraft_tilt_window` frames that starts no earlier
+/// than `tuning::updraft_tilt_before` frames before the press, and ends no
+/// later than now, is averaged -- each frame a key is down counts its whole
+/// direction, each frame it is up nothing -- and the strongest of those
+/// averages is the tilt. So a key held through any one run is a full tilt,
+/// wherever round the press it was, and a two-frame tap in a six-frame run is
+/// a third of one.
+pub fn updraft_tilt(log: u128, ago: u32) -> (Fx, Fx) {
+    let window = t::updraft_tilt_window().min(32);
+    let first = (ago + t::updraft_tilt_before()).min(31);
+    let key = |k: u32, bit: u32| ((log >> (4 * k + bit)) & 1) as i32;
+    let mut best = (0i32, 0i32, 0i64);
+    let mut start = first;
+    loop {
+        if start + 1 < window {
+            break;
+        }
+        let (mut sx, mut sz) = (0i32, 0i32);
+        for k in (start + 1 - window)..=start {
+            // W, A, S, D in bits 0 to 3.
+            sx += key(k, 3) - key(k, 1);
+            sz += key(k, 0) - key(k, 2);
+        }
+        let strength = (sx as i64) * (sx as i64) + (sz as i64) * (sz as i64);
+        if strength > best.2 {
+            best = (sx, sz, strength);
+        }
+        if start == 0 {
+            break;
+        }
+        start -= 1;
     }
-    let blowing = scene
-        .effects
-        .iter()
-        .flatten()
-        .any(|e| e.kind == EffectKind::Updraft && e.owner as usize == who);
-    if !blowing {
-        return;
+    let (sx, sz, _) = best;
+    let across = Fx::ratio(sx, window as i32);
+    let forward = Fx::ratio(sz, window as i32);
+    let long = V3::new(across, Fx::ZERO, forward).flat_len();
+    if long.raw() > Fx::ONE.raw() {
+        (across.div(long), forward.div(long))
+    } else {
+        (across, forward)
     }
-    let dir = move_dir(input.aim_turns(), ax, az);
-    let along = p.vel.x.mul(dir.x).add(p.vel.z.mul(dir.z));
-    let room = t::updraft_steer_cap().sub(along);
-    if room.raw() <= 0 {
-        return;
-    }
-    let push = t::updraft_steer().mul(DT).min(room);
-    p.vel.x = p.vel.x.add(dir.x.mul(push));
-    p.vel.z = p.vel.z.add(dir.z.mul(push));
 }
 
 /// **The thrown shield's volume this frame**, in the same shape a swing's
@@ -11523,7 +11667,11 @@ fn steer_while_stunned(p: &mut Player, wish: V3, wish_speed: Fx) {
 
 fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
     let current = p.vel.x.mul(wish.x).add(p.vel.z.mul(wish.z));
-    let head_room = wish_speed.sub(current);
+    // **How far the keys reach has a floor; how fast they get there does
+    // not** (2026-11-03): the class's own steering sets the rate, so a turn
+    // round in the air takes what it always did, and `air_drift_floor` is the
+    // least speed they carry her to along the way she holds.
+    let head_room = wish_speed.max(t::air_drift_floor()).sub(current);
     if head_room.raw() <= 0 {
         return;
     }
@@ -12370,6 +12518,7 @@ fn hash_player(h: &mut Fnv, p: &Player) {
         hash_v3(h, &p.ball_at);
     }
     h.write_u32(p.space_held as u32);
+    h.write_u32(p.space_ago as u32);
     h.write_u32(p.leap_used as u32);
     // As the byte it was, for every slot a byte could name: a fight
     // of four hashes as it did.
@@ -12475,6 +12624,13 @@ fn hash_player(h: &mut Fnv, p: &Player) {
     if p.fall_over != Fx::ZERO {
         h.write_i32(0xFA11);
         h.write_i32(p.fall_over.raw());
+    }
+    // Only once a walk key has been pressed, for the same reason.
+    if p.walk_log != 0 {
+        h.write_u32(p.walk_log as u32);
+        h.write_u32((p.walk_log >> 32) as u32);
+        h.write_u32((p.walk_log >> 64) as u32);
+        h.write_u32((p.walk_log >> 96) as u32);
     }
     for f in &p.repeat_lock {
         h.write_u32(*f as u32);
@@ -14525,6 +14681,7 @@ impl World {
                         effect.take_hit(0, i);
                         self.players[i].vel.y = self.players[i].vel.y.max(t::updraft_lift());
                         self.players[i].grounded = false;
+                        lifted_out_of_a_slam(&mut self.players[i]);
                     }
                 }
                 self.ride_the_thermal(effect);
@@ -16525,7 +16682,7 @@ fn step_rider(
     // you -- which is what makes stepping off the back of a charging animal a
     // real option rather than a mistake. Not from inside: the creature lets
     // you out, when it does.
-    if input.has(Input::SPACE) && p.action.actionable() && !inside {
+    if jump_pressed(p, input) && p.action.actionable() && !inside {
         let mob = p.class.mobility();
         p.mount = monster::NO_MOUNT;
         // **What the leap carries is capped.** You take the surface's own
@@ -16905,7 +17062,7 @@ fn step_critter_rider(
     rider_acts(p, who, input, scene, out, pressed_mechanic);
 
     // Jumping is how you leave, with what the back was doing, capped.
-    if input.has(Input::SPACE) && p.action.actionable() {
+    if jump_pressed(p, input) && p.action.actionable() {
         let mob = p.class.mobility();
         p.mount = monster::NO_MOUNT;
         let carried = carry_off(surface);
@@ -20212,7 +20369,14 @@ impl World {
         let q = &mut self.players[owner];
         q.vel.y = q.vel.y.max(t::thermal_lift());
         q.grounded = false;
-        q.fall_over = Fx::ZERO;
+        // **A Thermal is a push up like any other** for the fall rule: the
+        // fall is measured again from where it throws her, never from
+        // nowhere. It used to set the fall's start to zero, which made her
+        // immune to falling until she next touched the floor -- a missed
+        // jump off a Thermal from twenty metres cost nothing, the same drop
+        // off a ledge half her health (the owner, 2026-11-03, from play).
+        // `fall_rule` lowers the start for the rise on its own.
+        lifted_out_of_a_slam(q);
         if let Some(carpet) = self.effects[slot].filter(|e| e.kind == EffectKind::FireCarpet) {
             let along = carpet.dir.scale(t::thermal_push());
             q.vel.x = q.vel.x.add(along.x);

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 755] = [
+pub const SCALARS: [i32; 760] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -677,8 +677,8 @@ pub const SCALARS: [i32; 755] = [
              400, // blood_mage.heart,_earned_by_dealing = 400
               40, // elementalist.wind_on_fire,_air_ball_burns_per_tick = 40
               90, // elementalist.wind_on_fire,_a_draft_burns_each_body_for = 90
-         2621440, // elementalist.updraft,_steered_by_her_walk_(m/s_per_s) = 40
-          917504, // elementalist.updraft,_steered_up_to_(m/s) = 14
+               6, // elementalist.updraft,_the_tilt_is_read_over_(frames) = 6
+          786432, // elementalist.updraft,_in_the_air,_pushed_along_her_walk_up_to_(m/s) = 12
          1048576, // elementalist.fissure_surge,_speed_(m/s) = 16
            98304, // elementalist.fissure_surge,_damage_at_a_full_hold_(+x) = 1.5
            65536, // elementalist.fissure_surge,_knockback_at_a_full_hold_(+x) = 1
@@ -763,6 +763,11 @@ pub const SCALARS: [i32; 755] = [
              600, // match.five_points,_the_middle_unlocks_after = 600
            28800, // match.five_points,_a_round_lasts_at_most = 28800
             3600, // match.five_points,_a_capture_adds_to_the_clock = 3600
+               6, // elementalist.updraft,_the_tilt_is_read_from_before_the_press_(frames) = 6
+          196608, // valley.updraft,_bleeds_a_body's_flat_speed_(share_a_second) = 3
+          393216, // valley.updraft,_draws_a_body_to_its_middle_(m/s_per_s_at_the_rim) = 6
+               6, // air.jump,_a_press_before_landing_still_jumps_for_(frames) = 6
+          111411, // air.steering,_the_walk_keys_reach_at_least_(m/s) = 1.7
 ];
 
 #[rustfmt::skip]

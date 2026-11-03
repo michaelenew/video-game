@@ -210,16 +210,18 @@ fn hunt_hash(class: Class, frames: u32, seed: u64) -> u64 {
 /// new -- both fighters' and the creature's positions, health and actions
 /// and every effect, every frame of every class's 2,400 (exploration 0029).
 const PINNED: [(Class, u64); 6] = [
-    // Moved 2026-10-23, deliberately: five clips bent a foreleg backward at
-    // the knee and now bend it the way it walks (`tests/knees.rs`), and a
-    // leg is collision geometry, so where it is in a slam or a stumble moves
-    // what four of these hunts run into. Re-pinned on the eight-slot build.
-    (Class::Champion, 0x76340afe58c9dbeb),
-    (Class::Bulwark, 0x23920af50987f830),
-    (Class::ShadowReaver, 0xd02d596836beb00d),
-    (Class::BloodMage, 0x1d14548f46a90352),
-    (Class::DualMage, 0xf7d9bd12eb4c7e88),
-    (Class::Elementalist, 0x295a65bab1fa58a2),
+    // Moved 2026-11-03, deliberately, every class: the scripts press random
+    // keys, so they jump and steer, and a jump is now a press rather than a
+    // hold (`state::jump_pressed`), the walk keys in the air reach at least
+    // `air_drift_floor`, a lip is landed on, a ledge is caught out of a
+    // move's recovery, and the Updraft pushes once by its tilt
+    // (feel-log.md, 2026-11-03).
+    (Class::Champion, 0x306e4c7fc94aa235),
+    (Class::Bulwark, 0x0514478fd7c7f116),
+    (Class::ShadowReaver, 0xc0d87b3b2be42fd0),
+    (Class::BloodMage, 0x5c0f485e225a9601),
+    (Class::DualMage, 0x554de5cef74c00c9),
+    (Class::Elementalist, 0xaa3bf62007f5de6b),
 ];
 
 #[test]
