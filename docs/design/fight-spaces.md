@@ -185,6 +185,7 @@ What each level became is [versus.md](versus.md) §2–§3; the numbers, from
 | Delta | 80 × 56 m, 1.4 R, 1 level, 4/18/10 | 128 × 92 m, 2.3 R, 0 / 6.5 / 14.5 m, 4/22/22, 8 updrafts, 4 drifts, 13 ways |
 | Gorge | 76 × 52 m, 1.3 R, 2 levels, 1/26/2 | 128 × 92 m, 2.3 R, 0 / 7 / 15 m, 3/18/26, 6 updrafts, 4 drifts, 11 ways |
 | Henge | 76 × 56 m, 1.3 R, 2 levels, 3/20/8 | 128 × 92 m, 2.3 R, 0 / 7 / 15 m, 3/26/32, 10 updrafts, 9 ways |
+| Kilnworks (new, five points) | -- | 238 × 80 m, points 48 m (1.9 R) apart, start 17 m behind its last, levels 0 / 7 / 14.5 m, a works wall with three ways through, 14 updrafts, 2 hoists, 2 trams, 25 ways |
 | Duel stages | 19–37 m of pieces, starts 12–18 m apart, 1 level | ~47 m of pieces, starts 21–22 m apart, a level 8.4 m up, lifts, ferries and two recovery updrafts each |
 
 **Big, bigger, biggest** (2026-11-02, from the owner: "aiming for big /

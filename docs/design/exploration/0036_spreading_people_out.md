@@ -13,6 +13,8 @@ The owner, 2026-11-02, after the hill maps were rebuilt bigger
 > really beloved. I never played but they seem to have figured something
 > out.
 
+**Since 2026-11-03 the owner chose §5's fifth, a push map**: five points in a row on a new long map, the Kilnworks ([versus.md](../versus.md) §1, §3a).
+
 This is a working note: where the clumping comes from, what other games do
 about it, which of it survives a game whose fighting happens inside 25 m,
 and what to build first. Nothing here is built.

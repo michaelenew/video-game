@@ -307,6 +307,57 @@ barrow** on each side's south flank whose 4.4 m passage comes out by the
 circle -- the hidden way -- and whose roof is a perch, and **a dolmen** on
 the north flank, climbed by an updraft or a propped stone.
 
+## 3a · The five-point maps (`arena/kilnworks.rs`)
+
+### The Kilnworks (`kilnworks`)
+
+A brick-kiln works in ruins, **238 × 80 m**, its five points in a row west
+to east 48 m apart (just under two reaches: a fight on one cannot reach the
+next), turned half a turn about its middle like every versus map. The plan
+is [gallery/kilnworks-plan.png](gallery/kilnworks-plan.png), the kiln court
+from above [gallery/kilnworks.png](gallery/kilnworks.png). From the west:
+
+- **The loading dock** (the west side's last point, x −96 m): the point on
+  a dock a metre up under **a great shed roof** 14 m high, **balconies** along
+  both inside walls at 7 m as the defenders' perches, and **three doors** in
+  the back wall from the start 17 m behind, so nobody camps one exit. The
+  balconies are climbed by steps, by updrafts up the back wall and off the
+  dock, by the trestle and by the tram.
+- **The clay pit** (open, the width of the map): drying racks and brick
+  pillars to fight through; **a trestle** crossing at 7 m from the engine
+  house roof to the south balcony, to fight on or under; and **a tram**, a
+  cart at 7 m running 15 m between the clay store roof and the north balcony
+  across a gap nobody jumps -- two seconds at each end, four on the way. The
+  west side's spawn behind its second point is here, behind the clay store.
+- **The kiln court** (the second point, x −48 m): a paved court ringed by
+  7 m roofs -- the clay store and kiln hall, the engine house, the drying
+  house against the works wall -- and **the great kiln**, round and 14.5 m
+  tall, the strong point aimed down at the court, climbed by **a hoist** up its
+  face or an updraft from the drying house roof. A plank at 8 m crosses the
+  back lane from the rampart to the hall roof. A brick stack and a kiln column
+  on the point are its cover.
+- **The works wall** (the choke): 8 m of brick across the whole map, rim to
+  rim, with **three ways through** -- **the main gate**, ten metres of open
+  floor under a timber lintel; **the gatehouse passage**, a tunnel 4 m wide
+  and 4.5 m tall with a slot in its roof to drop through and a window sill on
+  the yard side; and **the rampart**, the wall top, reached by an updraft up
+  its yard face and from the drying house roof. Three ways at a choke is the
+  point of it: no side holds all three at once. The west side's spawn behind
+  the middle is in the lane behind the wall, out of the yard's sight.
+- **The clay yard** (the middle, x 0): wide open ground for the big brawl,
+  the point on a slab flush with it. **Open-fronted drying sheds** north and
+  south with roofs at 7 m, climbed by crates and updrafts; **the gantry**, a
+  plank at 7 m from shed roof to shed roof straight over the point -- the one
+  overpass, and nobody standing on it is on the point; **two chimneys** 16 m
+  tall off the yard, perches with updrafts up their backs; brick stacks for
+  cover.
+
+Three levels throughout -- the floor, roofs and balconies at 7–8 m, the
+kilns, chimneys and the dock's roof at 14.5–16 m -- 14 updrafts, two hoists
+and two trams, and 25 ways walked by every mover: four onto each point of
+the west half, from both sides and every kind of route, and from each spawn
+to its point. 118 boxes of the 160 a five-point map may have.
+
 ## 4 · Checked by
 
 `crates/sim/tests/versus.rs`:
