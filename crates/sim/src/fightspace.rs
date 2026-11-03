@@ -146,9 +146,9 @@ pub fn measure(arena: &'static Arena, reach: Fx, jump: Fx) -> Measure {
     let centre = match stage.and_then(|s| s.hill) {
         Some(h) => V3::new(h.at.x, base, h.at.z),
         None => V3::new(
-            Fx::from_raw(b.lo_x.raw() / 2 + b.hi_x.raw() / 2),
+            crate::math::midpoint(b.lo_x, b.hi_x),
             base,
-            Fx::from_raw(b.lo_z.raw() / 2 + b.hi_z.raw() / 2),
+            crate::math::midpoint(b.lo_z, b.hi_z),
         ),
     };
     let start = arena.spawns.versus[0].at;
@@ -232,9 +232,9 @@ pub fn measure(arena: &'static Arena, reach: Fx, jump: Fx) -> Measure {
             continue;
         }
         let mid = V3::new(
-            Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2),
+            crate::math::midpoint(s.min.x, s.max.x),
             Fx::ZERO,
-            Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2),
+            crate::math::midpoint(s.min.z, s.max.z),
         );
         let d = crate::math::wide_len(mid.sub(V3::new(centre.x, Fx::ZERO, centre.z)));
         let k = if d.raw() <= core.raw() {

@@ -100,8 +100,8 @@ fn plan(a: &'static Arena, r: Fx, j: Fx) {
             shade(s.max.y)
         );
         let (cx, cz) = (
-            Fx::from_raw(s.min.x.raw() / 2 + s.max.x.raw() / 2),
-            Fx::from_raw(s.min.z.raw() / 2 + s.max.z.raw() / 2),
+            sim::math::midpoint(s.min.x, s.max.x),
+            sim::math::midpoint(s.min.z, s.max.z),
         );
         match s.shape {
             arena::Shape::Round { bottom, top, .. } => println!(

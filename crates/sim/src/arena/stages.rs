@@ -458,7 +458,12 @@ const TWIN_ISLES_VENTS: [Vent; 2] = [
 // a drift -- a lift, the dais, a ferry -- is not among them: the walker
 // does not wait.
 
-const ANVIL_WAYS: [Way; 2] = [
+const ANVIL_WAYS: [Way; 3] = [
+    Way::new(
+        "the hammer, by the lift",
+        (-450, 4000, -450),
+        &[(-450, 4000, -925), (-450, 4840, -925), (-500, 4840, -425)],
+    ),
     Way::new(
         "the hammer, by the hovering stones",
         (-950, 4000, 450),
@@ -471,7 +476,12 @@ const ANVIL_WAYS: [Way; 2] = [
     ),
 ];
 
-const ZIGGURAT_WAYS: [Way; 2] = [
+const ZIGGURAT_WAYS: [Way; 3] = [
+    Way::new(
+        "the crown, by the dais",
+        (-650, 4000, 725),
+        &[(-250, 4010, 725), (-250, 4840, 725), (0, 4840, 0)],
+    ),
     Way::new(
         "the crown, up the tiers",
         (-950, 4000, 600),
@@ -484,7 +494,12 @@ const ZIGGURAT_WAYS: [Way; 2] = [
     ),
 ];
 
-const CALDERA_WAYS: [Way; 2] = [
+const CALDERA_WAYS: [Way; 3] = [
+    Way::new(
+        "the plug, by the lift",
+        (100, 4000, -900),
+        &[(100, 4000, -1325), (100, 4840, -1325), (100, 4840, -800)],
+    ),
     Way::new(
         "the plug, from the lip",
         (-750, 4000, -750),
