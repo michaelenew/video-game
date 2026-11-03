@@ -24,6 +24,9 @@ use sim::arena::ArenaId;
 /// gets a plain bright day rather than a black void, which is the failure that
 /// is easy to miss and ugly to ship.
 pub fn of(id: ArenaId) -> Sky {
+    // A stretched hill map is its base under the same sky
+    // (`sim::arena::hills::sizes`).
+    let id = sim::arena::hills::sizes::looks_like(id);
     match id {
         // --- dev arenas ---------------------------------------------------
         //

@@ -127,6 +127,10 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::DELTA => &stages::DELTA,
         ArenaId::GORGE => &stages::GORGE,
         ArenaId::HENGE => &stages::HENGE,
+        // A stretched hill map (`sim::arena::hills::sizes`): its base's
+        // props stood where the base had them would be in the wrong places,
+        // and they are small; it is drawn bare.
+        id if sim::arena::hills::sizes::base_of(id).is_some() => &BARE,
         ArenaId::WARDEN => &warden::DRESSING,
         // A range is a pocket of the land: nothing laid on it but what grows
         // there. Until 2026-10-22 it fell through to the proving ground's

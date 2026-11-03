@@ -349,16 +349,38 @@ fn stages(ui: &mut egui::Ui, sim: &mut crate::Sim) {
     ui.heading("Versus stages");
     ui.add_space(4.0);
     let mut go = None;
-    for (kind, title) in [
-        (Kind::Duel, "Floating duel"),
-        (Kind::Hill, "King of the Hill"),
-    ] {
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new("Floating duel").strong());
+        for s in STAGES.iter().filter(|s| s.kind == Kind::Duel) {
+            let here = sim.cur.arena == s.arena;
+            if ui
+                .selectable_label(here, s.arena.get().name)
+                .on_hover_text(s.theme)
+                .clicked()
+                && !here
+            {
+                go = Some(s.arena);
+            }
+        }
+    });
+    // King of the Hill: a row a map, in its three sizes
+    // (`sim::arena::hills::sizes`).
+    ui.label(egui::RichText::new("King of the Hill").strong());
+    let looks = sim::arena::hills::sizes::looks_like;
+    for base in STAGES
+        .iter()
+        .filter(|s| s.kind == Kind::Hill && looks(s.arena) == s.arena)
+    {
         ui.horizontal_wrapped(|ui| {
-            ui.label(egui::RichText::new(title).strong());
-            for s in STAGES.iter().filter(|s| s.kind == kind) {
+            ui.label(base.arena.get().name);
+            for (s, size) in STAGES
+                .iter()
+                .filter(|s| looks(s.arena) == base.arena)
+                .zip(["big", "bigger", "biggest"])
+            {
                 let here = sim.cur.arena == s.arena;
                 if ui
-                    .selectable_label(here, s.arena.get().name)
+                    .selectable_label(here, size)
                     .on_hover_text(s.theme)
                     .clicked()
                     && !here
