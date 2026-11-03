@@ -2,7 +2,8 @@
 //! the cell's bars, across the east end of the cell where it opens into the
 //! cut, torn out in the middle by whatever came through -- the Warden's work,
 //! before you have seen it. One lies on the floor. None of it collides; the
-//! way out is the gap.
+//! way out is the gap. Thirty metres up, on the island's top
+//! (`sim::arena::warden::TOP`).
 
 use super::{Dressing, Prop, Shape};
 
@@ -12,7 +13,7 @@ const IRON: [f32; 3] = [0.22, 0.21, 0.22];
 const fn bar(z: f32, h: f32) -> Prop {
     Prop {
         shape: Shape::Cylinder,
-        at: [-8.0, 0.0, z],
+        at: [-8.0, 30.0, z],
         size: [0.14, h, 0.14],
         yaw: 0.0,
         rgb: IRON,
@@ -20,7 +21,8 @@ const fn bar(z: f32, h: f32) -> Prop {
 }
 
 pub static DRESSING: Dressing = Dressing {
-    drop: false,
+    // A floating island: the floor far below is a drop.
+    drop: true,
     props: &[
         bar(-5.6, 4.0),
         bar(-4.8, 4.0),
@@ -35,14 +37,14 @@ pub static DRESSING: Dressing = Dressing {
         // The crossbar, its middle torn away.
         Prop {
             shape: Shape::Box,
-            at: [-8.0, 3.9, -4.2],
+            at: [-8.0, 33.9, -4.2],
             size: [0.16, 0.16, 3.4],
             yaw: 0.0,
             rgb: IRON,
         },
         Prop {
             shape: Shape::Box,
-            at: [-8.0, 3.9, 4.2],
+            at: [-8.0, 33.9, 4.2],
             size: [0.16, 0.16, 3.4],
             yaw: 0.0,
             rgb: IRON,
@@ -50,7 +52,7 @@ pub static DRESSING: Dressing = Dressing {
         // A bar on the floor, thrown clear.
         Prop {
             shape: Shape::Box,
-            at: [-5.5, 0.0, 1.2],
+            at: [-5.5, 30.0, 1.2],
             size: [0.14, 0.14, 3.6],
             yaw: 0.11,
             rgb: IRON,

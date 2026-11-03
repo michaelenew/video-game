@@ -43,10 +43,7 @@ fn relief_is_gentle_everywhere() {
         // (`docs/design/fight-spaces.md` F8): no steeper anywhere than the
         // land a body still walks up (`tuning::terrain_steepest`), and no
         // taller than its top level.
-        // The opening's (`arena::warden`) is the way to its fight -- a yard's
-        // swells and a ravine -- and is held as a King of the Hill map's is;
-        // its fight is on the keep's floor, which is flat.
-        let versus = sim::versus::of(a.id).is_some() || a.id == ArenaId::WARDEN;
+        let versus = sim::versus::of(a.id).is_some();
         let (step, most) = if climbs {
             (Fx::ratio(1, 4), Fx::from_int(40))
         } else if versus {
@@ -109,11 +106,6 @@ fn relief_keeps_clear_of_what_stands_on_the_floor() {
             continue;
         }
         for s in a.solids() {
-            // The opening's causeway is a bridge: the floor falls away under
-            // it on purpose, into the ravine it crosses.
-            if a.id == ArenaId::WARDEN && s.min.y.raw() < 0 {
-                continue;
-            }
             let corners = [
                 (s.min.x, s.min.z),
                 (s.min.x, s.max.z),

@@ -987,9 +987,8 @@ pub static WARDEN: crate::plans::Card = crate::plans::Card {
 /// in its keep until somebody comes in, and the Ridgeback's hunter waits for
 /// its creature to come to it, so on their own the two would wait at either
 /// end of the opening forever. A person walks over: while it sleeps, this
-/// walks the hunter at the keep along the straight way in (the cut, the
-/// yard, the causeway and the gate are all on one line), and hands over to
-/// the Ridgeback's plan the moment it wakes.
+/// walks the hunter along the way in (`sim::arena::warden::WAY`), and hands
+/// over to the Ridgeback's plan the moment it wakes.
 struct WardenWay {
     who: usize,
     inner: Ridgeback,
@@ -1011,8 +1010,15 @@ impl crate::Plan for WardenWay {
         if !asleep {
             return self.inner.act(w);
         }
-        let (kx, kz) = sim::arena::warden::KEEP;
+        // The next point of the way it has not yet passed: the way goes
+        // round the curtain wall and through the chapel, so the keep itself
+        // is the last point, not the first.
         let p = w.players[self.who].pos;
+        let (kx, kz) = sim::arena::warden::WAY
+            .iter()
+            .copied()
+            .find(|&(x, _)| Fx::ratio(x, 100).raw() > p.x.add(Fx::ONE).raw())
+            .unwrap_or(sim::arena::warden::KEEP);
         let dx = Fx::ratio(kx, 100).sub(p.x);
         let dz = Fx::ratio(kz, 100).sub(p.z);
         let aim = (sim::math::atan2_turns(dz, dx).raw() & 0xFFFF) as u16;

@@ -133,6 +133,11 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "pub const FALL_COST: i32 = 120",
+        "Level data, the opening's: what a fall off its island costs, judged with the \
+         drop it is a fall into, as a course's pit and gates are its arena's.",
+    ),
+    (
         "pub const HIGH: i32 = 600",
         "Level data, the opening's: how high a hunter must be for the blow that \
          wakes the Warden to topple it -- above anything on the keep's floor's level \

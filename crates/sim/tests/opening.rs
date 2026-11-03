@@ -2,13 +2,17 @@
 //! (`docs/design/opening.md` §5-§6, `sim::arena::warden`,
 //! `sim::species::warden`; the play check, `docs/design/delivery.md` D3).
 //!
-//! Every class that moves (`sim::class::MOVERS`) walks from the cell, out
-//! through the cut, across the yard and the causeway to the keep's gate; and
-//! from there round the keep and up its four great steps to the rampart, the
-//! way in from above. The Warden sleeps while they come, and wakes when
-//! somebody comes into the keep.
+//! The opening is a floating island, its top thirty metres up
+//! (`arena::warden::TOP`). Every class that moves (`sim::class::MOVERS`)
+//! walks from the cell, out through the cut, round the curtain wall through
+//! its gap, through the chapel and over the causeway to the keep's gate;
+//! round the keep's lip to the climb, over the pillars rising out of the
+//! drop and up the ledges to the rampart; and up the spiral inside. A fall
+//! off the island stands you back on the nearest safe spot, a little hurt.
+//! The Warden sleeps while they come, wakes when somebody comes into the
+//! keep, and goes over when the blow that wakes it comes from above.
 
-use sim::arena::warden::{KEEP, KEEP_FLOOR};
+use sim::arena::warden::{KEEP, KEEP_FLOOR, SAFE, TOP, WAY};
 use sim::species::SpeciesId;
 use sim::{Class, Fx, Input, V3, World};
 
@@ -16,6 +20,11 @@ const HOLD: u32 = 50;
 
 fn at(x: i32, z: i32) -> (Fx, Fx) {
     (Fx::ratio(x, 100), Fx::ratio(z, 100))
+}
+
+/// A height over the island's top, in centimetres, as a height in the world.
+fn up(h: i32) -> Fx {
+    Fx::ratio(TOP + h, 100)
 }
 
 /// A hunt of the Warden with one hunter: the second seat out of it.
@@ -89,27 +98,21 @@ fn walk_to(w: &mut World, to: (Fx, Fx), from_height: Fx) -> Result<(), String> {
     ))
 }
 
-/// The way from the cell to the gate, in centimetres: out of the cut,
-/// across the yard and over the causeway.
-const TO_THE_GATE: [(i32, i32); 6] = [
-    (1000, 0),
-    (3500, 0),
-    (6000, 0),
-    (6800, 0),
-    (8000, 0),
-    (8300, 0),
-];
-
-/// From the causeway down into the ravine beside it, out, along the keep's
-/// south wall and up the climb -- four pillars, then seven ledges up the
-/// wall's outside face and round its corner -- onto the rampart,
-/// twenty-nine metres up.
-const TO_THE_RAMPART: [(i32, i32, i32); 13] = [
-    (6000, -2800, 200),
-    (8600, -2900, 400),
-    (9075, -2900, 650),
-    (9550, -2900, 900),
-    (10050, -2900, 1150),
+/// From the causeway's end along the keep's island's lip, outside its
+/// south-west wall, to the foot of the climb; over its four pillars rising
+/// out of the drop; and up the seven ledges on the south wall's outside face
+/// and round its corner, onto the rampart, twenty-nine metres up.
+/// Centimetres, and the height over the island's top to look down from.
+const TO_THE_RAMPART: [(i32, i32, i32); 16] = [
+    (8300, -500, 200),
+    (8250, -900, 200),
+    (8350, -1300, 200),
+    (8950, -1900, 200),
+    (9450, -2400, 200),
+    (9300, -3000, 400),
+    (9750, -3300, 650),
+    (10250, -3350, 900),
+    (10700, -3150, 1150),
     (10300, -2725, 1400),
     (10700, -2725, 1650),
     (11100, -2725, 1900),
@@ -117,7 +120,6 @@ const TO_THE_RAMPART: [(i32, i32, i32); 13] = [
     (11880, -2725, 2400),
     (12306, -2547, 2700),
     (12589, -2264, 2950),
-    (12626, -1626, 3000),
 ];
 
 /// **The spiral inside**, from the keep's floor by the gate, ledge by
@@ -134,7 +136,7 @@ fn up_the_spiral() -> Vec<(i32, i32, i32)> {
             h,
         )
     };
-    let mut way = vec![(8000, 0, 200), (9500, -500, 200)];
+    let mut way = vec![(8600, 0, 200), (9500, -500, 200)];
     for k in 0..8 {
         let face = 225.0 + 45.0 * k as f64;
         let top = 325 * (k + 1);
@@ -151,14 +153,10 @@ fn every_mover_walks_from_the_cell_to_the_gate_and_up_to_the_rampart() {
     let mut wrong = Vec::new();
     for class in sim::class::MOVERS {
         let mut w = hunt(class);
-        let way = TO_THE_GATE
+        let way = WAY
             .iter()
-            .map(|&(x, z)| (at(x, z), Fx::from_int(2)))
-            .chain(
-                TO_THE_RAMPART
-                    .iter()
-                    .map(|&(x, z, h)| (at(x, z), Fx::ratio(h, 100))),
-            );
+            .map(|&(x, z)| (at(x, z), up(200)))
+            .chain(TO_THE_RAMPART.iter().map(|&(x, z, h)| (at(x, z), up(h))));
         for (k, (to, from)) in way.enumerate() {
             if let Err(e) = walk_to(&mut w, to, from) {
                 wrong.push(format!("{class:?}, waypoint {k}: {e}"));
@@ -181,8 +179,10 @@ fn every_mover_climbs_the_spiral_to_the_top() {
     let mut wrong = Vec::new();
     for class in sim::class::MOVERS {
         let mut w = World::versus_in([class, Class::Champion], sim::arena::ArenaId::WARDEN);
+        // Stood at the gate: the way there is the other test's.
+        w.players[0].pos = V3::new(Fx::from_int(86), up(0), Fx::ZERO);
         for (k, &(x, z, h)) in up_the_spiral().iter().enumerate() {
-            if let Err(e) = walk_to(&mut w, at(x, z), Fx::ratio(h, 100)) {
+            if let Err(e) = walk_to(&mut w, at(x, z), up(h)) {
                 wrong.push(format!("{class:?}, step {k}: {e}"));
                 break;
             }
@@ -211,8 +211,8 @@ fn warden(w: &World) -> sim::Monster {
 fn the_warden_sleeps_until_you_come_into_the_keep() {
     let mut w = hunt(Class::Champion);
     let start = warden(&w).pos;
-    for &(x, z) in &TO_THE_GATE[..3] {
-        walk_to(&mut w, at(x, z), Fx::from_int(2)).expect("the yard is walkable");
+    for &(x, z) in &WAY[..5] {
+        walk_to(&mut w, at(x, z), up(200)).expect("the yard is walkable");
     }
     let m = warden(&w);
     assert!(
@@ -225,8 +225,8 @@ fn the_warden_sleeps_until_you_come_into_the_keep() {
         "its grace ran out with nobody in the keep"
     );
     // In through the gate, to the edge of its floor.
-    for &(x, z) in &TO_THE_GATE[3..] {
-        walk_to(&mut w, at(x, z), Fx::from_int(2)).expect("the causeway is walkable");
+    for &(x, z) in &WAY[5..] {
+        walk_to(&mut w, at(x, z), up(200)).expect("the causeway is walkable");
     }
     let inside = at(KEEP.0 - KEEP_FLOOR + 300, 0);
     let mut woke = false;
@@ -254,7 +254,7 @@ fn a_blow_from_above_topples_it_and_one_from_the_floor_does_not() {
         w.advance([Input::default(); 2]);
         if from_high {
             // On the rampart over the south wall, outside its floor.
-            w.players[0].pos = V3::new(Fx::from_int(110), Fx::from_int(29), Fx::from_int(-23));
+            w.players[0].pos = V3::new(Fx::from_int(110), up(2925), Fx::from_int(-23));
         }
         for m in w.monsters.iter_mut().flatten() {
             m.brain.grace = 0;
@@ -270,4 +270,35 @@ fn a_blow_from_above_topples_it_and_one_from_the_floor_does_not() {
             m.doing
         );
     }
+}
+
+/// **A fall off the island is not a death**: a fighter dropped off its
+/// edge is stood on the nearest safe spot on its top, hurt by the fall's
+/// cost and no more.
+#[test]
+fn a_fall_off_the_island_stands_you_back_a_little_hurt() {
+    let mut w = hunt(Class::Champion);
+    w.advance([Input::default(); 2]);
+    let full = w.players[0].health;
+    // Off the yard's south edge, falling past the island's underside.
+    w.players[0].pos = V3::new(Fx::from_int(20), up(-1500), Fx::from_int(-40));
+    w.players[0].grounded = false;
+    w.advance([Input::default(); 2]);
+    let p = w.players[0];
+    let (x, z) = SAFE[1];
+    assert!(
+        p.pos
+            .sub(V3::new(Fx::ratio(x, 100), p.pos.y, Fx::ratio(z, 100)))
+            .flat_len()
+            .raw()
+            < Fx::ONE.raw(),
+        "stood at {:?}, not on the yard's safe spot",
+        p.pos
+    );
+    assert!(
+        p.pos.y.raw() >= up(-10).raw(),
+        "not on the island's top: {:?}",
+        p.pos
+    );
+    assert_eq!(p.health, full - sim::species::warden::FALL_COST);
 }

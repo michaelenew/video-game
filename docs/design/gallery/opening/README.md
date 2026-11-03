@@ -1,6 +1,6 @@
 # Gallery — the opening, as built
 
-Headless captures of `--hunt warden` (2026-11-03), for
+Headless captures of `--hunt warden` (2026-11-03, the floating island), for
 [opening.md](../../opening.md) §5-§6: the way from the cell to the Warden's
 keep, the climb up its outside, the spiral inside, and the fight. The first
 blockout, superseded, is in [first-blockout/](first-blockout/README.md).
@@ -19,36 +19,38 @@ software Vulkan driver, 1280 × 760 scaled to 960 wide, the HUD hidden
 
 | | |
 | --- | --- |
-| ![](00_overview.jpg) **From above** (placed by hand). The cell and cut between the rock (right), the yard, the ravine and causeway, the keep: twenty-nine metres of wall, the climb's pillars along its south side. | ![](01_cell.jpg) **The cell.** The bars torn out, one on the floor, and the keep already in sight down the cut. |
-| ![](02_out.jpg) **Out of the cut**: the yard, the arch's posts, and the keep on the far side. | ![](03_yard.jpg) **The yard**, the causeway and the gate ahead; the climb's pillars to the left of the keep. |
-| ![](04_gate.jpg) **The gate**, and the Warden asleep in the middle of its floor. | ![](05_climb_pillars.jpg) **The climb**: on the second of its four pillars, the wall's ledges above. |
-| ![](06_climb_ledges.jpg) **Up the outside face**, twenty metres over the yard. | ![](07_rampart_dive.jpg) **The rampart**, twenty-nine metres up: the Warden asleep below, the soft place on its neck. Hit it from here and it goes over. |
-| ![](08_spiral.jpg) **The spiral inside**, partway up: a ledge on every face, the piers and columns below. | ![](09_fight_a.jpg) **The fight**: the hunter at its feet, the floor's way. |
-| ![](10_fight_b.jpg) **The fight**, later: the hunter on the floor of the keep. | |
+| ![](00_overview.jpg) **From above** (placed by hand). The floating island: rock masses narrowing beneath, the cell and cut between rock (right), the yard with its curtain wall and chapel, the gap and the causeway, the keep and its climb's pillars rising from the ground below. | ![](01_cell.jpg) **The cell.** The bars torn out, the keep already in sight down the cut. |
+| ![](02_curtain.jpg) **The curtain wall** across the yard: the keep over it, and the only gap off to the north. | ![](03_through_gap.jpg) **Through the gap**, against the island's edge: the drop to the right, the keep framed ahead. |
+| ![](04_chapel.jpg) **The chapel**, roofless: in at one door, out at the other, the keep hidden in between. | ![](05_causeway.jpg) **The causeway** to the keep's island, its gate open, the Warden asleep inside. |
+| ![](06_climb_foot.jpg) **The foot of the climb**, on the keep's lip: the pillars rising out of the drop. | ![](07_pillars.jpg) **On the pillars**, over the drop: miss one and you are off the island. |
+| ![](08_rampart_dive.jpg) **The rampart**, twenty-nine metres up the keep: the Warden below, the soft place on its neck. Hit it from here and it goes over. | ![](09_spiral.jpg) **The spiral inside**, partway up. |
+| ![](10_fight.jpg) **The fight**: the hunter at its feet, the floor's way. | |
 
 ## How each was taken
 
 All with `GAME_ARGS="--hunt warden --p1 champion --pretty"` (00 without
-`--pretty`) and `SHOT_BARE=1`:
+`--pretty`) and `SHOT_BARE=1`. Heights in `SHOT_AT` are the world's: the
+island's top is thirty metres up.
 
 | Shot | Environment |
 | --- | --- |
-| 00 | `SHOT_FRAME=5 SHOT_EYE=-10,95,-80,85,0,0` |
+| 00 | `SHOT_FRAME=5 SHOT_EYE=-35,105,-95,70,25,0` |
 | 01 | `DEMO=1 SHOT_FRAME=30 SHOT_PITCH=-0.08` |
-| 02 | `DEMO=1 SHOT_FRAME=260 SHOT_PITCH=-0.08` |
-| 03 | `DEMO=1 SHOT_FRAME=450 SHOT_PITCH=-0.08` |
-| 04 | `DEMO=1 SHOT_FRAME=830 SHOT_PITCH=-0.08` |
-| 05 | `SHOT_FRAME=5 SHOT_AT=90.75,-29,7 SHOT_FACE=0 SHOT_YAW=0 SHOT_PITCH=0.0` |
-| 06 | `SHOT_FRAME=5 SHOT_AT=115,-27.25,22 SHOT_FACE=0 SHOT_YAW=0.3 SHOT_PITCH=-0.3` |
-| 07 | `SHOT_FRAME=5 SHOT_AT=126.3,-16.3,31 SHOT_FACE=135 SHOT_YAW=2.36 SHOT_PITCH=-1.0` |
-| 08 | `SHOT_FRAME=5 SHOT_AT=122.5,12.5,17.5 SHOT_FACE=200 SHOT_YAW=3.5 SHOT_PITCH=-0.25` |
-| 09 | `DEMO=1 SHOT_FRAME=1300 SHOT_PITCH=0.02` |
-| 10 | `DEMO=1 SHOT_FRAME=1700 SHOT_PITCH=0.02` |
+| 02 | `DEMO=1 SHOT_FRAME=230 SHOT_PITCH=-0.08` |
+| 03 | `DEMO=1 SHOT_FRAME=330 SHOT_PITCH=-0.08` |
+| 04 | `DEMO=1 SHOT_FRAME=560 SHOT_PITCH=-0.08` |
+| 05 | `DEMO=1 SHOT_FRAME=820 SHOT_PITCH=-0.08` |
+| 06 | `SHOT_FRAME=5 SHOT_AT=94.5,-24,32 SHOT_FACE=-90 SHOT_YAW=-1.3 SHOT_PITCH=-0.2` |
+| 07 | `SHOT_FRAME=5 SHOT_AT=97.5,-33,37 SHOT_FACE=0 SHOT_YAW=0.2 SHOT_PITCH=-0.35` |
+| 08 | `SHOT_FRAME=5 SHOT_AT=126.3,-16.3,61 SHOT_FACE=135 SHOT_YAW=2.36 SHOT_PITCH=-1.0` |
+| 09 | `SHOT_FRAME=5 SHOT_AT=122.5,12.5,47.5 SHOT_FACE=200 SHOT_YAW=3.5 SHOT_PITCH=-0.25` |
+| 10 | `DEMO=1 SHOT_FRAME=1500 SHOT_PITCH=0.02` |
 
 ## What the pictures do not show
 
 - **The Warden moves like a big Ridgeback**: its body and its motion are
   the Ridgeback's, at 1.5 times the size, until it has clips of its own
   (opening.md, OPENING-12).
-- **The fight from above**: the scripted hunter fights from the floor and
-  never climbs, so no capture here is of the dive or of a toppled Warden.
+- **The fight from above**: the scripted hunter climbs onto its back but
+  never up the keep, so no capture here is of the dive from the rampart or
+  of the topple it opens with.

@@ -167,19 +167,32 @@ point.
 **As built (2026-11-03, `--hunt warden`, the Esc menu's Prototypes row;
 `sim::arena::warden`).** What changed from the plan above, and why:
 
-- **It is half the length.** The plan was 260 m to the keep; as built the
-  whole place is 152 by 64 metres -- cell 10 m, cut 16, yard 54 by 64,
-  ravine and causeway 21, keep 52 -- about twenty seconds at a run. An
-  arena fought alone keeps its diagonal under 170 m
-  ([fight-spaces.md](fight-spaces.md), F8): past about 181 m a squared
-  distance overflows fixed point. The first build was 340 m long, and the
-  mountains round it drew their trees floating in the sky where the land
-  under them was not drawn; the yard the plan wants is the valley's map's
-  to give (OPENING-10).
-- **The gorge is a ravine** three and a half metres deep with walkable
-  sides, crossed by the causeway: a fall into it costs nothing and you walk
-  out. A gorge you could not climb out of, or die in, is the loss intent §3
-  rules out (L8).
+- **It is a floating island** (the owner, 2026-11-03: "instead of being
+  bounded by mountains, it's a floating island ... a little more interesting
+  with some curves"). Six round masses of rock overlap, their tops thirty
+  metres over the floor far below and narrowing beneath, so the edge
+  curves; past it is the drop. **A fall off it is not a death**: you are
+  stood on the nearest of six safe spots on the top, 120 health the
+  poorer (a stomp's worth), as a jump course stands you on its last gate
+  (`species::warden::stand_back`, L8).
+- **It is half the plan's length.** The whole place is 157 by 65 metres --
+  cell and cut 26 m, yard 56, the gap and causeway 18, keep 56 -- about
+  twenty-five seconds at a run. An arena fought alone keeps its diagonal
+  under 170 m ([fight-spaces.md](fight-spaces.md), F8): past about 181 m a
+  squared distance overflows fixed point. The plan's yard is the valley's
+  map's to give (OPENING-10).
+- **Things in the yard that move you and turn your view** (the owner,
+  2026-11-03: "walls, buildings that actually make the user take a different
+  path and change their view"):
+  - **The curtain wall**, seven metres tall across the yard, whose one gap
+    (six metres) is at its north end against the island's edge: the way
+    bends to the edge, and through the gap the keep stands framed.
+  - **The chapel**, roofless, its west and east doors at different places:
+    go through it and the keep is hidden until you come out of the east
+    door; go round it and you are on the island's southern edge.
+  - The arch's posts and a fallen statue, from before.
+- **The gap and the causeway**: between the yard's lobes and the keep's
+  island the drop shows through, and the causeway bridges it.
 - **The keep is twenty-nine metres tall**, not sixty (the owner,
   2026-11-03: "much higher walls and be more climbable ... without class
   abilities, and it needs to give the scale and verticality of the game"):
@@ -192,10 +205,13 @@ point.
     and two columns (16 and 22 m) are the other perches.
   - **Outside, the climb** (the owner, 2026-11-03: start the fight from
     high up only through "a second agility section ... It should teach
-    that the mobility sections offer an extra reward even when optional"):
-    four pillars along the south wall's foot and seven ledges up its outside
-    face and round the corner, each a held jump, to the rampart. Optional:
-    the gate is the other way in.
+    that the mobility sections offer an extra reward even when optional",
+    and "a small section where missing could mean they fall off the
+    island"): from the keep island's lip by its south-west wall, **four
+    pillars rising out of the drop**, each a held jump above the last --
+    miss one and you are off the island -- then seven ledges up the south
+    wall's outside face, over the lip, and round its corner to the
+    rampart. Optional: the gate is the other way in.
   - **The reward**: woken by a blow while a hunter is more than six metres
     up -- from the rampart, or diving off it -- the Warden goes straight
     over, and the fight opens with it toppled (`species::warden`,
@@ -291,14 +307,17 @@ first time and can see yourself winning.
   (`tests/opening.rs`).
 
 **The hunter's report** (`cargo run -p hunt --bin fight -- --species
-warden --repeats 6`): the Ridgeback's hunter, walked to the keep and taught
-to jump the slam as it jumps the sweep, **loses all six**, after two to four
-minutes in the keep. Landed of thrown: stomp 39/116, sweep 9/85, slam
-0/146, kick 0/70; nothing unanswerable. It fights from the floor, where the
-feet take a quarter of a blow, and never climbs a pier or the rampart, so it
-never reaches the back: what it measures is that the floor is the hard way,
-and that **the stomp is what lands** (OPENING-11). How the fight goes from
-above is for a person to find.
+warden --repeats 6`): the Ridgeback's hunter, walked along the way and
+taught to jump the slam as it jumps the sweep, **wins three of six**, in
+57 to 126 seconds in the keep, each win by getting onto its back -- one to
+ten rides, four topples -- and loses three from the floor. Landed of
+thrown: stomp 22/53, sweep 8/43, slam 0/97, kick 0/45; nothing
+unanswerable. Before the island the same hunter lost all six from the
+floor: the Warden had been sinking into its floor, a body that climbs what
+it meets taking the ground for something to climb. It **keeps its own
+height** now (`FightDecl::keeps_height`), held at the island's top by its
+hook. How the fight goes from the rampart and the spiral is for a person to
+find.
 
 ## 7 · The first blockout, and why it is superseded
 
@@ -367,7 +386,7 @@ Answer by ID.
   system to hand anything out. A view, a glimpse of the Warden, a hint of
   the story are the candidates until there is.
 - **OPENING-10: the run-up is half the plan's.** One arena holds 170 m of
-  diagonal (§5, as built), so the yard is 54 m, not 150. The plan's length
+  diagonal (§5, as built), so the yard is 56 m, not 150. The plan's length
   needs the opening on the valley's map, which keeps each place's
   coordinates local. Worth it, or is twenty seconds enough?
 - **OPENING-11: the stomp.** It lands on the hunter a third of the times
@@ -376,3 +395,9 @@ Answer by ID.
 - **OPENING-12: its own moves.** The shockwave, a floor taken away and the
   swat at a perch (§6) need clips of its own; until then it moves like a big
   Ridgeback.
+- **OPENING-13: the camera on the outside climb.** It fails one bar of the
+  camera check: turning round on the wall's ledges, the arm pulls
+  in against the wall on 1.5% of frames against a bar of 1%. Close to what
+  any climb up a wall face does; accept it for climbs, or give the ledges
+  more room?
+

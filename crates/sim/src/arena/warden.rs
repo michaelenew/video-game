@@ -1,108 +1,134 @@
 //! **The way to the Warden** (`--hunt warden`, `docs/design/opening.md` §5):
-//! the opening, from the cell to the keep. Built to the place standard
-//! (`docs/design/level-design.md`): the walls that enclose are rock or thick
-//! stone or the rim's land, a run-up through open ground before the fight,
-//! the keep seen from the moment you step out. And within what fixed point
-//! holds for an arena fought alone: 152 by 64 metres, a diagonal of 165
-//! (`docs/design/fight-spaces.md`, F8).
+//! the opening, from the cell to the keep, **on a floating island**. Built to
+//! the place standard (`docs/design/level-design.md`): walls of rock and
+//! thick stone, a run-up through open ground before the fight, the keep seen
+//! from the moment you step out, every height climbed with the moves every
+//! class shares. Within what fixed point holds for an arena fought alone: a
+//! diagonal under 170 m (`docs/design/fight-spaces.md`, F8).
 //!
-//! Along `+x`, at a run about twenty seconds end to end:
+//! The island is round masses of rock ([`lobe`]) overlapping, their tops
+//! thirty metres up ([`TOP`]), narrowing below: its edge curves, and past it
+//! is the drop. **A fall off it is not a death** (`species::warden::frame`):
+//! you are stood back on the nearest safe spot ([`SAFE`]), a little hurt.
 //!
-//! | x (m) | What | Made of |
-//! | --- | --- | --- |
-//! | -16 to -6 | **The cell**, twelve metres wide, open to the sky | rock either side, the rim behind |
-//! | -6 to 10 | **The cut**, twelve metres wide, out to daylight | the same rock, twenty metres tall |
-//! | 10 to 64 | **The yard**: open ground, swells and a dip, a knoll to look out from, low ruins | relief ([`super::relief`]) and low stone |
-//! | 63 to 84 | **The ravine**, three and a half metres deep and walkable in and out, and **the causeway** over it, ten wide | two ramps of the floor, one thick block |
-//! | 84 to 136 | **The keep**: eight walls six metres thick and twenty-nine tall round a floor forty across, a gate in the west wall; inside, a spiral of ledges a held jump apart up every face to the top, four piers (6 and 10 m) and two columns (16 and 22 m); outside, **the climb**: four pillars and six ledges up its south face to the rampart, optional, rewarded | thick stone |
+//! Along `+x`, at a run about twenty-five seconds end to end:
 //!
-//! Mountains rise on every side (the rim). Nothing here is a thin wall, and
-//! every height in the keep is reached with the moves every class shares.
+//! | x (m) | What |
+//! | --- | --- |
+//! | -16 to 10 | **The cell** and **the cut**, between rock |
+//! | 10 to 66 | **The yard**, on four lobes of the island: a curtain wall across it whose one gap is to the north, a roofless chapel with its doors at different places, an arch's posts, a fallen statue |
+//! | 66 to 84 | **The causeway**, over the gap to the keep's island |
+//! | 84 to 136 | **The keep**: eight walls six metres thick and twenty-nine tall round a floor forty across, a gate in the west wall; inside, a spiral of ledges up every face to the top, piers and columns; outside, **the climb**, pillars rising out of the drop and ledges up the south wall, optional, rewarded |
 
 use super::hills::slab;
-use super::relief::{Bump, Ramp};
-use super::rim::Rim;
-use super::{
-    Area, Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Region, Shape, Solid, Spawns,
-};
+use super::{Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Shape, Solid, Spawns};
 use crate::fixed::Fx;
 use crate::math::V3;
 
-use Material::{Grass, Rock, Stone};
+use Material::{Grass, Peat, Rock, Stone};
 
+/// **The island's top**, in centimetres: thirty metres over the floor far
+/// below, which is the drop.
+pub const TOP: i32 = 3000;
 /// The middle of the keep, in centimetres.
 pub const KEEP: (i32, i32) = (11000, 0);
 /// The keep's floor, as a radius from its middle: inside this is the fight.
 pub const KEEP_FLOOR: i32 = 2000;
-/// How tall the keep's walls stand: the rampart's height.
+/// How tall the keep's walls stand over the island: the rampart's height.
 pub const RAMPART: i32 = 2925;
+/// **How far below the island's top a body has fallen off it**, in
+/// centimetres.
+pub const FALLEN: i32 = 1200;
+
+/// **Where a fall off the island stands you**: the nearest of these, on the
+/// island's top -- the cell, the yard either side of the curtain wall, the
+/// causeway's two ends, and the foot of the climb, on the keep's island's
+/// lip by its south-west wall.
+pub const SAFE: [(i32, i32); 6] = [
+    (-1000, 0),
+    (2000, 0),
+    (4000, 1000),
+    (6400, 0),
+    (8600, 0),
+    (9450, -2400),
+];
+
+/// **The way to the keep**, for anything that walks it (the scripted
+/// hunter, `tests/opening.rs`): out of the cut, north through the curtain
+/// wall's gap, through the chapel, over the causeway, in at the gate.
+pub const WAY: [(i32, i32); 8] = [
+    (1000, 0),
+    (2600, 1300),
+    (3400, 1300),
+    (4000, -900),
+    (4800, -900),
+    (5700, -1100),
+    (6600, 0),
+    (8800, 0),
+];
 
 pub static ARENA: Arena = Arena {
     id: ArenaId::WARDEN,
     name: "Warden",
     creature: Some(crate::species::SpeciesId::WARDEN),
-    bounds: Bounds::cm((-1600, 13600), (-3200, 3200)),
-    floor: Grass,
-    regions: &REGIONS,
+    bounds: Bounds::cm((-1700, 14000), (-3500, 3000)),
+    floor: Peat,
+    regions: &[],
     solids: &SOLIDS,
     spawns: Spawns {
         // In the cell, side by side, facing the way out.
         versus: [
-            Mark::cm(-1200, -250, (1000, -250)),
-            Mark::cm(-1200, 250, (1000, 250)),
+            on_top(Mark::cm(-1200, -250, (1000, -250))),
+            on_top(Mark::cm(-1200, 250, (1000, 250))),
         ],
         hunt: Some(HuntMarks {
             hunters: [
-                Mark::cm(-1200, -250, (1000, -250)),
-                Mark::cm(-1200, 250, (1000, 250)),
+                on_top(Mark::cm(-1200, -250, (1000, -250))),
+                on_top(Mark::cm(-1200, 250, (1000, 250))),
             ],
             // In the middle of the keep, facing its gate.
             creatures: [
-                Mark::cm(KEEP.0, KEEP.1, (9000, 0)),
-                Mark::cm(KEEP.0, 1000, (9000, 1000)),
+                on_top(Mark::cm(KEEP.0, KEEP.1, (9000, 0))),
+                on_top(Mark::cm(KEEP.0, 1000, (9000, 1000))),
             ],
         }),
     },
     sites: &[],
-    // Mountains on every side: a bank too steep to climb, rising from the
-    // floor at the edge.
-    rim: Some(Rim::new((-1600, 13600), (-3200, 3200), [0, 0, 0, 0], 2000)),
+    // No rim: past the island's edge is the drop.
+    rim: None,
 };
 
-/// Bare rock in the cell and the cut, and the keep's floor flagged stone:
-/// the yard is the only green.
-const REGIONS: [Region; 2] = [
-    Region {
-        area: Area::rect_cm((-1600, 1000), (-600, 600)),
-        material: Rock,
-    },
-    Region {
-        area: Area::disc_cm(KEEP.0, KEEP.1, KEEP_FLOOR),
-        material: Stone,
-    },
-];
+/// **A mark on the island**: a fight stands a body on what is under its
+/// mark, so a mark at the floor's height would stand it on the floor far
+/// below. Two metres over the island's top.
+const fn on_top(m: Mark) -> Mark {
+    Mark {
+        at: V3::new(m.at.x, super::cm(TOP + 200), m.at.z),
+        facing: m.facing,
+    }
+}
 
-/// **The yard's ground** (`super::relief`): a knoll by the south rim to look
-/// out from, swells either side of the way across and a shallow dip on it.
-/// Clear of the ruins: the floor may rise into a solid's foot, never fall
-/// away under one.
-pub const BUMPS: [Bump; 5] = [
-    Bump::cm(4000, -2300, 1200, 500),
-    Bump::cm(2500, 1900, 1400, 250),
-    Bump::cm(5500, 2100, 1200, 300),
-    Bump::cm(3500, 400, 900, -100),
-    Bump::cm(1500, -2000, 1000, 200),
-];
+/// **A mass of the island**: round, `r` across (a radius) at its top, which
+/// is the island's top, and a third of that at its foot twenty metres down.
+const fn lobe(x: i32, z: i32, r: i32, material: Material) -> Solid {
+    Solid {
+        min: V3::new(super::cm(x - r), super::cm(TOP - 2000), super::cm(z - r)),
+        max: V3::new(super::cm(x + r), super::cm(TOP), super::cm(z + r)),
+        material,
+        shape: Shape::Round {
+            bottom: super::cm(r / 3),
+            top: super::cm(r),
+            hollow: Fx::ZERO,
+        },
+    }
+}
 
-/// The ravine the causeway crosses: down three and a half metres over nine,
-/// and up again, across the whole width.
-pub const RAMPS: [Ramp; 2] = [Ramp::x(6400, 7300, -350), Ramp::x(7500, 8400, 350)];
-
-/// A round pier, `r` across (a radius), `top` tall, at (x, z).
+/// A round pier on the keep's floor, `r` across (a radius), `top` over it,
+/// at (x, z).
 const fn pier(x: i32, z: i32, r: i32, top: i32) -> Solid {
     Solid {
-        min: V3::new(super::cm(x - r), Fx::ZERO, super::cm(z - r)),
-        max: V3::new(super::cm(x + r), super::cm(top), super::cm(z + r)),
+        min: V3::new(super::cm(x - r), super::cm(TOP), super::cm(z - r)),
+        max: V3::new(super::cm(x + r), super::cm(TOP + top), super::cm(z + r)),
         material: Stone,
         shape: Shape::Round {
             bottom: super::cm(r),
@@ -112,85 +138,103 @@ const fn pier(x: i32, z: i32, r: i32, top: i32) -> Solid {
     }
 }
 
+/// A pillar of the climb, rising out of the drop to `top` (centimetres,
+/// over the floor far below).
+const fn pillar(x: i32, z: i32, top: i32) -> Solid {
+    Solid {
+        min: V3::new(super::cm(x - 125), Fx::ZERO, super::cm(z - 125)),
+        max: V3::new(super::cm(x + 125), super::cm(top), super::cm(z + 125)),
+        material: Rock,
+        shape: Shape::Round {
+            bottom: super::cm(160),
+            top: super::cm(125),
+            hollow: Fx::ZERO,
+        },
+    }
+}
+
 /// One of the keep's four diagonal walls, centred on (x, z), lying along
 /// (dx, dz): twenty metres long, six thick.
 const fn diagonal(x: i32, z: i32, along: (i32, i32)) -> Solid {
-    slab(x, z, (0, RAMPART), (1000, 300), along, Stone)
+    slab(x, z, (TOP, TOP + RAMPART), (1000, 300), along, Stone)
 }
 
-const SOLIDS: [Solid; 46] = [
-    // --- the cell and the cut: rock either side, to the rim ---------------
-    Solid::cm([-1600, 0, 600], [1000, 2000, 3200], Rock),
-    Solid::cm([-1600, 0, -3200], [1000, 2000, -600], Rock),
-    // --- the yard: low ruins, nothing the camera must keep out of --------
-    // A broken enclosure.
-    Solid::cm([2000, 0, 1200], [3200, 120, 1350], Stone),
-    Solid::cm([2000, 0, 1200], [2150, 120, 2000], Stone),
-    Solid::cm([3050, 0, 1200], [3200, 80, 1700], Stone),
-    // An arch's two posts and its fallen lintel.
-    Solid::cm([4500, 0, -1300], [4700, 500, -1100], Stone),
-    Solid::cm([4500, 0, -700], [4700, 500, -500], Stone),
-    slab(4900, -900, (0, 60), (300, 50), (1, 2), Stone),
-    // A plinth, and the statue fallen off it.
-    Solid::cm([5200, 0, 700], [5500, 150, 1000], Stone),
-    slab(5800, 1200, (0, 150), (350, 70), (3, 1), Stone),
-    // A low wall toward the ravine.
-    Solid::cm([5800, 0, -2200], [6300, 100, -2050], Stone),
-    // --- the causeway over the ravine ------------------------------------
-    Solid::cm([6300, -450, -500], [8400, 0, 500], Stone),
+const SOLIDS: [Solid; 58] = [
+    // --- the island: round masses of rock, their tops at TOP, narrowing
+    // below. Overlapping, they make its curving edge. -------------------
+    lobe(-500, 0, 1500, Rock),
+    lobe(1700, 700, 1700, Grass),
+    lobe(3300, -900, 2000, Grass),
+    lobe(4700, 1300, 1600, Grass),
+    lobe(5600, -700, 1500, Grass),
+    lobe(11000, 0, 3000, Stone),
+    // --- the cell and the cut: rock either side, and behind -------------
+    Solid::cm([-1600, 3000, 600], [1000, 5000, 1300], Rock),
+    Solid::cm([-1600, 3000, -1300], [1000, 5000, -600], Rock),
+    Solid::cm([-1700, 3000, -600], [-1400, 5000, 600], Rock),
+    // --- the curtain wall across the yard: its only gap is to the north,
+    // so the way bends, and the gap frames the keep -------------------------
+    Solid::cm([2900, 3000, -2600], [3100, 3700, 1000], Stone),
+    Solid::cm([2900, 3000, 1600], [3100, 3700, 1800], Stone),
+    Solid::cm([2900, 3550, 1000], [3100, 3700, 1600], Stone),
+    // --- the chapel: roofless, its doors west and east at different places;
+    // through it the keep is hidden, round it the yard's edge -------------
+    Solid::cm([4200, 3000, -1600], [5400, 3500, -1500], Stone),
+    Solid::cm([4200, 3000, -300], [5400, 3500, -200], Stone),
+    Solid::cm([4200, 3000, -1600], [4300, 3500, -1100], Stone),
+    Solid::cm([4200, 3000, -700], [4300, 3500, -200], Stone),
+    Solid::cm([5300, 3000, -1600], [5400, 3500, -1300], Stone),
+    Solid::cm([5300, 3000, -900], [5400, 3500, -200], Stone),
+    // An arch's two posts and its fallen lintel; a plinth and its statue.
+    Solid::cm([1800, 3000, -1100], [2000, 3500, -900], Stone),
+    Solid::cm([1800, 3000, -500], [2000, 3500, -300], Stone),
+    slab(2200, -700, (3000, 3060), (300, 50), (1, 2), Stone),
+    Solid::cm([3900, 3000, 1300], [4200, 3150, 1600], Stone),
+    slab(4500, 1900, (3000, 3150), (350, 70), (3, 1), Stone),
+    // --- the causeway over the gap to the keep's island ------------------
+    Solid::cm([6600, 2700, -500], [8400, 3000, 500], Stone),
     // --- the keep: eight thick walls, the west one parted by the gate ----
-    // East.
-    Solid::cm([13000, 0, -1000], [13600, RAMPART, 1000], Stone),
-    // North and south.
-    Solid::cm([10000, 0, 2000], [12000, RAMPART, 2600], Stone),
-    Solid::cm([10000, 0, -2600], [12000, RAMPART, -2000], Stone),
-    // West, either side of an eight-metre gate.
-    Solid::cm([8400, 0, 400], [9000, RAMPART, 1000], Stone),
-    Solid::cm([8400, 0, -1000], [9000, RAMPART, -400], Stone),
-    // The diagonals.
+    Solid::cm([13000, 3000, -1000], [13600, 5925, 1000], Stone),
+    Solid::cm([10000, 3000, 2000], [12000, 5925, 2600], Stone),
+    Solid::cm([10000, 3000, -2600], [12000, 5925, -2000], Stone),
+    Solid::cm([8400, 3000, 400], [9000, 5925, 1000], Stone),
+    Solid::cm([8400, 3000, -1000], [9000, 5925, -400], Stone),
     diagonal(12626, 1626, (-1, 1)),
     diagonal(9374, 1626, (1, 1)),
     diagonal(9374, -1626, (-1, 1)),
     diagonal(12626, -1626, (1, 1)),
-    // **The climb to the rampart** (optional; the gate is the other way
-    // in): four pillars along the south wall's foot, each a held jump above
-    // the last and a jump across from it, then seven ledges stepping up
-    // the wall's outside face and round the corner, 2.6 m apart, to the
-    // top. Nothing overhangs anything: every ledge is climbed onto. A fall from
-    // the low pillars costs nothing; from the ledges, what the fall rule
-    // says. The reward is the Warden asleep below (`species::warden`).
-    pier(8600, -2900, 125, 300),
-    pier(9075, -2900, 125, 550),
-    pier(9550, -2900, 125, 800),
-    pier(10050, -2900, 125, 1050),
-    Solid::cm([10100, 1210, -2850], [10500, 1310, -2600], Stone),
-    Solid::cm([10500, 1470, -2850], [10900, 1570, -2600], Stone),
-    Solid::cm([10900, 1730, -2850], [11300, 1830, -2600], Stone),
-    Solid::cm([11300, 1990, -2850], [11700, 2090, -2600], Stone),
-    Solid::cm([11700, 2250, -2850], [12060, 2350, -2600], Stone),
-    // Round the corner, up the south-east wall's outside face.
-    slab(12306, -2547, (2510, 2610), (200, 125), (1, 1), Stone),
-    slab(12589, -2264, (2770, 2870), (200, 125), (1, 1), Stone),
-    // **The spiral inside**: a ledge four and a half metres deep on every
-    // wall's inner face, each a held jump (3.25 m) above the one before it
-    // round the keep, meeting it at the corner, from the
-    // south-west face to the one over the gate -- the way up for everybody,
+    // **The climb** (optional; the gate is the other way in): four pillars
+    // rising out of the drop beside the keep's island, each a held jump
+    // above the last -- miss one and you are off the island -- then ledges
+    // up the south wall's outside face and round its corner to the top.
+    pillar(9300, -3000, 3300),
+    pillar(9750, -3300, 3550),
+    pillar(10250, -3350, 3800),
+    pillar(10700, -3150, 4050),
+    Solid::cm([10100, 4210, -2850], [10500, 4310, -2600], Stone),
+    Solid::cm([10500, 4470, -2850], [10900, 4570, -2600], Stone),
+    Solid::cm([10900, 4730, -2850], [11300, 4830, -2600], Stone),
+    Solid::cm([11300, 4990, -2850], [11700, 5090, -2600], Stone),
+    Solid::cm([11700, 5250, -2850], [12060, 5350, -2600], Stone),
+    slab(12306, -2547, (5510, 5610), (200, 125), (1, 1), Stone),
+    slab(12589, -2264, (5770, 5870), (200, 125), (1, 1), Stone),
+    // **The spiral inside**: a ledge on every wall's inner face, each a held
+    // jump (3.25 m) above the one before it round the keep, meeting it at
+    // the corner, from the floor to the top -- the way up for everybody,
     // with no tool of any class (the owner, 2026-11-03).
-    slab(9745, -1255, (225, 325), (750, 225), (1, -1), Stone),
-    slab(11000, -1775, (550, 650), (750, 225), (1, 0), Stone),
-    slab(12255, -1255, (875, 975), (750, 225), (1, 1), Stone),
-    slab(12775, 0, (1200, 1300), (750, 225), (0, 1), Stone),
-    slab(12255, 1255, (1525, 1625), (750, 225), (-1, 1), Stone),
-    slab(11000, 1775, (1850, 1950), (750, 225), (1, 0), Stone),
-    slab(9745, 1255, (2175, 2275), (750, 225), (1, 1), Stone),
-    slab(9225, 0, (2500, 2600), (750, 225), (0, 1), Stone),
-    // Two columns between the piers: perches at 16 and 22 m, the other way
-    // up the middle levels.
-    pier(11000, 1300, 200, 1600),
-    pier(11000, -1300, 200, 2200),
-    // --- the piers inside, toward the walls: perches at 6 and 10 m --------
+    slab(9745, -1255, (3225, 3325), (750, 225), (1, -1), Stone),
+    slab(11000, -1775, (3550, 3650), (750, 225), (1, 0), Stone),
+    slab(12255, -1255, (3875, 3975), (750, 225), (1, 1), Stone),
+    slab(12775, 0, (4200, 4300), (750, 225), (0, 1), Stone),
+    slab(12255, 1255, (4525, 4625), (750, 225), (-1, 1), Stone),
+    slab(11000, 1775, (4850, 4950), (750, 225), (1, 0), Stone),
+    slab(9745, 1255, (5175, 5275), (750, 225), (1, 1), Stone),
+    slab(9225, 0, (5500, 5600), (750, 225), (0, 1), Stone),
+    // Piers at 6 and 10 m, columns at 16 and 22 m.
     pier(11778, 778, 250, 600),
     pier(10222, 778, 250, 1000),
     pier(10222, -778, 250, 600),
     pier(11778, -778, 250, 1000),
+    pier(11000, 1300, 200, 1600),
+    pier(11000, -1300, 200, 2200),
 ];

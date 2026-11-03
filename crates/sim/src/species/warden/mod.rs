@@ -31,10 +31,11 @@
 
 mod tuned;
 
+use crate::arena::warden::{FALLEN, SAFE, TOP};
 use crate::fixed::Fx;
 use crate::species::ridgeback::{self, Clip};
 use crate::species::{MoveDecl, Species, SpeciesId, Stock};
-use crate::state::World;
+use crate::state::{Player, World};
 
 /// The Ridgeback's moves, the Warden's choice of them: what it never
 /// chooses is still in the table, so the move rows line up with the
@@ -85,6 +86,10 @@ pub static SPECIES: Species = Species {
 pub static FIGHT: crate::species::FightDecl = crate::species::FightDecl {
     row: true,
     collides: true,
+    // Its height is the island's ([`stand_back`]): a body that climbs what
+    // it meets, it would otherwise take the island's top for something to
+    // climb and sink through it to the floor far below.
+    keeps_height: true,
     frame: Some(frame),
     ..crate::species::FightDecl::PLAIN
 };
@@ -93,14 +98,18 @@ pub static FIGHT: crate::species::FightDecl = crate::species::FightDecl {
 const AWAKE: usize = 0;
 
 /// **How high a hunter must be** for a blow that wakes it to topple it, in
-/// centimetres: below its back (8.4 m) and above anything on its floor's
-/// level outside the keep. Level data, like the keep's own heights.
+/// centimetres over the island's top: below its back (8.4 m) and above
+/// anything on the floor's level outside the keep. Level data, like the
+/// keep's own heights.
 pub const HIGH: i32 = 600;
 
-/// **The sleep**: while it has not woken, its grace is held (it stands and
-/// throws nothing), until a hunter is inside the keep's walls or it has been
-/// hit (which ends its grace on its own, `Monster::take_blow`).
+/// **What it does to the place every frame**: the fall off the island
+/// ([`stand_back`]), then the sleep -- while it has not woken, its grace is
+/// held (it stands and throws nothing), until a hunter is inside the keep's
+/// walls or it has been hit (which ends its grace on its own,
+/// `Monster::take_blow`).
 pub fn frame(w: &mut World) {
+    stand_back(w);
     let (kx, kz) = crate::arena::warden::KEEP;
     let centre = (Fx::ratio(kx, 100), Fx::ratio(kz, 100));
     let inside = Fx::ratio(crate::arena::warden::KEEP_FLOOR, 100);
@@ -117,7 +126,7 @@ pub fn frame(w: &mut World) {
     });
     let high = w.players[..present]
         .iter()
-        .any(|p| p.pos.y.raw() > Fx::ratio(HIGH, 100).raw());
+        .any(|p| p.pos.y.raw() > Fx::ratio(TOP + HIGH, 100).raw());
     for m in w.monsters.iter_mut().flatten() {
         if m.species != SpeciesId::WARDEN || m.own[AWAKE] != 0 {
             continue;
@@ -138,5 +147,75 @@ pub fn frame(w: &mut World) {
             continue;
         }
         m.brain.grace = m.brain.grace.max(2);
+    }
+}
+
+/// **What a fall off the island costs**, in health: about a stomp's worth.
+/// Level data: what the drop is worth, judged with the drop.
+pub const FALL_COST: i32 = 120;
+
+/// **A fall off the island is not a death** (`docs/design/level-design.md`,
+/// L8): a fighter more than [`FALLEN`] below the island's top is stood on
+/// the nearest safe spot ([`SAFE`]), as a jump course stands you on its last
+/// gate (`World::step_course`) -- fresh, with whatever she had out taken
+/// back -- less [`FALL_COST`] of the health she had, never below one. And
+/// the Warden stands on the island's top, and if it walks out over the drop
+/// is back in the middle of its keep.
+fn stand_back(w: &mut World) {
+    let pit = Fx::ratio(TOP - FALLEN, 100);
+    let top = Fx::ratio(TOP, 100);
+    let present = w.present();
+    for i in 0..present {
+        let p = w.players[i];
+        if p.pos.y.raw() >= pit.raw() {
+            continue;
+        }
+        // The nearest by the two flat distances added: nothing here is
+        // squared, at the island's size (`fight-spaces.md`, F8).
+        let near = |s: &(i32, i32)| {
+            let dx = Fx::ratio(s.0, 100).sub(p.pos.x).abs();
+            let dz = Fx::ratio(s.1, 100).sub(p.pos.z).abs();
+            dx.add(dz).raw()
+        };
+        let Some(&(x, z)) = SAFE.iter().min_by_key(|s| near(s)) else {
+            continue;
+        };
+        let (wins, class) = (p.rounds_won, p.class);
+        let health = (p.health - FALL_COST).max(1);
+        let stand = crate::math::V3::new(Fx::ratio(x, 100), top, Fx::ratio(z, 100));
+        let q = &mut w.players[i];
+        *q = Player {
+            pos: stand,
+            facing: p.facing,
+            rounds_won: wins,
+            ..Player::new(class)
+        };
+        q.health = health;
+        if let crate::class::Mechanic::Shadow(_) = q.mechanic {
+            q.mechanic =
+                crate::class::Mechanic::Shadow(crate::class::Shadow::attending(q.pos, q.facing));
+        }
+    }
+    // The Warden stands on the island's top wherever the island is under
+    // it; walked out over the drop, it is back in the middle of its keep.
+    let (kx, kz) = crate::arena::warden::KEEP;
+    let ground = w.terrain();
+    let mut over_the_drop = [false; crate::monster::MAX_MONSTERS];
+    for (i, m) in w.monsters.iter().enumerate() {
+        if let Some(m) = m.filter(|m| m.species == SpeciesId::WARDEN) {
+            let probe = crate::math::V3::new(m.pos.x, top.add(Fx::ONE), m.pos.z);
+            over_the_drop[i] = ground.ground_under(probe).raw() < pit.raw();
+        }
+    }
+    for (i, m) in w.monsters.iter_mut().enumerate() {
+        let Some(m) = m.as_mut().filter(|m| m.species == SpeciesId::WARDEN) else {
+            continue;
+        };
+        if over_the_drop[i] {
+            m.pos = crate::math::V3::new(Fx::ratio(kx, 100), top, Fx::ratio(kz, 100));
+            m.speed = Fx::ZERO;
+        } else {
+            m.pos.y = top;
+        }
     }
 }
