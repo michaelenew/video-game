@@ -28,6 +28,7 @@ pub mod drift;
 pub mod dual;
 pub mod effects;
 pub mod envelope;
+pub mod fightspace;
 pub mod fixed;
 pub mod ground;
 pub mod group;

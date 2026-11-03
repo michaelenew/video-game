@@ -1304,6 +1304,14 @@ scalars! {
     // Appended: `tuned::SCALARS` is read by this enum's own discriminant.
     ShadowDashFrames,     "Shadow Reaver", "Dash to the shadow, lasts at most",              Frames, 1, 60;
     SwimPopFrames,        "Blood mage", "Swim, the pop out lasts",                          Frames, 1, 60;
+    // **Five points in a row** (2026-11-03, `crate::versus::Front`): the
+    // middle is locked this long at the start, a round runs this long at
+    // most, and every capture gives this much of it back. A capture itself
+    // takes King of the Hill's time, with its share for a second capper.
+    // Appended: `tuned::SCALARS` is read by this enum's own discriminant.
+    FrontUnlock,          "Match",    "Five points, the middle unlocks after",               Frames, 0, 3600;
+    FrontClock,           "Match",    "Five points, a round lasts at most",                  Frames, 3600, 36000;
+    FrontBonus,           "Match",    "Five points, a capture adds to the clock",            Frames, 0, 7200;
 }
 
 // ---------------------------------------------------------------------------

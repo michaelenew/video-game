@@ -393,6 +393,7 @@ fn main() {
                     tick_sim,
                     same_frame,
                     arenas::dress,
+                    arenas::move_drifts,
                     sky::weather,
                     stream::stream,
                     valley::update,

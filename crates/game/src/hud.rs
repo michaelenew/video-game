@@ -42,7 +42,7 @@ pub const SEAT_COLOURS: [Color; sim::state::MAX_PLAYERS] = {
 /// side (`sim::versus::side`), so seats one and three are blue and two and
 /// four orange, bodies and bars alike.
 pub fn seat_colour(w: &sim::World, seat: usize) -> Color {
-    let shown = if w.hill.on {
+    let shown = if w.teams() {
         sim::versus::side(seat) as usize
     } else {
         seat
@@ -1488,7 +1488,13 @@ pub fn update(
                     None => "the quarry stands".into(),
                 }
             }
+            Phase::RoundOver { winner, .. } if winner == u8::MAX && sim.cur.front.on => {
+                "time: the line is level".into()
+            }
             Phase::RoundOver { winner, .. } if winner == u8::MAX => "double KO".into(),
+            Phase::RoundOver { winner, .. } if sim.cur.front.on => {
+                format!("{} side takes the line", SIDE_NAMES[winner as usize % 2])
+            }
             Phase::RoundOver { .. } if sim.cur.hunting() => "the hunt is over".into(),
             Phase::RoundOver { winner, .. } if sim.cur.hill.on => {
                 format!("{} side holds the hill", SIDE_NAMES[winner as usize % 2])
@@ -1799,7 +1805,11 @@ type ButtonQuery<'w, 's> = Query<
 /// The line under the bars on a King of the Hill map (`sim::versus`): its own
 /// system for the reason the online line is.
 pub fn update_hill(sim: Res<crate::Sim>, mut text: Query<&mut Text, With<HillText>>) {
-    let line = hill_line(&sim.cur.hill);
+    let line = if sim.cur.front.on {
+        front_line(&sim.cur.front)
+    } else {
+        hill_line(&sim.cur.hill)
+    };
     for mut t in text.iter_mut() {
         if t.0 != line {
             *t = Text::new(line.clone());
@@ -1850,6 +1860,59 @@ pub fn hill_line(k: &sim::versus::Koth) -> String {
         "the point is open".to_string()
     };
     format!("{clocks}   |   {state}")
+}
+
+/// **A five-point map's line** (`sim::versus::Front`): the five points
+/// west to east as each side's letter -- lower case while it is the next
+/// one open to the other side -- a dot for nobody's, the round's clock, and
+/// what is happening on any point being taken.
+pub fn front_line(f: &sim::versus::Front) -> String {
+    use sim::versus::{NOBODY, POINTS};
+    if !f.on {
+        return String::new();
+    }
+    let letter = |s: u8| SIDE_NAMES[s as usize % 2].chars().next().unwrap_or('?');
+    let points: Vec<String> = (0..POINTS)
+        .map(|k| match f.owner[k] {
+            NOBODY => "·".to_string(),
+            s => {
+                let c = letter(s);
+                if f.open(k, 1 - s % 2) {
+                    c.to_lowercase().to_string()
+                } else {
+                    c.to_string()
+                }
+            }
+        })
+        .collect();
+    let mut events: Vec<String> = Vec::new();
+    for k in 0..POINTS {
+        if f.standing[k].iter().all(|&n| n > 0) {
+            events.push(format!("point {} contested", k + 1));
+        } else if f.capper[k] != NOBODY && f.progress[k] > 0 {
+            events.push(format!(
+                "{} taking point {} {}%",
+                SIDE_NAMES[f.capper[k] as usize % 2],
+                k + 1,
+                f.percent(k)
+            ));
+        }
+    }
+    let state = if f.locked > 0 {
+        format!("the middle opens in {}", clock(f.locked))
+    } else if events.is_empty() {
+        format!(
+            "{} {} - {} {}",
+            SIDE_NAMES[0],
+            f.held(0),
+            f.held(1),
+            SIDE_NAMES[1]
+        )
+    } else {
+        events.join(", ")
+    };
+    let left = clock(f.clock.min(u16::MAX as u32) as u16);
+    format!("[ {} ]   {left}   |   {state}", points.join(" "))
 }
 
 /// The online line. Its own system because `update`'s queries are already

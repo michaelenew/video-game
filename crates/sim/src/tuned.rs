@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 752] = [
+pub const SCALARS: [i32; 755] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -760,6 +760,9 @@ pub const SCALARS: [i32; 752] = [
              900, // match.versus,_time_to_choose_classes_before_a_round = 900
               22, // shadow_reaver.dash_to_the_shadow,_lasts_at_most = 22
               11, // blood_mage.swim,_the_pop_out_lasts = 11
+             600, // match.five_points,_the_middle_unlocks_after = 600
+           28800, // match.five_points,_a_round_lasts_at_most = 28800
+            3600, // match.five_points,_a_capture_adds_to_the_clock = 3600
 ];
 
 #[rustfmt::skip]

@@ -65,6 +65,13 @@ pub fn draw(
     under: Under,
 ) {
     let Some(place) = valley::place(arena.id) else {
+        // A versus stage is no place of the valley, and has updrafts of its
+        // own (`sim::versus::Stage::vents`).
+        let ground = Terrain::bare(arena);
+        for v in sim::versus::vents(arena.id) {
+            let floor = ground.floor_below(sim::V3::new(v.at.0, v.top, v.at.1));
+            draw_vent(commands, meshes, materials, v, floor, palette, under);
+        }
         return;
     };
     // On the map, the floor under anything here is the land's, in this

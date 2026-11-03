@@ -236,12 +236,20 @@ impl World {
     /// **The drifts of the place the world is in**, in its coordinates: on
     /// the valley's map, every one on the map; anywhere else, none.
     pub fn drifts(&self) -> impl Iterator<Item = Drift> + '_ {
-        let (list, o): (&[Drift], V3) = if self.valley.on {
+        let (list, o) = self.drift_list();
+        list.iter().map(move |d| d.moved(V3::ZERO.sub(o)))
+    }
+
+    /// The drifts the world is among, and the origin they are written from:
+    /// on the valley's map the map's; on a versus stage the stage's own
+    /// (`crate::versus::Stage::drifts`), written in its coordinates;
+    /// anywhere else none.
+    fn drift_list(&self) -> (&'static [Drift], V3) {
+        if self.valley.on {
             (&crate::atlas::valley().drifts, self.map_origin())
         } else {
-            (&[], V3::ZERO)
-        };
-        list.iter().map(move |d| d.moved(V3::ZERO.sub(o)))
+            (crate::versus::drifts(self.arena), V3::ZERO)
+        }
     }
 
     /// The seats that are played, by index.
@@ -272,11 +280,7 @@ impl World {
         let frame = self.frame;
         let reach = near_reach();
         let seats = self.drift_seats();
-        let (list, o): (&[Drift], V3) = if self.valley.on {
-            (&crate::atlas::valley().drifts, self.map_origin())
-        } else {
-            (&[], V3::ZERO)
-        };
+        let (list, o) = self.drift_list();
         for (k, d) in list.iter().map(|d| d.moved(V3::ZERO.sub(o))).enumerate() {
             let was = d.at(frame.wrapping_sub(1));
             let step = d.step(frame);
@@ -306,12 +310,8 @@ impl World {
     /// top, the landing takes the fall away; a hang holds the body still.)
     pub(crate) fn let_riders_go(&mut self, carried: Carried) {
         let frame = self.frame;
-        let list: &[Drift] = if self.valley.on {
-            &crate::atlas::valley().drifts
-        } else {
-            &[]
-        };
-        let o = V3::ZERO.sub(self.map_origin());
+        let (list, o) = self.drift_list();
+        let o = V3::ZERO.sub(o);
         let seats = self.drift_seats();
         for i in seats {
             let held = carried[i];

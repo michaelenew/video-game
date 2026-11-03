@@ -331,8 +331,11 @@ pub fn all() -> impl Iterator<Item = &'static Place> {
 
 /// The vents an arena has, for the movement that reads them -- whether or
 /// not the world is the valley, since they are part of the ground.
+///
+/// A versus stage is not a place of the valley, and keeps its own
+/// (`crate::versus::Stage::vents`).
 pub fn vents(id: ArenaId) -> &'static [Vent] {
-    place(id).map_or(&[], |p| p.vents)
+    place(id).map_or_else(|| crate::versus::vents(id), |p| p.vents)
 }
 
 /// **Is a body in an updraft's column**, on whatever ground it is.

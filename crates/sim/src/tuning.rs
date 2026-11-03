@@ -421,6 +421,21 @@ pub fn hill_respawn() -> u16 {
     oven::scalar(Scalar::HillRespawn).max(0) as u16
 }
 
+/// How long the middle point of a five-point map is locked at the start.
+pub fn front_unlock() -> u16 {
+    oven::scalar(Scalar::FrontUnlock).max(0) as u16
+}
+
+/// The longest a round on a five-point map runs.
+pub fn front_clock() -> u32 {
+    oven::scalar(Scalar::FrontClock).max(1) as u32
+}
+
+/// How much of the clock a capture on a five-point map gives back.
+pub fn front_bonus() -> u32 {
+    oven::scalar(Scalar::FrontBonus).max(0) as u32
+}
+
 /// How high over the point's surface a body's feet still count as on it:
 /// the column of air a hop stays inside (`versus::Hill`).
 pub fn hill_column() -> Fx {
