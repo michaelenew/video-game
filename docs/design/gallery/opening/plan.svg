@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 580" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <!-- The opening's plan (docs/design/opening.md §5), from above, to scale:
+       3 px a metre. x is the way from the cell to the keep. -->
+  <rect width="1080" height="580" fill="#f3efe7"/>
+  <g transform="translate(30,95)">
+    <!-- The mountain, north -->
+    <path d="M0,0 L990,0 L990,-50 L0,-50 Z" fill="#b9ad9b"/>
+    <path d="M0,0 C120,-10 260,8 400,-4 C560,-14 700,6 990,0" fill="none" stroke="#8a7f6e" stroke-width="2"/>
+    <text x="8" y="-30" fill="#4d4538">MOUNTAIN (land, too steep to climb)</text>
+    <!-- The gorge, south and east -->
+    <path d="M90,345 C300,330 420,350 540,335 L540,410 L0,410 L0,345 Z" fill="#7f8ea3"/>
+    <path d="M540,40 L780,40 L780,410 L540,410 Z" fill="#7f8ea3"/>
+    <text x="600" y="395" fill="#eef2f7">THE GORGE</text>
+    <!-- The rock round the cell and the cut -->
+    <path d="M0,0 L90,0 L90,345 L0,345 Z" fill="#b9ad9b"/>
+    <!-- The cell -->
+    <rect x="6" y="165" width="24" height="24" fill="#5b5146"/>
+    <text x="4" y="208" fill="#2e2a24" font-weight="bold">1 cell</text>
+    <!-- The cut: 30 m long, 10 m wide -->
+    <rect x="30" y="162" width="62" height="30" fill="#d9cfbf"/>
+    <text x="34" y="156" fill="#2e2a24" font-weight="bold">2 the cut</text>
+    <!-- The yard: 150 m by ~100 m -->
+    <path d="M90,30 C200,18 380,26 540,40 L540,330 C420,345 300,328 90,345 Z" fill="#d6dcb8" stroke="#8d9668" stroke-width="2"/>
+    <text x="250" y="70" fill="#3d4426" font-size="18" font-weight="bold">3 THE YARD</text>
+    <text x="250" y="90" fill="#3d4426">150 m × ~100 m, open, ruined terrace</text>
+    <!-- Ruins: low walls, statue, watchtower, lookout -->
+    <g fill="#9c9282">
+      <rect x="150" y="110" width="70" height="6"/>
+      <rect x="150" y="110" width="6" height="40"/>
+      <rect x="330" y="240" width="60" height="6"/>
+      <rect x="420" y="120" width="6" height="55"/>
+    </g>
+    <circle cx="200" cy="80" r="14" fill="#8b8274"/>
+    <text x="112" y="58" fill="#3d4426">collapsed watchtower</text>
+    <rect x="300" y="160" width="26" height="10" fill="#8b8274" transform="rotate(-20 313 165)"/>
+    <text x="270" y="152" fill="#3d4426">fallen statue</text>
+    <path d="M430,320 L470,320 L460,348 L440,348 Z" fill="#8b8274"/>
+    <text x="398" y="312" fill="#3d4426">lookout over the gorge</text>
+    <!-- The click encounters, off the straight line -->
+    <g fill="#c2552d">
+      <circle cx="175" cy="250" r="7"/><circle cx="270" cy="105" r="7"/><circle cx="385" cy="275" r="7"/>
+    </g>
+    <text x="186" y="254" fill="#8b3a1c">click A</text>
+    <text x="281" y="109" fill="#8b3a1c">click B</text>
+    <text x="396" y="279" fill="#8b3a1c">click C</text>
+    <!-- The causeway: 80 m long, 12 m wide -->
+    <rect x="540" y="168" width="240" height="36" fill="#cfc4ae" stroke="#8a7f6e" stroke-width="2"/>
+    <text x="548" y="226" fill="#2e2a24" font-weight="bold">5 the causeway</text><text x="548" y="242" fill="#2e2a24">12 m wide, rising</text>
+    <!-- The keep: floor 50 m across, rampart round it, cut into rock -->
+    <circle cx="870" cy="186" r="105" fill="#b9ad9b"/>
+    <circle cx="870" cy="186" r="96" fill="#cfc4ae" stroke="#8a7f6e" stroke-width="2"/>
+    <circle cx="870" cy="186" r="75" fill="#e7dfcf" stroke="#5b5146" stroke-width="2"/>
+    <text x="826" y="80" fill="#2e2a24" font-weight="bold">6 the rim</text>
+    <text x="812" y="96" fill="#2e2a24">rampart, 15-18 m up</text>
+    <text x="830" y="184" fill="#2e2a24" font-weight="bold">7 the fight</text>
+    <text x="826" y="200" fill="#2e2a24">floor 50 m across</text>
+    <g fill="#8b8274">
+      <rect x="850" y="128" width="12" height="12"/><rect x="900" y="160" width="12" height="12"/>
+      <rect x="880" y="225" width="12" height="12"/><rect x="822" y="212" width="12" height="12"/>
+    </g>
+    <text x="900" y="250" fill="#2e2a24" font-size="11">piers</text>
+    <!-- The direct way -->
+    <path d="M30,177 L92,177 C200,177 300,190 420,184 C480,181 520,186 540,186 L780,186 L795,186" fill="none" stroke="#2e2a24" stroke-width="2.5" stroke-dasharray="8 6"/>
+    <!-- The sightline to the tower -->
+    <path d="M95,170 L840,140" fill="none" stroke="#c2552d" stroke-width="1.5" stroke-dasharray="2 5"/>
+    <text x="300" y="132" fill="#8b3a1c">4 the tower in sight from the moment you step out</text>
+    <!-- Distances -->
+    <g fill="#2e2a24" font-size="12">
+      <line x1="0" y1="430" x2="990" y2="430" stroke="#2e2a24"/>
+      <line x1="0" y1="424" x2="0" y2="436" stroke="#2e2a24"/><text x="-4" y="452">0</text>
+      <line x1="90" y1="424" x2="90" y2="436" stroke="#2e2a24"/><text x="80" y="452">30 m</text>
+      <line x1="540" y1="424" x2="540" y2="436" stroke="#2e2a24"/><text x="526" y="452">180 m</text>
+      <line x1="780" y1="424" x2="780" y2="436" stroke="#2e2a24"/><text x="766" y="452">260 m</text>
+      <text x="830" y="452">~40 s at a run, direct</text>
+    </g>
+  </g>
+  <text x="30" y="26" font-size="17" font-weight="bold" fill="#2e2a24">The way to the tower: plan, from above, to scale (3 px = 1 m)</text>
+  <text x="30" y="570" fill="#5b5146">Dashed: the direct way. Red dots: optional click encounters. Everything grey-brown is rock or land, not thin boxes.</text>
+</svg>
