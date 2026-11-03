@@ -895,6 +895,10 @@ pub const SECTIONS: &[Section] = &[
                 "Every move's frame data, on-block and on-hit advantage, air stats. For the Dual mage, the tiers and the numbers of the hill between her bars too.",
             ),
             e(
+                "cargo run --release -p sim --bin fightspace",
+                "Every fight measured in the game's own units -- a reach (the movers' second-longest pointed reach) and a jump (their shortest full held jump): its size, its starts' distance from the point, how much of it is out of reach of the middle, its levels, where its structure is, and what in it moves you. With `-- --plan <arena>` it prints that place's plan from above as SVG. docs/design/fight-spaces.md.",
+            ),
+            e(
                 "cargo run -p sim --bin goad",
                 "The Dual mage's two bars, driven by named input scripts -- alternate, one-sided, finisher, idle, ascend -- in an empty arena and against a dummy. Prints when each tier is reached, when the band is left, how long the lower bar lasts outside it, what the burn cost, and whether she ascended. Name one script for it frame by frame.",
             ),
