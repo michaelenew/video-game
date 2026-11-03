@@ -150,12 +150,40 @@ pub const fn solid(s: Solid, p: Plan) -> Solid {
     }
 }
 
+/// How narrow a thing over the point must be to keep its width when the
+/// map is stretched: as wide as the point, four metres either way of its
+/// middle.
+const NARROW: Fx = Fx::from_int(4);
+
+/// A solid over the point (every map's point is at its middle) narrower
+/// than [`NARROW`] across one way -- a bridge, a lintel -- keeps that width
+/// and is stretched only along its length, so a walkway over the point is
+/// as wide on every size and a way onto the point does not end under its
+/// edge.
+const fn over_the_point(s: Solid, p: Plan) -> Solid {
+    let mut out = solid(s, p);
+    let over = s.min.x.raw() < 0 && s.max.x.raw() > 0 && s.min.z.raw() < 0 && s.max.z.raw() > 0;
+    if !over || !matches!(s.shape, Shape::Box) {
+        return out;
+    }
+    let two = NARROW.raw() as i64 * 2;
+    if (s.max.x.raw() as i64 - s.min.x.raw() as i64) <= two {
+        out.min.x = s.min.x;
+        out.max.x = s.max.x;
+    }
+    if (s.max.z.raw() as i64 - s.min.z.raw() as i64) <= two {
+        out.min.z = s.min.z;
+        out.max.z = s.max.z;
+    }
+    out
+}
+
 /// Every solid of a table, stretched.
 pub const fn solids<const N: usize>(base: [Solid; N], p: Plan) -> [Solid; N] {
     let mut out = base;
     let mut i = 0;
     while i < N {
-        out[i] = solid(base[i], p);
+        out[i] = over_the_point(base[i], p);
         i += 1;
     }
     out
@@ -194,12 +222,14 @@ pub const fn bumps<const N: usize>(base: [Bump; N], p: Plan) -> [Bump; N] {
     out
 }
 
-/// Every updraft, moved out with the floor; as wide and as tall.
+/// Every updraft, moved out with the floor and as much wider, so one that
+/// hugged a face still does; as tall.
 pub const fn vents<const N: usize>(base: [Vent; N], p: Plan) -> [Vent; N] {
     let mut out = base;
     let mut i = 0;
     while i < N {
         out[i].at = (p.fx(base[i].at.0), p.fx(base[i].at.1));
+        out[i].radius = p.fx(base[i].radius);
         i += 1;
     }
     out

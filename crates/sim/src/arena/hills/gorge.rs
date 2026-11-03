@@ -74,7 +74,7 @@ pub static GORGE_STAGE: Stage = Stage {
     pit: None,
     // Room up to just under the bridge's planks, 6.4 m over the bar:
     // anybody in the air under them counts, nobody standing on them.
-    hill: Some(Hill::cm(0, 45, 0, 400, 50, 640)),
+    hill: Some(Hill::cm(0, 12, 0, 400, 50, 670)),
     vents: &GORGE_VENTS,
     drifts: &GORGE_DRIFTS,
     ways: &GORGE_WAYS,
@@ -99,8 +99,9 @@ const GORGE_REGIONS: [Region; 3] = [
 
 const GORGE_SOLIDS: [Solid; 48] = whole(
     [
-        // The bar the point is on, a step up, walked.
-        round(0, 0, (0, 45), (500, 450), Sand),
+        // The bar the point is on, barely proud of the river: a step a
+        // hop would take under the bridge catches its edge.
+        round(0, 0, (0, 12), (500, 450), Sand),
         // The bridge, straight over the point from terrace to terrace:
         // planks four metres wide, their underside 6.3 m over the floor,
         // flush with both terraces.
@@ -234,13 +235,13 @@ const GORGE_DRIFTS: [Drift; 4] = [
 const GORGE_WAYS: [Way; 11] = [
     Way::new(
         "out of the core on the hoist, up to the south terrace",
-        (-100, 45, 0),
+        (-100, 12, 0),
         &[(-1800, 0, -700), (-1800, 0, -1200), (-1800, 700, -1700)],
     ),
     Way::new(
         "the open floor, down the river onto the point",
         (-5800, 0, 0),
-        &[(-100, 45, 0)],
+        &[(-100, 12, 0)],
     ),
     Way::new(
         "the stair up the north face to the terrace",
@@ -250,7 +251,7 @@ const GORGE_WAYS: [Way; 11] = [
     Way::new(
         "the high road: along the terrace, out on the bridge, down onto the point",
         (-3700, 700, 1600),
-        &[(0, 700, 1700), (0, 700, 500), (-300, 45, 0)],
+        &[(0, 700, 1700), (0, 700, 500), (-300, 12, 0)],
     ),
     Way::new(
         "the cave: in from the bay, out of its mouth onto the point",
@@ -259,17 +260,17 @@ const GORGE_WAYS: [Way; 11] = [
             (-1150, 0, 2200),
             (-1150, 0, 1000),
             (-700, 0, 0),
-            (-320, 45, 0),
+            (-320, 12, 0),
         ],
     ),
     Way::new(
         "off the cliff-top, down to the terrace, over the bridge onto the point",
         (-600, 1500, 3200),
-        &[(-300, 700, 2200), (0, 700, 500), (-300, 45, 0)],
+        &[(-300, 700, 2200), (0, 700, 500), (-300, 12, 0)],
     ),
     Way::new(
         "out of the core by the cave's mouth, up through its skylight",
-        (-100, 45, 0),
+        (-100, 12, 0),
         &[(-1150, 0, 1000), (-1150, 0, 2200), (-2000, 700, 1600)],
     ),
     Way::new(
