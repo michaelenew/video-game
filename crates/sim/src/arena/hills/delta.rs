@@ -71,6 +71,7 @@ pub static DELTA_STAGE: Stage = Stage {
     theme: "A river mouth's ruined waterworks: dykes, a sluice gate, a broken aqueduct",
     pit: None,
     hill: Some(Hill::cm(0, 45, 0, 400, 50, 1000)),
+    front: None,
     vents: &DELTA_VENTS,
     drifts: &DELTA_DRIFTS,
     ways: &DELTA_WAYS,

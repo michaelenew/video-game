@@ -116,6 +116,7 @@ pub mod gully;
 pub mod stages;
 
 pub mod hills;
+pub mod kilnworks;
 
 pub mod hall;
 
@@ -232,6 +233,9 @@ impl ArenaId {
     pub const GORGE_BIGGEST: ArenaId = ArenaId(87);
     pub const HENGE_BIGGER: ArenaId = ArenaId(88);
     pub const HENGE_BIGGEST: ArenaId = ArenaId(89);
+    /// **The Kilnworks** (`kilnworks`, `docs/design/versus.md` §3a): the
+    /// first five-point map.
+    pub const KILNWORKS: ArenaId = ArenaId(90);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// gets the proving ground rather than a crash in the middle of a rollback.
@@ -243,8 +247,8 @@ impl ArenaId {
 /// How many ids there are, registered or not: the valley's ranges are
 /// numbered from forty (`valley::ranges::FIRST`), and past the first fourteen
 /// from sixty-four (`valley::ranges::MORE`); the stretched hill maps from
-/// eighty.
-pub const COUNT: usize = 90;
+/// eighty; the five-point maps from ninety.
+pub const COUNT: usize = 96;
 
 /// The most solids an arena **fought on alone** may have. Alone, every query
 /// walks all of them, several times a frame per body, so this is what keeps a
@@ -255,6 +259,13 @@ pub const COUNT: usize = 90;
 /// town and reaches -- is not held to it: there a query reads the few tiles
 /// near it, and the map can hold as many boxes as anybody draws.
 pub const MAX_SOLIDS: usize = 64;
+
+/// The most solids a **five-point map** may have (`versus::Kind::Front`,
+/// 2026-11-03): a long map of buildings, catwalks and pillars, fought on
+/// alone like any versus stage, and measured as the busiest fight there is
+/// in `tests/budget.rs` (four on it). Raise it only with that scenario in
+/// budget.
+pub const MAX_SOLIDS_FRONT: usize = 160;
 
 /// The most floor regions an arena may have, for the same reason.
 pub const MAX_REGIONS: usize = 32;
@@ -336,6 +347,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::GORGE_BIGGEST => Some(&hills::sizes::GORGE_BIGGEST),
         ArenaId::HENGE_BIGGER => Some(&hills::sizes::HENGE_BIGGER),
         ArenaId::HENGE_BIGGEST => Some(&hills::sizes::HENGE_BIGGEST),
+        ArenaId::KILNWORKS => Some(&kilnworks::ARENA),
 
         ArenaId::HALL_CHAMPION => Some(&hall::CHAMPION),
         ArenaId::HALL_REAVER => Some(&hall::REAVER),

@@ -322,6 +322,7 @@ macro_rules! stretched {
             theme: $base::$b_stage.theme,
             pit: None,
             hill: $crate::arena::hills::sizes::hill($base::$b_stage.hill, $plan),
+            front: None,
             vents: &$crate::arena::hills::sizes::vents($base::$vents, $plan),
             drifts: &$crate::arena::hills::sizes::drifts($base::$drifts, $plan),
             ways: $base::$b_stage.ways,

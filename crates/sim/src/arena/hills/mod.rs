@@ -65,7 +65,13 @@ pub(super) const fn whole<const C: usize, const H: usize, const N: usize>(
 
 /// A round solid from centimetres: centred on (x, z), from `y0` to `y1`,
 /// `bottom` and `top` across (radii).
-const fn round(x: i32, z: i32, y: (i32, i32), r: (i32, i32), material: Material) -> Solid {
+pub(super) const fn round(
+    x: i32,
+    z: i32,
+    y: (i32, i32),
+    r: (i32, i32),
+    material: Material,
+) -> Solid {
     let (bottom, top) = r;
     let big = if bottom > top { bottom } else { top };
     Solid {

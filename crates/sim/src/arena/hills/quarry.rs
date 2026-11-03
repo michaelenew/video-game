@@ -73,6 +73,7 @@ pub static QUARRY_STAGE: Stage = Stage {
     theme: "A terraced stone quarry: the point on the pit floor, two benches up each face",
     pit: None,
     hill: Some(Hill::cm(0, 45, 0, 400, 50, 1000)),
+    front: None,
     vents: &QUARRY_VENTS,
     drifts: &QUARRY_DRIFTS,
     ways: &QUARRY_WAYS,

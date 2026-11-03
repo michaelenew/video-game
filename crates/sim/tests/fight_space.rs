@@ -84,6 +84,61 @@ fn duel_stage(m: &Measure, name: &str, r: Fx, j: Fx, fails: &mut Vec<String>) {
     at_least("its top level", name, m.top(), of(2, 1, j), fails);
 }
 
+/// **A five-point map** (`docs/design/versus.md` §3a): its points far
+/// enough apart that a fight on one cannot reach the next, room behind each
+/// side's last, three levels, and at least two ways onto every point of the
+/// west half (the east's are the same, turned).
+fn front_map(s: &versus::Stage, m: &Measure, name: &str, r: Fx, j: Fx, fails: &mut Vec<String>) {
+    let line = s.front.expect("a five-point map has a line");
+    for k in 0..versus::POINTS - 1 {
+        let gap = line.points[k + 1].at.sub(line.points[k].at).flat_len();
+        at_least(
+            &format!("points {k} to {}", k + 1),
+            name,
+            gap,
+            of(9, 5, r),
+            fails,
+        );
+    }
+    let home = s.arena.get().spawns.versus[0].at;
+    let behind = line.points[0].at.sub(home).flat_len();
+    at_least(
+        "the start behind its last point",
+        name,
+        behind,
+        of(3, 5, r),
+        fails,
+    );
+    at_least("its width", name, m.width, of(5, 2, r), fails);
+    if m.tiers.len() < 3 {
+        fails.push(format!(
+            "{name}: {} levels, the rule wants 3",
+            m.tiers.len()
+        ));
+    }
+    at_least("its top level", name, m.top(), of(7, 2, j), fails);
+    for (k, point) in line.points.iter().enumerate().take(3) {
+        let onto = s
+            .ways
+            .iter()
+            .filter(|w| {
+                w.route.last().is_some_and(|&(x, y, z)| {
+                    point.holds(sim::math::V3::new(
+                        Fx::ratio(x, 100),
+                        Fx::ratio(y, 100),
+                        Fx::ratio(z, 100),
+                    ))
+                })
+            })
+            .count();
+        if onto < 2 {
+            fails.push(format!(
+                "{name}: {onto} ways onto point {k}, the rule wants 2"
+            ));
+        }
+    }
+}
+
 #[test]
 fn every_versus_stage_has_room_to_fight() {
     let (r, j) = (fightspace::reach(), fightspace::jump());
@@ -94,6 +149,7 @@ fn every_versus_stage_has_room_to_fight() {
         match s.kind {
             Kind::Hill => hill_map(&m, a.name, r, j, &mut fails),
             Kind::Duel => duel_stage(&m, a.name, r, j, &mut fails),
+            Kind::Front => front_map(s, &m, a.name, r, j, &mut fails),
         }
         if m.vents + m.drifts == 0 {
             fails.push(format!(

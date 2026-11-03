@@ -72,6 +72,7 @@ pub static HENGE_STAGE: Stage = Stage {
     // Room up to just under the long lintel's top, 6.7 m over the altar:
     // anybody in the air under it counts, nobody standing on it.
     hill: Some(Hill::cm(0, 12, 0, 400, 50, 670)),
+    front: None,
     vents: &HENGE_VENTS,
     drifts: &[],
     ways: &HENGE_WAYS,

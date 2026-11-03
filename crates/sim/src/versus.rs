@@ -108,6 +108,8 @@ pub struct Stage {
     pub pit: Option<i32>,
     /// The capture point, on a King of the Hill map.
     pub hill: Option<Hill>,
+    /// **The line of five points**, on a five-point map ([`Kind::Front`]).
+    pub front: Option<&'static Line>,
     /// **Its updrafts** (2026-11-02, `docs/design/fight-spaces.md`): columns
     /// of rising air, read by the same movement as the valley's
     /// (`crate::valley::vents` falls back to these) -- a way up to a tier
@@ -154,6 +156,11 @@ pub enum Kind {
     Duel,
     /// King of the Hill: hold the point until your clock runs out.
     Hill,
+    /// **Five points in a row** (2026-11-03, Team Fortress 2's five-point
+    /// maps): each side owns its own two, the middle is nobody's, a side
+    /// takes only the next point along its line, and the side that owns all
+    /// five wins. A side respawns a point behind its front.
+    Front,
 }
 
 impl Stage {
@@ -166,7 +173,7 @@ impl Stage {
 /// Every stage, duels first, in the order the picker steps through them:
 /// each King of the Hill map big, bigger and biggest (`arena::hills::sizes`),
 /// so `Shift+N` flips through one map's sizes before the next map.
-pub static STAGES: [&Stage; 19] = {
+pub static STAGES: [&Stage; 20] = {
     use crate::arena::hills::{self, sizes};
     [
         &crate::arena::stages::ANVIL_STAGE,
@@ -188,6 +195,7 @@ pub static STAGES: [&Stage; 19] = {
         &hills::HENGE_STAGE,
         &sizes::HENGE_BIGGER_STAGE,
         &sizes::HENGE_BIGGEST_STAGE,
+        &crate::arena::kilnworks::STAGE,
     ]
 };
 
@@ -327,51 +335,254 @@ impl Koth {
 
     /// The capture: who is on it moves the progress.
     fn capture(&mut self) {
-        let full = Koth::full();
-        let rate = |n: u8| -> u32 {
-            if n == 0 {
-                0
-            } else {
-                100 + t::hill_second() as u32 * (n as u32 - 1)
+        capture(
+            &mut self.owner,
+            &mut self.capper,
+            &mut self.progress,
+            self.standing,
+        );
+    }
+}
+
+/// **A capture, one frame**: who is standing on a point (`standing`, each
+/// side's count) moves its progress -- King of the Hill's point and each of
+/// a five-point map's ([`Front`]) alike. Returns whether it changed hands.
+fn capture(owner: &mut u8, capper: &mut u8, progress: &mut u32, standing: [u8; SIDES]) -> bool {
+    let full = Koth::full();
+    let rate = |n: u8| -> u32 {
+        if n == 0 {
+            0
+        } else {
+            100 + t::hill_second() as u32 * (n as u32 - 1)
+        }
+    };
+    let [a, b] = standing;
+    let mut taken = false;
+    // One side alone on it, and it is not theirs: their capture. A side
+    // stepping onto somebody else's capture first takes it back to
+    // nothing, at their own rate, before starting their own.
+    let alone = match (a > 0, b > 0) {
+        (true, false) => Some((0u8, a)),
+        (false, true) => Some((1u8, b)),
+        _ => None,
+    };
+    match alone {
+        // Contested: nothing moves.
+        None if a > 0 => {}
+        // Nobody on it: a capture under way drains away slowly.
+        None => {
+            let drain = t::hill_decay() as u32;
+            *progress = progress.saturating_sub(drain);
+        }
+        Some((s, n)) if s == *owner => {
+            // The holders on their own point push a capture back.
+            *progress = progress.saturating_sub(rate(n));
+        }
+        Some((s, n)) => {
+            if *capper != s && *progress > 0 {
+                *progress = progress.saturating_sub(rate(n));
+                return false;
             }
-        };
-        let [a, b] = self.standing;
-        // One side alone on it, and it is not theirs: their capture. A side
-        // stepping onto somebody else's capture first takes it back to
-        // nothing, at their own rate, before starting their own.
-        let alone = match (a > 0, b > 0) {
-            (true, false) => Some((0u8, a)),
-            (false, true) => Some((1u8, b)),
-            _ => None,
-        };
-        match alone {
-            // Contested: nothing moves.
-            None if a > 0 => {}
-            // Nobody on it: a capture under way drains away slowly.
-            None => {
-                let drain = t::hill_decay() as u32;
-                self.progress = self.progress.saturating_sub(drain);
-            }
-            Some((s, n)) if s == self.owner => {
-                // The holders on their own point push a capture back.
-                self.progress = self.progress.saturating_sub(rate(n));
-            }
-            Some((s, n)) => {
-                if self.capper != s && self.progress > 0 {
-                    self.progress = self.progress.saturating_sub(rate(n));
-                    return;
-                }
-                self.capper = s;
-                self.progress = (self.progress + rate(n)).min(full);
-                if self.progress >= full {
-                    self.owner = s;
-                    self.capper = NOBODY;
-                    self.progress = 0;
-                }
+            *capper = s;
+            *progress = (*progress + rate(n)).min(full);
+            if *progress >= full {
+                *owner = s;
+                *capper = NOBODY;
+                *progress = 0;
+                taken = true;
             }
         }
-        if self.progress == 0 {
-            self.capper = NOBODY;
+    }
+    if *progress == 0 {
+        *capper = NOBODY;
+    }
+    taken
+}
+
+// ---------------------------------------------------------------------------
+// Five points in a row
+// ---------------------------------------------------------------------------
+
+/// How many points a five-point map has.
+pub const POINTS: usize = 5;
+
+/// **A five-point map's line** (2026-11-03): its five points from the west
+/// side's last to the east side's last, and where the west side stands back
+/// up when its spawn is at each of them. The map is turned half a turn about
+/// its middle, so the east side's spawn at point `k` is the west side's at
+/// `4 - k`, turned ([`Line::spawn`]).
+#[derive(Clone, Copy, Debug)]
+pub struct Line {
+    pub points: [Hill; POINTS],
+    /// The west side's spawn while its spawn is at each point: behind the
+    /// point, on the west side's own ground.
+    pub spawns: [crate::arena::Mark; POINTS],
+}
+
+impl Line {
+    /// Where `side` stands back up while its spawn is at point `k`.
+    pub fn spawn(&self, side: u8, k: usize) -> crate::arena::Mark {
+        if side == 0 {
+            self.spawns[k]
+        } else {
+            let m = self.spawns[POINTS - 1 - k];
+            crate::arena::Mark {
+                at: V3::new(m.at.x.neg(), m.at.y, m.at.z.neg()),
+                facing: V3::new(m.facing.x.neg(), m.facing.y, m.facing.z.neg()),
+            }
         }
+    }
+}
+
+/// **A game on a five-point map**: who owns each point, each capture under
+/// way, the round's clock and the respawns. All zero (and not hashed) on
+/// every arena that is not one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Front {
+    pub on: bool,
+    /// Frames until anything can be captured: the middle point is locked at
+    /// the start so both sides can reach it.
+    pub locked: u16,
+    pub owner: [u8; POINTS],
+    pub capper: [u8; POINTS],
+    pub progress: [u32; POINTS],
+    /// How many of each side stood on each point this frame -- counting only
+    /// those who may take it or hold it ([`Front::open`]).
+    pub standing: [[u8; SIDES]; POINTS],
+    /// Frames left in the round. Every capture adds to it.
+    pub clock: u32,
+    /// Each seat's wait to stand back up, in frames: zero while alive.
+    pub respawn: [u16; MAX_PLAYERS],
+}
+
+impl Front {
+    pub const NONE: Front = Front {
+        on: false,
+        locked: 0,
+        owner: [NOBODY; POINTS],
+        capper: [NOBODY; POINTS],
+        progress: [0; POINTS],
+        standing: [[0; SIDES]; POINTS],
+        clock: 0,
+        respawn: [0; MAX_PLAYERS],
+    };
+
+    /// A game from the top: each side owns its own two points, the middle is
+    /// nobody's and locked, the clock full. [`Front::NONE`] on an arena that
+    /// is not a five-point map.
+    pub fn start(arena: ArenaId) -> Front {
+        if of(arena).and_then(|s| s.front).is_none() {
+            return Front::NONE;
+        }
+        Front {
+            on: true,
+            locked: t::front_unlock(),
+            owner: [0, 0, NOBODY, 1, 1],
+            clock: t::front_clock(),
+            ..Front::NONE
+        }
+    }
+
+    /// **May `side` take point `k`?** It is not theirs, and the point on
+    /// their side of it is theirs -- or it is the far end of the other
+    /// side's line. Only the next point along a side's line is open to it.
+    pub fn open(&self, k: usize, side: u8) -> bool {
+        if self.owner[k] == side {
+            return false;
+        }
+        if side == 0 {
+            k > 0 && self.owner[k - 1] == 0
+        } else {
+            k < POINTS - 1 && self.owner[k + 1] == 1
+        }
+    }
+
+    /// The point `side`'s front is at: the furthest of its own along its
+    /// line, unbroken from its last.
+    pub fn front(&self, side: u8) -> usize {
+        if side == 0 {
+            (0..POINTS)
+                .take_while(|&k| self.owner[k] == 0)
+                .last()
+                .unwrap_or(0)
+        } else {
+            (0..POINTS)
+                .rev()
+                .take_while(|&k| self.owner[k] == 1)
+                .last()
+                .unwrap_or(POINTS - 1)
+        }
+    }
+
+    /// **Where `side` stands back up**: a point behind its front, and never
+    /// behind its own last -- so taking the middle moves a side's spawn up to
+    /// its second point, and taking the other side's second to the middle.
+    pub fn spawn_at(&self, side: u8) -> usize {
+        let f = self.front(side);
+        if side == 0 {
+            f.saturating_sub(1)
+        } else {
+            (f + 1).min(POINTS - 1)
+        }
+    }
+
+    /// How many points `side` owns.
+    pub fn held(&self, side: u8) -> usize {
+        self.owner.iter().filter(|&&o| o == side).count()
+    }
+
+    /// How far a capture on point `k` is, 0 to 100.
+    pub fn percent(&self, k: usize) -> u32 {
+        (self.progress[k] * 100 / Koth::full().max(1)).min(100)
+    }
+
+    /// **One frame of the line.** `on[i]` is which point seat `i` is
+    /// standing on, alive, if any. Returns the round's result if it is over:
+    /// `Some(side)` when a side owns all five or holds more when the clock
+    /// runs out, `Some(NOBODY)` when the clock runs out level.
+    pub fn step(&mut self, on: [Option<usize>; MAX_PLAYERS]) -> Option<u8> {
+        if !self.on {
+            return None;
+        }
+        self.standing = [[0; SIDES]; POINTS];
+        for (i, at) in on.iter().enumerate() {
+            let Some(k) = *at else { continue };
+            let s = side(i);
+            // Only those who may take it or hold it count on it: standing on
+            // a point that is not next along your line does nothing.
+            if self.owner[k] == s || self.open(k, s) {
+                self.standing[k][s as usize] += 1;
+            }
+        }
+        if self.locked > 0 {
+            self.locked -= 1;
+            return None;
+        }
+        for k in 0..POINTS {
+            let (mut o, mut c, mut p) = (self.owner[k], self.capper[k], self.progress[k]);
+            if capture(&mut o, &mut c, &mut p, self.standing[k]) {
+                self.clock = self
+                    .clock
+                    .saturating_add(t::front_bonus())
+                    .min(t::front_clock());
+            }
+            (self.owner[k], self.capper[k], self.progress[k]) = (o, c, p);
+        }
+        for s in 0..SIDES as u8 {
+            if self.held(s) == POINTS {
+                return Some(s);
+            }
+        }
+        // A capture under way holds the round open, as overtime does.
+        let under_way = self.progress.iter().any(|&p| p > 0);
+        self.clock = self.clock.saturating_sub(1);
+        if self.clock == 0 && !under_way {
+            return Some(match self.held(0).cmp(&self.held(1)) {
+                core::cmp::Ordering::Greater => 0,
+                core::cmp::Ordering::Less => 1,
+                core::cmp::Ordering::Equal => NOBODY,
+            });
+        }
+        None
     }
 }

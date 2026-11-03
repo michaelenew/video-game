@@ -75,6 +75,7 @@ pub static GORGE_STAGE: Stage = Stage {
     // Room up to just under the bridge's planks, 6.4 m over the bar:
     // anybody in the air under them counts, nobody standing on them.
     hill: Some(Hill::cm(0, 12, 0, 400, 50, 670)),
+    front: None,
     vents: &GORGE_VENTS,
     drifts: &GORGE_DRIFTS,
     ways: &GORGE_WAYS,

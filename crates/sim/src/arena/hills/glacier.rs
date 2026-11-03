@@ -63,6 +63,7 @@ pub static GLACIER_STAGE: Stage = Stage {
     theme: "A snowfield under a glacier's snout: the point on an ice dome, caves beneath",
     pit: None,
     hill: Some(Hill::cm(0, 460, 0, 400, 50, 1000)),
+    front: None,
     vents: &GLACIER_VENTS,
     drifts: &GLACIER_DRIFTS,
     ways: &GLACIER_WAYS,
