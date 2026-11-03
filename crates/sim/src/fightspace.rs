@@ -216,11 +216,11 @@ pub fn measure(arena: &'static Arena, reach: Fx, jump: Fx) -> Measure {
             let (Some(&(x, y, z)), Some(h)) = (w.route.last(), hill) else {
                 return false;
             };
-            let plan = crate::arena::hills::sizes::plan_of(arena.id);
+            let (x, y, z) = crate::arena::hills::sizes::way_point(arena.id, (x, y, z));
             h.holds(V3::new(
-                Fx::ratio(plan.cm(x), 100),
+                Fx::ratio(x, 100),
                 Fx::ratio(y, 100),
-                Fx::ratio(plan.cm(z), 100),
+                Fx::ratio(z, 100),
             ))
         })
         .count();

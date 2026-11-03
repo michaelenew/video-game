@@ -598,8 +598,7 @@ fn every_way_on_every_stage_is_walked_by_every_mover() {
     let mut failed = Vec::new();
     for stage in versus::STAGES {
         // A stretched map walks its base's ways stretched the same way.
-        let plan = sim::arena::hills::sizes::plan_of(stage.arena);
-        let at = |p: (i32, i32, i32)| (plan.cm(p.0), p.1, plan.cm(p.2));
+        let at = |p| sim::arena::hills::sizes::way_point(stage.arena, p);
         for way in stage.ways {
             let from = at(way.from);
             let route: Vec<_> = way.route.iter().map(|&p| at(p)).collect();

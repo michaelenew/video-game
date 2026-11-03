@@ -94,6 +94,29 @@ pub const fn plan_of(id: ArenaId) -> Plan {
     }
 }
 
+/// **Where a way's point is on a stretched map** (centimetres): stretched
+/// with the floor, unless it is on the base map's point -- the point is as
+/// wide on every size, so a way that ends on it ends on it still.
+pub fn way_point(id: ArenaId, at: (i32, i32, i32)) -> (i32, i32, i32) {
+    let Some((base, p)) = base_of(id) else {
+        return at;
+    };
+    let on = crate::versus::of(base)
+        .and_then(|s| s.hill)
+        .is_some_and(|h| {
+            h.holds(V3::new(
+                Fx::ratio(at.0, 100),
+                Fx::ratio(at.1, 100),
+                Fx::ratio(at.2, 100),
+            ))
+        });
+    if on {
+        at
+    } else {
+        (p.cm(at.0), at.1, p.cm(at.2))
+    }
+}
+
 /// A solid stretched: its footprint and its shape's widths across the
 /// floor, its heights kept.
 pub const fn solid(s: Solid, p: Plan) -> Solid {
