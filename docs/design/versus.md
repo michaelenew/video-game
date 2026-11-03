@@ -95,6 +95,45 @@ a side. Fights here are one against one or two against two, and a duel's
 time to kill is about a minute, so every number above is shorter and every
 one is a guess.
 
+### Five points in a row (2026-11-03)
+
+From the owner, after the hill maps grew: "I think a 5cp mode would work
+fine, new longer map ... It needs chokes and wide areas, catwalks and
+buildings and perches and pillars. Stuff that makes a tactical difference."
+Team Fortress 2's five-point maps, and the answer of
+[exploration 0036](exploration/0036_spreading_people_out.md) to "how do you
+spread people out": several places that score, far enough apart that
+rotating between them is a decision, and a front that moves so a team can
+push toward the other's spawn.
+
+The state is `World::front` (`versus::Front`), about sixty bytes, hashed
+only on a five-point map. The map names its five points west to east and
+where the west side stands back up at each (`versus::Line`); the east
+side's are the same turned. The capture itself is King of the Hill's, one
+function for both, with its knobs.
+
+| Rule | Built as | Knob ("Match" family) | First guess |
+| --- | --- | --- | --- |
+| Each side **owns its own two points** at the start; the **middle is nobody's** and **locked** so both can reach it | `[0, 0, nobody, 1, 1]` | Five points, the middle unlocks after | 10 s |
+| A side can take **only the next point along its line**: one that is not its own, next to one that is | `Front::open` | | |
+| Standing on a point that is not next for your side **does nothing** -- not even contest it -- unless it is yours | | | |
+| A capture, contesting, draining and pushing back are King of the Hill's | | King of the hill, a capture takes (and its share for a second capper, and its drain) | 6 s |
+| **Every capture gives the clock back** some time, up to the round's whole length | | Five points, a capture adds to the clock | 1:00 |
+| **Owning all five wins** the round | | | |
+| The **clock out**: whoever holds more points wins; level is nobody's round. A capture under way holds the clock open, as overtime does | | Five points, a round lasts at most | 8:00 |
+| The **knocked out** stand back up **a point behind their side's front** -- at home while the front is their second point, at their second once they hold the middle, at the middle once they hold the other side's second | `Front::spawn_at`, `Line::spawn` | King of the hill, the dead are back after | 5 s |
+
+On a five-point map, as on a hill, **a side cannot hurt its own**
+(`World::teams`), and bodies wear their side's colour. The HUD's line shows
+the five points west to east as `b` and `o` -- capitals while they are not
+open to the other side, lower case while they are the next one it can take,
+a dot for nobody's -- the round's clock, and any capture under way. Pinned
+by `crates/sim/tests/front.rs`; the map is held to the fight-space rules
+for a five-point map (`tests/fight_space.rs`: points at least 1.8 reaches
+apart, room behind each side's last, three levels, two ways onto every
+point) and may have up to 160 boxes (`arena::MAX_SOLIDS_FRONT`), budgeted
+as four fighting on it (`tests/budget.rs`).
+
 ### Sides, and who can hurt whom
 
 **Seats alternate between the two sides** (`versus::side`): seats one and
