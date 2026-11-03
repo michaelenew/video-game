@@ -1112,10 +1112,6 @@ pub const SECTIONS: &[Section] = &[
                 "Hide the whole HUD, the crosshair too: a capture of the place and the fighters in it, with nothing laid over them.",
             ),
             e(
-                "SHOT_WARDEN=<x>,<z>,<yaw>,<pose>",
-                "In --arena warden, the opening's blockout (docs/design/opening.md), stand the Warden at (x, z) in metres, turned yaw degrees from facing +x, in a pose: stand, slam (both fists up), swat (its right arm out sideways at shoulder height) or down (felled). It is drawn, not built: nothing collides with it and it does not move. Without it, it stands in the middle of the shaft facing the gallery.",
-            ),
-            e(
                 "SHOT_EYE=<x>,<y>,<z>,<tx>,<ty>,<tz>",
                 "Put the camera at (x, y, z) looking at (tx, ty, tz), in metres in the place the world is in, whatever the fighter is doing -- a capture of something no fighter's camera frames, such as the Sleeper's horn arch: SHOT_EYE=560,300,470,690,240,370 SHOT_AT=700,0 with --arena pinewood --open. What is loaded follows the camera.",
             ),

@@ -9,9 +9,14 @@
 //! view once all the way round, the way a player does on arriving somewhere.
 //! Four things are flagged:
 //!
+//! - **A snap-in**: the arm pulled in sharply in one frame because the view
+//!   swung into something solid, or let out again as fast once it swung
+//!   clear -- the camera's designed answer to a wall or a pier at its back,
+//!   which keeps it out of them. Some is unavoidable beside anything solid;
+//!   a place where it happens often is cramped.
 //! - **A jump**: the eye moved, relative to the fighter, by much more in one
-//!   frame than turning the view accounts for. What a player reports as "the
-//!   camera jumped".
+//!   frame than turning the view accounts for, and not by pulling in. What a
+//!   player reports as "the camera jumped".
 //! - **A wall cut away**: the line from the eye to the fighter passes
 //!   through something wall-sized (three metres tall and four broad, or
 //!   more) that the camera does not keep out of
@@ -59,17 +64,25 @@ impl Default for Options {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Jump,
+    SnapIn,
     CutAway,
     Cramped,
     InLand,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Jump, Kind::CutAway, Kind::Cramped, Kind::InLand];
+    pub const ALL: [Kind; 5] = [
+        Kind::Jump,
+        Kind::SnapIn,
+        Kind::CutAway,
+        Kind::Cramped,
+        Kind::InLand,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Kind::Jump => "camera jumped",
+            Kind::SnapIn => "snapped in",
             Kind::CutAway => "wall cut away",
             Kind::Cramped => "cramped",
             Kind::InLand => "eye in the land",
@@ -118,11 +131,12 @@ impl Report {
         self.count(kind) as f32 / self.frames.max(1) as f32
     }
 
-    /// **The bar** (`docs/design/level-design.md`): no jumps, the eye
-    /// never in the land, a wall cut away on under one frame in fifty, and
-    /// cramped on under one in twenty.
+    /// **The bar** (`docs/design/delivery.md`, D3): no jumps, a snap-in on
+    /// under one frame in a hundred, the eye never in the land, a wall cut
+    /// away on under one frame in fifty, and cramped on under one in twenty.
     pub fn passes(&self) -> bool {
         self.count(Kind::Jump) == 0
+            && self.share(Kind::SnapIn) < 0.01
             && self.count(Kind::InLand) == 0
             && self.share(Kind::CutAway) < 0.02
             && self.share(Kind::Cramped) < 0.05
@@ -270,7 +284,15 @@ pub fn walk(terrain: &Terrain, route: &[[f32; 3]], opt: &Options) -> Report {
             let turned = (yaw - was_yaw).abs();
             let moved = len(sub(rel, was)) - len(was) * turned;
             if blind == 0 && moved > opt.jump {
-                report.flags.push(flag(Kind::Jump, moved));
+                // Most of the move was the arm's length changing: pulled in
+                // against something, or let out again past it.
+                let change = (len(was) - len(rel)).abs();
+                let kind = if change > 0.7 * moved {
+                    Kind::SnapIn
+                } else {
+                    Kind::Jump
+                };
+                report.flags.push(flag(kind, moved));
             }
         }
         blind = blind.saturating_sub(1);

@@ -108,6 +108,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
 
         SpeciesId::GALEWING => Some(&galewing::CARD),
         SpeciesId::SIEGESHELL => Some(&siegeshell::CARD),
+        SpeciesId::WARDEN => Some(&ridgeback::WARDEN),
         _ => None,
     }
 }

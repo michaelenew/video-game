@@ -38,16 +38,23 @@ swing round: as a starting guide, about eight metres across and five metres
 to any ceiling. Tighter is allowed only where the camera check
 ([delivery.md](delivery.md), D3) passes in it.
 
-**L4 · Walls that enclose are land, or thick enough to hold the camera.**
-Unless otherwise instructed, a wall that bounds a space is the arena's rim
-or the valley's land (`arena::rim`, as `CLAUDE.md` already requires of a
-fight's edge), or a box at least as thick and broad as the Oven's `Camera
-held off by a box this thick` and `... this broad` (8 m and 20 m as of
-2026-11-02). **A thinner box is not a wall to the camera**: it passes
-through it, the game draws it see-through round the fighter, and the arm
-lands on whatever is behind -- the jumping camera of the first blockout. An
-opening in a wall (a window, a door) is a gap in thick stone or in the land,
-never thin boxes stacked round a hole.
+**L4 · Walls that enclose are land or thick stone, and spaces are wide
+enough that the camera seldom meets them.** Unless otherwise instructed, a
+wall that bounds a space is the arena's rim or the valley's land
+(`arena::rim`, as `CLAUDE.md` already requires of a fight's edge), or stone
+thick enough to read as a wall. The camera keeps out of any box at least
+the Oven's `Camera held off by a box this thick` and `... this broad` (1 m
+and 4 m as of 2026-11-03): **it snaps its arm in when the view swings into
+one, and lets it out again as fast once it is clear.** That is the camera's
+designed answer and some of it is unavoidable beside anything solid; in a
+narrow space with solid on every side it happens on every turn of the view,
+which is what the first blockout's ten-metre well did and what a player
+calls the camera jumping. A smaller box (a post, a thin ledge) is cut away
+round the fighter instead. An opening in a wall is a gap in thick stone or
+in the land.
+
+*Corrected 2026-11-03: this rule first said 8 m and 20 m, which are the top
+of those two knobs' ranges, not their values.*
 
 **L5 · Every start is clear.** Unless otherwise instructed, every fighter's
 start stands on something, inside nothing, apart from the other's, and

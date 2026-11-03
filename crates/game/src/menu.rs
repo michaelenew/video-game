@@ -252,6 +252,7 @@ pub fn draw(
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
             let ui = right;
             crate::tutorial::menu(ui, &mut sim, &mut coach);
+            prototypes(ui, &mut sim);
             ui.separator();
             stages(ui, &mut sim);
             dummy(ui, &mut sim);
@@ -338,6 +339,35 @@ fn volume(ui: &mut egui::Ui, settings: &mut crate::settings::Settings) {
         settings.volume = level;
         settings.save();
     }
+}
+
+/// **Prototypes**: what is built and not finished -- the opening
+/// (`docs/design/opening.md`): the cell, the yard and the Warden's keep, as
+/// a hunt of the Warden. A trip on the wire (`Travel::hunt`), as the
+/// picker's is, so a peer comes too.
+fn prototypes(ui: &mut egui::Ui, sim: &mut crate::Sim) {
+    use sim::arena::ArenaId;
+    use sim::species::SpeciesId;
+    ui.separator();
+    ui.heading("Prototypes");
+    ui.add_space(4.0);
+    let here = sim.cur.arena == ArenaId::WARDEN;
+    if ui
+        .selectable_label(here, "The opening: the Warden")
+        .on_hover_text(
+            "Out of the cell, across the yard and the causeway, into the Warden's keep. It sleeps until you come in.",
+        )
+        .clicked()
+        && !here
+    {
+        sim.travel = sim::input::Travel::hunt(SpeciesId::WARDEN);
+    }
+    ui.label(
+        egui::RichText::new(
+            "Unfinished: it moves like a big Ridgeback for now. You start in the cell.",
+        )
+        .weak(),
+    );
 }
 
 /// **Versus stages**: a row of buttons for the floating duel stages and one
