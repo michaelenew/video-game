@@ -93,3 +93,21 @@ A stand-in drawn for a screenshot lives in that screenshot set only.
 how a place looks is judged from the fight's own camera, along the route,
 at the moments that matter. A camera placed by hand is for an establishing
 view and is labelled so; it is never the evidence that a place works.
+
+**L11 · An optional climb pays.** Unless otherwise instructed, a mobility
+section that is not the only way on gives something the other way does not
+-- a better start to a fight, a view, a shortcut, a thing to find -- and the
+place makes that plain, so a player learns that the climbs are worth
+taking even when they could walk round (the owner, 2026-11-03). The
+opening's climb up the keep's outside wall opens the fight with the Warden
+toppled ([opening.md](opening.md) §5).
+
+**L12 · Height is reached with the moves everyone has.** Unless otherwise
+instructed, every level of a fight space -- and every height a place wants
+to show off -- is reachable with the moves every class shares: the held
+jump, the wall jump, the ledge catch and climb. A class's own tools are a
+faster or a different way up, never the only one, and a test walks the way
+up with every mover (`tests/opening.rs` is the pattern). Places are built
+tall: the scale and the verticality are the game's (the owner,
+2026-11-03).
+

@@ -137,8 +137,9 @@ reach from the floor for every class; stumbled, its shoulders come down to
 4.0 m, a standing jump for four classes. Fifteen metres was tried first,
 and at 2.7 times the Ridgeback the body is thirty-five metres long; at 1.8
 it filled most of a keep fifty across; 1.5 fits the keep the place had room
-for (§5, as built). The piers stand below its back (6 m) and above it
-(10 m), the rampart above that (12 m): the floor is its, the heights are
+for (§5, as built). The keep's heights go far past it -- piers at 6 and
+10 m, columns at 16 and 22 m, a spiral of ledges to the rampart at 29 m --
+so from the top it is small below you: the floor is its, the heights are
 yours.
 
 ## 5 · The plan: the way to the tower
@@ -179,11 +180,26 @@ point.
   sides, crossed by the causeway: a fall into it costs nothing and you walk
   out. A gorge you could not climb out of, or die in, is the loss intent §3
   rules out (L8).
-- **The keep is twelve metres tall, not sixty**: eight walls of stone six
-  metres thick round a floor forty across, entered at its gate on the floor
-  or from above -- three great steps up the outside of its south wall, each
-  a held jump (3 m; the shortest held jump is 3.9), reach the rampart for
-  the dive. Four piers inside, toward the walls (6 and 10 m).
+- **The keep is twenty-nine metres tall**, not sixty (the owner,
+  2026-11-03: "much higher walls and be more climbable ... without class
+  abilities, and it needs to give the scale and verticality of the game"):
+  eight walls of stone six metres thick round a floor forty across.
+  - **Inside, a spiral**: a ledge four and a half metres deep on every
+    face, each a held jump (3.25 m; the shortest held jump is 3.9) above
+    the one before it round the keep, meeting it at the corner, from the
+    floor to the top -- climbed with the moves every class shares, no
+    class tool (`tests/opening.rs`, every mover). Four piers (6 and 10 m)
+    and two columns (16 and 22 m) are the other perches.
+  - **Outside, the climb** (the owner, 2026-11-03: start the fight from
+    high up only through "a second agility section ... It should teach
+    that the mobility sections offer an extra reward even when optional"):
+    four pillars along the south wall's foot and seven ledges up its outside
+    face and round the corner, each a held jump, to the rampart. Optional:
+    the gate is the other way in.
+  - **The reward**: woken by a blow while a hunter is more than six metres
+    up -- from the rampart, or diving off it -- the Warden goes straight
+    over, and the fight opens with it toppled (`species::warden`,
+    `HIGH`). Walked in through the gate, it simply wakes.
 - **It runs as a hunt**, so a fighter nobody plays is out of the world (no
   second body standing in the cell) and the two of you cannot hurt each
   other. Lose and you start in the cell again.
@@ -209,8 +225,9 @@ L4). In two slices, each checked and handed over on its own
 **The arena.** The keep's floor: round, forty metres across (fifty in the
 plan), walled by stone. Around it, things to get up on: **thick stone
 piers** below the Warden's back and above it, and **high ledges** above its
-back for the ranged classes -- as built, piers at 6 and 10 m and the
-rampart at 12 m.
+back for the ranged classes -- as built, piers at 6 and 10 m, columns at
+16 and 22 m, the spiral's ledges every 3.25 m up the walls, and the
+rampart at 29 m.
 
 **What it does.** It owns the floor. Its moves are aimed at the ground, so
 each has a floor answer (a dodge, a step out) and a better answer up off it:

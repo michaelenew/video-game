@@ -133,6 +133,13 @@ const LEVEL_DATA: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "pub const HIGH: i32 = 600",
+        "Level data, the opening's: how high a hunter must be for the blow that \
+         wakes the Warden to topple it -- above anything on the keep's floor's level \
+         outside it, below the Warden's back. Set by the keep's heights, judged by \
+         `tests/opening.rs`.",
+    ),
+    (
         "pub const ROOM_CM: i32 = 2400",
         "Level data, the halls': how long a tutorial room is along its hall \
          (`sim::tutorial`), which says which room a body is in. A building, judged \

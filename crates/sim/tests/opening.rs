@@ -137,7 +137,7 @@ fn up_the_spiral() -> Vec<(i32, i32, i32)> {
     let mut way = vec![(8000, 0, 200), (9500, -500, 200)];
     for k in 0..8 {
         let face = 225.0 + 45.0 * k as f64;
-        let top = 325 * (k as i32 + 1);
+        let top = 325 * (k + 1);
         way.push(at(face - 15.0, 1800.0, top + 100));
         way.push(at(face + 18.0, 1800.0, top + 100));
     }
