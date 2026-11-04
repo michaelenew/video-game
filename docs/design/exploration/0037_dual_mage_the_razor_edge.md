@@ -1,8 +1,8 @@
 ---
-status: proposal, 2026-11-03; nothing built, nothing played
+status: direction agreed 2026-11-04 ("this is the class"); nothing built, nothing played
 started: 2026-11-03
-supersedes (if taken): the tiers' movement, the blink, Phase, the curse and purge, Binary, the takeoff row, Ascension's wing beats
-keeps: the ball autos and their hop, the Flurry dash, the two bars and the hill, the Abyss and Judgement's look
+supersedes (when built): the tiers' movement, the blink, Phase, the curse and purge, Binary, the takeoff row, Apotheosis
+keeps: the hop, the Flurry dash's run (as the chain ride), the two bars and the hill, the Abyss and Judgement's look
 depends: ../dual-mage.md, ../kits/dual-mage.md, 0016 (the hands), the profiles below
 ---
 
@@ -63,209 +63,141 @@ the dodge-blink, Phase, the Flurry dash), two of them on the same dodge; nothing
 on purpose; up is only "jump again"; and the movement she has arrives with the bars, so at the
 start of a fight she has none.
 
-## The idea: one rule, and her body is what it is aimed with
+## The class: her magic is aimed at her (the owner, 2026-11-04: "this is the class")
 
-**Wherever dark meets light, they annihilate.** One rule, true of everything she makes, the way
-"fire changes what wind does" is true of everything the Elementalist makes. The flash is the
-class.
+The two beings are not her weapons. They are trying to kill her. Everything they throw is
+thrown **at her**; she steps off its line at the last instant, and it carries on into whatever
+is in front of her. She is a melee character because she has to stand near the enemy for the
+misses to land on them.
 
-In physics, when matter meets antimatter both are destroyed and their mass leaves as a burst of
-energy; how big the burst is depends on the *smaller* of the two amounts, because only equal
-parts can cancel. That is already her lower bar.
+It is a matador's pass (the *veronica*: the bull charges, the matador sways aside, the bull's
+own momentum carries it on). Bayonetta's Witch Time and bullet-hell "grazing" are the same
+pleasure in other games: the closer the miss, the better it feels.
 
-**A flash has a core and a rim.** Inside the core it hurts everything, her included. On the rim
-it hurts nothing and **throws** whatever is there, outward. So there is exactly one good place
-for her to be when a flash goes off: the rim. That is the edge the brief asks for, made into a
-distance. The core is about as far as a melee swing, and the rim sits just past it, where her
-autos' sweet spot already is (6 m). Offence wants her close, safety wants her far, and the rim
-is between them.
+What follows from it:
 
-This is the rocket jump (Quake, Team Fortress 2's Soldier: firing your own explosive at your
-feet to be thrown by its blast), with the danger kept and the self-damage moved to a place you
-can see and avoid.
+- **She never stops moving, because standing still is being hit.** Movement is not a tool she
+  reaches for; it is what she is. It is never behind a bar.
+- **Her body aims the spell.** Every strike runs from behind her, through where she stands, to
+  what the crosshair is on. She does not point a weapon; she puts herself between her forces
+  and her enemy.
+- **It reads from the other side.** The strike gathers behind her and comes through her at you.
+- **The animation brief.** Open hands, nothing held. The beings are presences over each
+  shoulder (the wings on her back become them) and every attack starts there, never in her
+  hands. Her motion is a dancer's: backbends under a beam, pirouettes, slides, cartwheels.
 
-**Range never scales** (the rule in [../dual-mage.md](../dual-mage.md)): the core and the rim are
-the same size at every bar. What the bars change is how hard the flash hits.
+### The press is the intent to dodge
 
-## The kit
+Pressing the button is enough to say she means to get out of the way, so **the dodge is part of
+the move**, and the player changes where it goes:
 
-| Input | Tapped | Held |
-| --- | --- | --- |
-| Left click | **Dark ball**, and the hop (as now) | **Dark jet** |
-| Right click | **Light ball**, and the hop (as now) | **Light jet** |
-| Middle click | **Clap** | **Flurry dash** (as now) |
-| `Q` / `E` | **Abyss** / **Judgement**: one-sided spectacle | |
-| Dodge | an ordinary dodge and airdodge | |
+- **By default** a spot dodge (a sway or a lean off the line) or upward. Which, per move, is
+  open; sustained strikes (the storm) are the hard case.
+- **Direction keys** send it that way; **jump** sends it up; **crouch** sends it low.
+- **A dodge timed by hand** (the dodge key, as the strike arrives) may earn a bonus, a graze.
+  Whether a mistimed one costs something is open.
 
-The same meaning on the floor and in the air (0016's first lesson). The takeoff row, Binary,
-the Devour and the Smite are not in v1: the owner's "I already have too much to manage" is the
-reason, and the clap covers what the takeoffs were for.
+### Both clicks at once: annihilation where she stood
 
-### Residue: what the autos leave
+Each strike passes through her, so a dark one and a light one thrown together meet at one
+point: her. **Left and right together, both beings lunge at once, she is gone a frame before
+they collide, and they annihilate where she was standing.**
 
-A ball that lands leaves its force on what it struck: a body, or a wall or floor. **One force at
-a time.** The same force again grows it (up to a few stacks, drawn as a sphere over the head that
-gets bigger, the Reaver's marks); the other force meets it and **it annihilates**. Either order.
-The question is never "dark then light", it is *when* and *where are you standing*.
+- **One rule for the blast**: it hurts and throws everything in it, the same at every distance.
+  It never touches her, as no class's own attack touches itself. No rim, and no self-damage, so
+  no limited pool of mobility on a long journey.
+- **Her movement is the leap out, not the blast**: her biggest and most sudden, up by default
+  or the way she holds. In the air it is her vertical-gap crosser.
+- Point-blank, it lands on whoever was beside her while she is already clear.
+- The chord is the class: the freedom to press both, and what happens when she does.
 
-- Pop a small one early: a small flash, safe.
-- Grow a big one from range, then pop it: a big hit, and you had better be on the rim.
-- Leave residue on a wall or the floor and pop it: a flash with nobody in it, which is a launch
-  pad. That is the "something other than fighting": two balls into the ledge below you and she
-  goes up the cliff on her own blast.
-- Residue near residue on another body: one pop sets off the neighbour, "whatever happens to be
-  nearby".
+### Each move: a strike, and the escape it forces
 
-It fades if nothing is added, so it is something you manage in the moment, not a ledger.
+| Input | What comes at her | Her escape | The shape it gives |
+| --- | --- | --- | --- |
+| Tap left / right | A quick lash from that shoulder | The hop, now with a reason: she steps off its line | **Round**: the strafe, the orbit's step |
+| Left + right | Both beings at once | A spring out of the collision | **Up**: big, sudden, a bomb below her |
+| Hold right (light) | **The execution**: one great lance from behind | A long sudden lunge the way she holds; the beam goes through where she was and on, 16 m | **A burst along** |
+| Hold left (dark) | **The storm hunts her**: for about a second lightning strikes where she was a beat ago and leaps to whatever is near | She has to keep moving, and drags it through them | **A sustained weave** |
+| Tap middle | **The chain**: both forces linked, flung at her | She dodges and it flies through: it **binds** and hurts the first body it meets | (a spot dodge) |
+| Hold middle | The same chain | **She catches its tail** as it passes and is dragged with it, through whoever is on the line, untouchable; a jump at the end keeps the run (the Flurry dash's dash jump) | **Through, and down** when aimed at the floor below |
 
-### The jets: the long holds, made into a stand
+The chain is the Flurry dash's successor and the clearest statement of the class: a thing that
+comes out of her too strong to stop, and the choice is only whether to let it go by or to hold
+on to it.
 
-Hold a click and a **stream** of that force pours from that hand toward the crosshair:
-continuous damage while held, a **fixed visible length** with a hard splash at its end (which
-answers "how far does it reach"), about the auto's reach. Black lightning from the left, a beam
-of sunlight from the right: the cloud's and the disk's looks, brought down to her hands.
+**Budgets, one each, so the order is free:** the hop, one per lash; the spring, less each time
+in one airtime and given back when its blast hits something; the lance, one lunge a hold; the
+storm, its own length; the chain ride, its recovery; the jump, as everyone's.
 
-- **She can move while pouring.** Walk, jump, clap. The hand is busy, the body is not.
-- **It pushes back.** A stream that strong leaves her: aimed at somebody it drifts her gently
-  away (defence wants long); aimed at the floor it holds her up (the hover, her "hang").
-- **Both held, the streams cross** a little ahead of her hands, and where they cross is a
-  continuous flash: the biggest damage she has, with her standing just behind its rim. Hold it
-  and she is pushed back by two streams. Let one go and the crossing is gone.
-- **One jet into the other force's residue** pops it: pour dark onto a lit body.
-- **What limits it is the hill, not a movement budget.** A jet fills its own bar fast, so a
-  one-sided jet runs away and burns her. She can stay up as long as she keeps the forces level,
-  which is the class in one sentence.
+**Four directions, one owner each**: round (the hop), up (the spring), along (the lance, the
+chain), down (the chain at the floor), and the lash's hang holds her in the air as now. Every
+one of them is damage and movement in one act: dodging the lance as it goes through somebody is
+the small win twice over.
 
-### The clap: her signature
+**The long holds keep what people reached for**: hold the button, somebody is hurt, and the
+reach is honest, a line from her back, through her, to a visible end. And the hold is now the
+most dramatic movement in the kit.
 
-**Both hands together, a small flash at arm's length in front of her**, aimed with the look. She
-is on its rim by construction, so it throws her the opposite way, and what is in front of her is
-in its core.
+**The orbit falls out of it.** The spring's bomb wants her point-blank, the lance and the lashes
+want her a strike's length off, the storm wants her going past them, the chain takes her
+through. In, bomb, out, lance, round. Nobody locks on.
 
-- Aimed down: **up**. The vertical-gap crosser, and the double jump with intent.
-- Aimed at a wall: off it.
-- Aimed up from the air: **down**, fast. Her dive.
-- Aimed at somebody: they are hit and she bounces back out to the edge.
+## The bars
 
-One simple thing, and the intent is the aim: the Elementalist's clarity. **Budget:** each clap in
-an airtime throws her less than the one before (the air "gives less each time you ask", the
-roster's rule), back to full on landing, **and a clap that hits a body refunds the step**: the
-damage-plus-movement micro-win, and what makes her mobility *sustained in combat* and only good
-outside it.
+Power only. The two bars and the hill stay as built; the carried bar is how hard a one-sided
+strike hits, the lower bar how hard an annihilation hits (it is limited by the lesser amount, as
+matter and antimatter are), the gap the drift and the burn. Nothing she does to move reads a
+bar.
 
-### The hop and the Flurry dash: kept, given a job each
+**`Q` and `E` are aimed at her too.** The Abyss opens beneath her, Judgement's columns fall on
+her; she leaves, and the spectacle lands where she stood. Movement no longer lives on the bars,
+so "empty" no longer means "slow". The Abyss meeting Judgement is the largest annihilation there
+is.
 
-- **The hop** is the strafe, the step round. It is the only one of her moves that is purely
-  sideways-on-a-held-direction, and it keeps the momentum it gives her rather than stopping her
-  at its end. The first air hop of an airtime rises (as now).
-- **The Flurry dash** is the cut *through*: in, past, out the other side, untouchable, the
-  Champion's third sword hit in the owner's reading. The dash jump that keeps 0.8 of the run
-  stays, because that is what makes it traversal. Its five blows are dark and light in turn, so
-  a body it passes through with residue on it goes off behind her as she leaves: the rim is
-  where she ends up.
+## Ascension: staying ahead of the crest
 
-### Four directions, one owner each
-
-| | Up | Along | Down | Hang | Budget |
-| --- | --- | --- | --- | --- | --- |
-| Clap | aimed down | aimed back | aimed up | | falls off per airtime; a hit refunds |
-| Hop | first air hop rises | **the strafe** | | the auto's own hang | one per auto |
-| Flurry dash | | **the cut through** (dash jump keeps it) | | | its recovery |
-| Jet | | slow drift back | | **the hover** | the hill |
-| A flash she set | **the big launch** | outward | | | residue placed first |
-
-The jump is there as everyone's is. Nothing on this table depends on a bar, and no two rows do
-the same job.
-
-### Where the orbit comes from
-
-Nobody locks on. Each tool simply has a preferred distance: the clap and the jets push her out,
-the Flurry dash takes her in and through, the hop goes round, and the flash's rim is where all of
-them are worth most. A player who fights well spends most of the fight on a ring round the
-target at about the rim, going in through it and being thrown back out. That is an orbit:
-an inward pull and an outward push balanced by going round. The pull is her own offence and the
-push is her own power going off.
-
-### An air string, to show the budgets are separate
-
-Jump · clap down (up 4–5 m) · light ball, hop left (round them; light on them) · light ball
-again (it grows) · dark ball from the rim (it annihilates; she is thrown up and out) · hold the
-dark jet onto them while she falls (hovering, drifting out) · Flurry dash through (untouchable)
-· jump in its last frames (the run kept) · clap down again (less than the first, because it is
-the second) · and the clap hit them, so the third will be full.
-
-Every step draws on something different. The order is free.
-
-## What the bars are for now
-
-The two bars and the hill stay as built: autos and jets fill their own bar, the higher bar
-runs away outside the band, the gap burns her. What changes is what reads them.
-
-| Quantity | Read by |
-| --- | --- |
-| **The carried bar** | How hard a one-sided thing hits: the balls, the jets, the majors |
-| **The lower bar** | How hard a **flash** hits: annihilation yield, the lesser amount, as in physics. It used to gate the tiers |
-| **The gap** | The drift and the burn, as now |
-
-**A flash spends both bars by the same amount.** Annihilation destroys equal parts, so it lowers
-both without changing the gap: the *level* valve. The majors stay the *one-sided* valve. The
-decision is now: pop flashes as you go, staying level and below the top, or hold off and climb
-to Ascension.
-
-**`Q` and `E`** stay one-sided spectacles and keep their look, and **the Abyss meeting Judgement
-is the biggest flash in the game**: the dark sun and the light columns annihilate where they
-overlap. Their "then I'm slow" is gone by itself, because her movement no longer lives on the
-bars. Whether they still spend the *whole* bar is open (below).
-
-## Ascension, rethought
-
-Both bars full means the forces are no longer contained. For the whole fight she has been
-dancing round flashes; at Ascension **the flash dances round her**. A ring of annihilation stands
-at the rim's distance round her body for its length: whatever is on the ring is struck
-continuously, she is safe at its centre. Every ball she throws is both forces at once and goes
-off on contact. The fight inverts and stays the same shape: she wants them exactly a rim away,
-which is where she has wanted them all along. It ends with the bars spent and her movement as it
-always is.
-
-This is one readable rule (a ring, at the distance you have been learning all game), where the
-current version is a list of changes (unlimited wing beats, no dodge, the nova, the refund, a
-graduated stagger).
+Both bars full and the beings stop waiting to be asked. For its length **they strike at her on
+their own**, and she has to keep venting at pace to stay in control: fall behind and the
+unbidden strikes come faster, and those *can* hit her. It is riding the crest of a wave: every
+miss lands beyond her, any two that cross near her annihilate, and the moment she stops
+spending, the wave breaks on her. The only place her own forces ever hurt her, and it is the
+punishment for not keeping up.
 
 ## What goes
 
-- The tiers' movement: the blink, the second jump, the slow fall, the float.
+- Every movement the tiers gave (the blink, the second jump, the slow fall, the float).
 - Phase, the Equinox blink, every teleport.
-- The curse, the purge, the stacks, the ticks and the drain.
-- Binary, the takeoff row (Veil, Equinox, Sanctuary), the Devour and the Smite on `F` and `R`.
-- The cloud and the disk over her head as sources (their looks come down to her hands).
-- Apotheosis as a separate burst (Ascension's ring takes its place).
+- The curse and purge, its stacks, ticks and drain.
+- Binary, the takeoff row (Veil, Equinox, Sanctuary), the Devour and the Smite.
+- The cloud and the disk over her head as sources; their looks become the beings' strikes.
+- Apotheosis as a separate burst.
+- (The 2026-11-03 draft of this document: jets she poured while moving, a clap, residue, and a
+  flash with a hurting core and a throwing rim. The owner: the jets are not big or sudden enough,
+  and a rim that pushes in one part and hurts in another reads wrong.)
 
 ## What it touches in the code, roughly
 
-- **Aiming.** The jet is a skillshot of fixed length (`aim::skillshot_path`). The clap's flash
-  point is a fixed distance along the look from the hand, and its throw is the opposite of that
-  line: either an existing kind or a seventh in `aim.rs`, never a ray worked out beside the move.
-  The flash's throw on whatever is on its rim is a direction away from a point, not an aim.
-- **A new effect**, the flash, with a core and a rim, read by `state::hitbox` like everything
-  else so the overlay draws what the test uses.
-- **Residue** replaces the curse fields on `Player` and `Monster` (same size, one force and a
-  count), and a residue spot on terrain is a small effect with a lifetime, inside `World::shift`.
-- **Self-damage** is new: the class's own flash wounding her. The feel log should record it as a
-  decision, and `feel.rs` can pin that the rim never hurts.
-- All of it knobs in the Oven: the core and rim radii, the throw, the clap's falloff and refund,
-  the jet's push and lift, residue's stacks and fade, the flash's spend.
+- **Aiming.** A strike is the skillshot's target (`aim::skillshot_path`'s point) left from a point
+  behind her on the line through her: the Overhead kind's rule with a different start, so a
+  change to `aim.rs`, never a ray beside the move. Her escape is a direction held (as the hop
+  reads it, `aim::hop_to`) or a default per move.
+- **The annihilation** is one effect: a sphere, read by `state::hitbox` so the overlay draws what
+  the test uses, that excludes its caster.
+- **The chain ride** is the Flurry dash's run (`state::dash_down_the_flurry`, `aim::flurry_dash_to`)
+  with the chain as what she is carried by; the bind is the root that already exists.
+- **Ascension's unbidden strikes** are strikes with no press, aimed at her, on a clock read from
+  how far behind her venting is: all of it in the snapshot.
+- All of it knobs in the Oven.
 
-## Open questions for the owner
+## Open
 
-1. **Self-damage in the core.** Is "your own flash hurts you if you're too close" the right kind
-   of danger, or should the core only deny her (no throw, no refund) without wounding?
-2. **Residue on terrain.** It is what makes the class good outside a fight; it is also a climbing
-   technique somebody will push to its limit. Keep it, or residue on bodies only?
-3. **How much the clap throws.** Enough to cross a full vertical gap alone, or only most of one,
-   so the big crossings need a flash she set up?
-4. **The jets' push.** Gentle drift (she can hold forward against it) or a real shove that
-   decides her distance for her?
-5. **The majors.** Spend the whole bar, half, or only down to the other bar?
-6. **What leaves the kit.** Is cutting Binary, the takeoff row, the Devour and the Smite for v1
-   right, or is one of them load-bearing for you?
-7. **Ascension as the ring.** Does "the flash dances round her" read as the payoff?
+1. **The default escape per move**: spot dodge or up, and what it is for the storm, which keeps
+   coming.
+2. **The timed dodge**: what the graze earns, and whether a mistime costs.
+3. **Something to build and cash.** The curse is gone and nothing replaces it yet. The Reaver's
+   marks are the example of a good one; the class may not need one, since the bars already build.
+4. **The burn outside Ascension**: keep the passive drain of a runaway, or let a runaway also
+   bring an unbidden strike now and then.
+5. **The majors**: whole bar, half, or down to the other bar.
+6. **The bind**: how long, and whether the chain ride drags the bound body with her or past.
