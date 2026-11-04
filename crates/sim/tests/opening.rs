@@ -302,3 +302,142 @@ fn a_fall_off_the_island_stands_you_back_a_little_hurt() {
     );
     assert_eq!(p.health, full - sim::species::warden::FALL_COST);
 }
+
+/// Is a fighter on the island's top (not falling, not stood back yet)?
+fn on_top(p: &sim::state::Player) -> bool {
+    p.pos.y.raw() >= up(-50).raw()
+}
+
+/// **The curtain wall is crossed at its gap and nowhere else** with the
+/// moves every class shares (`arena::warden::CURTAIN`): every mover, from
+/// the yard's west side, runs and jumps straight at the far side -- at the
+/// wall's middle, at each of its ends where they run out over the drop --
+/// and is never on the island's top east of it. Falls off the ends stand
+/// it back on the west side.
+#[test]
+fn the_curtain_wall_is_crossed_only_at_its_gap() {
+    let (west, east, _) = sim::arena::warden::CURTAIN;
+    let mut wrong = Vec::new();
+    // From, and the point straight across.
+    let tries = [
+        ((2400, -2000), (3600, -2000)),
+        ((2400, -500), (3600, -500)),
+        ((2500, 600), (3600, 600)),
+        // At the ends: along the island's edge and off it, round the wall.
+        ((2600, -2600), (3500, -3800)),
+        ((2700, 1700), (3400, 3500)),
+        ((2700, 1700), (3600, 1900)),
+    ];
+    for class in sim::class::MOVERS {
+        for &(from, to) in &tries {
+            let mut w = hunt(class);
+            w.players[0].pos = V3::new(Fx::ratio(from.0, 100), up(0), Fx::ratio(from.1, 100));
+            w.advance([Input::default(); 2]);
+            let goal = at(to.0, to.1);
+            // Run at it, jumping whenever stopped, for twenty seconds.
+            let mut was_east = None;
+            let mut held = 0u32;
+            for _ in 0..1200 {
+                let p = w.players[0];
+                if on_top(&p) && p.pos.x.raw() > Fx::ratio(east, 100).raw() {
+                    was_east = Some(p.pos);
+                    break;
+                }
+                let d = V3::new(goal.0, p.pos.y, goal.1).sub(p.pos);
+                let aim = (sim::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
+                held = if p.grounded && held >= HOLD { 0 } else { held };
+                let jump = if held < HOLD {
+                    held += 1;
+                    Input::SPACE
+                } else {
+                    0
+                };
+                w.advance([Input::aimed(Input::W | jump, aim), Input::default()]);
+            }
+            if let Some(pos) = was_east {
+                wrong.push(format!("{class:?} from {from:?}: over at {pos:?}"));
+            }
+            assert!(w.players[0].pos.x.raw() < Fx::ratio(west, 100).raw() || was_east.is_some());
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "the curtain wall is crossed away from its gap:\n  {}",
+        wrong.join("\n  ")
+    );
+}
+
+/// **The chapel is gone through or round, never over**: every mover runs
+/// and jumps at its walls from outside, north and south, and comes inside
+/// only through a door, never over a wall.
+#[test]
+fn the_chapels_walls_are_not_climbed() {
+    let mut wrong = Vec::new();
+    let within = |p: V3, x0: i32, x1: i32, z0: i32, z1: i32| {
+        let (x, z) = (p.x.raw(), p.z.raw());
+        x > Fx::ratio(x0, 100).raw()
+            && x < Fx::ratio(x1, 100).raw()
+            && z > Fx::ratio(z0, 100).raw()
+            && z < Fx::ratio(z1, 100).raw()
+    };
+    // Between its walls' inner faces; and its two doorways, west and east.
+    let inside = |p: V3| within(p, 4300, 5300, -1500, -300);
+    let door = |p: V3| within(p, 4100, 4400, -1100, -700) || within(p, 5200, 5500, -1300, -900);
+    let tries = [
+        ((4800, -2300), (4800, -900)),
+        ((4800, 500), (4800, -900)),
+        ((5000, 100), (4900, -1000)),
+    ];
+    for class in sim::class::MOVERS {
+        for &(from, to) in &tries {
+            let mut w = hunt(class);
+            w.players[0].pos = V3::new(Fx::ratio(from.0, 100), up(0), Fx::ratio(from.1, 100));
+            w.advance([Input::default(); 2]);
+            let goal = at(to.0, to.1);
+            let (mut held, mut was) = (0u32, w.players[0].pos);
+            for _ in 0..1200 {
+                let p = w.players[0];
+                if inside(p.pos) && !inside(was) && !door(was) {
+                    wrong.push(format!("{class:?} from {from:?}: in at {:?}", p.pos));
+                    break;
+                }
+                was = p.pos;
+                let d = V3::new(goal.0, p.pos.y, goal.1).sub(p.pos);
+                let aim = (sim::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
+                held = if p.grounded && held >= HOLD { 0 } else { held };
+                let jump = if held < HOLD {
+                    held += 1;
+                    Input::SPACE
+                } else {
+                    0
+                };
+                w.advance([Input::aimed(Input::W | jump, aim), Input::default()]);
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "the chapel's walls are climbed:\n  {}",
+        wrong.join("\n  ")
+    );
+}
+
+/// **A fall is not a way through the wall**: off the island's north edge
+/// just west of the curtain wall, where the nearest safe spot is east of
+/// it, a fighter is stood back west of it.
+#[test]
+fn a_fall_beside_the_wall_stands_you_back_on_your_own_side() {
+    let mut w = hunt(Class::Champion);
+    w.advance([Input::default(); 2]);
+    w.players[0].pos = V3::new(Fx::from_int(28), up(-1500), Fx::from_int(28));
+    w.players[0].grounded = false;
+    w.advance([Input::default(); 2]);
+    let (west, _, _) = sim::arena::warden::CURTAIN;
+    let p = w.players[0];
+    assert!(on_top(&p), "not stood back: {:?}", p.pos);
+    assert!(
+        p.pos.x.raw() < Fx::ratio(west, 100).raw(),
+        "stood back past the wall: {:?}",
+        p.pos
+    );
+}

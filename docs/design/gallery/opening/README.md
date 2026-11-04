@@ -1,6 +1,6 @@
 # Gallery — the opening, as built
 
-Headless captures of `--hunt warden` (2026-11-03, the floating island), for
+Headless captures of `--hunt warden` (2026-11-04, the floating island, its walls raised to barriers), for
 [opening.md](../../opening.md) §5-§6: the way from the cell to the Warden's
 keep, the climb up its outside, the spiral inside, and the fight. The first
 blockout, superseded, is in [first-blockout/](first-blockout/README.md).
@@ -20,8 +20,8 @@ software Vulkan driver, 1280 × 760 scaled to 960 wide, the HUD hidden
 | | |
 | --- | --- |
 | ![](00_overview.jpg) **From above** (placed by hand). The floating island: rock masses narrowing beneath, the cell and cut between rock (right), the yard with its curtain wall and chapel, the gap and the causeway, the keep and its climb's pillars rising from the ground below. | ![](01_cell.jpg) **The cell.** The bars torn out, the keep already in sight down the cut. |
-| ![](02_curtain.jpg) **The curtain wall** across the yard: the keep over it, and the only gap off to the north. | ![](03_through_gap.jpg) **Through the gap**, against the island's edge: the drop to the right, the keep framed ahead. |
-| ![](04_chapel.jpg) **The chapel**, roofless: in at one door, out at the other, the keep hidden in between. | ![](05_causeway.jpg) **The causeway** to the keep's island, its gate open, the Warden asleep inside. |
+| ![](02_curtain.jpg) **The curtain wall** across the yard, twelve metres, from the drop to the drop: the only way past it is the gap off to the north. | ![](03_through_gap.jpg) **Through the gap**, against the island's edge: the drop to the right, the keep framed ahead. |
+| ![](04_chapel.jpg) **The chapel**, roofless, nine metres to its walls' tops: in at one door, out at the other, the keep hidden in between -- or round it, never over. | ![](05_causeway.jpg) **The causeway** to the keep's island, its gate open, the Warden asleep inside. |
 | ![](06_climb_foot.jpg) **The foot of the climb**, on the keep's lip: the pillars rising out of the drop. | ![](07_pillars.jpg) **On the pillars**, over the drop: miss one and you are off the island. |
 | ![](08_rampart_dive.jpg) **The rampart**, twenty-nine metres up the keep: the Warden below, the soft place on its neck. Hit it from here and it goes over. | ![](09_spiral.jpg) **The spiral inside**, partway up. |
 | ![](10_fight.jpg) **The fight**: the hunter at its feet, the floor's way. | |

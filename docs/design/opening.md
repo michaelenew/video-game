@@ -184,12 +184,24 @@ point.
 - **Things in the yard that move you and turn your view** (the owner,
   2026-11-03: "walls, buildings that actually make the user take a different
   path and change their view"):
-  - **The curtain wall**, seven metres tall across the yard, whose one gap
-    (six metres) is at its north end against the island's edge: the way
-    bends to the edge, and through the gap the keep stands framed.
-  - **The chapel**, roofless, its west and east doors at different places:
-    go through it and the keep is hidden until you come out of the east
-    door; go round it and you are on the island's southern edge.
+  - **The curtain wall**, twelve metres tall across the yard, whose one
+    gap (six metres) is at its north end against the island's edge: the
+    way bends to the edge, and through the gap the keep stands framed.
+    **It is a barrier** ([level-design.md](level-design.md), L13): taller
+    than a held jump and a ledge's catch, run a dozen metres out past the
+    island's edge at both ends and down its face below where a fall is
+    caught, and a fall is stood back on the side it fell from. The shared
+    moves cross it at its gap and nowhere else; a class's own movement
+    over the top is a skill's way. `tests/opening.rs`
+    (`the_curtain_wall_is_crossed_only_at_its_gap`) runs every mover at
+    its middle and round both ends; at its old seven metres every mover
+    went over.
+  - **The chapel**, roofless, nine metres to its walls' tops, its west and
+    east doors at different places: go through it and the keep is hidden
+    until you come out of the east door; go round it and you are on the
+    island's southern edge. **Never over** with the shared moves
+    (`the_chapels_walls_are_not_climbed`; at its old five metres, every
+    mover came in over a wall).
   - The arch's posts and a fallen statue, from before.
 - **The gap and the causeway**: between the yard's lobes and the keep's
   island the drop shows through, and the causeway bridges it.

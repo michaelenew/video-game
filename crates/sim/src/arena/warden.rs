@@ -16,7 +16,7 @@
 //! | x (m) | What |
 //! | --- | --- |
 //! | -16 to 10 | **The cell** and **the cut**, between rock |
-//! | 10 to 66 | **The yard**, on four lobes of the island: a curtain wall across it whose one gap is to the north, a roofless chapel with its doors at different places, an arch's posts, a fallen statue |
+//! | 10 to 66 | **The yard**, on four lobes of the island: a curtain wall twelve metres tall across it, from the drop to the drop, crossed only at its gap to the north; a roofless chapel nine metres tall with its doors at different places, gone through or round, never over; an arch's posts, a fallen statue |
 //! | 66 to 84 | **The causeway**, over the gap to the keep's island |
 //! | 84 to 136 | **The keep**: eight walls six metres thick and twenty-nine tall round a floor forty across, a gate in the west wall; inside, a spiral of ledges up every face to the top, piers and columns; outside, **the climb**, pillars rising out of the drop and ledges up the south wall, optional, rewarded |
 
@@ -39,6 +39,12 @@ pub const RAMPART: i32 = 2925;
 /// **How far below the island's top a body has fallen off it**, in
 /// centimetres.
 pub const FALLEN: i32 = 1200;
+
+/// **The curtain wall's line**, in centimetres: its west face, its east
+/// face, and its gap's two edges along `z`. Everything else of it is wall,
+/// twelve metres tall, from over the drop to over the drop. A fall is stood
+/// back on the side of it the faller was on.
+pub const CURTAIN: (i32, i32, (i32, i32)) = (2900, 3100, (1000, 1600));
 
 /// **Where a fall off the island stands you**: the nearest of these, on the
 /// island's top -- the cell, the yard either side of the curtain wall, the
@@ -172,19 +178,28 @@ const SOLIDS: [Solid; 58] = [
     Solid::cm([-1600, 3000, 600], [1000, 5000, 1300], Rock),
     Solid::cm([-1600, 3000, -1300], [1000, 5000, -600], Rock),
     Solid::cm([-1700, 3000, -600], [-1400, 5000, 600], Rock),
-    // --- the curtain wall across the yard: its only gap is to the north,
-    // so the way bends, and the gap frames the keep -------------------------
-    Solid::cm([2900, 3000, -2600], [3100, 3700, 1000], Stone),
-    Solid::cm([2900, 3000, 1600], [3100, 3700, 1800], Stone),
-    Solid::cm([2900, 3550, 1000], [3100, 3700, 1600], Stone),
-    // --- the chapel: roofless, its doors west and east at different places;
-    // through it the keep is hidden, round it the yard's edge -------------
-    Solid::cm([4200, 3000, -1600], [5400, 3500, -1500], Stone),
-    Solid::cm([4200, 3000, -300], [5400, 3500, -200], Stone),
-    Solid::cm([4200, 3000, -1600], [4300, 3500, -1100], Stone),
-    Solid::cm([4200, 3000, -700], [4300, 3500, -200], Stone),
-    Solid::cm([5300, 3000, -1600], [5400, 3500, -1300], Stone),
-    Solid::cm([5300, 3000, -900], [5400, 3500, -200], Stone),
+    // --- the curtain wall across the yard (`CURTAIN`): **impassable but at
+    // its gap** to the moves every class shares -- twelve metres tall, past
+    // a held jump and a ledge's catch, and run out over the drop at both
+    // ends, a dozen metres past the edge and down the island's face below
+    // where a fall is caught (`FALLEN`), so there is no way round an end,
+    // and no drifting under it on the way down. Its gap, six metres, is at
+    // the north end, against the island's edge, and frames the keep. A
+    // class's own way over the top -- a stone launch, a dash -- is the other
+    // way, and a skill's to take (L12).
+    Solid::cm([2900, 1500, -4500], [3100, 4200, 1000], Stone),
+    Solid::cm([2900, 1500, 1600], [3100, 4200, 4000], Stone),
+    Solid::cm([2900, 3550, 1000], [3100, 4200, 1600], Stone),
+    // --- the chapel: roofless, nine metres to its walls' tops, **through it
+    // or round it, never over** with the shared moves. Its doors, west and
+    // east, are at different places; through it the keep is hidden, round
+    // it is the island's southern edge.
+    Solid::cm([4200, 3000, -1600], [5400, 3900, -1500], Stone),
+    Solid::cm([4200, 3000, -300], [5400, 3900, -200], Stone),
+    Solid::cm([4200, 3000, -1600], [4300, 3900, -1100], Stone),
+    Solid::cm([4200, 3000, -700], [4300, 3900, -200], Stone),
+    Solid::cm([5300, 3000, -1600], [5400, 3900, -1300], Stone),
+    Solid::cm([5300, 3000, -900], [5400, 3900, -200], Stone),
     // An arch's two posts and its fallen lintel; a plinth and its statue.
     Solid::cm([1800, 3000, -1100], [2000, 3500, -900], Stone),
     Solid::cm([1800, 3000, -500], [2000, 3500, -300], Stone),

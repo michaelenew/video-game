@@ -111,3 +111,20 @@ up with every mover (`tests/opening.rs` is the pattern). Places are built
 tall: the scale and the verticality are the game's (the owner,
 2026-11-03).
 
+**L13 · A thing that blocks a way commits.** Unless otherwise instructed,
+a feature put in the way is one of two things and never in between. **A
+step** is low enough to jump and narrow enough to walk round, and nothing
+says otherwise. **A barrier** declares how it is passed -- a gap, a door, a
+climb -- and *is* impassable by every other means with the moves every
+class shares: taller than a held jump and a ledge's catch (twelve metres
+is clear of both; nine for a wall with no run-up to it), running into
+another barrier or off over the drop at both ends with no way round them,
+and no way under them on a fall. A test runs and jumps every mover at it,
+straight on and round its ends, and finds it held; the same test with the
+barrier lowered must fail, or it proves nothing. A low wall with room
+round both ends is a step that has been dressed as a barrier: it forces
+nothing, and the player who walks round it learns that walls here do not
+mean what they say (the owner, 2026-11-04). A class's own movement tool
+over a barrier is allowed, and is a skill's reward (L12); say so where the
+barrier is written down.
+

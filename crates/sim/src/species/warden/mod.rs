@@ -177,7 +177,17 @@ fn stand_back(w: &mut World) {
             let dz = Fx::ratio(s.1, 100).sub(p.pos.z).abs();
             dx.add(dz).raw()
         };
-        let Some(&(x, z)) = SAFE.iter().min_by_key(|s| near(s)) else {
+        // On the side of the curtain wall the fall was on: it runs down
+        // the island's face, so nobody falls past it, and a fall is not a
+        // way through it (`arena::warden::CURTAIN`).
+        let (west, _, _) = crate::arena::warden::CURTAIN;
+        let west_of = |x: Fx| x.raw() < Fx::ratio(west, 100).raw();
+        let side = west_of(p.pos.x);
+        let Some(&(x, z)) = SAFE
+            .iter()
+            .filter(|s| west_of(Fx::ratio(s.0, 100)) == side)
+            .min_by_key(|s| near(s))
+        else {
             continue;
         };
         let (wins, class) = (p.rounds_won, p.class);
