@@ -1,5 +1,5 @@
 ---
-status: direction agreed 2026-11-04 ("this is definitely the right vein. Build it like you've described"); slice 1 being built, nothing played
+status: direction agreed 2026-11-04 ("this is definitely the right vein. Build it like you've described"); slice 1 built, unplayed
 started: 2026-11-03
 supersedes (when built): the Thorn lash, the Bramble, the vines, Thornfall, the Reap and the Harvest as bound, the Stake, the Upheaval, the teleport to a stain
 keeps: grey and its fade, every cost being a stain, her ground, the swim, hearts and thralls (for now), Coagulate on `Q`, the Sweep and its string, the spike's telegraph
@@ -163,7 +163,7 @@ the plant.
 
 ## Slices
 
-1. **The loop, end to end** (being built): the cast with the leash, the wrench and drag home,
+1. **The loop, end to end** (built 2026-11-04, unplayed; [kits/blood-mage.md](../kits/blood-mage.md) §"The world bleeds"): the cast with the leash, the wrench and drag home,
    and the zip; the Sweep wounding the floor; the Red Hand's Rend and Seize; the spike only from
    pools, standing as a plant that lashes, launches her, and is reaped by the scythe; the
    bindings above. Tests for each rule; the frametable; the movement search re-run for her.

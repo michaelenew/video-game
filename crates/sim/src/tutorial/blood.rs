@@ -76,9 +76,7 @@ fn cast(s: &Seen) -> bool {
     s.appeared(EffectKind::ScytheHead)
 }
 fn zip(s: &Seen) -> bool {
-    let zipping = |w: &crate::World| {
-        matches!(w.players[s.me].mechanic, crate::class::Mechanic::Blood(g) if g.zipping)
-    };
+    let zipping = |w: &crate::World| matches!(w.players[s.me].mechanic, crate::class::Mechanic::Blood(g) if g.zipping);
     zipping(s.after) && !zipping(s.before)
 }
 fn air_sweep(s: &Seen) -> bool {

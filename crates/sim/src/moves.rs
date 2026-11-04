@@ -1390,6 +1390,15 @@ pub mod blood {
         matches!(kind, BLACK_SPIKE)
     }
 
+    /// **Is this thrown by a button?** Everything but the four rows that are
+    /// what her plants and her grab do: the reaped thorns, a plant's lash and
+    /// Seize's two endings. Those are never begun by a press, so they are
+    /// never paid for and never locked out, and their frames are only the
+    /// lengths of the clips drawn for the rows before them (`view::clips`).
+    pub const fn thrown(kind: u8) -> bool {
+        !matches!(kind, THORNS | LASH | SLAM | IMPALE)
+    }
+
     /// Is this a spike, which needs a pool to raise -- and with none comes
     /// out as nothing at all?
     pub const fn raises_a_pool(kind: u8) -> bool {
@@ -1822,8 +1831,8 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             9 => "Q",
             10 => "Space+RMB",
             11 => "a plant",
-            12 => "Seize, no plant",
-            _ => "Seize, by a plant",
+            12 => "Seize, floor",
+            _ => "Seize, plant",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
@@ -2013,11 +2022,9 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // spike is its disc where the pool was, and the Cast is its head.
         Class::BloodMage => match kind {
             blood::BLACK_SPIKE => Shape::Cylinder,
-            blood::SWEEP
-            | blood::RISING_REAP
-            | blood::REND
-            | blood::RISING_REND
-            | blood::SEIZE => Shape::Swing(Plane::Flat),
+            blood::SWEEP | blood::RISING_REAP | blood::REND | blood::RISING_REND | blood::SEIZE => {
+                Shape::Swing(Plane::Flat)
+            }
             _ => Shape::None,
         },
         // The Shield step puts the shield in the world as a wall and nothing
@@ -2211,6 +2218,12 @@ pub const fn puts_out(class: Class, kind: u8) -> Option<crate::effects::EffectKi
         // The full charges' second halves: the crescent leaving the blade,
         // the ground breaking round the hammer, the cuts left hanging along
         // the line he ran, the javelin. See `state::World::champion_comes_out`.
+        // The Rising spike raises the pool at her feet (2026-11-04), which no
+        // row column places. See `state::World::blood_comes_out`.
+        Class::BloodMage => match kind {
+            blood::RISING_SPIKE => Some(E::BlackSpike),
+            _ => None,
+        },
         Class::Champion => match kind {
             champion::CRESCENT => Some(E::Crescent),
             champion::SHOCKWAVE | champion::METEOR => Some(E::Shockwave),

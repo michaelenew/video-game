@@ -267,7 +267,17 @@ fn main() {
                 // confidently wrong about an ability that tethers people.
                 let leaves = sim::effects::EffectKind::from_code(m.effect).is_some()
                     || moves::puts_out(class, slot as u8).is_some();
-                let base = if sim::gust::Gale::thrown_by(class, slot as u8).is_some() {
+                // The Blood mage's four rows no button throws (2026-11-04):
+                // the blow a plant's lash, its reaped thorns and Seize's two
+                // endings strike with, read by the world, not thrown.
+                let unthrown =
+                    class == sim::class::Class::BloodMage && !moves::blood::thrown(slot as u8);
+                let base = if unthrown {
+                    format!(
+                        "no button: the blow one of her things strikes with, {} damage",
+                        m.damage
+                    )
+                } else if sim::gust::Gale::thrown_by(class, slot as u8).is_some() {
                     format!("throws something; the thing it threw hits{ignored}{wound}")
                 } else if leaves || m.shape.strikes() {
                     format!("places something; the thing it placed hits{ignored}{wound}")

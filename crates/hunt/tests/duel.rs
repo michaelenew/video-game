@@ -288,7 +288,7 @@ fn the_levels_climb() {
 
 /// **It knows what hurts.** The Elementalist's two pushes go straight through
 /// a body (2026-10-02), so measured on somebody they take nothing, and the
-/// pillar takes plenty. Thrown things -- the Shuriken, the Thorn lash, which
+/// pillar takes plenty. Thrown things -- the Shuriken, which
 /// have no damage of their own in the move table -- are measured at what the
 /// thing they throw does.
 #[test]
@@ -309,7 +309,7 @@ fn it_knows_what_hurts() {
     let blood = Kit::measure(Class::BloodMage);
     let lash = blood
         .iter()
-        .find(|t| t.kind == sim::moves::blood::THORN_LASH)
+        .find(|t| t.kind == sim::moves::blood::REND)
         .unwrap();
     assert!(lash.hurt > 0, "{blood:?}");
 }

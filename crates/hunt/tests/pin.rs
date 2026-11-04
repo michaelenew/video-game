@@ -179,7 +179,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Before re-pinning, every hunt was compared frame by frame against the
     // code before the change -- both fighters, the creature, the phase and
     // the effects -- and was identical (exploration 0029).
-    (Class::BloodMage, 83, 0x85be670e20ff7ade),
+    // Moved 2026-11-04, deliberately: the world bleeds (exploration 0038)
+    // -- the class layer casts the scythe's head from range and zips in on
+    // it, rends and sweeps up close, and raises a pool only where one is.
+    (Class::BloodMage, 83, 0x495c065d2da152d2),
 ];
 
 #[test]

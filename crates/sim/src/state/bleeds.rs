@@ -559,7 +559,7 @@ impl World {
     /// `tuning::zip_keeps` of the speed, and the jump banked near the end
     /// (`bank_the_zip_jump`) thrown. A zip a hit broke sends its head home.
     pub(super) fn tend_the_zips(&mut self, seen: &[Player; MAX_PLAYERS]) {
-        for i in 0..MAX_PLAYERS {
+        for (i, was) in seen.iter().enumerate() {
             let Some(g) = garden_of(&self.players[i]) else {
                 continue;
             };
@@ -601,7 +601,6 @@ impl World {
                 continue;
             }
             // The haul is over: arrived, or broken.
-            let was = seen[i];
             let arrived =
                 was.haul > 0 && p.pos.sub(was.haul_to).len().raw() <= t::body_radius().raw();
             tend(&mut self.players[i], |g| {
@@ -612,14 +611,13 @@ impl World {
                 let run = was.haul_to.sub(was.pos).normalized();
                 let q = &mut self.players[i];
                 q.vel = run.scale(was.haul_speed.mul(t::zip_keeps()));
-                if g.zip_jump || garden_of(&was).is_some_and(|g| g.zip_jump) {
+                if g.zip_jump || garden_of(was).is_some_and(|g| g.zip_jump) {
                     let jump = t::jump_speed().mul(q.class.mobility().jump);
                     q.vel.y = q.vel.y.max(Fx::ZERO).add(jump);
                     q.jump_hold = t::jump_hold_frames();
                 }
                 q.grounded = false;
-                if matches!(q.action, Action::Recovery { kind, .. } if kind == moves::blood::CAST)
-                {
+                if matches!(q.action, Action::Recovery { kind, .. } if kind == moves::blood::CAST) {
                     q.action = Action::Free;
                 }
                 self.effects[head] = None;
@@ -794,7 +792,11 @@ impl World {
             reach,
         );
         let half = Fx::ratio(1, 2);
-        let mid = V3::new(stone.at.x, stone.at.y.add(stone.height().mul(half)), stone.at.z);
+        let mid = V3::new(
+            stone.at.x,
+            stone.at.y.add(stone.height().mul(half)),
+            stone.at.z,
+        );
         self.gore_each(&mut touch, 0, mid, reach, Fx::ONE);
         self.gore_critters(&mut touch, mid, reach, Fx::ONE);
     }
@@ -863,7 +865,13 @@ impl World {
                 },
             );
             if dealt > 0 {
-                self.spill_under(owner as u8, Class::BloodMage, moves::blood::THORNS, &q, dealt);
+                self.spill_under(
+                    owner as u8,
+                    Class::BloodMage,
+                    moves::blood::THORNS,
+                    &q,
+                    dealt,
+                );
             }
         }
         // The creature and the critters along the cone's middle.
@@ -879,10 +887,11 @@ impl World {
         thorns.life = t::spell_flash();
         let share = Fx::ratio(damage, m.damage.max(1));
         let half = Fx::ratio(1, 2);
-        let mid = stone
-            .at
-            .add(dir.scale(reach.mul(half)))
-            .add(V3::new(Fx::ZERO, t::body_height().mul(half), Fx::ZERO));
+        let mid = stone.at.add(dir.scale(reach.mul(half))).add(V3::new(
+            Fx::ZERO,
+            t::body_height().mul(half),
+            Fx::ZERO,
+        ));
         self.gore_each(&mut thorns, 0, mid, reach.mul(half), share);
         self.gore_critters(&mut thorns, mid, reach.mul(half), share);
         thorns.forget_hits();
@@ -930,7 +939,12 @@ impl World {
     /// to the ending's row: the impaling worth its row and the blood the
     /// plant holds, and a launch; the slam worth its row, driven down from
     /// the air (`tuning::seize_drive`).
-    pub(super) fn seize_how(&self, attacker: usize, defender: usize, hit: &mut Hit) -> Option<Seized> {
+    pub(super) fn seize_how(
+        &self,
+        attacker: usize,
+        defender: usize,
+        hit: &mut Hit,
+    ) -> Option<Seized> {
         let p = self.players[attacker];
         if p.class != Class::BloodMage
             || p.action.attack_kind() != Some(moves::blood::SEIZE)
@@ -974,7 +988,13 @@ impl World {
     /// **The Seize lands**: impaled, they are put on the plant's top and it
     /// drinks what the blow dealt; slammed, their blood lands in a ring round
     /// them rather than under them.
-    pub(super) fn seize_lands(&mut self, attacker: usize, defender: usize, how: Seized, dealt: i32) {
+    pub(super) fn seize_lands(
+        &mut self,
+        attacker: usize,
+        defender: usize,
+        how: Seized,
+        dealt: i32,
+    ) {
         match how {
             Seized::Impaled(slot) => {
                 let Some(g) = garden_of(&self.players[attacker]) else {

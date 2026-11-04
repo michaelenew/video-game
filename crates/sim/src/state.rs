@@ -7583,7 +7583,9 @@ fn step_player(
                     spend_the_rise(p, kind);
                     begin_champion(p, kind);
                     match (begin_move(p, who, kind, input, scene, true), rise) {
-                        (Action::Startup { kind, .. }, Some(left)) => Action::Startup { kind, left },
+                        (Action::Startup { kind, .. }, Some(left)) => {
+                            Action::Startup { kind, left }
+                        }
                         (begun, _) => begun,
                     }
                 }
@@ -12039,7 +12041,8 @@ fn string_the_sweep(p: &mut Player, input: Input, pressed_hand: bool) -> bool {
     p.right_held = input.has(click);
     let place = p.string & !STRINGING;
     if let Action::Recovery { kind, .. } = p.action
-        && ((kind == moves::blood::SWEEP && pressed) || (kind == moves::blood::REND && pressed_hand))
+        && ((kind == moves::blood::SWEEP && pressed)
+            || (kind == moves::blood::REND && pressed_hand))
         && place < 2
     {
         p.string = (place + 1) | STRINGING;

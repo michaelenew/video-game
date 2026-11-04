@@ -1,12 +1,13 @@
 ---
-status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18), the spike as a finisher (2026-10-19); played once
+status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18), the spike as a finisher (2026-10-19), played once; the world bleeds, slice 1 (2026-11-04), unplayed
 decided: 2026-09-09
 revised: 2026-09-23
 revised: 2026-10-12
 revised: 2026-10-13
 revised: 2026-10-18
 revised: 2026-10-19
-sources: ../exploration/0021_blood_mage_territory.md, ../exploration/0016_blood_mage_thralls_and_the_well.md, ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
+revised: 2026-11-04
+sources: ../exploration/0038_blood_mage_the_world_bleeds.md, ../exploration/0021_blood_mage_territory.md, ../exploration/0016_blood_mage_thralls_and_the_well.md, ../exploration/0015_blood_mage_blaster.md, ../blood-mage.md, ../plans/blood-mage-v1.md, docs/archive/combat-design/blood-mage-skills.md
 ---
 
 # Blood mage — kit
@@ -56,6 +57,125 @@ she has left herself, and a floor that is hers.
 > eruption and every eruption drank. Played without the spike she was an area-control mage --
 > bleeds, Coagulate, hearts -- and that is the class. §"The spike as a finisher" below wins
 > where it disagrees with §"Territory".
+
+> **The world bleeds, 2026-11-04 — slice 1 built, unplayed.** The owner: the left and right
+> clicks felt unimpactful, the best strategy was still to spam spikes at their feet, and the
+> aerials did not make sense. §"The world bleeds" below is what is in the game now; **where
+> anything after it disagrees, it wins.** The direction is
+> [../exploration/0038_blood_mage_the_world_bleeds.md](../exploration/0038_blood_mage_the_world_bleeds.md).
+
+## The world bleeds — slice 1, built 2026-11-04
+
+**Unplayed.** Whatever she cuts bleeds -- a fighter, a creature, the floor -- and where blood
+falls something grows: the scythe sows, the spike grows a plant out of a pool, the scythe
+reaps it. The code is `sim::state::bleeds` (a child of `state`), the plants
+`class::Garden`; the tests one a rule, `tests/world_bleeds.rs`.
+
+| | Left: the Red Hand | Middle: the spike | Right: the scythe |
+| --- | --- | --- | --- |
+| **Tapped** | **Rend**, strung to three | **Black spike**, out of a pool only | **Sweep**, strung to three; on the floor it cuts the floor |
+| **Held** (past `Hold, a finisher after`, 12 f) | **Seize** | -- | **Cast**; pressed again while it holds, **the zip** |
+| **In the air** | the same | the same | the same |
+| **Space + click**, floor or once in the air | **Rising rend** | **Rising spike** | **Rising reap** |
+
+| Key | Move |
+| --- | --- |
+| `Q` | **Coagulate**, unchanged |
+| `E` | **Heart**, unchanged |
+| `shift` | on her ground **the swim**; otherwise an ordinary dodge. **The teleport to a stain is cut** |
+
+**Cut from the bindings:** the Thorn lash, the Bramble, the Black vines, Thornfall, the Reap,
+the Harvest, the spike's tiers and the Crimson cascade (a spike that raises one pool has no
+tiers to hold through), the Stake, the Upheaval, the teleport. Their effect kinds stay in the
+table (the Plague, the Vines, the Cascade -- the last is the picture of the reaped thorns) with
+nothing that makes them. **The rows were retuned, not renumbered**: the Reap's row is the Cast,
+the Thorn lash's Rend, the Bramble's Seize, Thornfall's the Rising rend, the Upheaval's the
+Rising spike, the Stake's the reaped thorns, the vines' the plant's lash, the cascade's and the
+Harvest's Seize's two endings.
+
+### The Cast and the zip
+
+- **The head flies the crosshair's line** (`aim::skillshot_path`) from her hand at `Cast, the
+  head flies at` (40 m/s) to the row's reach (16 m), headed for the first solid thing on it
+  (`aim::first_along`, the world and its stones). With the crosshair on the floor -- a
+  skillshot's floor point, raised to a body's middle -- it goes into the floor there.
+- **It embeds in the first thing it meets.** A **fighter**: the row's 28, today's bleed
+  (`Bleed lasts` 240 f, 25 a tick), slowed to `Cast, slows a fighter it holds to` (×0.6), and
+  **leashed** -- the chain is the flat distance at the bite, never under `Cast, the leash is at
+  least` (3 m), and neither body may get further from the other than that or than it already
+  was, each held against where the other stood at the top of the frame, so nobody is dragged.
+  Guarded, it glances off and comes home. A **creature**: the cut and its bleed, held where it
+  bit. **The world** (a wall, the floor, a stone, a critter): **the world bleeds**, `Cast, a bite
+  in the world bleeds` (25) on the floor under the bite.
+- **Left alone it wrenches free** after `Cast, holds for` (45 f): a fighter is staggered for
+  `Cast, wrenched free, staggers for` (12 f) and shoved toward her at `Cast, wrenched free, shoves
+  toward her at` (6 m/s). Then the head **drags home** along the floor at `Cast, drags home at`
+  (20 m/s), **reaping everything on its line**: her stains are drunk (the scythe's rule, never
+  past her grey), her plants burst.
+- **The zip** (right click pressed again while it holds, floor or air): she is hauled to the
+  head at `Zip, hauls her at` (30 m/s) -- a body short of a fighter or a creature it is in, which
+  the haul follows -- in the Cast's recovery. On arrival she keeps `Zip, keeps of its speed`
+  (×0.75), and a jump pressed within `Zip, a jump this near the end fires on arrival` (6 f) of
+  it is thrown there. A hit breaks it, and the head comes home.
+- Cost: the Sweep's 1% on the press and the Cast's 2% when the hold opens, a stain as every cost.
+- **The bite is 28, not 0038's ~40**: the Cast is slot nought, which the feel properties read as
+  the class's poke, and her committed move (the spike, 60) has to be worth more than twice it
+  (`feel.rs`, *committed moves are more punishable than pokes*). The bleed it opens is 200 more.
+
+### The Red Hand
+
+- **Rend**: startup 5, active 3, recovery 10, 25, 1.6 m, strung to three by a press inside its
+  recovery, the third `Rend, the third of a string hits` (×1.5). 1%. Every hit spills.
+- **Seize**: startup 10, 1.8 m, unblockable. Caught, with a plant of hers within `Seize, throws
+  onto a plant within` (5 m) of them: **impaled** -- put on its top, the impaling row's 50 and
+  the blood the plant holds, launched (12), and the plant drinks what it dealt. With none:
+  **slammed** -- the slam row's 40, and their blood lands in a ring `Seize, slammed, bleeds a
+  ring this wide` (1.5 m) round them, four pools; in the air, driven down at `Seize, in the air
+  drives them down at` (18 m/s). 2%.
+- **Rising rend**: the claw jumping, self-lift 10, launch 7.
+- **Not done**: a Seize on a creature only strikes its part with the row's nought; she does not
+  ride it.
+
+### The spike, and the plant it leaves
+
+- **It raises only a pool of hers** under the crosshair, the pool's disc touching the spike's
+  (2.2 m): **on bare ground the press does nothing and costs nothing**. The Rising spike raises
+  the pool at her own feet, or nothing.
+- **Small grows fast, big grows slow**: the startup is the pool's rise, `Black spike, a small
+  pool rises in` (8 f) up to `a small pool holds up to` (30), `a fighter's pool rises in` (16 f)
+  at `Pool, full-sized at volume` (110), `a big pool rises in` (20 f) from `a big pool holds at
+  least` (250), on straight lines between.
+- **It erupts as before** -- worth its pool, setting off the stains its edge reaches, drinking
+  the pool -- but the row is 60 (was 100); the Rising spike's 55. **It launches whoever is over it, her too**: her feet
+  over the pool, she is put on the plant's top and thrown up at `Black spike, launches her at`
+  (14 m/s). The Sweep into the floor, then the spike, is her way up.
+- **It stands as a plant** (`class::Garden`, three at once, the oldest making way) for `Plant,
+  stands for` (120 f): a structure `Plant, size (x a stone)` (×0.6) wide and tall, in the stones'
+  field in her slots -- solid, a foothold, aimed through -- but **never written back from it**,
+  so nothing kicks, lights, shoves or breaks one but her scythe. It holds what the spike cost
+  her. Every `Plant, lashes every` (30 f) it **lashes** each enemy within `Plant, lashes within`
+  (2 m) of its edge: the lash row (12, hitstun 8) and a slow to `Plant, a lash slows to` (×0.7);
+  the creature and the critters too.
+- **Reap**: a Sweep or a Rising reap whose volume passes through a plant, or the head dragged
+  home through one, breaks it: its thorns fly `Reaped thorns, fly` (8 m) in a cone of `Reaped
+  thorns, cone half-width (cos)` (0.7) -- out from her through the plant for the scythe, the way
+  the head was going for the drag -- each enemy struck once for the thorns' row (30) **and all
+  the blood the plant held**; what she paid into it she drinks back, never past her grey.
+
+### The floor bleeds
+
+- **A grounded Sweep cuts the floor** on its first active frame: `Sweep, cuts the floor for` (25)
+  at the middle of its arc. **The Rising reap** cuts the floor she leaves: `Rising reap, cuts the
+  floor for` (25). Self-lift 11, launch 6, a real swing now (2.6 m).
+- **The world's blood is hers to raise, not to drink** (`Effect::is_world_blood`): a spike
+  raises it like any pool, nothing she walks or cuts through drinks it, and a body's blood
+  spilled into it makes it a body's. The heal stays a refund.
+
+### What it is not yet
+
+Animation is unchanged: the Cast, Rend, Seize and the zip play her old clips; the head is a ball
+of blood and its chain a row of links (`game::effect_piece`), a plant the stone's column in a
+dark red. The garden's stages, the heart-tree and Bloom are slice 2; `Q` and `E` slice 3.
 
 ## The spike as a finisher — built 2026-10-19
 

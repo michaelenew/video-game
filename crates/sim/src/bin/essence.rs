@@ -374,7 +374,11 @@ fn bleed_table() {
         // landing and would fold the first ticks into the bolt.
         let pitch = pitch_at(&w, b::CAST, w.players[1].pos);
         looking(&mut w, t::hold_from() as u32 + 2, Input::RIGHT, pitch, 0);
-        let flight = m.reach.div(t::cast_speed().max(Fx::ONE)).div(sim::DT).to_int() as u32;
+        let flight = m
+            .reach
+            .div(t::cast_speed().max(Fx::ONE))
+            .div(sim::DT)
+            .to_int() as u32;
         for _ in 0..m.startup as u32 + flight + 2 {
             looking(&mut w, 1, 0, pitch, 0);
             count_ticks(w.players[1].health, &mut ticks);

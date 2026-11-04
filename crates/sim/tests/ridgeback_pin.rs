@@ -219,7 +219,11 @@ const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x306e4c7fc94aa235),
     (Class::Bulwark, 0x0514478fd7c7f116),
     (Class::ShadowReaver, 0xc0d87b3b2be42fd0),
-    (Class::BloodMage, 0x5c0f485e225a9601),
+    // The Blood mage's alone again 2026-11-04, deliberately: her kit is the
+    // world bleeds (exploration 0038) -- the same random presses throw Rend,
+    // Seize, the Cast and the zip, and the spike raises nothing on bare
+    // ground.
+    (Class::BloodMage, 0xf0c6e7449bd1df67),
     (Class::DualMage, 0x554de5cef74c00c9),
     (Class::Elementalist, 0xaa3bf62007f5de6b),
 ];

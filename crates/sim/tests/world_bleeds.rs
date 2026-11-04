@@ -190,8 +190,7 @@ fn the_wrench_shoves_them_toward_her_and_the_head_reaps_her_stains_home() {
     assert!(
         pools(&w)
             .iter()
-            .all(|p| flat_apart(p.pos, at(-2.0, 0.0, 8.0)) > 1.0
-                || p.banked < 100),
+            .all(|p| flat_apart(p.pos, at(-2.0, 0.0, 8.0)) > 1.0 || p.banked < 100),
         "the stain on its line was drunk"
     );
     assert!(w.players[0].health > health, "and gave her back her grey");
@@ -288,10 +287,7 @@ fn her_own_spike_launches_her_and_stands_as_a_plant() {
     );
     assert!(as_f(highest) > 2.0, "high: {}", as_f(highest));
     assert_eq!(plants(&w), 1, "and it stands");
-    assert!(
-        pools(&w).is_empty(),
-        "the pool it rose out of is spent"
-    );
+    assert!(pools(&w).is_empty(), "the pool it rose out of is spent");
 }
 
 #[test]
@@ -412,10 +408,19 @@ fn the_sweep_bleeds_the_floor_and_the_spike_raises_it() {
     run(&mut w, 30, 0, 0);
     // Two: the floor the Sweep cut, and what the Sweep cost her, a stain at
     // the blade's end as every cost is.
-    let cut: Vec<Effect> = pools(&w).into_iter().filter(|p| p.is_world_blood()).collect();
+    let cut: Vec<Effect> = pools(&w)
+        .into_iter()
+        .filter(|p| p.is_world_blood())
+        .collect();
     assert_eq!(cut.len(), 1, "the floor the Sweep cut bled");
-    assert!(cut[0].banked > t::sweep_bleeds() / 2, "what it cut, less a little drain");
-    assert!(flat_apart(cut[0].pos, w.players[0].pos) > 0.5, "in front of her");
+    assert!(
+        cut[0].banked > t::sweep_bleeds() / 2,
+        "what it cut, less a little drain"
+    );
+    assert!(
+        flat_apart(cut[0].pos, w.players[0].pos) > 0.5,
+        "in front of her"
+    );
     // And it is a pool to raise.
     let mut raised = false;
     for pitch in [-2000, -3000, -4000, -5000, -6000, -1500] {
@@ -429,4 +434,3 @@ fn the_sweep_bleeds_the_floor_and_the_spike_raises_it() {
     }
     assert!(raised, "the spike raised the floor's blood");
 }
-

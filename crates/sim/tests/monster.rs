@@ -945,19 +945,32 @@ fn beast_health(w: &World) -> i32 {
 }
 
 #[test]
-fn a_spike_on_bare_floor_hits_the_creature_and_erupts() {
+fn a_spike_out_of_a_pool_hits_the_creature_and_erupts() {
     // Effects used to be applied to fighters and nobody else, so a Blood mage
     // hunting alone put a spike in the ground and it did nothing. The spike
     // is one event now rather than a field, and the event has to reach the
     // creature the same way it reaches a fighter: damage, and since
-    // 2026-10-19 no stain but an eruption out of the blow.
-    // A tap of the middle click: the spike's first tier, aimed down at the
-    // floor under the animal -- it reaches twenty metres since the blaster, so
-    // a level crosshair puts it well past.
+    // 2026-10-19 no stain of its own. Since 2026-11-04 it rises only out of a
+    // pool of hers: one under the animal, the crosshair on it.
+    let stained = || {
+        let mut w = parked();
+        let beast = w.monster().copied().expect("a hunt has a creature");
+        let mut stain = sim::effects::Effect::pool(
+            0,
+            Class::BloodMage,
+            sim::moves::blood::CAST,
+            V3::new(beast.pos.x, Fx::ZERO, beast.pos.z),
+            100,
+        );
+        stain.age = sim::tuning::stain_settles() + 1;
+        let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
+        w.effects[slot] = Some(stain);
+        w
+    };
     let full = beast_health(&parked());
-    let mut w = parked();
-    for pitch in [-2000, -3000, -4000, -5000, -6000] {
-        w = parked();
+    let mut w = stained();
+    for pitch in [-2000, -3000, -4000, -5000, -6000, -1000, 0] {
+        w = stained();
         for _ in 0..2 {
             w.advance([Input::looking_at(Input::MIDDLE, 0, pitch), Input::default()]);
         }
@@ -973,8 +986,6 @@ fn a_spike_on_bare_floor_hits_the_creature_and_erupts() {
         beast_health(&w) < full,
         "the spike never touched the creature"
     );
-    let pools = w.effects.iter().flatten().filter(|e| e.is_a_pool()).count();
-    assert_eq!(pools, 0, "the hit left {pools} stains");
 }
 
 #[test]
@@ -1088,25 +1099,17 @@ fn a_hazard_never_touches_a_hunting_partner() {
     // there rather than a flag -- the same rule direct hits already follow. A
     // drain field was the one thing in the game that could kill a team-mate.
     let mut w = parked();
-    // The Hemoplague: her left click held past the bolt's wind-up, and let
-    // go a little later.
-    let start = sim::moves::get(Class::BloodMage, sim::moves::blood::THORN_LASH).startup;
-    for _ in 0..start + 20 {
-        w.advance([Input::new(Input::LEFT), Input::default()]);
+    // A plant of hers, lashing what stands beside it (2026-11-04; the
+    // Hemoplague's field before it), and the partner held beside it.
+    let spot = w.players[1].pos.add(V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO));
+    if let sim::class::Mechanic::Blood(g) = &mut w.players[0].mechanic {
+        g.plants[0] = Some(sim::class::Structure::planted(spot));
     }
-    // Stand the partner in it, wherever it landed, and hold them there.
+    let beside = w.players[1].pos;
     let mut stood_in_it = 0;
-    for _ in 0..200 {
-        if let Some(field) = w
-            .effects
-            .iter()
-            .flatten()
-            .find(|e| e.kind == sim::effects::EffectKind::Plague)
-            .copied()
-        {
-            w.players[1].pos = V3::new(field.pos.x, w.players[1].pos.y, field.pos.z);
-            stood_in_it += 1;
-        }
+    for _ in 0..100 {
+        w.players[1].pos = beside;
+        stood_in_it += 1;
         w.advance([Input::default(), Input::default()]);
     }
     assert!(stood_in_it > 60, "fixture: nobody stood in anything");
@@ -1469,13 +1472,8 @@ fn a_spreading_eruption_hits_the_creature_once() {
     let mut w = parked();
     let beast = w.monster().copied().expect("a hunt has a creature");
     let under = V3::new(beast.pos.x, Fx::ZERO, beast.pos.z);
-    let stain = sim::effects::Effect::pool(
-        0,
-        Class::BloodMage,
-        sim::moves::blood::THORN_LASH,
-        under,
-        100,
-    );
+    let stain =
+        sim::effects::Effect::pool(0, Class::BloodMage, sim::moves::blood::CAST, under, 100);
     let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
     w.effects[slot] = Some(stain);
     let before = beast_health(&w);

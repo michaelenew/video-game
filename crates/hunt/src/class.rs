@@ -923,17 +923,14 @@ impl Hands {
         }
         let cut = moves::get(me.class, moves::blood::CAST);
         if red >= RED_CUT + 10
-            && safe > (cut.startup + cut.active + cut.recovery) as i32 + sim::tuning::hold_from() as i32
+            && safe
+                > (cut.startup + cut.active + cut.recovery) as i32 + sim::tuning::hold_from() as i32
             && far.raw() < cut.reach.sub(Fx::ONE).raw()
             && !self.head(w, false)
             && self.ready(w, me, moves::blood::CAST)
         {
             self.uses.cuts += 1;
-            return Some(self.look(
-                me,
-                self.spot(w, me, at, false),
-                moves::blood::keys::SCYTHE,
-            ));
+            return Some(self.look(me, self.spot(w, me, at, false), moves::blood::keys::SCYTHE));
         }
         None
     }

@@ -317,7 +317,7 @@ fn one_fighter_cannot_spam_away_the_other_fighters_field() {
     w.effects[0] = Some(sim::effects::Effect::pool(
         1,
         Class::BloodMage,
-        sim::moves::blood::THORN_LASH,
+        sim::moves::blood::CAST,
         // Off her feet: she drinks a stain she stands in.
         w.players[1]
             .pos
@@ -472,46 +472,49 @@ fn a_structure_climbs_out_of_the_ground_and_then_stops_counting() {
 // next time somebody retunes the reach.
 // ---------------------------------------------------------------------------
 
-/// Stand the other fighter where the spike will come up, then cast it.
-///
-/// Where it lands is found by casting once and reading the answer, rather
-/// than typed: the crosshair places it, and a fixture that hard-coded a
-/// distance would silently stop testing anything the next time the reach
-/// was retuned. The spike is one event now, so the victim has to be there
-/// *before* it comes up.
+/// A stain of hers under the other fighter, six metres in front of her: a
+/// pool for the spike to raise (2026-11-04: on bare ground it raises
+/// nothing).
+fn pooled(w: &mut World) {
+    let ahead = w.players[0]
+        .pos
+        .add(sim::V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    w.players[1].pos = sim::V3::new(ahead.x, w.players[0].pos.y, ahead.z);
+    let mut stain = sim::effects::Effect::pool(
+        0,
+        Class::BloodMage,
+        sim::moves::blood::CAST,
+        w.players[1].pos,
+        sim::tuning::pool_full(),
+    );
+    stain.age = sim::tuning::stain_settles() + 1;
+    let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
+    w.effects[slot] = Some(stain);
+}
+
+/// The Black spike raised out of a pool under the other fighter, and run
+/// until it has come up.
 fn spiked(w: &mut World) {
-    let mut probe = w.clone();
-    run(&mut probe, 2, SPIKE, 0);
-    let mut at = None;
-    for _ in 0..120 {
-        run(&mut probe, 1, 0, 0);
-        if let Some(spike) = effects_of(&probe, EffectKind::BlackSpike).first() {
-            at = Some(spike.pos);
-            break;
-        }
-    }
-    let at = at.expect("the spike never went into the ground");
-    w.players[1].pos = sim::V3::new(at.x, w.players[1].pos.y, at.z);
-    let startup = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC).startup;
+    pooled(w);
     run(w, 2, SPIKE, 0);
-    run(w, startup as u32, 0, 0);
+    run(w, sim::tuning::spike_rise_body() as u32, 0, 0);
 }
 
 #[test]
 fn the_black_spike_is_the_middle_click() {
     // It used to be shift + click, then `E`; since the blaster it is the middle
-    // click on the floor, held through three tiers, and a tap is the spike as
-    // it always was. `E` is the Hemoplague.
+    // click, and since 2026-11-04 it raises a pool of hers and nothing else.
     let mut w = engaged(Class::BloodMage);
+    pooled(&mut w);
     tap(&mut w, Input::SHIFT | Input::LEFT, 60);
     assert!(
         effects_of(&w, EffectKind::BlackSpike).is_empty(),
         "shift + click still casts the spike"
     );
 
-    let mut w = engaged(Class::BloodMage);
-    let startup = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC).startup;
-    tap(&mut w, SPIKE, startup as u32 + 2);
+    let mut w = as_class(Class::BloodMage);
+    pooled(&mut w);
+    tap(&mut w, SPIKE, sim::tuning::spike_rise_body() as u32 + 2);
     assert_eq!(
         effects_of(&w, EffectKind::BlackSpike).len(),
         1,
@@ -523,12 +526,15 @@ fn the_black_spike_is_the_middle_click() {
 fn the_spike_takes_long_enough_to_be_seen_coming() {
     // The cast is the telegraph. A field you can drop on somebody instantly is
     // not a placement decision, it is a trap, and the whole point of the
-    // ability is that the other player gets to walk out of the circle.
-    let mut w = engaged(Class::BloodMage);
-    let startup = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC).startup;
+    // ability is that the other player gets to walk out of the circle. Since
+    // 2026-11-04 the rise is the pool's: a fighter's blood rises past
+    // reaction time (a footprint's small pool does not, and is a small blow).
+    let mut w = as_class(Class::BloodMage);
+    pooled(&mut w);
+    let startup = sim::tuning::spike_rise_body();
     assert!(
         startup > sim::tuning::HUMAN_REACTION_FRAMES,
-        "the spike comes out inside reaction time, so nobody can answer it"
+        "a fighter's pool rises inside reaction time, so nobody can answer it"
     );
     run(&mut w, 2, SPIKE, 0);
     run(&mut w, (startup - 1) as u32, 0, 0);
@@ -554,20 +560,20 @@ fn the_spike_reaches_much_further_than_a_swing() {
 }
 
 #[test]
-fn the_black_spike_on_bare_floor_hits_slows_and_erupts() {
+fn the_black_spike_out_of_a_pool_hits_slows_and_spills_nothing() {
     // Not a damage puddle and not a field any more: a spike. It hits once,
     // it slows what it hit -- leaving costs you time, which is what turns it
     // into something you put between yourself and someone -- and since
-    // 2026-10-19 it spills nothing: its blow erupts at once instead, the
-    // finisher of a bleed rather than the thing that lays one.
+    // 2026-10-19 it spills nothing, the finisher of a bleed rather than the
+    // thing that lays one. Since 2026-11-04 it rises only out of a pool.
     let mut w = as_class(Class::BloodMage);
     let before = w.players[1].health;
     spiked(&mut w);
     run(&mut w, 2, 0, 0);
     assert_eq!(
         effects_of(&w, EffectKind::BlackSpike).len(),
-        2,
-        "the spike and the eruption out of its blow"
+        1,
+        "the eruption out of the pool"
     );
     assert!(w.players[1].health < before, "the spike hit nobody");
     assert!(
@@ -593,11 +599,12 @@ fn casting_costs_the_blood_mage_health() {
     // two-frame press is a tap, which costs only its row.
     use sim::moves::blood as b;
     use sim::moves::blood::keys;
+    // The spike is the one exception (2026-11-04): on bare ground it raises
+    // nothing and costs nothing -- `tests/world_bleeds.rs`.
     for (slot, button, airborne) in [
-        (b::THORN_LASH, keys::THORNS, false),
-        (b::THORN_LASH, keys::THORNS, true),
+        (b::REND, keys::HAND, false),
+        (b::REND, keys::HAND, true),
         (b::HEART, keys::PLANT, false),
-        (b::BLACK_SPIKE, keys::SPIKES, false),
         (b::SWEEP, keys::SCYTHE, false),
         (b::COAGULATE, keys::GATHER, false),
     ] {
@@ -645,7 +652,7 @@ fn spending_health_cannot_kill_you() {
     );
     w.players[0].health = 1;
     for _ in 0..20 {
-        tap(&mut w, SPIKE, 60);
+        tap(&mut w, sim::moves::blood::keys::HAND, 60);
         assert!(
             w.players[0].health > 0,
             "the Blood mage cast herself to death"
