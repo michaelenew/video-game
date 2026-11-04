@@ -21,6 +21,7 @@ software Vulkan driver, 1280 × 760 scaled to 960 wide, the HUD hidden
 | --- | --- |
 | ![](00_overview.jpg) **From above** (placed by hand). The floating island: rock masses narrowing beneath, the cell and cut between rock (right), the yard with its curtain wall and chapel, the gap and the causeway, the keep and its climb's pillars rising from the ground below. | ![](01_cell.jpg) **The cell.** The bars torn out, the keep already in sight down the cut. |
 | ![](02_curtain.jpg) **The curtain wall** across the yard, twelve metres, from the drop to the drop: the only way past it is the gap off to the north. | ![](03_through_gap.jpg) **Through the gap**, against the island's edge: the drop to the right, the keep framed ahead. |
+| ![](02b_curtain_end.jpg) **The curtain wall's end**, at the island's southern edge: it runs on out over the drop. There is no way round. | ![](04b_chapel_wall.jpg) **A chapel wall** from outside: nine metres, nothing to catch. |
 | ![](04_chapel.jpg) **The chapel**, roofless, nine metres to its walls' tops: in at one door, out at the other, the keep hidden in between -- or round it, never over. | ![](05_causeway.jpg) **The causeway** to the keep's island, its gate open, the Warden asleep inside. |
 | ![](06_climb_foot.jpg) **The foot of the climb**, on the keep's lip: the pillars rising out of the drop. | ![](07_pillars.jpg) **On the pillars**, over the drop: miss one and you are off the island. |
 | ![](08_rampart_dive.jpg) **The rampart**, twenty-nine metres up the keep: the Warden below, the soft place on its neck. Hit it from here and it goes over. | ![](09_spiral.jpg) **The spiral inside**, partway up. |
@@ -39,6 +40,8 @@ island's top is thirty metres up.
 | 02 | `DEMO=1 SHOT_FRAME=230 SHOT_PITCH=-0.08` |
 | 03 | `DEMO=1 SHOT_FRAME=330 SHOT_PITCH=-0.08` |
 | 04 | `DEMO=1 SHOT_FRAME=560 SHOT_PITCH=-0.08` |
+| 02b | `SHOT_FRAME=5 SHOT_AT=26,-27,30 SHOT_FACE=-60 SHOT_YAW=-1.0 SHOT_PITCH=-0.05` |
+| 04b | `SHOT_FRAME=5 SHOT_AT=48,-21,30 SHOT_FACE=90 SHOT_YAW=1.57 SHOT_PITCH=0.1` |
 | 05 | `DEMO=1 SHOT_FRAME=820 SHOT_PITCH=-0.08` |
 | 06 | `SHOT_FRAME=5 SHOT_AT=94.5,-24,32 SHOT_FACE=-90 SHOT_YAW=-1.3 SHOT_PITCH=-0.2` |
 | 07 | `SHOT_FRAME=5 SHOT_AT=97.5,-33,37 SHOT_FACE=0 SHOT_YAW=0.2 SHOT_PITCH=-0.35` |
