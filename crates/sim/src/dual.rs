@@ -171,10 +171,9 @@ pub fn step(p: &mut Player) -> bool {
     else {
         return false;
     };
-    // The Veil's clock runs whatever the bars are doing, and so does the storm.
-    if let Mechanic::Meter { veil: v, storm, .. } = &mut p.mechanic {
+    // The Veil's clock runs whatever the bars are doing.
+    if let Mechanic::Meter { veil: v, .. } = &mut p.mechanic {
         *v = veil.saturating_sub(1);
-        *storm = storm.saturating_sub(1);
     }
 
     if ascending > 0 {
@@ -450,38 +449,6 @@ pub fn spring(p: &mut Player, along: crate::math::V3) {
     if let Mechanic::Meter { springs, .. } = &mut p.mechanic {
         *springs = springs.saturating_add(1);
     }
-}
-
-/// The storm begins hunting her: for `storm, hunts her for`, from where she
-/// is standing.
-pub fn raise_the_storm(p: &mut Player) {
-    let at = p.pos;
-    if let Mechanic::Meter {
-        storm, storm_at, ..
-    } = &mut p.mechanic
-    {
-        *storm = t::storm_lasts();
-        *storm_at = at;
-    }
-}
-
-/// One frame of the storm following her: its point closes `storm, closes on
-/// her` of the way to where she is. True on the frames it strikes. A no-op,
-/// false, for anybody it is not hunting.
-pub fn storm_follows(p: &mut Player) -> Option<crate::math::V3> {
-    let pos = p.pos;
-    let Mechanic::Meter {
-        storm, storm_at, ..
-    } = &mut p.mechanic
-    else {
-        return None;
-    };
-    if *storm == 0 {
-        return None;
-    }
-    *storm_at = storm_at.add(pos.sub(*storm_at).scale(t::storm_follows()));
-    let every = t::storm_every().max(1);
-    (*storm % every == 0).then_some(*storm_at)
 }
 
 /// Is the dodge a blink right now?

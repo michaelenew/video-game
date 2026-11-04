@@ -224,7 +224,7 @@ const PINNED: [(Class, u64); 6] = [
     // both clicks at once annihilate, the holds are the storm and the lance,
     // middle click is the chain, and nothing she moves with reads a bar
     // (exploration 0037; feel-log.md, 2026-11-04).
-    (Class::DualMage, 0x7a968652bcc38543),
+    (Class::DualMage, 0xaaa2d01033aab9da),
     (Class::Elementalist, 0xaa3bf62007f5de6b),
 ];
 

@@ -132,7 +132,7 @@ const PINNED: [(Class, u32, u64); 7] = [
     // The Dual mage moved 2026-11-04, deliberately: her new kit (exploration
     // 0037), and the bot's way up in the air is the spring out of an
     // annihilation where it was a second jump on a tier.
-    (Class::DualMage, 2_222, 0x93abe20381d3997e),
+    (Class::DualMage, 2_222, 0xe1f87ff1dbf58d42),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the

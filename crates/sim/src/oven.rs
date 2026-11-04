@@ -1339,9 +1339,8 @@ scalars! {
     SpringFalloff,        "Dual mage", "Annihilation, each spring after is worth (share)",   Fixed, 0, fx(1,1);
     LanceLunge,           "Dual mage", "Lance, she lunges clear at (m/s)",                   Fixed, 0, fx(40,1);
     LanceLungeUp,         "Dual mage", "Lance, and rises at (m/s)",                          Fixed, 0, fx(30,1);
-    StormLasts,           "Dual mage", "Storm, hunts her for",                               Frames, 1, 240;
-    StormEvery,           "Dual mage", "Storm, strikes every",                               Frames, 1, 60;
-    StormFollows,         "Dual mage", "Storm, closes on her each frame (share)",            Fixed, fx(1,100), fx(1,1);
+    StormDash,            "Dual mage", "Storm, she dashes in and out at (m/s)",              Fixed, fx(5,1), fx(120,1);
+    StormOut,             "Dual mage", "Storm, out the way she holds this far (m)",          Fixed, 0, fx(16,1);
     WaveRise,             "Dual mage", "Ascension, the wave rises (a second)",               Fixed, 0, fx(200,1);
     WaveVent,             "Dual mage", "Ascension, a move she throws pushes the wave back",  Int, 0, 100;
     WaveBreaks,           "Dual mage", "Ascension, the wave breaks at",                      Int, 0, 100;

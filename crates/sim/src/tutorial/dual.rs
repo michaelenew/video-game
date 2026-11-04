@@ -168,9 +168,9 @@ pub const ROOMS: [Room; 10] = [
         advanced: false,
         intro: "Tapped, left click is a dark strike from behind her, at her: she steps off it \
                 and it flies on into whatever she faces. Hold a direction as you tap and she hops \
-                that way. Held a moment, the storm hunts her: lightning falls a beat behind \
-                wherever she goes and leaps to whoever is near, so keep moving and take it \
-                through them.",
+                that way. Held a moment, the storm: she dashes to the crosshair, the lightning \
+                aimed at her comes down there as she dashes out -- back where she was, or the \
+                way you hold -- and it leaps to whoever is near.",
         tasks: &[
             Task {
                 what: "Dark strike, on the floor",
@@ -192,7 +192,7 @@ pub const ROOMS: [Room; 10] = [
             },
             Task {
                 what: "Hold: the storm",
-                keys: "Hold left click, then run past the dummy",
+                keys: "Hold left click, crosshair on the dummy",
                 check: storm,
                 lands: false,
             },

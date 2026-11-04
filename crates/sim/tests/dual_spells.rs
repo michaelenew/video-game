@@ -1132,56 +1132,6 @@ fn the_chain_flies_through_where_she_stood_and_binds_the_first_body() {
     assert!(bound, "not bound");
 }
 
-#[test]
-fn the_storm_hunts_her_and_strikes_whoever_is_near_where_she_was() {
-    let mut w = facing(2.5);
-    let (mine, theirs) = (w.players[0].health, w.players[1].health);
-    assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
-    let mut struck = 0;
-    let mut last = theirs;
-    for _ in 0..120 {
-        step(&mut w, 0);
-        let now = w.players[1].health;
-        if now < last {
-            struck += 1;
-        }
-        last = now;
-        // Hold the other where it stood: the storm follows her, not them.
-        w.players[1].pos = at(-3.5, 0.0, 8.0);
-    }
-    assert!(struck >= 3, "struck {struck} times beside her");
-    assert_eq!(w.players[0].health, mine, "her own storm hit her");
-}
-
-#[test]
-fn the_storm_strikes_a_beat_behind_her() {
-    let mut w = alone();
-    assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
-    run(&mut w, 20, 0);
-    // She runs; where it thinks she is trails her.
-    for _ in 0..20 {
-        step(&mut w, Input::W);
-    }
-    let Mechanic::Meter {
-        storm, storm_at, ..
-    } = w.players[0].mechanic
-    else {
-        unreachable!()
-    };
-    assert!(storm > 0, "the storm is over already");
-    let behind = w.players[0].pos.sub(storm_at).len();
-    assert!(
-        behind.raw() > metres(0.3).raw(),
-        "it is on top of her: {} m",
-        as_f(behind)
-    );
-    assert!(
-        behind.raw() < metres(4.0).raw(),
-        "it lost her: {} m",
-        as_f(behind)
-    );
-}
-
 /// Throw the Flurry dash from `facing(gap)`, keeping the other where it
 /// stood, and step until she is free or `most` frames have gone, pressing
 /// `space` on the frames it answers yes to. What the world was each frame
@@ -1352,10 +1302,14 @@ fn a_full_hold_is_a_commitment_and_not_a_charge() {
             let mut came_out = false;
             for f in 0..90 {
                 step(&mut w, if f < keep { button } else { 0 });
+                // The storm is its dash (2026-11-04): it goes from its first
+                // active frame straight into the run to the spot.
                 came_out |= matches!(
                     w.players[0].action,
                     Action::Active { kind, .. } if kind == spell
-                );
+                ) || (spell == d::STORM
+                    && w.players[0].haul > 0
+                    && matches!(w.players[0].action, Action::Recovery { kind, .. } if kind == spell));
             }
             (came_out, worth)
         };
@@ -1374,4 +1328,61 @@ fn a_full_hold_is_a_commitment_and_not_a_charge() {
             "{button:#x}: holding on changed what it was worth"
         );
     }
+}
+
+/// Hold left at `pitch` until the storm is thrown, then step `frames` holding
+/// `held`; where she got to furthest along +X, where she ended, and what the
+/// other fighter lost.
+fn storm(gap: f32, held: u16, frames: u32) -> (Fx, V3, i32) {
+    let mut w = facing(gap);
+    let pitch = onto_their_feet(&w);
+    let before = w.players[1].health;
+    assert!(hold_into(&mut w, keys::DARK, pitch, d::STORM, 60));
+    let mut furthest = w.players[0].pos.x;
+    for _ in 0..frames {
+        step_looking(&mut w, held, pitch);
+        furthest = furthest.max(w.players[0].pos.x);
+        w.players[1].pos = at(-6.0 + gap, 0.0, 8.0);
+    }
+    (furthest, w.players[0].pos, before - w.players[1].health)
+}
+
+#[test]
+fn the_storm_dashes_her_to_the_crosshair_strikes_there_and_takes_her_back() {
+    // From play (2026-11-04): she dashes to the spot, the lightning aimed at
+    // her comes down on it, and she dashes out -- back where she was,
+    // holding nothing.
+    let (furthest, end, dealt) = storm(7.0, 0, 70);
+    assert!(
+        furthest.raw() > metres(-6.0 + 4.5).raw(),
+        "she only got to {} m",
+        as_f(furthest)
+    );
+    assert!(dealt > 0, "the lightning missed the body she dashed to");
+    assert!(
+        end.x.raw() < metres(-6.0 + 1.5).raw(),
+        "holding nothing she ended at {} m, not back where she started",
+        as_f(end.x)
+    );
+}
+
+#[test]
+fn holding_a_direction_she_dashes_out_of_the_storm_that_way() {
+    let (_, back, _) = storm(7.0, 0, 70);
+    let (_, side, _) = storm(7.0, Input::D, 70);
+    assert!(
+        side.sub(back).len().raw() > metres(2.5).raw(),
+        "holding D she ended {:?}, holding nothing {:?}",
+        side,
+        back
+    );
+}
+
+#[test]
+fn her_own_storm_never_strikes_her() {
+    let mut w = facing(2.0);
+    let mine = w.players[0].health;
+    assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
+    run(&mut w, 80, 0);
+    assert_eq!(w.players[0].health, mine);
 }

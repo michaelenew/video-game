@@ -3790,6 +3790,25 @@ impl World {
         for i in 0..MAX_PLAYERS {
             self.hunt_the_mage(i);
         }
+        // **The storm's dash in arrives** (2026-11-04): the lightning comes
+        // down where she is and she dashes out of it.
+        for (i, was) in seen.iter().enumerate() {
+            let dashing_in = |q: &Player| {
+                q.class == Class::DualMage
+                    && q.haul > 0
+                    && matches!(
+                        q.action,
+                        Action::Recovery {
+                            kind: moves::dual::STORM,
+                            ..
+                        }
+                    )
+                    && matches!(q.mechanic, Mechanic::Meter { storm: 1, .. })
+            };
+            if dashing_in(was) && !dashing_in(&self.players[i]) {
+                self.storm_strikes(i, inputs[i]);
+            }
+        }
         // **The Flurry dash's disk breaks** (2026-10-13) the frame her run
         // reaches it: a burst where it stood, the size of the disk.
         for (i, was) in seen.iter().enumerate() {
@@ -4015,7 +4034,7 @@ impl World {
                         self.players[i].vel.y = self.players[i].vel.y.add(lift);
                         self.players[i].grounded = false;
                     }
-                    moves::dual::STORM => dual::raise_the_storm(&mut self.players[i]),
+                    moves::dual::STORM => self.storm_in(i),
                     moves::dual::SMITE => {
                         self.write_sigil(i, p.aim_at(), t::sigil_radius(), p.thrown_at)
                     }
@@ -19605,18 +19624,112 @@ impl World {
         q.grounded = false;
     }
 
-    /// **What hunts a Dual mage this frame** (2026-11-04): the storm she
-    /// called, striking a beat behind her, and -- while she ascends with the
-    /// wave past its break -- the beings themselves, unbidden. A no-op for
-    /// anybody else.
+    /// **What hunts a Dual mage this frame** (2026-11-04): while she ascends
+    /// with the wave past its break, the beings themselves, unbidden. A no-op
+    /// for anybody else.
     fn hunt_the_mage(&mut self, i: usize) {
         if self.players[i].class != Class::DualMage {
             return;
         }
-        if let Some(at) = dual::storm_follows(&mut self.players[i]) {
-            self.chain_lightning(i, at);
-        }
         self.unbidden_strikes(i);
+    }
+
+    /// **The storm, in** (2026-11-04, from play): she dashes to the
+    /// crosshair's spot (`aim::flurry_dash_to`, short of anything solid) at
+    /// `storm, she dashes in and out at`, untouchable on the way, and the
+    /// lightning that is coming for her comes down there as she arrives --
+    /// `storm_strikes`, the frame the run ends.
+    fn storm_in(&mut self, i: usize) {
+        let p = self.players[i];
+        let to = {
+            let stones = stones::gather(&self.players);
+            let seen = self.players;
+            let effects = self.effects;
+            let scene = aim::Scene {
+                stones: &stones,
+                players: &seen,
+                effects: &effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &self.terrain(),
+            };
+            aim::flurry_dash_to(p.pos, p.aim_path.to, &scene)
+        };
+        let speed = t::storm_dash();
+        let frames = to
+            .sub(p.pos)
+            .len()
+            .div(speed.mul(DT))
+            .to_int()
+            .clamp(1, 120) as u16
+            + 1;
+        let q = &mut self.players[i];
+        if let Mechanic::Meter {
+            storm, storm_at, ..
+        } = &mut q.mechanic
+        {
+            *storm = 1;
+            *storm_at = p.pos;
+        }
+        begin_haul(q, to, speed, frames + 1);
+        dual::veil_for(q, frames.saturating_add(1).min(u8::MAX as u16) as u8);
+        q.action = Action::Recovery {
+            kind: moves::dual::STORM,
+            left: frames + 2,
+        };
+    }
+
+    /// **The storm comes down, and she is out** (2026-11-04, from play): the
+    /// frame her dash in arrives, the lightning that was aimed at her strikes
+    /// where she stands -- onto the body nearest it and on to the next
+    /// (`chain_lightning`) -- and she dashes out of it: the way she holds,
+    /// `storm, out the way she holds this far` (`aim::hop_to`), or back where
+    /// she came from holding nothing. Hits from wherever she chooses, in and
+    /// out, the class's dodge made into a reach.
+    fn storm_strikes(&mut self, i: usize, input: Input) {
+        let p = self.players[i];
+        let Mechanic::Meter { storm_at, .. } = p.mechanic else {
+            return;
+        };
+        self.chain_lightning(i, p.pos);
+        let (ax, az) = input.move_axis();
+        let dir = move_dir(input.aim_turns(), ax, az);
+        let out = {
+            let stones = stones::gather(&self.players);
+            let seen = self.players;
+            let effects = self.effects;
+            let scene = aim::Scene {
+                stones: &stones,
+                players: &seen,
+                effects: &effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &self.terrain(),
+            };
+            if dir == V3::ZERO {
+                aim::flurry_dash_to(p.pos, storm_at, &scene)
+            } else {
+                aim::hop_to(p.pos, dir, t::storm_out(), Fx::ZERO, &scene)
+            }
+        };
+        let speed = t::storm_dash();
+        let frames = out
+            .sub(p.pos)
+            .len()
+            .div(speed.mul(DT))
+            .to_int()
+            .clamp(1, 120) as u16
+            + 1;
+        let m = moves::get(p.class, moves::dual::STORM);
+        let q = &mut self.players[i];
+        if let Mechanic::Meter { storm, .. } = &mut q.mechanic {
+            *storm = 2;
+        }
+        begin_haul(q, out, speed, frames + 1);
+        q.action = Action::Recovery {
+            kind: moves::dual::STORM,
+            left: frames.saturating_add(m.recovery),
+        };
     }
 
     /// **Ascension's unbidden strikes** (2026-11-04): once the wave is past

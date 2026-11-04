@@ -1028,11 +1028,13 @@ pub enum Mechanic {
         /// less than the last, a hit she lands gives one back, landing gives
         /// them all back. See `crate::dual::spring`.
         springs: u8,
-        /// Frames left of the storm hunting her (the left click's hold).
+        /// Where the storm's dash is (2026-11-04, from play): nought, or one
+        /// while she dashes in to the crosshair's spot, two while she dashes
+        /// out of the lightning coming down on it.
         storm: u16,
-        /// Where the storm thinks she is: a point that follows her a beat
-        /// behind, and where the lightning comes down. In world coordinates,
-        /// so it moves with `World::shift`.
+        /// Where she dashed in from: where the dash out takes her back to,
+        /// holding nothing. In world coordinates, so it moves with
+        /// `World::shift`.
         storm_at: crate::math::V3,
         /// Frames until an unbidden strike lands, nought for none coming.
         strike: u8,

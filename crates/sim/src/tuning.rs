@@ -5251,20 +5251,16 @@ pub fn lance_lunge_up() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LanceLungeUp)).max(Fx::ZERO)
 }
 
-/// How long the storm hunts her once she has called it.
-pub fn storm_lasts() -> u16 {
-    oven::scalar(Scalar::StormLasts).clamp(1, 240) as u16
+/// How fast the storm's dash carries her: in to the crosshair's spot, and out
+/// again as the lightning comes down on it.
+pub fn storm_dash() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StormDash)).max(Fx::ONE)
 }
 
-/// How often it strikes while it does.
-pub fn storm_every() -> u16 {
-    oven::scalar(Scalar::StormEvery).clamp(1, 60) as u16
-}
-
-/// What share of the way to her the storm's point closes each frame: how far
-/// behind her it strikes.
-pub fn storm_follows() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::StormFollows)).clamp(Fx::ratio(1, 100), Fx::ONE)
+/// How far the storm's dash out goes the way she holds. Holding nothing she
+/// goes back where she came from, however far that was.
+pub fn storm_out() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StormOut)).max(Fx::ZERO)
 }
 
 /// How fast Ascension's wave rises on its own, in bar units a second.

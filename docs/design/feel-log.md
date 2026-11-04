@@ -213,6 +213,37 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-11-04 — the Dual mage, after the first play: the storm dashes, and more damage
+
+**Changed** **The storm** is a dash: hold left and she dashes to the crosshair's spot (10 m at
+most, 45 m/s, untouchable on the way), the lightning comes down there as she arrives -- 48 on
+the nearest body and on along the chain -- and she dashes out of it, back where she started or
+6 m the way she holds. 8/2/10 frames. The storm that hunted her (a point following a beat
+behind, a bolt every 9 frames) is gone, and its three knobs with it. **Damage**: the
+annihilation 45 → 80; the Abyss 5 → 7 a tick and its collapse 24 → 45; Judgement 121 → 132 and
+its field 4 → 6 a tick. Tried first: Judgement 140, the Abyss 8 and 60 -- a full-bar Judgement
+took 261 of 1000 against B3's quarter, and the majors in turn 1.61 bars against B9's 1.5.
+**Why** The owner, after a 7½-minute run (`versus-champion-27702f-a15e.replay`): the lance
+"reads as just a stronger and higher range auto with more mobility"; the lightning was "hard
+to hit and feels low reward" -- "the mage dashes towards the crosshairs, then gets a dash
+elsewhere (default back to their original position) based on what direction they're holding.
+That gives the lightning an effective range and keeps with the 'dodging hits aimed at her'
+theme"; the explosions and `Q`/`E` work "but both are pretty weak damage wise"; and damage on a
+Ridgeback "quite tough to rack up". Read against the run, attributing every point of damage to
+a creature to her blow or her newest effect: 4,436 in about 316 s near one, ~14 a second.
+Storm bolts 1,548 (65 storms), lance 1,185 (75 lances, ~16 each: half missed), dark strikes 655
+(61), the chain ride 419, the Abyss 193, Judgement 178, light strikes 109 (25), annihilation 45
+(7). Her lower bar averaged 24 of 100 (power ×0.79 of a possible ×1.4); 160 s at 4-9 m from the
+creature, 29 s inside 4 m.
+**Not fixed, found on the way** `tests/valley.rs` (`a_change_of_frame_changes_nothing_in_a_hunt`)
+fails since her first rebuild today, and not on anything of hers: in the Last Valley the Abyss's
+floor aim (`aim::Kind::Grounded`, which the script presses on `Q`) comes out 1.5 m apart from the
+same place and look depending on which place's coordinates the world is in, and in the Ashwood a
+word of the Veilstalker's lore keeps a point the shift does not move. Both were there before; her
+new kit changes how the scripted Champion-and-Dual-mage hunt plays, and the trajectory now walks
+into them. Every position she added (`storm_at`, `strike_at`) is in `shift`.
+**Verdict** open -- the lance-or-strikes question is the owner's, next.
+
 ### 2026-11-04 — the Dual mage's magic is aimed at her
 
 **Changed** Her kit, from the owner's direction ([exploration/0037](exploration/0037_dual_mage_the_razor_edge.md)):
