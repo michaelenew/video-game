@@ -164,7 +164,7 @@ all of it longer.
 About forty seconds straight there; minutes if you look round, which is the
 point.
 
-**As built (2026-11-03, `--hunt warden`, the Esc menu's Prototypes row;
+**As built (2026-11-03, `--hunt warden`, the Esc menu's World section;
 `sim::arena::warden`).** What changed from the plan above, and why:
 
 - **It is a floating island** (the owner, 2026-11-03: "instead of being
