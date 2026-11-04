@@ -340,13 +340,25 @@ pub fn vents(id: ArenaId) -> &'static [Vent] {
 
 /// **Is a body in an updraft's column**, on whatever ground it is.
 pub fn vent_on(ground: &crate::arena::Terrain, feet: V3) -> bool {
+    vent_middle(ground, feet).is_some()
+}
+
+/// **The column a body is in**: its middle, in the world's own coordinates,
+/// and its radius -- `(x, z, radius)` -- or `None` outside every updraft.
+/// What draws a body in a column toward its axis (`state::ride_the_air`).
+pub fn vent_middle(ground: &crate::arena::Terrain, feet: V3) -> Option<(Fx, Fx, Fx)> {
     match ground.atlas() {
-        None => vent_at(ground.id, feet).is_some(),
+        None => vent_at(ground.id, feet).map(|v| (v.at.0, v.at.1, v.radius)),
         Some(a) => {
-            let m = feet.add(ground.origin());
-            a.vents.iter().any(|v| v.carries(m))
-                || a.place_at(m.x, m.z)
-                    .is_some_and(|p| vent_at(p.arena, p.from_map(m)).is_some())
+            let origin = ground.origin();
+            let m = feet.add(origin);
+            if let Some(v) = a.vents.iter().find(|v| v.carries(m)) {
+                return Some((v.at.0.sub(origin.x), v.at.1.sub(origin.z), v.radius));
+            }
+            let p = a.place_at(m.x, m.z)?;
+            let v = vent_at(p.arena, p.from_map(m))?;
+            let mid = p.to_map(V3::new(v.at.0, Fx::ZERO, v.at.1)).sub(origin);
+            Some((mid.x, mid.z, v.radius))
         }
     }
 }

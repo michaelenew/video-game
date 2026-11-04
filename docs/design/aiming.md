@@ -108,15 +108,21 @@ upward**: the floor, the top of a platform, the top of a stone. That is "the
 ground". The side of a platform, the side of a stone and the range sphere are
 not. Bodies do not come up: they are not on the ray.
 
-**To an attack, the top of a stone is not ground** (`aim::sight_for_attack`,
-2026-09-26). It is ground for *placing*, because it is where the next thing
-goes. For a shot it was a trap: somebody standing just in front of a stone puts
-the crosshair through them and onto its lid, a body's height up, and a skillshot
-raised half a body above *that* went over their head — Cataclysm whiffed at
-point blank. So an attack meets a stone exactly where the crosshair touches it,
-lid or side, like a wall. The stone stays on the ray rather than coming off it,
-because where on a stone you point is a mechanic: the Bolt kicks one along the
-line it was shot along.
+**To an attack, the Elementalist's stones are not there at all either**
+(the owner, 2026-11-03, from play). From 2026-09-26 an attack met a stone
+exactly where the crosshair touched it, lid or side, like a wall
+(`aim::sight_for_attack`) -- before that its lid was ground, and a shot aimed
+past somebody standing in front of one went over their head. Standing high on a
+ledge and raining shots down showed the cost of keeping it on the ray at all: a
+crosshair through a stone at the floor below aimed at the stone, a dead zone in
+the middle of the screen that the player had not put there and could not see
+round, and anybody's stones could put one in anybody's aim. So the ray goes
+through every one of her structures, for every kind of aim, to the place
+behind. What a shot *runs into* on its way is still `aim::first_along`'s
+question: a Bolt fired through a stone still meets it, and still kicks it along
+the line it was shot along -- which is now the line to the place behind it.
+`aim::sight_for_attack` is kept for what remains in the field that is not hers
+(a Bulwark's planted shield), whose top is still not ground to a shot.
 
 **To a placement, the Elementalist's stones are not there at all**
 (`aim::grounded_path`, 2026-10-02, from play) — **Raise included.** The ray goes

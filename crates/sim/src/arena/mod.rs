@@ -1418,7 +1418,18 @@ fn resolve_among(
                 && py_up.raw() <= step.raw()
                 && py_up.raw() < py_down.raw()
                 && headroom(ground, V3::new(pos.x, solid.max.y, pos.z), radius, height);
-            if steps_up || ay.raw() <= side.depth.raw() {
+            // **Coming down on a lip is landing on it** (the owner,
+            // 2026-11-03, from play: "appears to catch the lip of a platform
+            // then doesn't stand on it"). The shallower push used to decide
+            // it alone, and a fall moves a quarter of a metre a frame: any
+            // body less than that far over the edge was put off the side of
+            // the box, however much of it was over the top. Feet that were
+            // at or above the top a frame ago, coming down, came from above,
+            // and are put on it.
+            let came_down = vel.y.raw() <= 0
+                && feet.sub(vel.y.mul(crate::DT)).raw() >= solid.max.y.sub(SKIN).raw()
+                && py_up.raw() < py_down.raw();
+            if steps_up || came_down || ay.raw() <= side.depth.raw() {
                 if py_up.raw() <= py_down.raw() {
                     pos.y = solid.max.y;
                     if vel.y.raw() < 0 {

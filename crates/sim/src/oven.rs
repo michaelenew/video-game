@@ -1130,9 +1130,10 @@ scalars! {
     // everything above is. Wind that has caught fire burns.
     WindFireBurn,         "Elementalist", "Wind on fire, Air ball burns per tick",           Int, 0, 300;
     DraftFireBurn,        "Elementalist", "Wind on fire, a draft burns each body for",        Int, 0, 400;
-    // Her Updraft steers: the direction she holds pushes her while it blows.
-    UpdraftSteer,         "Elementalist", "Updraft, steered by her walk (m/s per s)",        Fixed, 0, fx(120,1);
-    UpdraftSteerCap,      "Elementalist", "Updraft, steered up to (m/s)",                    Fixed, 0, fx(30,1);
+    // Her Updraft in the air pushes her along her walk, by how much of a
+    // short stretch round the press she held it: the tilt (2026-11-03).
+    UpdraftTiltWindow,    "Elementalist", "Updraft, the tilt is read over (frames)",         Frames, 1, 30;
+    UpdraftAirPush,       "Elementalist", "Updraft, in the air, pushed along her walk up to (m/s)", Fixed, 0, fx(30,1);
     // Fissure's surge: the stone comes up while it slides, carrying whoever
     // stands at its front and striking the rest harder the longer it was held.
     SurgeSpeed,           "Elementalist", "Fissure surge, speed (m/s)",                      Fixed, fx(1,1), fx(60,1);
@@ -1312,6 +1313,19 @@ scalars! {
     FrontUnlock,          "Match",    "Five points, the middle unlocks after",               Frames, 0, 3600;
     FrontClock,           "Match",    "Five points, a round lasts at most",                  Frames, 3600, 36000;
     FrontBonus,           "Match",    "Five points, a capture adds to the clock",            Frames, 0, 7200;
+    // **The tilt, and the columns that hold you** (2026-11-03, from play).
+    // How far before the Updraft's press the walk is read from, and an
+    // updraft's hold on a body: its flat speed bled off, and a pull to its
+    // middle. Appended: `tuned::SCALARS` is read by this enum's own discriminant.
+    UpdraftTiltBefore,    "Elementalist", "Updraft, the tilt is read from before the press (frames)", Frames, 0, 16;
+    VentDrag,             "Valley",   "Updraft, bleeds a body's flat speed (share a second)", Fixed, 0, fx(10,1);
+    VentPull,             "Valley",   "Updraft, draws a body to its middle (m/s per s at the rim)", Fixed, 0, fx(40,1);
+    // **A jump is a press, not a hold** (2026-11-03): how long a press of
+    // space before the feet arrive still jumps on landing.
+    JumpBuffer,           "Air",      "Jump, a press before landing still jumps for (frames)", Frames, 0, 30;
+    // **The least the walk keys steer in the air** (2026-11-03): a floor
+    // under every class's steering. See `tuning::air_drift_floor`.
+    AirDriftFloor,        "Air",      "Steering, the walk keys reach at least (m/s)",     Fixed, 0, fx(5,1);
 }
 
 // ---------------------------------------------------------------------------
