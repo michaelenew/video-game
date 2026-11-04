@@ -840,14 +840,19 @@ pub fn overhead(pos: V3) -> V3 {
 
 /// **Where a strike aimed at her comes from** (2026-11-04): `behind, the
 /// beings strike from this far back` behind `through` -- her middle -- on the
-/// line from `to` through it, and `behind, and this high` over it, so the line
-/// passes over her shoulder and narrowly misses her. See
+/// line from `to` through it, `behind, and this high` over it, and `side`
+/// times `behind, and this far to the side` to her right (negative to her
+/// left): the being over that shoulder. The light one stands over her right,
+/// the dark one over her left, and a strike of both from dead behind, so the
+/// line passes over her shoulder and narrowly misses her. See
 /// `docs/design/exploration/0037_dual_mage_the_razor_edge.md`.
-pub fn behind(through: V3, to: V3) -> V3 {
+pub fn behind(through: V3, to: V3, side: Fx) -> V3 {
     let dir = to.sub(through).normalized();
+    let right = V3::new(dir.z, Fx::ZERO, dir.x.neg()).normalized();
     through
         .sub(dir.scale(t::behind_back()))
         .add(V3::new(Fx::ZERO, t::behind_rise(), Fx::ZERO))
+        .add(right.scale(t::behind_side().mul(side)))
 }
 
 /// The line a strike **from behind her** travels: from [`behind`] to the point
@@ -855,10 +860,10 @@ pub fn behind(through: V3, to: V3) -> V3 {
 /// as it does for a skillshot -- [`skillshot_path`] is asked, and only its far
 /// end is kept -- so it lands where the reticle is, having come through where
 /// she stood.
-pub fn behind_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+pub fn behind_path(who: usize, look: Input, reach: Fx, side: Fx, scene: &Scene) -> Path {
     let shot = skillshot_path(who, look, reach, scene);
     Path {
-        from: behind(shot.from, shot.to),
+        from: behind(shot.from, shot.to, side),
         to: shot.to,
     }
 }

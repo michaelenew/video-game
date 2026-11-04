@@ -5304,3 +5304,9 @@ pub fn unbidden_damage() -> i32 {
 pub fn unbidden_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::UnbiddenRadius)).max(Fx::ratio(1, 10))
 }
+
+/// How far to her side the being over that shoulder strikes from: the light
+/// one over her right, the dark one over her left. See `aim::behind`.
+pub fn behind_side() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BehindSide)).max(Fx::ZERO)
+}

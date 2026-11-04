@@ -11440,7 +11440,16 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
         }
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
         aim::Kind::Skillshot => aim::skillshot_path(who, input, reach, scene),
-        aim::Kind::Behind => aim::behind_path(who, input, reach, scene),
+        // Which shoulder: the being of the move's force, over her right for
+        // light and her left for dark; both from dead behind.
+        aim::Kind::Behind => {
+            let side = match moves::dual::force(kind).filter(|_| p.class == Class::DualMage) {
+                Some(Force::Light) => Fx::ONE,
+                Some(Force::Dark) => Fx::ONE.neg(),
+                None => Fx::ZERO,
+            };
+            aim::behind_path(who, input, reach, side, scene)
+        }
         // Not aimed at anything -- a body moving. What it commits to is the
         // **plane** it swings in: the yaw is the facing, which is locked
         // already, and the pitch is the rest of the same look, dead-zoned so

@@ -129,7 +129,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // autos again, each hopping her the way she holds (0016); and again for
     // the second round -- forward wings, long holds, spending majors -- and
     // the third: the autos a ball, every click a tap or a hold (2026-10-13).
-    (Class::DualMage, 2_222, 0x44f9cc82054f6657),
+    // The Dual mage moved 2026-11-04, deliberately: her new kit (exploration
+    // 0037), and the bot's way up in the air is the spring out of an
+    // annihilation where it was a second jump on a tier.
+    (Class::DualMage, 2_222, 0x93abe20381d3997e),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the

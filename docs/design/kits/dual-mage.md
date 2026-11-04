@@ -37,8 +37,9 @@ meaningless without it.
 [../exploration/0037_dual_mage_the_razor_edge.md](../exploration/0037_dual_mage_the_razor_edge.md).
 The two beings are trying to kill her. Everything they throw comes **from behind her, through
 where she stands, at what she is looking at** (`aim::Kind::Behind`, `aim::behind`: `behind, the
-beings strike from this far back` 2.5 m behind her middle and `behind, and this high` 0.8 m
-over it, so the line narrowly misses her shoulder), and the press is her intent to dodge: the
+beings strike from this far back` 2.5 m behind her middle, `behind, and this high` 0.8 m
+over it, and `behind, and this far to the side` 0.7 m over the shoulder of the being whose force
+it is -- light her right, dark her left, both dead behind -- so the line narrowly misses her), and the press is her intent to dodge: the
 move carries the escape, and the keys choose where it goes. **Movement is hers at every bar;
 power is behind the bars.**
 

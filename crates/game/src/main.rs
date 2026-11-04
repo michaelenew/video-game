@@ -5031,7 +5031,11 @@ fn hold_gathering(
             sim::tuning::body_height().mul(sim::Fx::ratio(1, 2)),
             sim::Fx::ZERO,
         ));
-        fx3(sim::aim::behind(mid, p.aim_at()))
+        // Along her facing rather than her aim: through the wind-up the aim
+        // is not locked yet, and a stale one put the disk in front of her.
+        // Over her right shoulder, where the light being stands: the point
+        // the lance leaves from (`aim::behind`, a side of one).
+        fx3(sim::aim::behind(mid, mid.add(p.facing), sim::Fx::ONE))
     } else {
         fx3(sim::aim::overhead(p.pos))
     };
@@ -5092,12 +5096,12 @@ fn hold_gathering(
             let side = Vec3::new(-face.z, 0.0, face.x);
             let open = 0.25 + 0.75 * full;
             match part {
-                0 => Some(plate(Skin::Sun, over, face, 1.35 * open, 0.06)),
-                1 => Some(hoop(Skin::Light, over, face, 1.7 * open)),
-                2 => Some(hoop(Skin::Light, over, face, 1.95 * open)),
+                0 => Some(plate(Skin::Sun, over, face, 0.8 * open, 0.06)),
+                1 => Some(hoop(Skin::Light, over, face, 1.0 * open)),
+                2 => Some(hoop(Skin::Light, over, face, 1.15 * open)),
                 k if k < 15 => {
                     let turn = (k - 3) as f32 / 12.0 * std::f32::consts::TAU - spin * 0.05;
-                    let r = 2.25 * open;
+                    let r = 1.3 * open;
                     Some(floating_in(
                         Skin::Light,
                         over + side * (turn.cos() * r) + Vec3::Y * (turn.sin() * r),

@@ -152,7 +152,8 @@ Every move declares which, in the move table (`aim::Kind`). There is no seventh.
 `aim::behind_path`): the Dual mage's magic is aimed at her and she dodges it, so
 the lance and the chain come from `aim::behind` -- `tuning::behind_back` behind
 her middle on the line from the crosshair's point through her, and
-`tuning::behind_rise` over it, so the line passes over her shoulder -- and go
+`tuning::behind_rise` over it, and `tuning::behind_side` over the shoulder of the being
+whose force it is, so the line passes beside her -- and go
 on to the skillshot's target. Still one target, still the skillshot's; only the
 end it leaves from moved. See
 [exploration/0037](exploration/0037_dual_mage_the_razor_edge.md).

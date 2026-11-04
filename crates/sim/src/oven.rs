@@ -1349,6 +1349,7 @@ scalars! {
     UnbiddenWarn,         "Dual mage", "Ascension, an unbidden strike lands after",          Frames, 1, 120;
     UnbiddenDamage,       "Dual mage", "Ascension, an unbidden strike hurts her",            Int, 0, 400;
     UnbiddenRadius,       "Dual mage", "Ascension, an unbidden strike reaches (m)",          Fixed, fx(1,10), fx(6,1);
+    BehindSide,           "Dual mage", "Behind, and this far to the side, over her shoulder (m)", Fixed, 0, fx(3,1);
 }
 
 // ---------------------------------------------------------------------------

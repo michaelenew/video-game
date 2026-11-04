@@ -218,7 +218,9 @@ The play scripts are in the dated entries for that day.
 **Changed** Her kit, from the owner's direction ([exploration/0037](exploration/0037_dual_mage_the_razor_edge.md)):
 every strike comes from behind her, through where she stands, at the crosshair's point, and
 she dodges it onto them. A sixth line of effect replaces Overhead: `aim::Kind::Behind`, 2.5 m
-behind her middle and 0.8 m up. **Both clicks at once is annihilation** -- a 3.5 m burst at her
+behind her middle, 0.8 m up and 0.7 m over the shoulder of its force (light right, dark left).
+Dead behind, the first screenshot had the sun-disk between her camera and her, over the
+crosshair; from the shoulder the lance passes beside her and the target stays in view. **Both clicks at once is annihilation** -- a 3.5 m burst at her
 feet, 45, worth her lower bar, that never touches her -- and **the spring** out of it, up 20
 m/s and 10 along the held direction, each spring in an airtime ×0.6 of the last, a landed hit
 giving one back, landing giving all back. Left held is **the storm** (72 frames, a bolt every 9
@@ -249,7 +251,7 @@ a burst reaches as a column standing on its point, so it passed over a knee-high
 **Instruments** The movement search's buttons gained the chord (`search::BUTTONS[7]`), and
 her envelope lines were re-recorded (`--class Dual_mage`). `envelope::Extra::SecondJump` --
 what the Hanging Stones, the Crown and the High Line measure as "the Dual mage's second jump"
--- is the spring now, and every tool hop is still reached. The Ridgeback pin re-pinned for her
+-- is the spring now, and every tool hop is still reached. The Ridgeback pin and the bot's scripted hunt (`hunt/tests/pin.rs`) re-pinned for her
 alone.
 **Not done** `Q` and `E` are as they were: the owner will make them persistent ("buffs or
 debuffs or interactions with the rest of the kit") later. Her moves still play the old clips.

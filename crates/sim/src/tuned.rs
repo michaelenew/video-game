@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 777] = [
+pub const SCALARS: [i32; 778] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -785,6 +785,7 @@ pub const SCALARS: [i32; 777] = [
               24, // dual_mage.ascension,_an_unbidden_strike_lands_after = 24
               60, // dual_mage.ascension,_an_unbidden_strike_hurts_her = 60
            91750, // dual_mage.ascension,_an_unbidden_strike_reaches_(m) = 1.4
+           45875, // dual_mage.behind,_and_this_far_to_the_side,_over_her_shoulder_(m) = 0.7
 ];
 
 #[rustfmt::skip]
