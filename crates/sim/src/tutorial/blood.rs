@@ -1,7 +1,6 @@
-//! **The Blood mage's hall** (`docs/design/kits/blood-mage.md`, Territory
-//! and the spike as a finisher): thorns, spikes, the scythe, the keys; then
-//! her ground, the bleed into a spike, drinking back, spending grey, the
-//! swim, and hearts.
+//! **The Blood mage's hall** (`docs/design/kits/blood-mage.md`, the world
+//! bleeds): the Red Hand, the spike, the scythe, the keys; then her ground,
+//! the bleed into a spike, drinking back, reaping, the swim, and hearts.
 
 use super::{Bay, Dummy, Room, Seen, Task, Tutorial};
 use crate::arena::ArenaId;
@@ -19,8 +18,8 @@ pub static TUTORIAL: Tutorial = Tutorial {
     plays: "Standing on her ground she hits half again as hard and can sink into it and swim. \
             Cut the enemy so they bleed a trail of stains, drive a spike into the stains to blow \
             them up, and walk over stains to drink back the health you spent.",
-    wins: "She wins by spreading her ground, fighting from inside it, and cashing in the health \
-           she has on loan -- the grey part of her bar -- with a big held-to-the-end finisher.",
+    wins: "She wins by fighting inside her patch: cast the head, raise the pool its bite left, \
+           zip in, rend or seize, and reap the plants, so every drop spilled feeds what grows.",
     rooms: &ROOMS,
 };
 
@@ -39,35 +38,33 @@ fn jumped(s: &Seen) -> bool {
 fn dodged(s: &Seen) -> bool {
     s.dodged() && s.now().swim == 0 && s.moved().raw() < Fx::from_int(super::SLID).raw()
 }
-fn lash(s: &Seen) -> bool {
-    s.out(THORN_LASH) && s.now().grounded
+fn rend(s: &Seen) -> bool {
+    s.out(REND) && s.now().grounded
 }
-fn bramble(s: &Seen) -> bool {
-    s.channelled(BRAMBLE)
+fn third_rend(s: &Seen) -> bool {
+    s.out(REND) && s.now().string & 0x7F == 2
 }
-fn vines(s: &Seen) -> bool {
-    s.began(VINES)
+fn seize(s: &Seen) -> bool {
+    s.began(SEIZE)
 }
-fn air_lash(s: &Seen) -> bool {
-    s.out(THORN_LASH) && !s.now().grounded
+fn air_rend(s: &Seen) -> bool {
+    s.out(REND) && !s.now().grounded
 }
-fn thornfall(s: &Seen) -> bool {
-    s.began(THORNFALL)
+fn rising_rend(s: &Seen) -> bool {
+    s.began(RISING_REND)
 }
 fn spike(s: &Seen) -> bool {
-    s.began(BLACK_SPIKE) && s.now().tier <= 1
+    s.began(BLACK_SPIKE)
 }
-fn big_spike(s: &Seen) -> bool {
-    s.began(BLACK_SPIKE) && s.now().tier >= 3
+fn rising_spike(s: &Seen) -> bool {
+    s.began(RISING_SPIKE)
 }
-fn cascade(s: &Seen) -> bool {
-    s.began(CASCADE)
-}
-fn stake(s: &Seen) -> bool {
-    s.began(STAKE)
-}
-fn upheaval(s: &Seen) -> bool {
-    s.began(UPHEAVAL)
+fn grew(s: &Seen) -> bool {
+    let plants = |w: &crate::World| match w.players[s.me].mechanic {
+        crate::class::Mechanic::Blood(g) => g.plants.iter().flatten().count(),
+        _ => 0,
+    };
+    plants(s.after) > plants(s.before)
 }
 fn sweep(s: &Seen) -> bool {
     s.out(SWEEP) && s.now().grounded
@@ -75,11 +72,14 @@ fn sweep(s: &Seen) -> bool {
 fn third_sweep(s: &Seen) -> bool {
     s.out(SWEEP) && s.now().string & 0x7F == 2
 }
-fn reap(s: &Seen) -> bool {
-    s.began(REAP)
+fn cast(s: &Seen) -> bool {
+    s.appeared(EffectKind::ScytheHead)
 }
-fn harvest(s: &Seen) -> bool {
-    s.began(HARVEST)
+fn zip(s: &Seen) -> bool {
+    let zipping = |w: &crate::World| {
+        matches!(w.players[s.me].mechanic, crate::class::Mechanic::Blood(g) if g.zipping)
+    };
+    zipping(s.after) && !zipping(s.before)
 }
 fn air_sweep(s: &Seen) -> bool {
     s.out(SWEEP) && !s.now().grounded
@@ -92,9 +92,6 @@ fn coagulate(s: &Seen) -> bool {
 }
 fn heart(s: &Seen) -> bool {
     s.began(HEART)
-}
-fn teleport(s: &Seen) -> bool {
-    s.dodged() && s.moved().raw() > Fx::from_int(super::BLINKED).raw()
 }
 fn swim(s: &Seen) -> bool {
     s.was().swim == 0 && s.now().swim == 1
@@ -113,8 +110,12 @@ fn set_off(s: &Seen) -> bool {
 fn drank(s: &Seen) -> bool {
     s.now().health > s.was().health && s.now().grey < s.was().grey
 }
-fn spent_grey(s: &Seen) -> bool {
-    s.was().grey > 0 && s.began_any(&[VINES, CASCADE, HARVEST]) && s.now().fuel > 0
+fn reaped(s: &Seen) -> bool {
+    s.after
+        .effects
+        .iter()
+        .flatten()
+        .any(|e| e.owner as usize == s.me && e.slot == THORNS && e.age <= 1)
 }
 fn surfaced_strong(s: &Seen) -> bool {
     s.was().swim == 1 && s.now().swim != 1 && strong(s)
@@ -148,41 +149,41 @@ pub const ROOMS: [Room; 11] = [
         bay: Bay::Flat,
     },
     Room {
-        title: "Left click: thorns",
+        title: "Left click: the Red Hand",
         advanced: false,
-        intro: "Tapped, left click lashes a thorn at the crosshair that makes them bleed: a \
-                stain drops under them every half second. Held, it opens a field of thorns that \
-                grows while you hold. Held to the very end, it is Black vines, which spends all \
-                your grey.",
+        intro: "Her other hand, gloved in her own blood. Tapped, left click rends -- the fastest \
+                thing she has, for arm's length -- and tapped again strings up to three. Held, it \
+                seizes: a grab that throws them onto a plant of hers near them, or slams them \
+                into the floor, which bleeds in a ring round them.",
         tasks: &[
             Task {
-                what: "Thorn lash",
-                keys: "Tap left click at the dummy",
-                check: lash,
+                what: "Rend",
+                keys: "Tap left click, close to the dummy",
+                check: rend,
                 lands: true,
             },
             Task {
-                what: "Hold: Bramble",
-                keys: "Hold left click at the floor",
-                check: bramble,
+                what: "Hold: Seize",
+                keys: "Hold left click, close to the dummy",
+                check: seize,
                 lands: false,
             },
             Task {
-                what: "Hold to the end: Black vines",
-                keys: "Keep holding left click almost two seconds",
-                check: vines,
+                what: "A third rend",
+                keys: "Tap left click three times in a row",
+                check: third_rend,
                 lands: true,
             },
             Task {
                 what: "In the air",
                 keys: "Space, then tap left click",
-                check: air_lash,
+                check: air_rend,
                 lands: false,
             },
             Task {
-                what: "Takeoff: Thornfall",
+                what: "Takeoff: Rising rend",
                 keys: "Space + left click together",
-                check: thornfall,
+                check: rising_rend,
                 lands: false,
             },
         ],
@@ -190,41 +191,30 @@ pub const ROOMS: [Room; 11] = [
         bay: Bay::Flat,
     },
     Room {
-        title: "Middle click: spikes",
+        title: "Middle click: the spike",
         advanced: false,
-        intro: "Middle click drives a black spike up at the crosshair. Hold it and more spikes \
-                come up in a ring -- up to seven. Held to the end, it is a Crimson cascade that \
-                sets off every stain near the crosshair. In the air it is a Stake that pins.",
+        intro: "Middle click raises a pool of blood into a spike -- only a pool: on bare \
+                ground nothing happens. A small pool rises fast, a big one slow. It throws up \
+                whatever is over it, you too, and stands a while as a thorned plant that lashes \
+                anybody beside it. Cut the floor with the scythe first if there is no blood.",
         tasks: &[
             Task {
-                what: "Black spike",
-                keys: "Tap middle click at the dummy",
+                what: "Black spike on a pool",
+                keys: "Sweep the floor, then middle click on the stain",
                 check: spike,
-                lands: true,
-            },
-            Task {
-                what: "Hold for a ring of spikes",
-                keys: "Hold middle click a second, let go",
-                check: big_spike,
-                lands: true,
-            },
-            Task {
-                what: "Hold to the end: Crimson cascade",
-                keys: "Keep holding middle click a second and a half",
-                check: cascade,
-                lands: true,
-            },
-            Task {
-                what: "In the air: Stake",
-                keys: "Space, then middle click",
-                check: stake,
                 lands: false,
             },
             Task {
-                what: "Takeoff: Upheaval",
-                keys: "Space + middle click together, crosshair on the dummy",
-                check: upheaval,
-                lands: true,
+                what: "A plant stands",
+                keys: "Raise any pool",
+                check: grew,
+                lands: false,
+            },
+            Task {
+                what: "Takeoff: Rising spike",
+                keys: "Standing on a pool, Space + middle click together",
+                check: rising_spike,
+                lands: false,
             },
         ],
         dummy: Dummy::Stands,
@@ -234,8 +224,10 @@ pub const ROOMS: [Room; 11] = [
         title: "Right click: the scythe",
         advanced: false,
         intro: "Tapped, right click sweeps the scythe -- longer and harder the more grey you \
-                carry -- and tapped again strings up to three sweeps. Held, it is a lunge, the \
-                Reap. Held to the end, a Harvest: a full turn that drinks every stain round you.",
+                carry -- and tapped again strings up to three; on the floor it cuts the floor, \
+                which bleeds. Held, it casts the head out on its chain: it bites what it meets, \
+                and a fighter it bites is leashed to you. Press right click again while it holds \
+                to zip to it.",
         tasks: &[
             Task {
                 what: "Sweep",
@@ -250,16 +242,16 @@ pub const ROOMS: [Room; 11] = [
                 lands: true,
             },
             Task {
-                what: "Hold: Reap",
-                keys: "Hold right click, let go",
-                check: reap,
-                lands: true,
+                what: "Hold: Cast",
+                keys: "Hold right click at the dummy or a wall",
+                check: cast,
+                lands: false,
             },
             Task {
-                what: "Hold to the end: Harvest",
-                keys: "Keep holding right click almost a second",
-                check: harvest,
-                lands: true,
+                what: "Zip",
+                keys: "While the head holds, right click again",
+                check: zip,
+                lands: false,
             },
             Task {
                 what: "In the air",
@@ -271,7 +263,7 @@ pub const ROOMS: [Room; 11] = [
                 what: "Takeoff: Rising reap",
                 keys: "Space + right click together",
                 check: rising_reap,
-                lands: true,
+                lands: false,
             },
         ],
         dummy: Dummy::Stands,
@@ -282,8 +274,7 @@ pub const ROOMS: [Room; 11] = [
         advanced: false,
         intro: "Q pulls every stain near you to the crosshair and pools them. E plants a heart, \
                 once you have earned one by dealing damage: it holds your ground and sends out \
-                thralls. Shift is three moves in one: aimed at a stain it teleports you into it; \
-                on your ground it sinks you in to swim; anywhere else it is a dodge.",
+                thralls. Shift on your ground sinks you in to swim; anywhere else it is a dodge.",
         tasks: &[
             Task {
                 what: "Coagulate",
@@ -295,12 +286,6 @@ pub const ROOMS: [Room; 11] = [
                 what: "Plant a heart",
                 keys: "E at the floor (once the heart is earned)",
                 check: heart,
-                lands: false,
-            },
-            Task {
-                what: "Teleport to a stain",
-                keys: "Crosshair on a stain, Shift + a direction",
-                check: teleport,
                 lands: false,
             },
             Task {
@@ -332,13 +317,13 @@ pub const ROOMS: [Room; 11] = [
     Room {
         title: "Advanced: bleed, then spike",
         advanced: true,
-        intro: "Her core combo. A bleed drops stains under the target; a spike on a stain sets \
-                it off, and the eruption jumps from stain to stain. Lash, wait for a stain or \
-                two, then spike the trail.",
+        intro: "The cast's bite bleeds: a stain drops under the target every half second. A \
+                spike on a stain sets it off, and the eruption jumps from stain to stain. Cast, \
+                wait for a stain or two, then spike the trail.",
         tasks: &[
             Task {
                 what: "Make the dummy bleed",
-                keys: "Thorn lash it",
+                keys: "Hold right click at it",
                 check: bled,
                 lands: false,
             },
@@ -356,7 +341,7 @@ pub const ROOMS: [Room; 11] = [
         title: "Advanced: drink it back",
         advanced: true,
         intro: "Every spell turns red health grey, and grey fades. A stain gives it back only if \
-                you reach it: walk over one, teleport into one, or Harvest round you.",
+                you reach it: walk over one, or drag the scythe's head home through it.",
         tasks: &[Task {
             what: "Drink a stain",
             keys: "Spend some health, then walk over a stain of yours",
@@ -367,16 +352,16 @@ pub const ROOMS: [Room; 11] = [
         bay: Bay::Flat,
     },
     Room {
-        title: "Advanced: spend your grey",
+        title: "Advanced: reap",
         advanced: true,
-        intro: "The three held-to-the-end moves burn all your grey for extra damage, and pay it \
-                back as red if they land. So spend health first, then finish before the grey \
-                fades.",
+        intro: "The scythe through one of your plants breaks it, and its thorns fly on the way \
+                the blade was going, worth what the plant held -- and what you paid for it comes \
+                back. Raise a plant between you and the dummy, then sweep through it.",
         tasks: &[Task {
-            what: "A finisher on borrowed health",
-            keys: "Two or three casts, then hold any click to the end",
-            check: spent_grey,
-            lands: true,
+            what: "Reap a plant",
+            keys: "Raise a pool, then sweep through the plant",
+            check: reaped,
+            lands: false,
         }],
         dummy: Dummy::Stands,
         bay: Bay::Flat,

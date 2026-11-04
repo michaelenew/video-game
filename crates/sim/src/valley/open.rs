@@ -708,6 +708,12 @@ fn shift_player(p: &mut Player, d: V3) {
                 s.launch_from = s.launch_from.add(d);
             }
         }
-        Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => {}
+        Mechanic::Blood(garden) => {
+            for s in garden.plants.iter_mut().flatten() {
+                s.at = s.at.add(d);
+                s.launch_from = s.launch_from.add(d);
+            }
+        }
+        Mechanic::Forms { .. } | Mechanic::Meter { .. } => {}
     }
 }

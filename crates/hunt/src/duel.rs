@@ -638,6 +638,9 @@ struct Gesture {
     level: bool,
     turning: u16,
     pressing: u16,
+    /// How long the press is held, when it is longer than a tap: the Blood
+    /// mage's Cast is her scythe held.
+    hold: u16,
     age: u16,
     error: Fx,
     then: After,
@@ -663,9 +666,17 @@ impl Gesture {
             level: false,
             turning: 0,
             pressing: 0,
+            hold: 0,
             age: 0,
             error: Fx::ZERO,
             then: After::Nothing,
+        }
+    }
+
+    fn held(self, frames: u16) -> Gesture {
+        Gesture {
+            hold: frames,
+            ..self
         }
     }
 
@@ -1762,7 +1773,7 @@ impl Duelist {
                 // A press that needs an edge needs the button up first.
                 let edge = self.last_bits & g.bits == 0;
                 if edge && (settled || g.turning >= TURN_PATIENCE) {
-                    g.pressing = PRESS - 1;
+                    g.pressing = g.hold.max(PRESS) - 1;
                     bits |= g.bits;
                     walk = g.walk;
                     if g.pressing == 0 {

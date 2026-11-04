@@ -351,6 +351,16 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     PILLAR,
                 );
             }
+            // The Cast's head: the ball it bites with, and its chain.
+            EffectKind::ScytheHead => {
+                let head = crate::fx3(effect.home);
+                gizmos.sphere(
+                    Isometry3d::from_translation(head),
+                    effect.field_radius().to_f32_for_render(),
+                    PILLAR,
+                );
+                gizmos.line(crate::fx3(effect.pos), head, PILLAR);
+            }
             // The Reaver's Whirl and arc: the ball round the shadow's middle
             // they cut in. The Tumble's fan: each blade's ball.
             EffectKind::ShadowWhirl => {

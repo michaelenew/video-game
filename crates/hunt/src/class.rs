@@ -87,8 +87,6 @@ const LOTUS_DRAG: u16 = 24;
 /// The furthest the mouse goes off a plan's camera in one frame: a flick,
 /// about eleven degrees, the sparring bot's `ON_TARGET`.
 const FLICK: Fx = Fx::ratio(3, 100);
-/// Frames past a move's own that make a window long: a creature down.
-const LONG_WINDOW: i32 = 45;
 /// How far out the crosshair's ray is asked about, checking where a cast
 /// would land: further than anything in a kit reaches.
 const SIGHT_REACH: Fx = Fx::from_int(30);
@@ -109,7 +107,6 @@ const ALONG: Fx = Fx::ratio(5, 10);
 const GOAD_TO: i32 = 80;
 /// The Blood mage's red, in percent, below which she stops paying for things.
 const RED_FLOOR: i32 = 25;
-const RED_CHARGE: i32 = 70;
 const RED_CUT: i32 = 70;
 /// **The Bulwark's throw and leap**: the nearest and furthest a window is
 /// worth crossing that way. Inside the near one he walks; past the far one
@@ -394,7 +391,7 @@ impl Hands {
         let standing = match (me.class, kind) {
             (Class::Elementalist, SLOT_SPECIAL) => Some(EffectKind::FirePillar),
             (Class::ShadowReaver, SLOT_SPECIAL) => Some(EffectKind::GuillotineLotus),
-            (Class::BloodMage, moves::blood::BRAMBLE) => Some(EffectKind::Plague),
+            (Class::BloodMage, moves::blood::CAST) => Some(EffectKind::ScytheHead),
             _ => None,
         };
         standing.is_none_or(|k| {
@@ -433,13 +430,13 @@ impl Hands {
 
     /// **How far from what it is hitting this class hits it from.** The poke's
     /// reach -- the bolt's nine metres, for the Elementalist -- and for the
-    /// Blood mage half her Thorn lash's: a plan that walks to "in reach"
-    /// walks this far, near enough for her stains to land where she can
-    /// reach them, and she closes to the scythe from there.
+    /// Blood mage half her Cast's (2026-11-04): a plan that walks to "in
+    /// reach" walks this far, near enough for the head to bite, and she zips
+    /// in to the Red Hand and the scythe from there.
     pub fn reach(&self, me: &Player) -> Fx {
         let poke = moves::get(me.class, SLOT_POKE);
         match me.class {
-            Class::BloodMage => moves::get(me.class, moves::blood::THORN_LASH)
+            Class::BloodMage => moves::get(me.class, moves::blood::CAST)
                 .reach
                 .mul(Fx::ratio(1, 2)),
             _ => sim::state::live_reach(me, &poke),
@@ -563,11 +560,22 @@ impl Hands {
         plan
     }
 
-    /// The Blood mage: **the spike on a pool under it**, which drinks the pool
-    /// whole and comes up half again as hard; **the Bramble** on it in a
-    /// long window; **a Heart** when she has none standing; **the Thorn
-    /// lash** from range; and **the Sweep** in the scythe's reach.
+    /// Her scythe's head, out: holding something, or anywhere at all.
+    fn head(&self, w: &World, holding: bool) -> bool {
+        w.effects.iter().flatten().any(|e| {
+            e.kind == EffectKind::ScytheHead
+                && e.owner == self.who as u8
+                && (!holding || e.is_a_head_holding())
+        })
+    }
+
+    /// The Blood mage (2026-11-04, the world bleeds): **the spike on a pool
+    /// under it**; **the zip** to her head while it holds; **a Heart** when
+    /// she has none standing; **the Cast** from range; **the Sweep** in the
+    /// scythe's reach and **Rend** inside it. A tap is a press and a let-go,
+    /// so a tapped button is pressed only when it is up.
     fn bleed(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
+        use moves::blood::keys;
         let red = me.health * 100 / me.full_health().max(1);
         let far = flat(at.sub(me.pos)).flat_len();
         let spike = moves::get(me.class, moves::blood::BLACK_SPIKE);
@@ -577,52 +585,40 @@ impl Hands {
             && flat(pool.sub(me.pos)).flat_len().raw() < spike.reach.sub(Fx::ratio(5, 10)).raw()
             && !self.on_top(w, me, pool)
             && self.ready(w, me, moves::blood::BLACK_SPIKE)
-            && let Some(b) = self.button(me, moves::blood::BLACK_SPIKE)
         {
             self.uses.spikes += 1;
             self.uses.erupted += 1;
-            return self.look_keeping(me, plan, pool, b);
+            return self.look_keeping(me, plan, pool, keys::SPIKES);
         }
-        let plague = moves::get(me.class, moves::blood::BRAMBLE);
-        if red >= RED_CHARGE
-            && window >= (plague.startup + plague.active) as i32 + LONG_WINDOW
-            && far.raw() < plague.reach.sub(Fx::ratio(5, 10)).raw()
-            && self.ready(w, me, moves::blood::BRAMBLE)
-            && let Some(b) = self.button(me, moves::blood::BRAMBLE)
-        {
-            self.uses.plagues += 1;
-            return self.look_keeping(me, plan, at, b);
+        if self.head(w, true) && !me.right_held && me.action.actionable() {
+            self.uses.blinks += 1;
+            return self.look_keeping(me, plan, at, keys::SCYTHE);
         }
-        let sweep = self.reach(me);
         if let Some(input) = self.charge(w, me, at, plan, window, red) {
             return input;
         }
-        let cut = moves::get(me.class, moves::blood::THORN_LASH);
+        let scythe = sim::state::scythe_reach(me);
+        let cast = moves::get(me.class, moves::blood::CAST);
         if red >= RED_CUT
-            && far.raw() > sweep.add(Fx::ratio(5, 10)).raw()
-            && far.raw() < cut.reach.raw()
-            && window >= (cut.startup + cut.active) as i32 + SPARE
-            && self.ready(w, me, moves::blood::THORN_LASH)
-            && let Some(b) = self.button(me, moves::blood::THORN_LASH)
+            && far.raw() > scythe.add(Fx::ONE).raw()
+            && far.raw() < cast.reach.sub(Fx::ONE).raw()
+            && !self.head(w, false)
+            && self.ready(w, me, moves::blood::CAST)
         {
             self.uses.cuts += 1;
-            return self.look_keeping(me, plan, self.spot(w, me, at, false), b);
+            return self.look_keeping(me, plan, self.spot(w, me, at, false), keys::SCYTHE);
         }
-        // In the scythe's reach, the Sweep rather than the plan's own press:
-        // she advances to where they bled (2026-10-18).
-        let scythe = sim::state::scythe_reach(me);
+        // In the scythe's reach, the Sweep rather than the plan's own press.
         if far.raw() < scythe.add(Fx::ratio(5, 10)).raw()
+            && !me.right_held
             && self.ready(w, me, moves::blood::SWEEP)
-            && let Some(b) = self.button(me, moves::blood::SWEEP)
         {
-            return self.look_keeping(me, plan, at, b);
+            return self.look_keeping(me, plan, at, keys::SCYTHE);
         }
-        // Near enough, the Thorn lash rather than the plan's own press.
-        if far.raw() < sweep.add(Fx::ratio(5, 10)).raw()
-            && red >= RED_CUT
-            && let Some(b) = self.button(me, moves::blood::THORN_LASH)
-        {
-            return self.look_keeping(me, plan, at, b);
+        // Inside it, the Red Hand.
+        let rend = moves::get(me.class, moves::blood::REND);
+        if far.raw() < rend.reach.add(Fx::ratio(5, 10)).raw() && !me.earth_held {
+            return self.look_keeping(me, plan, at, keys::HAND);
         }
         if red < RED_CUT {
             return Input::looking_at(plan.bits & !ATTACKS, plan.aim, plan.pitch);
@@ -919,23 +915,25 @@ impl Hands {
             && flat(pool.sub(me.pos)).flat_len().raw() < spike.reach.sub(Fx::ratio(5, 10)).raw()
             && !self.on_top(w, me, pool)
             && self.ready(w, me, moves::blood::BLACK_SPIKE)
-            && let Some(b) = self.button(me, moves::blood::BLACK_SPIKE)
         {
             self.uses.spikes += 1;
             self.uses.erupted += 1;
             self.rest();
-            return Some(self.look(me, pool, b));
+            return Some(self.look(me, pool, moves::blood::keys::SPIKES));
         }
-        let cut = moves::get(me.class, moves::blood::THORN_LASH);
+        let cut = moves::get(me.class, moves::blood::CAST);
         if red >= RED_CUT + 10
-            && safe > (cut.startup + cut.active + cut.recovery) as i32
+            && safe > (cut.startup + cut.active + cut.recovery) as i32 + sim::tuning::hold_from() as i32
             && far.raw() < cut.reach.sub(Fx::ONE).raw()
-            && self.ready(w, me, moves::blood::THORN_LASH)
-            && let Some(b) = self.button(me, moves::blood::THORN_LASH)
+            && !self.head(w, false)
+            && self.ready(w, me, moves::blood::CAST)
         {
             self.uses.cuts += 1;
-            self.rest();
-            return Some(self.look(me, self.spot(w, me, at, false), b));
+            return Some(self.look(
+                me,
+                self.spot(w, me, at, false),
+                moves::blood::keys::SCYTHE,
+            ));
         }
         None
     }
@@ -1018,26 +1016,19 @@ impl Hands {
                 if let Some(input) = self.charge(w, me, at, self.look(me, at, 0), window, red) {
                     return Some(input);
                 }
-                if window <= dodge / 2 + 14 {
+                // **The zip** to her head, holding something near it
+                // (2026-11-04): she goes in on the chain.
+                let near = w.effects.iter().flatten().any(|e| {
+                    e.kind == EffectKind::ScytheHead
+                        && e.owner == self.who as u8
+                        && e.is_a_head_holding()
+                        && flat(e.home.sub(at)).flat_len().raw() < Fx::ratio(25, 10).raw()
+                });
+                if !near || me.right_held {
                     return None;
                 }
-                let pool = self
-                    .pools(w)
-                    .filter(|p| flat(p.sub(at)).flat_len().raw() < Fx::ratio(25, 10).raw())
-                    .filter(|p| self.sees(me, *p))
-                    .filter(|p| {
-                        let d = flat(p.sub(me.pos)).flat_len();
-                        d.raw() > HOP_NEAR.raw() && d.raw() < HOP_FAR.raw()
-                    })
-                    .min_by_key(|p| flat(p.sub(at)).flat_len().raw())?;
                 self.uses.blinks += 1;
-                self.seq = Some(Seq::Then {
-                    then: Input::LEFT,
-                    at,
-                    left: dodge as u16,
-                });
-                self.fresh = true;
-                Some(self.look(me, pool, Input::SHIFT | Input::W))
+                Some(self.look(me, at, moves::blood::keys::SCYTHE))
             }
             Class::Bulwark => self.throw_in(me, at, far, window),
             _ => None,

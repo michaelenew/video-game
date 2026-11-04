@@ -1326,6 +1326,40 @@ scalars! {
     // **The least the walk keys steer in the air** (2026-11-03): a floor
     // under every class's steering. See `tuning::air_drift_floor`.
     AirDriftFloor,        "Air",      "Steering, the walk keys reach at least (m/s)",     Fixed, 0, fx(5,1);
+    // **The Blood mage: the world bleeds** (2026-11-04, exploration 0038):
+    // the Cast and its zip, the Red Hand, the spike only from a pool and the
+    // plant it leaves, and the floor the scythe cuts. Appended:
+    // `tuned::SCALARS` is read by this enum's own discriminant.
+    CastSpeed, "Blood mage", "Cast, the head flies at (m/s)", Fixed, fx(5,1), fx(120,1);
+    CastHolds, "Blood mage", "Cast, holds for", Frames, 1, 300;
+    CastSlow, "Blood mage", "Cast, slows a fighter it holds to (x)", Fixed, 0, fx(1,1);
+    CastLeastLeash, "Blood mage", "Cast, the leash is at least (m)", Fixed, 0, fx(20,1);
+    CastStagger, "Blood mage", "Cast, wrenched free, staggers for", Frames, 0, 60;
+    CastShove, "Blood mage", "Cast, wrenched free, shoves toward her at (m/s)", Fixed, 0, fx(30,1);
+    CastDrag, "Blood mage", "Cast, drags home at (m/s)", Fixed, fx(1,1), fx(80,1);
+    CastBleeds, "Blood mage", "Cast, a bite in the world bleeds", Int, 0, 500;
+    ZipSpeed, "Blood mage", "Zip, hauls her at (m/s)", Fixed, fx(5,1), fx(80,1);
+    ZipKeeps, "Blood mage", "Zip, keeps of its speed", Fixed, 0, fx(3,2);
+    ZipJumpBuffer, "Blood mage", "Zip, a jump this near the end fires on arrival (frames)", Frames, 0, 30;
+    RendThird, "Blood mage", "Rend, the third of a string hits (x)", Fixed, fx(1,1), fx(4,1);
+    SeizePlantReach, "Blood mage", "Seize, throws onto a plant within (m)", Fixed, 0, fx(15,1);
+    SeizeRing, "Blood mage", "Seize, slammed, bleeds a ring this wide (m)", Fixed, 0, fx(5,1);
+    SeizeDrive, "Blood mage", "Seize, in the air drives them down at (m/s)", Fixed, 0, fx(60,1);
+    SpikeSmallPool, "Blood mage", "Black spike, a small pool holds up to", Int, 1, 500;
+    SpikeBigPool, "Blood mage", "Black spike, a big pool holds at least", Int, 1, 2000;
+    SpikeRiseSmall, "Blood mage", "Black spike, a small pool rises in", Frames, 1, 60;
+    SpikeRiseBody, "Blood mage", "Black spike, a fighter's pool rises in", Frames, 1, 60;
+    SpikeRiseBig, "Blood mage", "Black spike, a big pool rises in", Frames, 1, 60;
+    SpikeLaunchesHer, "Blood mage", "Black spike, launches her at (m/s)", Fixed, 0, fx(40,1);
+    PlantStands, "Blood mage", "Plant, stands for", Frames, 1, 1200;
+    PlantScale, "Blood mage", "Plant, size (x a stone)", Fixed, fx(1,10), fx(3,1);
+    PlantLashReach, "Blood mage", "Plant, lashes within (m)", Fixed, 0, fx(8,1);
+    PlantLashEvery, "Blood mage", "Plant, lashes every", Frames, 1, 240;
+    PlantLashSlow, "Blood mage", "Plant, a lash slows to (x)", Fixed, 0, fx(1,1);
+    ThornsReach, "Blood mage", "Reaped thorns, fly (m)", Fixed, fx(1,1), fx(30,1);
+    ThornsCone, "Blood mage", "Reaped thorns, cone half-width (cos)", Fixed, 0, fx(1,1);
+    SweepBleeds, "Blood mage", "Sweep, cuts the floor for", Int, 0, 500;
+    RisingReapBleeds, "Blood mage", "Rising reap, cuts the floor for", Int, 0, 500;
 }
 
 // ---------------------------------------------------------------------------

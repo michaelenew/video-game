@@ -78,6 +78,20 @@ impl Structure {
         }
     }
 
+    /// **A Blood mage's plant** (2026-11-04): what a spike leaves standing
+    /// where it erupted out of a pool. Out of the floor already -- the spike
+    /// was its rise, so it never churns or erupts as a stone does -- and
+    /// `tuning::plant_scale` of a stone, wide and tall. Its `age` is how long
+    /// it has stood, which is what `tuning::plant_stands` runs out.
+    pub fn planted(at: V3) -> Structure {
+        Structure {
+            age: 1,
+            rise: 1,
+            scale: t::plant_scale(),
+            ..Structure::raised(at)
+        }
+    }
+
     /// The stone the **earth jump** brings up with her: fully out of the
     /// floor already, its top at her feet, leaving with a share of her
     /// velocity (`tuning::earth_stone_keep_up`, `earth_stone_keep_flat`). See
@@ -241,6 +255,14 @@ pub fn gather(players: &[Player; MAX_PLAYERS]) -> Field {
             field[owner * MAX_STRUCTURES] = Some(crate::bulwark::wall(pos, weight));
             continue;
         }
+        // A Blood mage's plants stand in her slots, and are never written
+        // back: see `class::Garden`.
+        if let Mechanic::Blood(garden) = p.mechanic {
+            for (slot, plant) in garden.plants.iter().enumerate() {
+                field[owner * MAX_STRUCTURES + slot] = *plant;
+            }
+            continue;
+        }
         let Mechanic::Structures(slots) = p.mechanic else {
             continue;
         };
@@ -249,6 +271,13 @@ pub fn gather(players: &[Player; MAX_PLAYERS]) -> Field {
         }
     }
     field
+}
+
+/// Is slot `index` of the field one of a Blood mage's plants?
+pub fn is_a_plant(players: &[Player; MAX_PLAYERS], index: usize) -> bool {
+    players
+        .get(index / MAX_STRUCTURES)
+        .is_some_and(|p| matches!(p.mechanic, Mechanic::Blood(_)))
 }
 
 fn scatter(players: &mut [Player; MAX_PLAYERS], field: &Field) {

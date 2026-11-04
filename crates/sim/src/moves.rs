@@ -664,27 +664,27 @@ const NAMES: [&[&str]; 6] = [
         "Fire fountain",
         "Earth jump",
     ],
-    // Blood mage -- her territory (2026-10-18). Her blood goes out, and
-    // theirs comes back, and where it falls is hers: everything costs health,
-    // every hit she lands spills a stain, and her moves claim the floor they
-    // touch. In storage order rather than button order: the rows were retuned
-    // as the new moves rather than renumbered. See [`blood`] and
-    // `docs/design/exploration/0021_blood_mage_territory.md`.
+    // Blood mage -- the world bleeds (2026-11-04). Whatever she cuts bleeds,
+    // and where blood falls something grows: the scythe sows, the spike
+    // grows a plant out of a pool, the scythe reaps it. In storage order
+    // rather than button order: the rows were retuned as the new moves
+    // rather than renumbered. See [`blood`] and
+    // `docs/design/exploration/0038_blood_mage_the_world_bleeds.md`.
     &[
-        "Reap",
-        "Thorn lash",
-        "Bramble",
+        "Cast",
+        "Rend",
+        "Seize",
         "Black spike",
         "Sweep",
         "Heart",
-        "Thornfall",
-        "Upheaval",
-        "Stake",
+        "Rising rend",
+        "Rising spike",
+        "Reaped thorns",
         "Coagulate",
         "Rising reap",
-        "Black vines",
-        "Crimson cascade",
-        "Harvest",
+        "Plant lash",
+        "Seize, slammed",
+        "Seize, impaled",
     ],
     // Dual mage -- her spellbook (2026-10-12). Left is dark, cast on *them*:
     // curses. Right is light, cast on *the ground*: sigils. Middle is
@@ -1255,99 +1255,97 @@ pub mod dual {
 // The Blood mage's fourteen
 // ---------------------------------------------------------------------------
 
-/// The Blood mage's move list, and **which button throws each**: thorns,
-/// spikes and the scythe -- her territory, since 2026-10-18.
+/// The Blood mage's move list, and **which button throws each**: the Red
+/// Hand, the spike and the scythe -- the world bleeds, since 2026-11-04.
 ///
 /// ```text
-///                 left: thorns        middle: the spikes    right: the scythe
-///   tap           Thorn lash          Black spike (1)       Sweep, strung to 3
-///   hold          Bramble, growing    Black spike, 1 to 7   Reap
-///   held to end   Black vines         Crimson cascade       Harvest
-///   in the air    Thorn lash          Stake                 Sweep
-///   space+click   Thornfall           Upheaval              Rising reap
+///                 left: the Red Hand  middle: the spike     right: the scythe
+///   tap           Rend, strung to 3   Black spike, from a   Sweep, strung to 3
+///   hold          Seize               pool only             Cast (the zip on a
+///                                                           second press)
+///   in the air    Rend / Seize        Black spike           Sweep / Cast
+///   space+click   Rising rend         Rising spike          Rising reap
 ///   (floor, or once a jump in the air)
-///   Q  Coagulate    E  Heart    shift: a stain under the crosshair, the
-///   teleport; on her ground, the swim; otherwise a dodge
+///   Q  Coagulate    E  Heart    shift: on her ground, the swim; otherwise a
+///   dodge
 /// ```
 ///
-/// Left makes ground by bleeding, middle is the damage, right is fast and
-/// sure up close, for walking into the blood she just spilled. **A finisher
-/// is a hold kept to its end**, at any time, and it spends all
-/// her grey: the more there was, the bigger it is.
+/// Whatever she cuts bleeds: a fighter, a creature, the floor. The spike
+/// raises only a pool, and what it raises stands as a plant that lashes; the
+/// scythe through a plant reaps it. See
+/// `docs/design/exploration/0038_blood_mage_the_world_bleeds.md`.
 ///
 /// **Storage order is not button order.** The Oven's move store is packed in
 /// class order, so a slot appended to this class shifts every Dual mage index
 /// in `tuned.rs` and a slot *renumbered* silently rewrites every number on the
 /// class. So rows are **retuned** as new moves rather than renumbered: the
-/// Haemorrhage's row is the Thorn lash, the Hemoplague's the Bramble,
-/// Command's the Sweep, the Carpet's the Reap, the Summon's the Heart, the
-/// wings' Thornfall, the golem's the Harvest. See
-/// `docs/design/exploration/0021_blood_mage_territory.md` §2.
+/// Reap's row is the Cast, the Thorn lash's Rend, the Bramble's Seize,
+/// Thornfall's the Rising rend, the Upheaval's the Rising spike, the Stake's
+/// the reaped thorns, the vines' a plant's lash, the cascade's and the
+/// Harvest's the Seize's two endings.
 pub mod blood {
     /// Right click held past the Champion's window (`tuning::hold_from`):
-    /// **the Reap**. A lunge into a swing, further the longer it was held and
-    /// further again on her ground. Was the Carpet of blood's row.
-    pub const REAP: u8 = 0;
-    /// Left click, tapped -- on the floor and in the air: **the Thorn lash**.
-    /// A bolt of thorns that opens a bleed, and leaves ground where it lands,
-    /// hit or miss. Was the Haemorrhage.
-    pub const THORN_LASH: u8 = 1;
-    /// Left click held past the Thorn lash's startup: **the Bramble**. A
-    /// field of thorns on the floor where she aimed, growing for as long as
-    /// she holds, hurting and slowing everyone inside on a tick, and laying
-    /// her ground across itself. Was the Hemoplague.
-    pub const BRAMBLE: u8 = 2;
-    /// Middle click, held: **the Black spike**. One spike tapped, and more in
-    /// a wider area the longer the hold, up to seven. On a stain, the stain
-    /// erupts.
+    /// **the Cast**. The scythe's head flies out on its chain along the
+    /// crosshair and embeds in what it meets; pressed again while it holds,
+    /// the zip. Was the Reap's row.
+    pub const CAST: u8 = 0;
+    /// Left click, tapped -- on the floor and in the air: **Rend**. The Red
+    /// Hand's claws, fast and short, strung to three. Was the Thorn lash.
+    pub const REND: u8 = 1;
+    /// Left click held past the Champion's window: **Seize**. A grab that
+    /// feeds them to her garden: thrown onto a plant near them, or slammed
+    /// into the floor. Was the Bramble.
+    pub const SEIZE: u8 = 2;
+    /// Middle click: **the Black spike**, raised out of a pool of hers under
+    /// the crosshair -- and nothing on bare ground. It launches what is over
+    /// it, her too, and stands as a plant.
     pub const BLACK_SPIKE: u8 = 3;
     /// Right click, tapped: **the Sweep**. The scythe across her front; tapped
     /// again inside its recovery, a string of up to three, the second coming
-    /// back the other way and the third heavier. Was Command's row.
+    /// back the other way and the third heavier. On the floor it cuts the
+    /// floor, which bleeds. Was Command's row.
     pub const SWEEP: u8 = 4;
     /// `E`: **a Heart**, planted at the crosshair's floor. It holds ground
     /// round itself and sends out a thrall every few seconds. Was the Summon.
     pub const HEART: u8 = 5;
-    /// Space and left click: **Thornfall**. The wings' burst along her aim,
-    /// landing in a ring of thorns that leaves ground. Was Blood wings.
-    pub const THORNFALL: u8 = 6;
-    /// Space and middle click: **the Upheaval**. A geyser that launches.
-    pub const UPHEAVAL: u8 = 7;
-    /// Middle click, airborne: **the Stake**. Pins anybody in the air and
-    /// lands in an area.
-    pub const STAKE: u8 = 8;
+    /// Space and left click: **the Rising rend**, a jumping claw. Was
+    /// Thornfall.
+    pub const RISING_REND: u8 = 6;
+    /// Space and middle click: **the Rising spike**, raised out of a pool at
+    /// her own feet, launching her. Nothing without one. Was the Upheaval.
+    pub const RISING_SPIKE: u8 = 7;
+    /// **The thorns of a reaped plant**: no button. The scythe through a
+    /// plant breaks it into a cone of thorns along the blade; this row is
+    /// what each thorn's blow stuns and shoves by. Was the Stake.
+    pub const THORNS: u8 = 8;
     /// `Q`: **Coagulate**. Every stain of hers in reach slides to the
     /// crosshair's spot on the floor and merges. Was the chain's row.
     pub const COAGULATE: u8 = 9;
-    /// Space and right click: **the Rising reap**. A cone thrown forward that
-    /// hurls her thralls along and drinks the stains it crosses. Was the
-    /// leap's row.
+    /// Space and right click: **the Rising reap**. The scythe cut up out of
+    /// the floor as she leaves it, which bleeds under her. Was the leap's row.
     pub const RISING_REAP: u8 = 10;
-    /// The Bramble held to its end: **the Black vines**. Barbed vines
-    /// erupting outward from the field's middle across its area, bleeding
-    /// everything they reach, then standing a while, bleeding and slowing
-    /// whatever enters. Spends her grey. Was Frenzy's row.
-    pub const VINES: u8 = 11;
-    /// The Black spike held to its end: **the Crimson cascade**. A ring of
-    /// eruptions moving outward from the crosshair, wave after wave, setting
-    /// off every stain of hers it crosses. Spends her grey. Appended.
-    pub const CASCADE: u8 = 12;
-    /// The Reap held to its end: **the Harvest**. One great turning reap all
-    /// round her that drinks every stain in its reach. Spends her grey. Was
-    /// the Blood golem's row.
-    pub const HARVEST: u8 = 13;
+    /// **A plant's lash**: no button. What one of her standing plants does on
+    /// its own to an enemy near it. Was the Black vines.
+    pub const LASH: u8 = 11;
+    /// **Seize, slammed**: no button. The grab's ending with no plant near:
+    /// into the floor, which bleeds in a ring round them. Was the cascade.
+    pub const SLAM: u8 = 12;
+    /// **Seize, impaled**: no button. The grab's ending with a plant near:
+    /// thrown onto it, and it drinks. Was the Harvest.
+    pub const IMPALE: u8 = 13;
 
     pub const COUNT: usize = 14;
 
     /// **Which button is which of her verbs**, in one place.
     pub mod keys {
         use crate::input::Input;
-        /// Left click: the Thorn lash, the Bramble held, Thornfall with space.
-        pub const THORNS: u16 = Input::LEFT;
-        /// Middle click: the Black spike, the Stake in the air, the Upheaval
-        /// with space.
+        /// Left click: the Red Hand -- Rend, Seize held, the Rising rend with
+        /// space.
+        pub const HAND: u16 = Input::LEFT;
+        /// Middle click: the Black spike, the Rising spike with space.
         pub const SPIKES: u16 = Input::MIDDLE;
-        /// Right click: the Sweep, the Reap held, the Rising reap with space.
+        /// Right click: the Sweep, the Cast held, the Rising reap with space;
+        /// pressed again while the head holds, the zip.
         pub const SCYTHE: u16 = Input::RIGHT;
         /// `Q`: Coagulate.
         pub const GATHER: u16 = Input::SPECIAL;
@@ -1355,58 +1353,64 @@ pub mod blood {
         pub const PLANT: u16 = Input::MECHANIC;
     }
 
-    /// Which click throws this move -- what holds its charge open, and what
-    /// lets a stored charge go.
+    /// Which click throws this move -- what holds its hold open.
     pub const fn click_of(kind: u8) -> u16 {
         match kind {
-            BRAMBLE | THORN_LASH | THORNFALL | VINES => keys::THORNS,
-            BLACK_SPIKE | STAKE | UPHEAVAL | CASCADE => keys::SPIKES,
+            REND | SEIZE | RISING_REND => keys::HAND,
+            BLACK_SPIKE | RISING_SPIKE => keys::SPIKES,
             _ => keys::SCYTHE,
         }
     }
 
-    /// **Is this the one charged in tiers?** Held on the floor; let go, or
-    /// stored by a jump or a dodge out of the hold.
-    pub const fn tiered(kind: u8) -> bool {
-        matches!(kind, BLACK_SPIKE)
+    /// **Is this one charged in tiers?** None of hers since 2026-11-04: the
+    /// spike raises the one pool it is aimed at.
+    pub const fn tiered(_kind: u8) -> bool {
+        false
     }
 
-    /// **Is this held as a field** -- the Bramble growing -- rather than
-    /// charged in tiers?
-    pub const fn fielded(kind: u8) -> bool {
-        matches!(kind, BRAMBLE)
+    /// **Is this held as a field?** None of hers since 2026-11-04.
+    pub const fn fielded(_kind: u8) -> bool {
+        false
     }
 
     /// Which held move a tapped move becomes when its click is held past its
     /// startup or the Champion's window (`tuning::hold_from`), whichever is
-    /// longer: the Thorn lash the Bramble, the Sweep the Reap.
+    /// longer: Rend becomes Seize, the Sweep the Cast.
     pub const fn held_into(kind: u8) -> Option<u8> {
         match kind {
-            THORN_LASH => Some(BRAMBLE),
-            SWEEP => Some(REAP),
+            REND => Some(SEIZE),
+            SWEEP => Some(CAST),
             _ => None,
         }
     }
 
     /// Does this move's crosshair find her pools by their standing column
-    /// (`aim::column_on_sight`)? The spikes: everything that erupts a pool.
+    /// (`aim::column_on_sight`)? The spike, which raises one.
     pub const fn seeks_pools(kind: u8) -> bool {
-        matches!(kind, BLACK_SPIKE | STAKE | UPHEAVAL | CASCADE)
+        matches!(kind, BLACK_SPIKE)
     }
 
-    /// Which finisher this held move becomes, held to its end.
-    pub const fn finisher_of(kind: u8) -> Option<u8> {
-        match kind {
-            BRAMBLE => Some(VINES),
-            BLACK_SPIKE => Some(CASCADE),
-            REAP => Some(HARVEST),
-            _ => None,
-        }
+    /// Is this a spike, which needs a pool to raise -- and with none comes
+    /// out as nothing at all?
+    pub const fn raises_a_pool(kind: u8) -> bool {
+        matches!(kind, BLACK_SPIKE | RISING_SPIKE)
     }
 
-    /// Is this one of the three finishers?
-    pub const fn finisher(kind: u8) -> bool {
-        matches!(kind, VINES | CASCADE | HARVEST)
+    /// Which finisher this held move becomes, held to its end. None since
+    /// 2026-11-04: the finishers were cut with the moves they finished.
+    pub const fn finisher_of(_kind: u8) -> Option<u8> {
+        None
+    }
+
+    /// Is this one of her finishers? None since 2026-11-04.
+    pub const fn finisher(_kind: u8) -> bool {
+        false
+    }
+
+    /// Is this a move that is strung, up to three, by a press inside its
+    /// recovery -- the Sweep, and Rend?
+    pub const fn strung(kind: u8) -> bool {
+        matches!(kind, SWEEP | REND)
     }
 
     /// Is this the scythe -- a move whose reach, width and damage grow with
@@ -1417,7 +1421,7 @@ pub mod blood {
     /// growth is drawn as essence around it; `view::scythe` reads this to
     /// know which move to draw the volume for.
     pub const fn scythe(kind: u8) -> bool {
-        matches!(kind, SWEEP | REAP | HARVEST | RISING_REAP)
+        matches!(kind, SWEEP | RISING_REAP)
     }
 
     /// Does this move lay her ground where it touches -- the floor it lands
@@ -1802,21 +1806,24 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // `blood::keys`.
         // The blaster, since 2026-10-12: the three clicks held on the floor
         // in tiers, the air row quick, space a takeoff. See [`blood`].
+        // The world bleeds, since 2026-11-04: the Red Hand, the spike and
+        // the scythe, the same on the floor and in the air; three rows no
+        // button throws -- what her plants and her grab do.
         Class::BloodMage => match slot {
             0 => "RMB held",
             1 => "LMB",
             2 => "LMB held",
-            3 => "MMB held",
+            3 => "MMB",
             4 => "RMB",
             5 => "E",
             6 => "Space+LMB",
             7 => "Space+MMB",
-            8 => "MMB air",
+            8 => "a reaped plant",
             9 => "Q",
             10 => "Space+RMB",
-            11 => "LMB held to the end",
-            12 => "MMB held to the end",
-            _ => "RMB held to the end",
+            11 => "a plant",
+            12 => "Seize, no plant",
+            _ => "Seize, by a plant",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
@@ -2001,9 +2008,16 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // chain -- and lets it do the hitting.
         // Since 2026-10-18 the scythe is three real swings again: the Sweep
         // and the Reap across her front, and the Harvest all the way round.
+        // Since 2026-11-04 the scythe and the Red Hand are swings -- the
+        // Sweep, the Rising reap, Rend, the Rising rend and Seize -- the
+        // spike is its disc where the pool was, and the Cast is its head.
         Class::BloodMage => match kind {
-            blood::BLACK_SPIKE | blood::UPHEAVAL => Shape::Cylinder,
-            blood::SWEEP | blood::REAP | blood::HARVEST => Shape::Swing(Plane::Flat),
+            blood::BLACK_SPIKE => Shape::Cylinder,
+            blood::SWEEP
+            | blood::RISING_REAP
+            | blood::REND
+            | blood::RISING_REND
+            | blood::SEIZE => Shape::Swing(Plane::Flat),
             _ => Shape::None,
         },
         // The Shield step puts the shield in the world as a wall and nothing

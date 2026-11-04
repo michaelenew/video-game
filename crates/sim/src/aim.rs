@@ -784,11 +784,16 @@ fn past_structures(scene: &Scene) -> Field {
     open
 }
 
-/// Is slot `index` of the field one of an Elementalist's structures, rather
-/// than something else standing in it (a Bulwark's planted shield)?
+/// Is slot `index` of the field one of an Elementalist's structures or a
+/// Blood mage's plants, rather than something else standing in it (a
+/// Bulwark's planted shield)? The crosshair goes through both to the place
+/// behind (2026-11-04).
 fn is_structure(scene: &Scene, index: usize) -> bool {
     let owner = &scene.players[index / crate::class::MAX_STRUCTURES];
-    matches!(owner.mechanic, crate::class::Mechanic::Structures(_))
+    matches!(
+        owner.mechanic,
+        crate::class::Mechanic::Structures(_) | crate::class::Mechanic::Blood(_)
+    )
 }
 
 /// The line a **skillshot** flies along: from the caster's ability origin to

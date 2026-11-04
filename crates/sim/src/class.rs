@@ -200,7 +200,7 @@ impl Class {
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
-            Class::BloodMage => Mechanic::Blood,
+            Class::BloodMage => Mechanic::Blood(Garden::EMPTY),
             // Dark to start, which is arbitrary between two symmetric forces
             // and is not nothing: one click of the other button changes it, and
             // the bar says which one she is in from the first frame.
@@ -881,6 +881,44 @@ pub struct Structure {
 }
 
 // ---------------------------------------------------------------------------
+// Blood mage
+// ---------------------------------------------------------------------------
+
+/// **The Blood mage's garden** (2026-11-04, exploration 0038): the spikes she
+/// raised out of pools, standing as plants, and the zip to her scythe's head.
+///
+/// A plant is a [`Structure`] -- solid, a foothold, cover, aimed through as
+/// every structure is -- gathered into the field in her slots
+/// (`stones::gather`), but **never written back from it**: nothing kicks,
+/// lights, shoves or breaks a plant but her scythe, and what the field does
+/// to stones in a frame is forgotten for hers the next. It stands for
+/// `tuning::plant_stands` (its `age`), lashes an enemy beside it, and holds
+/// `blood` -- of which `paid` is hers, given back when it is reaped.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Garden {
+    pub plants: [Option<Structure>; MAX_STRUCTURES],
+    /// The blood each plant holds: what it is worth reaped.
+    pub blood: [u16; MAX_STRUCTURES],
+    /// Of that, what she paid for it: given back when it is reaped, never
+    /// past her grey.
+    pub paid: [u16; MAX_STRUCTURES],
+    /// Her haul is the zip to the scythe's head.
+    pub zipping: bool,
+    /// A jump pressed near the zip's end, thrown on arrival.
+    pub zip_jump: bool,
+}
+
+impl Garden {
+    pub const EMPTY: Garden = Garden {
+        plants: [None; MAX_STRUCTURES],
+        blood: [0; MAX_STRUCTURES],
+        paid: [0; MAX_STRUCTURES],
+        zipping: false,
+        zip_jump: false,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Dual mage
 // ---------------------------------------------------------------------------
 
@@ -970,8 +1008,9 @@ pub enum Mechanic {
     /// The Reaver: a second body, always somewhere. See [`Shadow`].
     Shadow(Shadow),
     Structures([Option<Structure>; MAX_STRUCTURES]),
-    /// Health is the resource, so there is no extra state to carry.
-    Blood,
+    /// Health is the resource; what she carries is her garden -- the plants
+    /// her spikes left standing -- and her zip. See [`Garden`].
+    Blood(Garden),
     /// The Dual mage: **two bars**, one per force, the force she is carrying,
     /// and whether the two of them have taken her. See [`Force`],
     /// `crate::dual` and `docs/design/dual-mage.md`.
@@ -1076,7 +1115,7 @@ impl Mechanic {
             // Guillotine erupts wherever that is.
             Mechanic::Shadow(shadow) => Some(shadow.pos),
             Mechanic::Structures(slots) => slots.iter().flatten().next().map(|s| s.at),
-            Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => None,
+            Mechanic::Forms { .. } | Mechanic::Blood(_) | Mechanic::Meter { .. } => None,
         }
     }
 
@@ -1161,7 +1200,10 @@ pub mod alloc_free {
                     "structures",
                     slots.iter().filter(|s| s.is_some()).count() as i32,
                 ),
-                Mechanic::Blood => Summary::Text("blood"),
+                Mechanic::Blood(garden) => Summary::Value(
+                    "plants",
+                    garden.plants.iter().filter(|s| s.is_some()).count() as i32,
+                ),
                 Mechanic::Meter {
                     dark,
                     light,
