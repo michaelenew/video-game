@@ -722,17 +722,13 @@ pub fn wall_jump_push() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallJumpPush))
 }
 
-/// What each wall jump after the first in one airtime is worth, compounding.
-///
-/// **The same-wall drop alone does not bound the height.** It stops jumping
-/// off a wall, air-steering back and jumping off it again from as high, but
-/// an inside corner is two walls a step apart, and alternating between them
-/// never meets the same wall twice running. Compounding the rise makes the sum of every
-/// wall jump's height a geometric series, bounded however many walls there
-/// are -- the argument [`air_stall_falloff`] makes for the hangs. Reset on
-/// landing.
-pub fn wall_jump_falloff() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WallJumpFalloff))
+/// **How many frames after a wall jump the stick is not heard back into
+/// the wall** (2026-11-04): the part of the air steering that points into the
+/// face just kicked off is dropped, so a player still holding into the wall
+/// from the slide is carried off it by the push rather than steered straight
+/// back on (`state::off_the_kicked_wall`). Along it and away steer as ever.
+pub fn wall_jump_lock() -> u8 {
+    oven::scalar(Scalar::WallJumpLock).clamp(0, 200) as u8
 }
 
 /// How many frames after leaving a wall a jump is still off it.
@@ -796,20 +792,17 @@ pub fn wall_slide_steer() -> Fx {
 }
 
 /// How much of the gap between the slide's speed along the wall and what the
-/// stick asks for is closed each frame: momentum carried onto a wall bleeds
-/// away rather than stopping dead.
+/// stick asks for is closed each frame, when the slide is short of it or
+/// going the other way: a turn round on a wall is gradual (2026-11-04).
 pub fn wall_slide_grip() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideGrip))
 }
 
-/// **What a slide keeps of its speed along the wall, a frame** (2026-10-20).
-///
-/// Until then a slide bled whatever it carried along the wall down to the
-/// stick's little steer within a few frames, so a run into a wall stopped
-/// dead on it and the jump off it went straight out -- the owner's "really
-/// hard to have any momentum forward". Now the run is kept, losing this
-/// share a frame to friction, and the stick only ever adds to it
-/// (`state::hold_to_the_wall`).
+/// **What a slide keeps of its speed along the wall beyond what the stick
+/// asks, a frame** (2026-11-04): with the stick into the wall or let go, of
+/// all of it, so a run onto a wall bleeds toward nothing within a second
+/// (`state::hold_to_the_wall`). From 2026-10-20 to then it was 0.99, and the
+/// run was all but kept.
 pub fn wall_slide_keep() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WallSlideKeep))
 }
