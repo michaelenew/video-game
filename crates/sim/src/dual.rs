@@ -161,19 +161,24 @@ fn top() -> Fx {
 /// right moment".
 pub fn step(p: &mut Player) -> bool {
     let Mechanic::Meter {
-        dark,
-        light,
         ascending,
-        singe,
         veil,
+        primed,
         ..
     } = p.mechanic
     else {
         return false;
     };
-    // The Veil's clock runs whatever the bars are doing.
-    if let Mechanic::Meter { veil: v, .. } = &mut p.mechanic {
+    // The Veil's clock and the strike's priming run whatever the bars are
+    // doing.
+    if let Mechanic::Meter {
+        veil: v,
+        primed: pr,
+        ..
+    } = &mut p.mechanic
+    {
         *v = veil.saturating_sub(1);
+        *pr = primed.saturating_sub(1);
     }
 
     if ascending > 0 {
@@ -195,70 +200,15 @@ pub fn step(p: &mut Player) -> bool {
         return false;
     }
 
-    // Calm: both fall, always, floored at zero.
-    let calm = t::meter_calm().mul(DT);
-    let mut dark = dark.sub(calm).max(Fx::ZERO);
-    let mut light = light.sub(calm).max(Fx::ZERO);
-
-    // The hill. Compared every frame; inside the band nothing happens.
-    let gap = dark.sub(light).abs();
-    let excess = gap.sub(Fx::from_int(t::meter_band()));
-    let mut singe = singe;
-    if excess.raw() > 0 {
-        let drift = t::drift_gain().mul(excess).min(t::drift_cap()).mul(DT);
-        let (high, low) = if dark.raw() >= light.raw() {
-            (&mut dark, &mut light)
-        } else {
-            (&mut light, &mut dark)
-        };
-        // The higher bar gains exactly what the lower one lost, so the drift
-        // moves what she has from one being to the other and never makes more
-        // of it: with no input, `dark + light` can only fall. It is what keeps
-        // the hill from ever being a road to the top.
-        let taken = drift.min(*low);
-        *low = low.sub(taken);
-        *high = high.add(taken).min(top());
-
-        // The burn, in health per second, carried forward in `singe` so that a
-        // rate under sixty a second is a slow burn and not no burn at all.
-        singe = singe.add(t::burn_gain().mul(excess).min(t::burn_cap()).mul(DT));
-        let owed = singe.to_int();
-        if owed > 0 {
-            singe_health(p, owed);
-            singe = singe.sub(Fx::from_int(owed));
-        }
-    }
-
-    // Both goaded to the top together, and it takes her. There is no input for
-    // it and there never was; the drift cannot deliver it, because the drift
-    // only ever pulls the two apart.
-    let ascends = tier_of_bar(dark.min(light)) == Tier::Wings;
-    if let Mechanic::Meter {
-        dark: d,
-        light: l,
-        ascending,
-        wave,
-        strike,
-        singe: s,
-        ..
-    } = &mut p.mechanic
-    {
-        *d = dark;
-        *l = light;
-        *ascending = if ascends { t::ascension_frames() } else { 0 };
-        *wave = Fx::ZERO;
-        *strike = 0;
-        *s = singe;
-    }
-    ascends
-}
-
-/// Health comes off, and never past one. Dying to your own bar is not a
-/// decision anybody made -- the same rule the Blood mage's costs follow.
-fn singe_health(p: &mut Player, amount: i32) {
-    if p.health > 1 {
-        p.health = (p.health - amount).max(1);
-    }
+    // **Nothing moves the bars on its own since 2026-11-04** (the owner,
+    // after playing it: the bars "feel like a chore rather than a part of the
+    // class"). No calm, no hill, no burn, and no ascension arriving by itself:
+    // the bars fill when she lands hits and are spent on her finishers --
+    // the majors one each, both together the grand annihilation
+    // (`World::annihilate`). The wave and its unbidden strikes run out on
+    // their own clock above for a mage already ascending, and nothing starts
+    // one now.
+    false
 }
 
 /// Ascension is over: both bars empty, the wave gone, and nothing else. Her
@@ -308,65 +258,107 @@ pub fn steer(p: &mut Player, kind: u8) {
     else {
         return;
     };
-    // Nothing steers during ascension. The bars are not the resource then;
-    // the wave is, and every move she throws pushes it back.
     if ascending > 0 {
         if let Mechanic::Meter { wave, .. } = &mut p.mechanic {
             *wave = wave.sub(Fx::from_int(t::wave_vent())).max(Fx::ZERO);
         }
         return;
     }
-    // **Everything on the mouse fills, `F` and `R` vent, majors spend**
-    // (2026-10-12; the long holds filled from 2026-10-13, at the owner's
-    // word): the autos, the takeoffs and the middle click's taps goad the
-    // bar of their force by `meter, an auto moves` (twilight both at once, so
-    // it never widens the gap), and a long hold by `meter, a long hold fills`
-    // (the Flurry dash both); the Devour and the Smite vent their own bar by
-    // `meter, a spell vents`; and a major spends `meter, a major spends` of
-    // its own -- worth the bar it was thrown from, since `Player::thrown_at`
-    // was read before this, and the way back into the band when one bar has
-    // run away. The force thrown is the one she is carrying after; twilight
-    // leaves that as it was.
+    // **On the press, only spending** (2026-11-04): a major spends the
+    // whole of its bar -- worth the bar it was thrown from, since
+    // `Player::thrown_at` was read before this -- and the lance spends
+    // `lance, spends of her light`, the price of the strongest thing on her
+    // mouse. Everything fills on a hit, never on a press
+    // (`filled_by_a_hit`): pressing at nothing no longer builds anything.
     use crate::moves::dual as d;
-    let by = if d::is_a_long_hold(kind) {
-        t::hold_fills()
-    } else if d::is_an_auto(kind) || d::is_takeoff(kind) || d::twilight(kind) {
-        t::meter_auto_push()
-    } else if d::is_the_finisher(kind) {
-        -t::meter_finisher_push()
-    } else {
-        -t::meter_cast_push()
-    };
-    let goad = |bar: Fx, by: i32| bar.add(Fx::from_int(by)).clamp(Fx::ZERO, top());
-    let (mut dark, mut light, colour) = match d::force(kind) {
-        Some(Force::Dark) => (goad(dark, by), light, Force::Dark),
-        Some(Force::Light) => (dark, goad(light, by), Force::Light),
-        None => (goad(dark, by), goad(light, by), colour),
-    };
-    // **Equinox levels her** (2026-10-12): the one spell aimed at her own
-    // runaway. What it moves goes from the higher bar to the lower, and never
-    // more than half the gap, so it can close the gap and cannot cross it.
-    if kind == crate::moves::dual::EQUINOX {
-        let half = dark.sub(light).abs().mul(Fx::ratio(1, 2));
-        let by = Fx::from_int(t::equinox_levels()).min(half);
-        if dark.raw() >= light.raw() {
-            dark = dark.sub(by);
-            light = light.add(by);
-        } else {
-            light = light.sub(by);
-            dark = dark.add(by);
+    let spend = |bar: Fx, by: i32| bar.sub(Fx::from_int(by)).max(Fx::ZERO);
+    let (mut dark, mut light) = (dark, light);
+    if d::is_the_finisher(kind) {
+        match d::force(kind) {
+            Some(Force::Dark) => dark = spend(dark, t::meter_finisher_push()),
+            _ => light = spend(light, t::meter_finisher_push()),
         }
+    } else if kind == d::LANCE {
+        light = spend(light, t::lance_spends());
     }
+    let colour = d::force(kind).unwrap_or(colour);
     if let Mechanic::Meter {
-        dark: d,
+        dark: dk,
         light: l,
         colour: c,
         ..
     } = &mut p.mechanic
     {
-        *d = dark;
+        *dk = dark;
         *l = light;
         *c = colour;
+    }
+}
+
+/// **A hit she landed fills a bar** (2026-11-04): the bar of the move's
+/// force by `meter, an auto moves`, and both for a move of both (the chain,
+/// its ride, an annihilation). Not the majors, which spend, and not the
+/// lance, which costs. So the bars are built by fighting, at a body.
+pub fn filled_by_a_hit(p: &mut Player, kind: u8) {
+    use crate::moves::dual as d;
+    if d::is_the_finisher(kind) || kind == d::LANCE {
+        return;
+    }
+    let Mechanic::Meter {
+        dark,
+        light,
+        ascending: 0,
+        ..
+    } = p.mechanic
+    else {
+        return;
+    };
+    let fill = |bar: Fx| bar.add(Fx::from_int(t::meter_auto_push())).min(top());
+    let (dark, light) = match d::force(kind) {
+        Some(Force::Dark) => (fill(dark), light),
+        Some(Force::Light) => (dark, fill(light)),
+        None => (fill(dark), fill(light)),
+    };
+    if let Mechanic::Meter {
+        dark: dk, light: l, ..
+    } = &mut p.mechanic
+    {
+        *dk = dark;
+        *l = light;
+    }
+}
+
+/// **A strike landed: the next hold is primed** (2026-11-04) -- thrown in the
+/// next `primed, lasts`, it skips most of its wind-up (`take_prime`). The
+/// strike is the way into the big spells.
+pub fn prime(p: &mut Player) {
+    if let Mechanic::Meter { primed, .. } = &mut p.mechanic {
+        *primed = t::primed_for();
+    }
+}
+
+/// Spend the priming, if there is any: true if this hold comes out fast.
+pub fn take_prime(p: &mut Player) -> bool {
+    match &mut p.mechanic {
+        Mechanic::Meter { primed, .. } if *primed > 0 => {
+            *primed = 0;
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Is she brimming -- both bars at the top together, so the next
+/// annihilation is the grand one?
+pub fn brimming(p: &Player) -> bool {
+    tier_of_bar(lower(p)) == Tier::Wings
+}
+
+/// Both bars spent: the grand annihilation took them.
+pub fn spend_both(p: &mut Player) {
+    if let Mechanic::Meter { dark, light, .. } = &mut p.mechanic {
+        *dark = Fx::ZERO;
+        *light = Fx::ZERO;
     }
 }
 
@@ -402,14 +394,18 @@ pub fn depth_at(p: &Player, kind: Option<u8>) -> Fx {
     if ascending > 0 {
         return t::depth_ceiling();
     }
-    // A twilight move is both forces at once, and is worth her lower bar:
-    // the balance is what it spends.
+    // **Only the majors read a bar since 2026-11-04**: everything else hits
+    // the same at any bar -- the bars are what she builds toward her
+    // finishers, not a tax on everything between them.
+    let _ = colour;
     let bar = match kind {
-        Some(kind) if crate::moves::dual::twilight(kind) => dark.min(light),
-        _ => match kind.and_then(crate::moves::dual::force).unwrap_or(colour) {
-            Force::Dark => dark,
-            Force::Light => light,
-        },
+        Some(kind) if crate::moves::dual::is_the_finisher(kind) => {
+            match crate::moves::dual::force(kind) {
+                Some(Force::Dark) => dark,
+                _ => light,
+            }
+        }
+        _ => return Fx::ONE,
     };
     let out = bar.div(top()).clamp(Fx::ZERO, Fx::ONE);
     crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)

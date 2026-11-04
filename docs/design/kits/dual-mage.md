@@ -51,6 +51,14 @@ power is behind the bars.**
 | Left + right together | **Annihilation**: both beings lunge at her, she springs clear, and they meet where she stood -- a burst of 3.5 m at her feet, 45, worth her lower bar, that never touches her | -- | **The spring**: up at `annihilation, the spring rises` (20 m/s) and the way she holds at `the spring carries her` (10); each in one airtime worth `each spring after is worth` (0.6) of the last, **a hit she lands gives one back**, landing gives them all back (`dual::spring`, `dual::landed_a_hit`) |
 | `Q` / `E` | **Abyss** / **Judgement**, unchanged -- each spends the whole of its bar | -- | -- |
 
+**The bars build to her finishers** (the same day, after the first play; see
+[../dual-mage.md](../dual-mage.md) at the top): a landed hit fills a bar, the lance spends 20 of
+her light, `Q`/`E` spend theirs, both full makes the next annihilation the grand one (twice as
+wide, three and a half times the worth, both bars spent), nothing burns her, and only the majors
+read a bar. **A landed strike primes the next hold** for 40 frames: thrown then, the storm or the
+lance keeps a quarter of its wind-up -- the strike is the way into the big spells. The strikes
+are 19 now.
+
 **The chord** (`state::dual_move`): both clicks on one frame, or the other click while the first
 is still deciding its hold (`step_channel`), is the annihilation. **Both forces are goaded
 alike** by it, the chain and the ride, by an auto's push, so they never widen the gap.

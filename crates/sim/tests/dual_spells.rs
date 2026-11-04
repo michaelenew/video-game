@@ -175,6 +175,7 @@ fn set_bars(w: &mut World, dark: i32, light: i32) {
         singe: Fx::ZERO,
         veil: 0,
         warded: false,
+        primed: 0,
     };
 }
 
@@ -456,20 +457,6 @@ fn a_big_purge_staggers() {
     );
 }
 
-#[test]
-fn a_purge_is_worth_her_light_bar() {
-    let from = |light: i32| {
-        let mut w = facing(2.5);
-        set_bars(&mut w, 0, light);
-        cursed(&mut w, 5);
-        let before = w.players[1].health;
-        step(&mut w, keys::LIGHT);
-        run(&mut w, 12, 0);
-        before - w.players[1].health
-    };
-    assert!(from(100) > from(0) + 50, "full light cashes for more");
-}
-
 // ---------------------------------------------------------------------------
 // Sigils
 // ---------------------------------------------------------------------------
@@ -611,42 +598,6 @@ fn the_black_sun_then_the_columns() {
 // ---------------------------------------------------------------------------
 // Ascending at the right moment
 // ---------------------------------------------------------------------------
-
-#[test]
-fn apotheosis_bursts_from_her_as_she_ascends_and_purges_at_full_power() {
-    let mut w = facing(2.0);
-    set_bars(&mut w, t::tier_wings() - 3, t::tier_wings() - 3);
-    cursed(&mut w, 5);
-    let before = w.players[1].health;
-    // Binary goads both bars: over the top, and the wings come.
-    step(&mut w, keys::TWILIGHT);
-    run(&mut w, 3, 0);
-    assert!(sim::dual::ascending(&w.players[0]), "fixture: she ascended");
-    assert!(
-        effects(&w, EffectKind::Burst)
-            .iter()
-            .any(|e| e.slot == sim::effects::APOTHEOSIS),
-        "the nova"
-    );
-    assert_eq!(stacks(&w), 0, "every curse in it purged");
-    let full = sim::dual::purge_damage(5, t::depth_ceiling());
-    assert!(
-        before - w.players[1].health >= full,
-        "at the top of her power: {} dealt, the purge alone is {full}",
-        before - w.players[1].health
-    );
-}
-
-#[test]
-fn apotheosis_alone_hits_nobody() {
-    let mut w = alone();
-    set_bars(&mut w, t::tier_wings() - 3, t::tier_wings() - 3);
-    let before = w.players[1].health;
-    step(&mut w, keys::TWILIGHT);
-    run(&mut w, 3, 0);
-    assert!(sim::dual::ascending(&w.players[0]));
-    assert_eq!(w.players[1].health, before, "nobody beside her, nothing");
-}
 
 // ---------------------------------------------------------------------------
 // Creatures
@@ -812,26 +763,6 @@ fn a_click_is_a_tap_or_a_hold_and_never_both() {
             );
         }
     }
-}
-
-#[test]
-fn a_long_hold_fills_its_bar() {
-    let mut w = alone();
-    level(&mut w, 40);
-    assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
-    let p = &w.players[0];
-    let (dark, light) = sim::dual::bars(p).unwrap();
-    let want = 40 + t::hold_fills();
-    assert!(
-        (dark.to_int() - want).abs() <= 2,
-        "the lightning left the dark bar at {} rather than about {want}",
-        as_f(dark)
-    );
-    assert!(
-        (light.to_int() - 40).abs() <= 2,
-        "the light bar moved: {}",
-        as_f(light)
-    );
 }
 
 #[test]
@@ -1385,4 +1316,80 @@ fn her_own_storm_never_strikes_her() {
     assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
     run(&mut w, 80, 0);
     assert_eq!(w.players[0].health, mine);
+}
+
+// ---------------------------------------------------------------------------
+// The bars build to a big moment (2026-11-04, from play)
+// ---------------------------------------------------------------------------
+
+/// Annihilate beside the other fighter from these bars; what it dealt and
+/// what was left on her bars.
+fn annihilate_from(dark: i32, light: i32) -> (i32, (i32, i32)) {
+    let mut w = facing(2.0);
+    set_bars(&mut w, dark, light);
+    let before = w.players[1].health;
+    step(&mut w, keys::DARK | keys::LIGHT);
+    run(&mut w, 30, 0);
+    (before - w.players[1].health, bars(&w))
+}
+
+#[test]
+fn both_bars_full_make_the_annihilation_grand_and_it_spends_them() {
+    let (plain, plain_left) = annihilate_from(60, 60);
+    let (grand, grand_left) = annihilate_from(100, 100);
+    assert!(grand > plain * 2, "grand {grand} against plain {plain}");
+    // Spent to nothing, and its own hit is the first step of the next climb.
+    let step_ = t::meter_auto_push();
+    assert_eq!(
+        grand_left,
+        (step_, step_),
+        "the grand one left {grand_left:?}"
+    );
+    assert_eq!(
+        plain_left,
+        (60 + step_, 60 + step_),
+        "short of full it cost {plain_left:?}"
+    );
+}
+
+#[test]
+fn a_hold_thrown_just_after_a_strike_lands_skips_most_of_its_windup() {
+    let wound_up = |primed: bool| -> u16 {
+        let mut w = facing(4.0);
+        if primed {
+            sim::dual::prime(&mut w.players[0]);
+        }
+        let pitch = onto_them(&w);
+        assert!(hold_into(&mut w, keys::LIGHT, pitch, d::LANCE, 60));
+        match w.players[0].action {
+            Action::Startup { left, .. } => left,
+            other => panic!("not winding up: {other:?}"),
+        }
+    };
+    let (cold, hot) = (wound_up(false), wound_up(true));
+    assert!(hot * 2 < cold, "primed {hot} frames against {cold}");
+}
+
+#[test]
+fn a_strike_that_lands_primes_the_next_hold() {
+    let mut w = facing(4.0);
+    let pitch = onto_them(&w);
+    step_looking(&mut w, keys::DARK, pitch);
+    step_looking(&mut w, 0, pitch);
+    let mut primed = false;
+    for _ in 0..20 {
+        step_looking(&mut w, 0, pitch);
+        primed |= matches!(w.players[0].mechanic, Mechanic::Meter { primed: p, .. } if p > 0);
+    }
+    assert!(primed, "a strike landed and primed nothing");
+}
+
+#[test]
+fn the_lance_spends_her_light() {
+    let mut w = facing(10.0);
+    set_bars(&mut w, 50, 50);
+    let pitch = onto_them(&w);
+    assert!(hold_into(&mut w, keys::LIGHT, pitch, d::LANCE, 60));
+    let (dark, light) = bars(&w);
+    assert_eq!((dark, light), (50, 50 - t::lance_spends()));
 }

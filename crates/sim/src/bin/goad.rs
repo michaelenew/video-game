@@ -126,6 +126,7 @@ impl Script {
             singe: Fx::ZERO,
             veil: 0,
             warded: false,
+            primed: 0,
         };
         match self {
             // Level at the first tier, with the carried bar at the far edge

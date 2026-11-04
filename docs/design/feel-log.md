@@ -213,6 +213,29 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-11-04 — the Dual mage's bars build to her finishers; strikes prime the holds
+
+**Changed** A bar fills on a landed hit (6), never on a press; the lance spends 20 of her light;
+the majors spend theirs as before. No calm, hill, drift or burn. Only the majors read a bar --
+everything else hits at ×1. Both bars full makes the next annihilation the **grand** one (2× as
+wide, 3.5× the worth: 280 at its base, both bars spent); Ascension no longer starts on its own.
+A landed strike **primes** the next hold for 40 frames: thrown then, its wind-up is a quarter
+(the lance 20 → 5 frames). The strikes 17 → 19.
+**Why** The owner, after playing: "B and D together" (strikes as the way into the holds; the
+lance with a price), and the bars "feel like a chore rather than a part of the class. You're more
+effective by spamming balanced abilities at the ground until you nearly ascend then using your
+regular abilities" -- "building up to some grand finisher. No longer costing her health ... you
+fight to a big moment, not to always manage your bars, and building both gives you a bigger
+annihilation."
+**Numbers** B1 fell to 0.94 bars at 17 (it had a top-of-the-curve Ascension at the end, and every
+move scaled): the strikes went to 19. B4 restated -- alternating strikes landing on a body fill
+both bars in ten to twenty seconds. The grand annihilation's own hit puts a step back on each
+bar: the first step of the next climb, left as it is. B2, B6, B7 and B8 measured the hill and the
+burn and went with them. Pins re-pinned for her.
+**Verdict** open -- unplayed. To feel for: whether 10-20 s of landing is the right distance to the
+big moment; whether the grand annihilation reads as the moment; whether the storm should spend
+dark as the lance spends light (it does not yet).
+
 ### 2026-11-04 — the Dual mage, after the first play: the storm dashes, and more damage
 
 **Changed** **The storm** is a dash: hold left and she dashes to the crosshair's spot (10 m at

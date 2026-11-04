@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 777] = [
+pub const SCALARS: [i32; 782] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -785,6 +785,11 @@ pub const SCALARS: [i32; 777] = [
               60, // dual_mage.ascension,_an_unbidden_strike_hurts_her = 60
            91750, // dual_mage.ascension,_an_unbidden_strike_reaches_(m) = 1.4
            45875, // dual_mage.behind,_and_this_far_to_the_side,_over_her_shoulder_(m) = 0.7
+              40, // dual_mage.primed,_a_landed_strike_primes_a_hold_for = 40
+           16384, // dual_mage.primed,_a_primed_hold_keeps_this_share_of_its_wind-up = 0.25
+              20, // dual_mage.lance,_spends_of_her_light = 20
+          131072, // dual_mage.grand_annihilation,_size_(x) = 2
+          229376, // dual_mage.grand_annihilation,_worth_(x) = 3.5
 ];
 
 #[rustfmt::skip]
@@ -3010,7 +3015,7 @@ pub const MOVES: [i32; 2730] = [
                5, // move.dual_mage.dark_auto.startup = 5
                6, // move.dual_mage.dark_auto.active = 6
               10, // move.dual_mage.dark_auto.recovery = 10
-              17, // move.dual_mage.dark_auto.damage = 17
+              19, // move.dual_mage.dark_auto.damage = 19
           393216, // move.dual_mage.dark_auto.reach = 6
            39322, // move.dual_mage.dark_auto.radius = 0.6
               18, // move.dual_mage.dark_auto.hitstun = 18
@@ -3130,7 +3135,7 @@ pub const MOVES: [i32; 2730] = [
                5, // move.dual_mage.light_auto.startup = 5
                6, // move.dual_mage.light_auto.active = 6
               10, // move.dual_mage.light_auto.recovery = 10
-              17, // move.dual_mage.light_auto.damage = 17
+              19, // move.dual_mage.light_auto.damage = 19
           393216, // move.dual_mage.light_auto.reach = 6
            39322, // move.dual_mage.light_auto.radius = 0.6
               18, // move.dual_mage.light_auto.hitstun = 18

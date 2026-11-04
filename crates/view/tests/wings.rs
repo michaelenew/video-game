@@ -30,6 +30,7 @@ fn mage_with(dark: i32, light: i32, ascending: u16) -> World {
         singe: Fx::ZERO,
         veil: 0,
         warded: false,
+        primed: 0,
     };
     w
 }

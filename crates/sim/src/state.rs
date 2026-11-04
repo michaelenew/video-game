@@ -5879,6 +5879,7 @@ fn spell_lands_on_fighter(players: &mut [Player; MAX_PLAYERS], by: usize, victim
     if players[by].class != Class::DualMage || by == victim {
         return;
     }
+    landed_by_the_mage(&mut players[by], kind);
     let laid = moves::dual::curses_laid(kind);
     if laid > 0 {
         let v = &mut players[victim];
@@ -5890,6 +5891,16 @@ fn spell_lands_on_fighter(players: &mut [Player; MAX_PLAYERS], by: usize, victim
     if moves::dual::force(kind) == Some(Force::Light) {
         let power = dual::depth_at(&players[by], Some(kind));
         purge_the_fighter(players, by, victim, power);
+    }
+}
+
+/// **What landing a hit does for her** (2026-11-04, from play): it fills a
+/// bar -- the bars are built by fighting, never by pressing at nothing -- and
+/// a strike primes the next hold to come out fast.
+fn landed_by_the_mage(p: &mut Player, kind: u8) {
+    dual::filled_by_a_hit(p, kind);
+    if moves::dual::is_an_auto(kind) {
+        dual::prime(p);
     }
 }
 
@@ -5934,6 +5945,7 @@ fn spell_lands_on_creature(
     if players[by].class != Class::DualMage || !beast.alive() {
         return;
     }
+    landed_by_the_mage(&mut players[by], kind);
     let laid = moves::dual::curses_laid(kind);
     if laid > 0 {
         dual::lay_curse(&mut beast.curse, &mut beast.curse_clock, by, laid);
@@ -11165,7 +11177,21 @@ fn step_channel(
         // spell comes out on its own; let go sooner and the click was a tap,
         // and the tap is thrown now -- the wing, or Binary or Phase. Nothing
         // of either had begun while it was undecided.
-        Some(moves::Charge::TapOrHold) if held >= cap => throw_move(p, kind, input, true),
+        // **Primed** (2026-11-04, from play): a strike of hers landed a moment
+        // ago, and the hold comes out with most of its wind-up skipped -- the
+        // strike is the way into the big spells.
+        Some(moves::Charge::TapOrHold) if held >= cap => match throw_move(p, kind, input, true) {
+            Action::Startup { kind, left } if p.class == Class::DualMage && dual::take_prime(p) => {
+                Action::Startup {
+                    kind,
+                    left: Fx::from_int(left as i32)
+                        .mul(t::primed_share())
+                        .to_int()
+                        .max(1) as u16,
+                }
+            }
+            thrown => thrown,
+        },
         Some(moves::Charge::TapOrHold) => match tap_of(p, kind).filter(|tap| !p.locked_out(*tap)) {
             Some(tap) => begin_move(p, who, tap, input, scene, true),
             None => Action::Free,
@@ -12411,6 +12437,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             singe,
             veil,
             warded,
+            primed,
         } => {
             h.write_u32(7);
             h.write_i32(dark.raw());
@@ -12424,6 +12451,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_i32(singe.raw());
             // The razor's edge, 2026-11-04: only when any is set, so a mage
             // who has thrown none of it hashes as she did.
+            if *primed != 0 {
+                h.write_u32(*primed as u32);
+            }
             if *springs != 0 || *storm != 0 || *strike != 0 {
                 h.write_u32(*springs as u32);
                 h.write_u32(*storm as u32);
@@ -19582,6 +19612,19 @@ impl World {
     fn annihilate(&mut self, i: usize, input: Input) {
         let p = self.players[i];
         let m = moves::get(p.class, moves::dual::ANNIHILATION);
+        // **Both bars full: the grand annihilation** (2026-11-04, from play).
+        // What she built is what goes off -- bigger, worth far more -- and
+        // both bars go with it. Short of full it is the ordinary one, and
+        // costs nothing.
+        let grand = dual::brimming(&p);
+        let (radius, power) = if grand {
+            (m.radius.mul(t::grand_size()), t::grand_power())
+        } else {
+            (m.radius, p.thrown_at)
+        };
+        if grand {
+            dual::spend_both(&mut self.players[i]);
+        }
         // At her feet: a burst reaches as a column standing on its point, so
         // from her waist it would pass over anything knee-high.
         let mut blast = Effect::cast(
@@ -19591,10 +19634,10 @@ impl World {
             moves::dual::ANNIHILATION,
             p.pos,
             V3::ZERO,
-            m.radius,
+            radius,
         );
         blast.home = p.pos;
-        blast.power = p.thrown_at;
+        blast.power = power;
         spawn_effect(&mut self.effects, blast);
         let (ax, az) = input.move_axis();
         let along = move_dir(input.aim_turns(), ax, az);

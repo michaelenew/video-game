@@ -19,6 +19,31 @@ holding them level — and she gets what neither could give her alone: wings.
 The verb is **goad**. This is a containment story, not a channelling story: the human is not a
 conduit, they are a vessel under load, and the load is two things that want to be apart.
 
+> **The bars rebuilt, 2026-11-04, after the first play: they build to her finishers.** The
+> owner: the bars "feel like a chore rather than a part of the class. You're more effective by
+> spamming balanced abilities at the ground until you nearly ascend"; "I wonder if the bars are
+> not supposed to be gating damage now but should be building up to some grand finisher. No
+> longer costing her health ... Then you fight to a big moment, not to always manage your bars,
+> and building both gives you a bigger annihilation." So, and it supersedes everything below
+> about the hill, the burn, the depth curve on ordinary moves and Ascension arriving:
+>
+> - **A bar fills when a hit lands** (`dual::filled_by_a_hit`), never on a press: a strike its
+>   own bar, a move of both (the chain, its ride, an annihilation) both, `meter, an auto moves`
+>   (6) a hit. The lance fills nothing and **spends** `lance, spends of her light` (20) on the
+>   press; a major spends its whole bar.
+> - **Nothing moves the bars on their own and nothing burns her**: no calm, no hill, no drift,
+>   no burn. The band and the gap read nothing.
+> - **Only the majors read a bar** (`dual::depth_at`); everything else hits the same at any bar.
+> - **Both full is the grand annihilation**: the next both-clicks is `grand annihilation, size`
+>   (2×) as wide and `worth` (3.5×) as much, and spends both bars (`World::annihilate`). Nothing
+>   starts on its own when they are full: Ascension and its wave are dormant -- the code stands,
+>   nothing sets it off.
+> - **A landed strike primes the next hold** for `primed, a landed strike primes a hold for` (40
+>   frames): thrown then, it keeps `primed, ... this share of its wind-up` (a quarter).
+>
+> B4 is now "alternating strikes on a body fill both bars in ten to twenty seconds"; B2, B6, B7
+> and B8 measured the hill and the burn and are gone; B1 holds with the strikes at 19.
+
 > **Rebuilt 2026-11-04: her magic is aimed at her.**
 > ([exploration/0037](exploration/0037_dual_mage_the_razor_edge.md), the kit in
 > [kits/dual-mage.md](kits/dual-mage.md) §"Her hands, 2026-11-04".) The two beings are trying to

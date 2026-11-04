@@ -5306,3 +5306,28 @@ pub fn unbidden_radius() -> Fx {
 pub fn behind_side() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BehindSide)).max(Fx::ZERO)
 }
+
+/// How long after one of her strikes lands a hold thrown is primed.
+pub fn primed_for() -> u8 {
+    oven::scalar(Scalar::PrimedFor).clamp(0, 120) as u8
+}
+
+/// What share of its wind-up a primed hold keeps: the rest is skipped.
+pub fn primed_share() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PrimedShare)).clamp(Fx::ZERO, Fx::ONE)
+}
+
+/// How much of her light bar the lance spends on the press.
+pub fn lance_spends() -> i32 {
+    oven::scalar(Scalar::LanceSpends).max(0)
+}
+
+/// How much bigger the grand annihilation is than an ordinary one.
+pub fn grand_size() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GrandSize)).max(Fx::ONE)
+}
+
+/// What the grand annihilation is worth, as a multiple of an ordinary one.
+pub fn grand_power() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GrandPower)).max(Fx::ONE)
+}

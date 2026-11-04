@@ -1349,6 +1349,14 @@ scalars! {
     UnbiddenDamage,       "Dual mage", "Ascension, an unbidden strike hurts her",            Int, 0, 400;
     UnbiddenRadius,       "Dual mage", "Ascension, an unbidden strike reaches (m)",          Fixed, fx(1,10), fx(6,1);
     BehindSide,           "Dual mage", "Behind, and this far to the side, over her shoulder (m)", Fixed, 0, fx(3,1);
+    // **Strikes prime the holds; the lance costs; the grand annihilation**
+    // (2026-11-04, from play). Appended: `tuned::SCALARS` is read by this
+    // enum's own discriminant.
+    PrimedFor,            "Dual mage", "Primed, a landed strike primes a hold for",          Frames, 0, 120;
+    PrimedShare,          "Dual mage", "Primed, a primed hold keeps this share of its wind-up", Fixed, 0, fx(1,1);
+    LanceSpends,          "Dual mage", "Lance, spends of her light",                         Int, 0, 100;
+    GrandSize,            "Dual mage", "Grand annihilation, size (x)",                       Fixed, fx(1,1), fx(5,1);
+    GrandPower,           "Dual mage", "Grand annihilation, worth (x)",                      Fixed, fx(1,1), fx(10,1);
 }
 
 // ---------------------------------------------------------------------------

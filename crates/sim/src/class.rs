@@ -221,6 +221,7 @@ impl Class {
                 singe: Fx::ZERO,
                 veil: 0,
                 warded: false,
+                primed: 0,
             },
         }
     }
@@ -1049,6 +1050,11 @@ pub enum Mechanic {
         /// Frames of the Veil left: untouchable while it runs. See
         /// `crate::dual::veiled`.
         veil: u8,
+        /// **Primed** (2026-11-04, from play): frames left in which a hold
+        /// thrown comes out with most of its wind-up skipped, because a strike
+        /// of hers just landed. The strike is the way into the big spells.
+        /// See `crate::dual::prime`.
+        primed: u8,
         /// Standing in one of her own sigils this frame, so a wound is cut by
         /// `sigil, wards her by`. Set by the world, which knows where the
         /// sigils are, once a frame; read by `state::Player::wound`.

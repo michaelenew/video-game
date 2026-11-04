@@ -21,16 +21,16 @@ pub static TUTORIAL: Tutorial = Tutorial {
            Everything they throw comes from behind her, at her; she gets out of the way, and \
            it lands on whatever is in front of her.",
     plays: "Left click is Dark and right click is Light: a quick strike she steps off, and a \
-            hop the way you hold. Hold a click for the big one. Both at once and the two \
-            collide where she was standing as she springs clear. Each hand fills its own bar: \
-            keep them level or the higher one burns her.",
+            hop the way you hold. Hold a click for the big one -- right after a strike lands, \
+            it comes out fast. Both at once and the two collide where she was standing as she \
+            springs clear. Every hit she lands fills a bar; Q and E spend one, and both full \
+            makes the next annihilation the grand one.",
     wins: "She wins by staying just out of reach -- in close enough that the strikes she dodges \
            land on them -- and spending full bars on her majors.",
     rooms: &ROOMS,
 };
 
 struct Meter {
-    ascending: u16,
     springs: u8,
     hopped: bool,
     dash_jump: bool,
@@ -39,13 +39,11 @@ struct Meter {
 fn meter(m: Mechanic) -> Option<Meter> {
     match m {
         Mechanic::Meter {
-            ascending,
             springs,
             hopped,
             dash_jump,
             ..
         } => Some(Meter {
-            ascending,
             springs,
             hopped,
             dash_jump,
@@ -130,8 +128,14 @@ fn air_hop(s: &Seen) -> bool {
 fn second_spring(s: &Seen) -> bool {
     !s.now().grounded && both(s).is_some_and(|(was, now)| was.springs == 1 && now.springs == 2)
 }
-fn wings(s: &Seen) -> bool {
-    both(s).is_some_and(|(was, now)| was.ascending == 0 && now.ascending > 0)
+/// The grand annihilation: thrown with both bars full.
+fn grand(s: &Seen) -> bool {
+    s.began(ANNIHILATION) && crate::dual::brimming(s.was())
+}
+/// A hold thrown primed: a strike landed a moment ago.
+fn primed(s: &Seen) -> bool {
+    matches!(s.was().mechanic, Mechanic::Meter { primed: p, .. } if p > 0)
+        && (s.began(STORM) || s.began(LANCE))
 }
 fn ride_jump(s: &Seen) -> bool {
     both(s).is_some_and(|(was, now)| was.dash_jump && !now.dash_jump)
@@ -285,28 +289,36 @@ pub const ROOMS: [Room; 10] = [
         bay: Bay::Flat,
     },
     Room {
-        title: "Advanced: switch hands",
+        title: "Advanced: strike, then the big one",
         advanced: true,
         intro: "Everything past here is advanced: ways to get the most from her. She plays well \
-                without any of it. Each hand fills its own bar. Let one get far ahead and it \
-                runs away and burns your health; alternate and both climb together. Get both a \
-                third full without letting them split.",
-        tasks: &[Task {
-            what: "Both bars a third full, together",
-            keys: "Alternate left and right taps",
-            check: in_the_band,
-            lands: false,
-        }],
+                without any of it. Every hit that lands fills the bar of its hand, so alternate \
+                and both climb together. And a hold thrown right after a strike lands skips most \
+                of its wind-up.",
+        tasks: &[
+            Task {
+                what: "Both bars a third full, together",
+                keys: "Alternate left and right taps on the dummy",
+                check: in_the_band,
+                lands: false,
+            },
+            Task {
+                what: "A primed hold",
+                keys: "Tap a click on the dummy, then hold one at once",
+                check: primed,
+                lands: false,
+            },
+        ],
         dummy: Dummy::Stands,
         bay: Bay::Flat,
     },
     Room {
-        title: "Advanced: vent a runaway bar",
+        title: "Advanced: spend a bar",
         advanced: true,
-        intro: "The majors empty their own bar: that is how a bar that has run away is pulled \
-                back. Let one get ahead -- three taps of one hand -- then bring it back.",
+        intro: "The majors spend their own bar, and are worth what they spend. Let one get \
+                ahead -- three hits of one hand -- then spend it.",
         tasks: &[Task {
-            what: "Pull a runaway bar back",
+            what: "Spend the bar that is ahead",
             keys: "Dark ahead: Q. Light ahead: E",
             check: vented,
             lands: false,
@@ -338,13 +350,12 @@ pub const ROOMS: [Room; 10] = [
         bay: Bay::Shelf(250),
     },
     Room {
-        title: "Advanced: springs, and Ascension",
+        title: "Advanced: springs, and the grand annihilation",
         advanced: true,
         intro: "Each spring in one jump goes less high than the last, and every hit you land \
                 gives one back -- so she stays up for as long as she keeps hitting. Fill both \
-                bars to the top together and she ascends: the beings strike at her on their \
-                own, faster the longer she goes without casting. Keep throwing to stay ahead of \
-                them.",
+                bars to the top and the next annihilation is the grand one: far bigger, and it \
+                spends them both.",
         tasks: &[
             Task {
                 what: "Two springs in one jump",
@@ -353,10 +364,10 @@ pub const ROOMS: [Room; 10] = [
                 lands: false,
             },
             Task {
-                what: "Ascend",
-                keys: "Fill both bars to the top",
-                check: wings,
-                lands: false,
+                what: "The grand annihilation",
+                keys: "Both bars full, then left and right together",
+                check: grand,
+                lands: true,
             },
         ],
         dummy: Dummy::Stands,
