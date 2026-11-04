@@ -15,16 +15,17 @@
 //! carries [`LONG`] -- the Dual mage's, the longest, carries about nine
 //! metres -- and five or six kicks carry every class over it, the Bulwark
 //! included; the rest of the roster makes fifteen to eighteen. The walls
-//! stand [`WIDE`] apart, so a kick crosses in about a third of a second: one
-//! more kick before the falloff has spent the rise (`tuning::wall_jump_falloff`).
+//! stand [`WIDE`] apart, so a kick crosses in about a third of a second.
 //! They stand [`ABOVE`] over the takeoff, out of any hand's reach, so a wall's
-//! top is not a ledge to go along instead.
+//! top is not a ledge to go along instead. (Since 2026-11-04 every kick rises
+//! as high as the first, so two walls this close can be climbed; twelve
+//! metres is a long way to climb for a top that leads nowhere.)
 //!
 //! **How it is played**: run along one side of the takeoff, jump, drift into
 //! the wall beside you, and press jump as you touch it (or just before: the
 //! press is kept for the wall); the push carries you to the other wall, and
-//! you press again. Hold forward: since 2026-10-20 a slide keeps the run and
-//! a kick goes the way the stick points along the wall.
+//! you press again. Hold forward: a kick goes the way the stick points along
+//! the wall (since 2026-10-20), and the slide between kicks steers that way.
 //!
 //! What is here is the shape; where a gully goes is its route's.
 

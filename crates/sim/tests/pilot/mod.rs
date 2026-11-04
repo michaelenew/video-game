@@ -198,16 +198,24 @@ fn try_jump(
 /// touched -- holding forward, because the stick into a wall is a slide and a
 /// slide bleeds the run away. `Ok` once it stands on `to`; the last miss if
 /// no try does. Returns the kicks the crossing took.
+///
+/// **And, if every kick at once fails, keeping its height** (2026-11-04):
+/// since every kick rises as high as the first, kicking on every touch climbs
+/// a gully rather than crossing it, up and over its walls. A person learns to
+/// let the slide take them back down to the takeoff's height before the next
+/// kick, and that is the second way tried.
 pub fn kick_across(w: &mut World, from: Solid, to: Solid, dir: (i32, i32)) -> Result<u32, String> {
     let o = w.map_origin();
     let mut last = String::new();
-    for side in [-1, 1] {
-        for off in [60, 85, 98] {
-            for hold in [30, 18, 8] {
-                let (from, to) = (moved(w, o, from), moved(w, o, to));
-                match try_kicks(w, from, to, dir, side * off, hold) {
-                    Ok(k) => return Ok(k),
-                    Err(e) => last = e,
+    for level in [false, true] {
+        for side in [-1, 1] {
+            for off in [60, 85, 98] {
+                for hold in [30, 18, 8] {
+                    let (from, to) = (moved(w, o, from), moved(w, o, to));
+                    match try_kicks(w, from, to, dir, side * off, hold, level) {
+                        Ok(k) => return Ok(k),
+                        Err(e) => last = e,
+                    }
                 }
             }
         }
@@ -222,6 +230,7 @@ fn try_kicks(
     dir: (i32, i32),
     off: i32,
     hold: u32,
+    level: bool,
 ) -> Result<u32, String> {
     let d = V3::new(Fx::from_int(dir.0), Fx::ZERO, Fx::from_int(dir.1));
     // Across the run, to the right of it.
@@ -239,6 +248,7 @@ fn try_kicks(
     let drift = if off > 0 { Input::D } else { Input::A };
     let mut jumped: Option<u32> = None;
     let mut touched = false;
+    let mut first_wall = V3::ZERO;
     let mut release = false;
     let mut kicks = 0;
     for f in 0..600u32 {
@@ -253,13 +263,29 @@ fn try_kicks(
                 }
             }
             Some(at) => {
-                if p.wall_since == 0 {
+                if p.wall_since == 0 && !touched {
                     touched = true;
+                    first_wall = p.wall.normal;
                 }
                 if !touched {
                     bits = drift;
                 }
-                let kick = touched && p.wall_since <= 2 && !p.ledge.is_some();
+                let low = !level || feet(w, o).y.raw() <= from.max.y.raw();
+                // Keeping height: on the slide, forward along it; off it,
+                // straight at the wall last touched, which is what gets back
+                // on (forward and in together steers nothing more in, the
+                // run already filling the air's allowance that way).
+                if touched && !low && !p.sliding {
+                    let n = p.wall.normal;
+                    let first = n.x.mul(first_wall.x).add(n.z.mul(first_wall.z)).raw() > 0;
+                    let back = if drift == Input::D {
+                        Input::A
+                    } else {
+                        Input::D
+                    };
+                    bits = if first { drift } else { back };
+                }
+                let kick = touched && p.wall_since <= 2 && !p.ledge.is_some() && low;
                 if kick && !release {
                     release = true;
                 } else if kick {
