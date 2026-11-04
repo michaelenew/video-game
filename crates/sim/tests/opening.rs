@@ -32,6 +32,27 @@ fn hunt(class: Class) -> World {
     World::hunt_of([class, Class::Champion], SpeciesId::WARDEN).seated(1)
 }
 
+/// **The space bar, as a player presses it**: a jump is a press, not a
+/// hold (`sim::state::jump_pressed`), so it is held for [`HOLD`] frames for
+/// the jump's full height and then let go, and pressed again only once it
+/// is up -- a held space through a landing does not jump again. `want` is
+/// whether a jump is wanted now; `held` counts the frames of this one.
+fn space(held: &mut u32, p: &sim::state::Player, want: bool) -> u16 {
+    if *held > 0 && *held < HOLD {
+        *held += 1;
+        return Input::SPACE;
+    }
+    if *held >= HOLD {
+        *held = 0;
+        return 0;
+    }
+    if want && p.grounded && !p.space_held {
+        *held = 1;
+        return Input::SPACE;
+    }
+    0
+}
+
 /// **Walk to a point**, on whatever is under it there: forward held, the
 /// look on it, a held jump when the point is higher, the walk is blocked or
 /// the ground ahead drops away -- as `tests/versus.rs` walks a stage. `Err`
@@ -57,21 +78,7 @@ fn walk_to(w: &mut World, to: (Fx, Fx), from_height: Fx) -> Result<(), String> {
         } else {
             0
         };
-        if p.grounded && held >= HOLD {
-            held = 0;
-        }
-        let jump = if held > 0 && held < HOLD {
-            held += 1;
-            Input::SPACE
-        } else if held == 0 && p.grounded && (above || stuck > 20) {
-            held = 1;
-            Input::SPACE
-        } else {
-            if held > 0 {
-                held += 1;
-            }
-            0
-        };
+        let jump = space(&mut held, &p, above || stuck > 20);
         // Hanging from an edge: push into its face to climb up, as a
         // player does (`controls.md`, "Ledges catch").
         if p.ledge.is_some() && p.ledge.grip != sim::state::Grip::Climb {
@@ -345,13 +352,7 @@ fn the_curtain_wall_is_crossed_only_at_its_gap() {
                 }
                 let d = V3::new(goal.0, p.pos.y, goal.1).sub(p.pos);
                 let aim = (sim::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
-                held = if p.grounded && held >= HOLD { 0 } else { held };
-                let jump = if held < HOLD {
-                    held += 1;
-                    Input::SPACE
-                } else {
-                    0
-                };
+                let jump = space(&mut held, &p, true);
                 w.advance([Input::aimed(Input::W | jump, aim), Input::default()]);
             }
             if let Some(pos) = was_east {
@@ -404,13 +405,7 @@ fn the_chapels_walls_are_not_climbed() {
                 was = p.pos;
                 let d = V3::new(goal.0, p.pos.y, goal.1).sub(p.pos);
                 let aim = (sim::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
-                held = if p.grounded && held >= HOLD { 0 } else { held };
-                let jump = if held < HOLD {
-                    held += 1;
-                    Input::SPACE
-                } else {
-                    0
-                };
+                let jump = space(&mut held, &p, true);
                 w.advance([Input::aimed(Input::W | jump, aim), Input::default()]);
             }
         }
