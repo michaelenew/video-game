@@ -10122,6 +10122,20 @@ with the Cast, as the Elementalist does with her shots. `haemorrhage.rs` measure
 the Cast's bite, the head taken off, and its chain test wants two eruptions where it wanted
 three: a bleed tick's small pool rises in 8 frames, before the trail is as long.
 
+**The movement search, re-run for her** (`envelope -- search --fixtures --class Blood_mage`,
+the search's Blood mage tools now the Cast at a point and the zip; her fixture lines replaced).
+Widest gap off the runway, shared blocks / whole kit, by rise:
+
+| rise | -8 | -4 | -2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 30 | 45 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| before | 33.7/33.7 | 32.3/34.3 | 33.7/34.4 | 35.9/35.9 | 33.1/33.1 | 36.1/36.9 | 33.0/33.6 | 13.7/15.2 | 12.3/18.9 | 14.0/14.7 | -/- | -/- | -/- | -/- | -/- | -/- | -/- |
+| after | 23.9/25.3 | 21.7/21.7 | 19.6/21.8 | 17.4/17.4 | 15.2/30.5 | 17.6/17.9 | 15.6/17.3 | 13.1/49.7 | 11.1/36.5 | 9.0/10.9 | -/36.2 | -/- | -/- | -/11.1 | -/23.6 | -/- | -/- |
+
+The shared blocks lost a third at the low rises: space and a click found Thornfall's burst along
+the aim, which is cut. The whole kit gained where the zip reaches a lip -- 50 m at +4, a ledge
+at +8, +16 and +20 she never reached -- and her own kit is now most of her reach rather than 5%
+of it. A search is a lower bound, and this one is 1,500 runs a cell.
+
 **Tried and dropped, the same day** *The spike's disc at 1.2 m* (was 2.2): a small stain's
 eruption no longer reached a fighter walking off it, and the bleed-then-spike chain stopped
 catching them. Back to 2.2 -- the problem was that it came up anywhere, not how wide. *The world's
