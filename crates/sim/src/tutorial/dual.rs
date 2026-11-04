@@ -1,14 +1,15 @@
-//! **The Dual mage's hall** (`docs/design/kits/dual-mage.md`, her hands):
-//! dark, twilight and light, the keys; then the hands kept in the band,
-//! venting, curse and purge, the air hop, what the lower bar unlocks, and
-//! the Flurry dash's jump.
+//! **The Dual mage's hall** (`docs/design/kits/dual-mage.md`, her hands, and
+//! `docs/design/exploration/0037_dual_mage_the_razor_edge.md`): her magic is
+//! aimed at her. The two balls and their holds, the chain, both clicks at
+//! once; then the hands kept in the band, venting, the hop chain, the springs
+//! and Ascension, and the chain ride's jump.
 //!
 //! A click opens a hold on the press and its tap comes out on the release,
 //! so a move is caught on its windup ([`Seen::began`]), never the press.
 
 use super::{Bay, Dummy, Room, Seen, Task, Tutorial};
 use crate::arena::ArenaId;
-use crate::class::{Class, Force, Mechanic};
+use crate::class::{Class, Mechanic};
 use crate::fixed::Fx;
 use crate::moves::dual::*;
 use crate::state::Action;
@@ -16,21 +17,21 @@ use crate::state::Action;
 pub static TUTORIAL: Tutorial = Tutorial {
     class: Class::DualMage,
     arena: ArenaId::HALL_DUAL,
-    what: "The Dual mage is a close-range caster with two forces, Dark and Light, one in each \
-           hand, each with its own bar.",
-    plays: "Left click fills Dark and right click fills Light, and after each quick hit she \
-            hops a few steps the way you hold, so a run of hits is a run of hops. The fuller the \
-            lower of her two bars, the more her body can do: blink, double jump, and at the top \
-            grow wings. Let one bar run far ahead of the other and it burns her health, so keep \
-            switching hands.",
-    wins: "She wins by cursing the enemy with Dark, cashing the curse with Light, and spending a \
-           full bar on a big finishing spell.",
+    what: "The Dual mage holds two beings, Dark and Light, that are trying to kill her. \
+           Everything they throw comes from behind her, at her; she gets out of the way, and \
+           it lands on whatever is in front of her.",
+    plays: "Left click is Dark and right click is Light: a quick strike she steps off, and a \
+            hop the way you hold. Hold a click for the big one. Both at once and the two \
+            collide where she was standing as she springs clear. Each hand fills its own bar: \
+            keep them level or the higher one burns her.",
+    wins: "She wins by staying just out of reach -- in close enough that the strikes she dodges \
+           land on them -- and spending full bars on her majors.",
     rooms: &ROOMS,
 };
 
 struct Meter {
     ascending: u16,
-    jumped: bool,
+    springs: u8,
     hopped: bool,
     dash_jump: bool,
 }
@@ -39,13 +40,13 @@ fn meter(m: Mechanic) -> Option<Meter> {
     match m {
         Mechanic::Meter {
             ascending,
-            jumped,
+            springs,
             hopped,
             dash_jump,
             ..
         } => Some(Meter {
             ascending,
-            jumped,
+            springs,
             hopped,
             dash_jump,
         }),
@@ -69,7 +70,7 @@ fn dark(s: &Seen) -> bool {
 fn air_dark(s: &Seen) -> bool {
     s.began_aloft(DARK_AUTO)
 }
-/// A hop off an auto: carried the way she holds, as its swing ends.
+/// A hop off an auto: carried the way she holds, as its strike ends.
 fn hop(s: &Seen) -> bool {
     s.was().haul == 0
         && s.now().haul > 0
@@ -81,38 +82,26 @@ fn hop(s: &Seen) -> bool {
             }
         )
 }
-fn chain(s: &Seen) -> bool {
-    s.began(CHAIN_LIGHTNING)
-}
-fn veil(s: &Seen) -> bool {
-    s.began(VEIL)
-}
-fn binary(s: &Seen) -> bool {
-    s.began(BINARY)
-}
-fn phase(s: &Seen) -> bool {
-    s.began(PHASE)
-}
-fn flurry(s: &Seen) -> bool {
-    s.began(FLURRY_DASH)
-}
-fn equinox(s: &Seen) -> bool {
-    s.began(EQUINOX)
+fn storm(s: &Seen) -> bool {
+    s.began(STORM)
 }
 fn light(s: &Seen) -> bool {
     s.began(LIGHT_AUTO)
 }
-fn disk_ray(s: &Seen) -> bool {
-    s.began(DISK_RAY)
+fn lance(s: &Seen) -> bool {
+    s.began(LANCE)
 }
-fn sanctuary(s: &Seen) -> bool {
-    s.began(SANCTUARY)
+fn chain(s: &Seen) -> bool {
+    s.began(CHAIN)
 }
-fn devour(s: &Seen) -> bool {
-    s.began(DEVOUR)
+fn ride(s: &Seen) -> bool {
+    s.began(FLURRY_DASH)
 }
-fn smite(s: &Seen) -> bool {
-    s.began(SMITE)
+fn annihilation(s: &Seen) -> bool {
+    s.began_standing(ANNIHILATION)
+}
+fn air_annihilation(s: &Seen) -> bool {
+    s.began_aloft(ANNIHILATION)
 }
 fn abyss(s: &Seen) -> bool {
     s.began(ABYSS)
@@ -132,41 +121,25 @@ fn vented(s: &Seen) -> bool {
     let band = Fx::from_int(crate::tuning::meter_band()).raw();
     crate::dual::gap(s.was()).raw() > band
         && crate::dual::gap(s.now()).raw() <= band
-        && matches!(
-            super::kind_of(s.now().action),
-            Some(DEVOUR | SMITE | ABYSS | JUDGEMENT | EQUINOX)
-        )
-}
-fn cursed(s: &Seen) -> bool {
-    let (was, now) = s.dummy();
-    crate::dual::stacks(was.curse) < 3 && crate::dual::stacks(now.curse) >= 3
-}
-fn purged(s: &Seen) -> bool {
-    let (was, now) = s.dummy();
-    crate::dual::stacks(was.curse) >= 3
-        && crate::dual::stacks(now.curse) == 0
-        && super::struck(was, now)
-        && super::kind_of(s.now().action).and_then(force) == Some(Force::Light)
+        && matches!(super::kind_of(s.now().action), Some(ABYSS | JUDGEMENT))
 }
 fn air_hop(s: &Seen) -> bool {
     both(s).is_some_and(|(was, now)| !was.hopped && now.hopped)
 }
-fn blink(s: &Seen) -> bool {
-    s.dodged() && s.moved().raw() > Fx::ONE.raw()
-}
-fn second_jump(s: &Seen) -> bool {
-    !s.was().grounded && both(s).is_some_and(|(was, now)| !was.jumped && now.jumped)
+/// A second spring in one airtime: less than the first, and still up.
+fn second_spring(s: &Seen) -> bool {
+    !s.now().grounded && both(s).is_some_and(|(was, now)| was.springs == 1 && now.springs == 2)
 }
 fn wings(s: &Seen) -> bool {
     both(s).is_some_and(|(was, now)| was.ascending == 0 && now.ascending > 0)
 }
-fn flurry_jump(s: &Seen) -> bool {
+fn ride_jump(s: &Seen) -> bool {
     both(s).is_some_and(|(was, now)| was.dash_jump && !now.dash_jump)
         && !s.now().grounded
         && s.now().vel.y.raw() > 0
 }
 
-pub const ROOMS: [Room; 11] = [
+pub const ROOMS: [Room; 10] = [
     Room {
         title: "The Dual mage",
         advanced: false,
@@ -193,75 +166,34 @@ pub const ROOMS: [Room; 11] = [
     Room {
         title: "Left click: Dark",
         advanced: false,
-        intro: "Tapped, left click throws a dark ball that curses whoever it hits, and fills \
-                your Dark bar. Hold a direction as you tap and she hops that way after it. Held a \
-                moment, it is Chain lightning, leaping from body to body. The same hand can't \
-                tap twice in half a second -- that is what the other hand is for.",
+        intro: "Tapped, left click is a dark strike from behind her, at her: she steps off it \
+                and it flies on into whatever she faces. Hold a direction as you tap and she hops \
+                that way. Held a moment, the storm hunts her: lightning falls a beat behind \
+                wherever she goes and leaps to whoever is near, so keep moving and take it \
+                through them.",
         tasks: &[
             Task {
-                what: "Dark ball, on the floor",
+                what: "Dark strike, on the floor",
                 keys: "Tap left click at the dummy",
                 check: dark,
                 lands: true,
             },
             Task {
-                what: "Dark ball, in the air",
+                what: "Dark strike, in the air",
                 keys: "Space, then tap left click",
                 check: air_dark,
                 lands: false,
             },
             Task {
-                what: "Hop after it",
+                what: "Hop off it",
                 keys: "Hold W, A, S or D and tap left click",
                 check: hop,
                 lands: false,
             },
             Task {
-                what: "Hold: Chain lightning",
-                keys: "Hold left click, crosshair near the dummy",
-                check: chain,
-                lands: true,
-            },
-            Task {
-                what: "Takeoff: Veil",
-                keys: "Space + left click together (untouchable as you rise)",
-                check: veil,
-                lands: false,
-            },
-        ],
-        dummy: Dummy::Stands,
-        bay: Bay::Flat,
-    },
-    Room {
-        title: "Middle click: both at once",
-        advanced: false,
-        intro: "Middle click uses both forces. On the floor, Binary: two stars that circle you \
-                and strike whoever comes close. In the air, Phase: a short blink along the \
-                crosshair, once a jump. Held, the Flurry dash: blows out to the crosshair, then \
-                she runs to them.",
-        tasks: &[
-            Task {
-                what: "Binary",
-                keys: "Tap middle click on the floor",
-                check: binary,
-                lands: false,
-            },
-            Task {
-                what: "In the air: Phase",
-                keys: "Space, then tap middle click",
-                check: phase,
-                lands: false,
-            },
-            Task {
-                what: "Hold: the Flurry dash",
-                keys: "Hold middle click, crosshair on the dummy",
-                check: flurry,
-                lands: true,
-            },
-            Task {
-                what: "Takeoff: Equinox",
-                keys: "Space + middle click together (it evens your bars)",
-                check: equinox,
+                what: "Hold: the storm",
+                keys: "Hold left click, then run past the dummy",
+                check: storm,
                 lands: false,
             },
         ],
@@ -271,51 +203,70 @@ pub const ROOMS: [Room; 11] = [
     Room {
         title: "Right click: Light",
         advanced: false,
-        intro: "Tapped, right click throws a light ball that fills your Light bar and burns away \
-                every curse on whoever it hits. It hops you too. Held, the Disk ray: a sun opens \
-                over your head and fires a beam to the crosshair.",
+        intro: "Tapped, right click is the same strike in light, and fills your Light bar. \
+                Held, the lance: a great beam from behind her, through where she stood, to the \
+                crosshair -- and she lunges clear of it, back, or the way you hold.",
         tasks: &[
             Task {
-                what: "Light ball",
+                what: "Light strike",
                 keys: "Tap right click at the dummy",
                 check: light,
                 lands: true,
             },
             Task {
-                what: "Hold: Disk ray",
+                what: "Hold: the lance",
                 keys: "Hold right click, crosshair on the dummy",
-                check: disk_ray,
+                check: lance,
                 lands: true,
-            },
-            Task {
-                what: "Takeoff: Sanctuary",
-                keys: "Space + right click together",
-                check: sanctuary,
-                lands: false,
             },
         ],
         dummy: Dummy::Stands,
         bay: Bay::Flat,
     },
     Room {
-        title: "The keys",
+        title: "Middle click: the chain",
         advanced: false,
-        intro: "F and R are spells that let a bar down: F, Devour, a dark maw; R, Smite, a \
-                column of light. Q and E are her majors, and each spends a whole bar: Q, the \
-                Abyss, spends Dark; E, Judgement, spends Light. They grow with the bar they \
-                spend. Shift dodges -- and once your lower bar is a third full, blinks.",
+        intro: "Middle click flings both forces, linked, at her. Tapped, she lets the chain \
+                fly by and it binds the first body it meets. Held, she catches its tail and is \
+                dragged down the line to where it lands, through whoever is on it.",
         tasks: &[
             Task {
-                what: "Devour",
-                keys: "F at the dummy",
-                check: devour,
+                what: "The chain",
+                keys: "Tap middle click, crosshair on the dummy",
+                check: chain,
                 lands: true,
             },
             Task {
-                what: "Smite",
-                keys: "R at the dummy",
-                check: smite,
+                what: "Hold: ride the chain",
+                keys: "Hold middle click, crosshair on the dummy",
+                check: ride,
                 lands: true,
+            },
+        ],
+        dummy: Dummy::Stands,
+        bay: Bay::Flat,
+    },
+    Room {
+        title: "Both clicks, and the keys",
+        advanced: false,
+        intro: "Press left and right together and both beings lunge at her at once: she \
+                springs clear -- up, or the way you hold -- and they annihilate where she was \
+                standing. Close to the dummy, the blast is on them; in the air, it is her way \
+                up. Q and E are her majors, and each spends a whole bar: Q, the Abyss, spends \
+                Dark; E, Judgement, spends Light. They grow with the bar they spend. Her \
+                movement never does.",
+        tasks: &[
+            Task {
+                what: "Annihilation beside the dummy",
+                keys: "Left and right click together",
+                check: annihilation,
+                lands: true,
+            },
+            Task {
+                what: "In the air: spring higher",
+                keys: "Space, then left and right click together",
+                check: air_annihilation,
+                lands: false,
             },
             Task {
                 what: "Abyss",
@@ -352,12 +303,11 @@ pub const ROOMS: [Room; 11] = [
     Room {
         title: "Advanced: vent a runaway bar",
         advanced: true,
-        intro: "The key spells let their own bar down and the majors empty theirs: that is how a \
-                bar that has run away is pulled back. Let one get ahead -- three taps of one \
-                hand -- then bring it back.",
+        intro: "The majors empty their own bar: that is how a bar that has run away is pulled \
+                back. Let one get ahead -- three taps of one hand -- then bring it back.",
         tasks: &[Task {
             what: "Pull a runaway bar back",
-            keys: "Dark ahead: F or Q. Light ahead: R or E. Or Space + middle click",
+            keys: "Dark ahead: Q. Light ahead: E",
             check: vented,
             lands: false,
         }],
@@ -365,34 +315,11 @@ pub const ROOMS: [Room; 11] = [
         bay: Bay::Flat,
     },
     Room {
-        title: "Advanced: curse, then purge",
-        advanced: true,
-        intro: "Dark lays curses on the target, up to five, and they fade one at a time. Light \
-                cashes every curse at once, and three or more stagger them. Curse, then purge, \
-                before they fade.",
-        tasks: &[
-            Task {
-                what: "Three curses on the dummy",
-                keys: "Left click, F, or Chain lightning",
-                check: cursed,
-                lands: false,
-            },
-            Task {
-                what: "Purge them",
-                keys: "Right click, R, or the Disk ray",
-                check: purged,
-                lands: false,
-            },
-        ],
-        dummy: Dummy::Stands,
-        bay: Bay::Flat,
-    },
-    Room {
         title: "Advanced: the hop chain",
         advanced: true,
-        intro: "Her way of moving is fighting: every auto with a direction held is a hop, and \
-                alternating hands gets round the lockout -- left, right, left, right across the \
-                room. The first auto off the floor in a jump rises like a second jump.",
+        intro: "Every strike with a direction held is a hop, and alternating hands gets round \
+                the lockout -- left, right, left, right across the room. The first strike off \
+                the floor in a jump rises like a second jump.",
         tasks: &[
             Task {
                 what: "A hop",
@@ -402,7 +329,7 @@ pub const ROOMS: [Room; 11] = [
             },
             Task {
                 what: "The rising hop",
-                keys: "Jump, then hold W and tap an auto",
+                keys: "Jump, then hold W and tap a click",
                 check: air_hop,
                 lands: false,
             },
@@ -411,23 +338,18 @@ pub const ROOMS: [Room; 11] = [
         bay: Bay::Shelf(250),
     },
     Room {
-        title: "Advanced: what the lower bar unlocks",
+        title: "Advanced: springs, and Ascension",
         advanced: true,
-        intro: "Her body follows the lower of her two bars. A third full, the dodge is a blink. \
-                Two thirds full, she has a second jump. Both full together, she ascends: wings \
-                for six seconds, every cast at full power. Build both bars with alternating taps \
-                and try each.",
+        intro: "Each spring in one jump goes less high than the last, and every hit you land \
+                gives one back -- so she stays up for as long as she keeps hitting. Fill both \
+                bars to the top together and she ascends: the beings strike at her on their \
+                own, faster the longer she goes without casting. Keep throwing to stay ahead of \
+                them.",
         tasks: &[
             Task {
-                what: "Blink",
-                keys: "Lower bar a third full: Shift + a direction",
-                check: blink,
-                lands: false,
-            },
-            Task {
-                what: "Second jump",
-                keys: "Lower bar two thirds full: Space, then Space again",
-                check: second_jump,
+                what: "Two springs in one jump",
+                keys: "Space, then left and right together, twice",
+                check: second_spring,
                 lands: false,
             },
             Task {
@@ -441,15 +363,14 @@ pub const ROOMS: [Room; 11] = [
         bay: Bay::Flat,
     },
     Room {
-        title: "Advanced: the Flurry dash jump",
+        title: "Advanced: jump off the chain",
         advanced: true,
-        intro: "The Flurry dash is her long-range way in, and a way across a gap: press Space \
-                just before she arrives at the end of the run and the jump keeps most of its \
-                speed.",
+        intro: "Riding the chain is her long way in, and a way across a gap: press Space just \
+                before she arrives at the end of the run and the jump keeps most of its speed.",
         tasks: &[Task {
-            what: "Jump out of the run",
+            what: "Jump off the ride",
             keys: "Hold middle click at a far spot, then Space as you arrive",
-            check: flurry_jump,
+            check: ride_jump,
             lands: false,
         }],
         dummy: Dummy::Aside,

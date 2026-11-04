@@ -213,6 +213,53 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-11-04 — the Dual mage's magic is aimed at her
+
+**Changed** Her kit, from the owner's direction ([exploration/0037](exploration/0037_dual_mage_the_razor_edge.md)):
+every strike comes from behind her, through where she stands, at the crosshair's point, and
+she dodges it onto them. A sixth line of effect replaces Overhead: `aim::Kind::Behind`, 2.5 m
+behind her middle and 0.8 m up. **Both clicks at once is annihilation** -- a 3.5 m burst at her
+feet, 45, worth her lower bar, that never touches her -- and **the spring** out of it, up 20
+m/s and 10 along the held direction, each spring in an airtime ×0.6 of the last, a landed hit
+giving one back, landing giving all back. Left held is **the storm** (72 frames, a bolt every 9
+on a point closing 0.12 of the way to her a frame, 12 a bolt, chaining 4 m); right held is **the
+lance** from behind her, and a lunge clear (14 m/s the held way or back, 9 up); middle tapped is
+**the chain** (12 m from behind, 18, binds with the Grasp's root), held the chain ride (the
+Flurry dash, kept). **Movement off the bars**: no blink, no second jump, no slow fall, no float,
+no wing beats; the hop's lift is 0.3 m at every bar. Gone from her buttons: Phase, Binary, the
+Shadowstep, the takeoffs, the Devour and the Smite, and the curse and purge on her clicks.
+**Ascension** is a wave rising 25 a second that each move she throws pushes back 20; past 50 the
+beings strike at her unbidden every 40 frames (20 at the top), landing 24 frames after they are
+marked, 60 to her if she is still there, never past one health; no drain, no refund, no
+stagger. The autos 14 → 17.
+**Why** The owner: the kit was "disjointed", the aerial play "a jumble of mechanics"; "movement
+should be the mage herself ... and power should be behind the bars"; no teleporting; "her magic
+is intended for her, she survives by dodging out of the way, which is why the class never stops
+moving"; L and R "cancel and explode" when pressed together; unbidden strikes "as a punishment
+for not keeping up with the venting during ascension".
+**Numbers, and why they moved** The autos 14 → 17: with the curse's ticks gone, alternating for
+half a round dealt 0.89 bars against B1's floor of one (1.08 at 17). B2 restated to one to two
+bars (it was one and a quarter, which the curse's ticks made). The four reworked moves first
+had their mobility at 100% so she could move through them; `feel.rs` holds that a committed move
+hinders more than the poke, and they are back at 25-30%: the spring and the lunge set her
+velocity outright, so it does not slow them. The annihilation's burst was first at her waist:
+a burst reaches as a column standing on its point, so it passed over a knee-high gnat
+(`tests/critters.rs`); it is at her feet. The lance's lunge looked like nothing in a first test
+-- it was the eight frames of impact freeze on the hit, not the lunge.
+**Instruments** The movement search's buttons gained the chord (`search::BUTTONS[7]`), and
+her envelope lines were re-recorded (`--class Dual_mage`). `envelope::Extra::SecondJump` --
+what the Hanging Stones, the Crown and the High Line measure as "the Dual mage's second jump"
+-- is the spring now, and every tool hop is still reached. The Ridgeback pin re-pinned for her
+alone.
+**Not done** `Q` and `E` are as they were: the owner will make them persistent ("buffs or
+debuffs or interactions with the rest of the kit") later. Her moves still play the old clips.
+The default escape for the tap is a spot dodge (she stays, unless a direction is held); a
+hand-timed dodge for a bonus is not built.
+**Verdict** open -- unplayed. To feel for: whether the spring is the "bringer" of the aerial
+feeling or one more button; whether 20 m/s is big and sudden enough; whether the storm a beat
+behind her reads as being hunted; whether the unbidden strikes' warning (rings closing on the
+floor) is enough to leave on; whether the strike from behind reads from the other seat.
+
 ### 2026-11-03 — the Elementalist off the ledge: tilt, columns, lips and falls
 
 **Changed**

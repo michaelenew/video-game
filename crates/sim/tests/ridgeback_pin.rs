@@ -220,7 +220,11 @@ const PINNED: [(Class, u64); 6] = [
     (Class::Bulwark, 0x0514478fd7c7f116),
     (Class::ShadowReaver, 0xc0d87b3b2be42fd0),
     (Class::BloodMage, 0x5c0f485e225a9601),
-    (Class::DualMage, 0x554de5cef74c00c9),
+    // The Dual mage moved again 2026-11-04, deliberately: her kit is new --
+    // both clicks at once annihilate, the holds are the storm and the lance,
+    // middle click is the chain, and nothing she moves with reads a bar
+    // (exploration 0037; feel-log.md, 2026-11-04).
+    (Class::DualMage, 0x182cb84f137f4849),
     (Class::Elementalist, 0xaa3bf62007f5de6b),
 ];
 

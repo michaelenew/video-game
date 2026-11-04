@@ -5205,3 +5205,102 @@ pub fn erupt_spread() -> u16 {
 pub fn stain_erupts() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StainErupts).max(0))
 }
+
+// ---------------------------------------------------------------------------
+// The Dual mage's magic is aimed at her (2026-11-04)
+// ---------------------------------------------------------------------------
+//
+// See `docs/design/exploration/0037_dual_mage_the_razor_edge.md`.
+
+/// How far behind her middle the beings strike from, along the line from what
+/// she is aiming at through her. See `aim::behind`.
+pub fn behind_back() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BehindBack)).max(Fx::ZERO)
+}
+
+/// How high over her middle they strike from: over her shoulder, so the line
+/// narrowly misses her.
+pub fn behind_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BehindRise)).max(Fx::ZERO)
+}
+
+/// How fast the spring out of an annihilation sends her up.
+pub fn spring_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpringLift)).max(Fx::ZERO)
+}
+
+/// How fast it carries her the way she is holding.
+pub fn spring_along() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpringAlong)).max(Fx::ZERO)
+}
+
+/// What each spring after the first in one airtime is worth of the one
+/// before. The air gives less each time you ask, and a hit gives one back.
+pub fn spring_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpringFalloff)).clamp(Fx::ZERO, Fx::ONE)
+}
+
+/// How fast she lunges clear of her own lance, the way she holds (back from
+/// what she aimed at, holding nothing).
+pub fn lance_lunge() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LanceLunge)).max(Fx::ZERO)
+}
+
+/// And how fast she rises as she lunges.
+pub fn lance_lunge_up() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LanceLungeUp)).max(Fx::ZERO)
+}
+
+/// How long the storm hunts her once she has called it.
+pub fn storm_lasts() -> u16 {
+    oven::scalar(Scalar::StormLasts).clamp(1, 240) as u16
+}
+
+/// How often it strikes while it does.
+pub fn storm_every() -> u16 {
+    oven::scalar(Scalar::StormEvery).clamp(1, 60) as u16
+}
+
+/// What share of the way to her the storm's point closes each frame: how far
+/// behind her it strikes.
+pub fn storm_follows() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StormFollows)).clamp(Fx::ratio(1, 100), Fx::ONE)
+}
+
+/// How fast Ascension's wave rises on its own, in bar units a second.
+pub fn wave_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WaveRise)).max(Fx::ZERO)
+}
+
+/// How far back each move she throws while ascending pushes it.
+pub fn wave_vent() -> i32 {
+    oven::scalar(Scalar::WaveVent).max(0)
+}
+
+/// Where the wave breaks: past this the beings strike at her unbidden.
+pub fn wave_breaks() -> i32 {
+    oven::scalar(Scalar::WaveBreaks).clamp(0, 100)
+}
+
+/// How often an unbidden strike comes with the wave just past its break; it
+/// comes twice as often with the wave at the top.
+pub fn unbidden_every() -> u32 {
+    oven::scalar(Scalar::UnbiddenEvery).clamp(4, 240) as u32
+}
+
+/// How long between an unbidden strike being called down and it landing: the
+/// time she has to leave.
+pub fn unbidden_warn() -> u8 {
+    oven::scalar(Scalar::UnbiddenWarn).clamp(1, 120) as u8
+}
+
+/// What an unbidden strike does to her if she is still there. The only thing
+/// of hers that ever hurts her.
+pub fn unbidden_damage() -> i32 {
+    oven::scalar(Scalar::UnbiddenDamage).max(0)
+}
+
+/// How far from where it lands an unbidden strike reaches.
+pub fn unbidden_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UnbiddenRadius)).max(Fx::ratio(1, 10))
+}

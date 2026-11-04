@@ -25,7 +25,7 @@
 use crate::DT;
 use crate::class::{Force, Mechanic};
 use crate::fixed::Fx;
-use crate::state::{Action, Player};
+use crate::state::Player;
 use crate::tuning as t;
 
 /// What the **lower** bar has unlocked.
@@ -164,7 +164,6 @@ pub fn step(p: &mut Player) -> bool {
         dark,
         light,
         ascending,
-        landed,
         singe,
         veil,
         ..
@@ -172,22 +171,27 @@ pub fn step(p: &mut Player) -> bool {
     else {
         return false;
     };
-    // The Veil's clock runs whatever the bars are doing.
-    if let Mechanic::Meter { veil: v, .. } = &mut p.mechanic {
+    // The Veil's clock runs whatever the bars are doing, and so does the storm.
+    if let Mechanic::Meter { veil: v, storm, .. } = &mut p.mechanic {
         *v = veil.saturating_sub(1);
+        *storm = storm.saturating_sub(1);
     }
 
     if ascending > 0 {
-        // The clock. Health is the cost and nothing steers the bars: they are
-        // not the resource while it runs, and they are what she gets back --
-        // empty -- when it ends.
-        singe_health(p, t::ascension_drain().max(1));
+        // **The wave** (2026-11-04): the crest rises on its own and every
+        // move she throws pushes it back (`steer`). Nothing else costs her:
+        // what hurts is the unbidden strikes that come once it is past the
+        // break, and those she can dodge (`World::unbidden_strikes`).
         let left = ascending - 1;
-        if let Mechanic::Meter { ascending, .. } = &mut p.mechanic {
+        if let Mechanic::Meter {
+            ascending, wave, ..
+        } = &mut p.mechanic
+        {
             *ascending = left;
+            *wave = wave.add(t::wave_rise().mul(DT)).min(top());
         }
         if left == 0 {
-            end_ascension(p, landed);
+            end_ascension(p);
         }
         return false;
     }
@@ -234,7 +238,8 @@ pub fn step(p: &mut Player) -> bool {
         dark: d,
         light: l,
         ascending,
-        landed,
+        wave,
+        strike,
         singe: s,
         ..
     } = &mut p.mechanic
@@ -242,7 +247,8 @@ pub fn step(p: &mut Player) -> bool {
         *d = dark;
         *l = light;
         *ascending = if ascends { t::ascension_frames() } else { 0 };
-        *landed = 0;
+        *wave = Fx::ZERO;
+        *strike = 0;
         *s = singe;
     }
     ascends
@@ -256,27 +262,17 @@ fn singe_health(p: &mut Player, amount: i32) {
     }
 }
 
-/// Ascension is over: both bars empty, and a stagger graduated by how much of
-/// the cost she paid back. The vent.
-///
-/// The share is what the hits she landed refunded against what the whole
-/// window drained, so it is the design's own sentence -- *you are staying alive
-/// one connection at a time* -- read back as a number. Nothing landed is the
-/// ceiling; paying it all back is the floor; a near miss is a short stagger,
-/// which is what lets the timing be learnt rather than feared.
-fn end_ascension(p: &mut Player, landed: u16) {
-    let drained = (t::ascension_drain().max(1) * t::ascension_frames() as i32).max(1);
-    let refunded = (landed as i32 * t::ascension_refund()).min(drained);
-    let share = Fx::ratio(refunded, drained);
-    let ceiling = Fx::from_int(t::ascension_stun() as i32);
-    let floor = Fx::from_int(t::ascension_stun_floor() as i32).min(ceiling);
-    let stun = ceiling.sub(ceiling.sub(floor).mul(share)).to_int().max(0) as u16;
+/// Ascension is over: both bars empty, the wave gone, and nothing else. Her
+/// movement was never the bars', so there is nothing to take back
+/// (2026-11-04: it used to end in a stagger graduated by what she landed).
+fn end_ascension(p: &mut Player) {
     if let Mechanic::Meter {
         dark,
         light,
         ascending,
         jumped,
-        landed,
+        wave,
+        strike,
         singe,
         ..
     } = &mut p.mechanic
@@ -285,11 +281,10 @@ fn end_ascension(p: &mut Player, landed: u16) {
         *light = Fx::ZERO;
         *ascending = 0;
         *jumped = false;
-        *landed = 0;
+        *wave = Fx::ZERO;
+        *strike = 0;
         *singe = Fx::ZERO;
     }
-    p.stun_total = stun;
-    p.action = Action::Stagger { left: stun };
 }
 
 /// Throwing a move moves a bar: an auto or a takeoff fills its own, a spell
@@ -315,8 +310,11 @@ pub fn steer(p: &mut Player, kind: u8) {
         return;
     };
     // Nothing steers during ascension. The bars are not the resource then;
-    // the clock is.
+    // the wave is, and every move she throws pushes it back.
     if ascending > 0 {
+        if let Mechanic::Meter { wave, .. } = &mut p.mechanic {
+            *wave = wave.sub(Fx::from_int(t::wave_vent())).max(Fx::ZERO);
+        }
         return;
     }
     // **Everything on the mouse fills, `F` and `R` vent, majors spend**
@@ -422,47 +420,97 @@ pub fn depth_at(p: &Player, kind: Option<u8>) -> Fx {
 // What the tiers do to her body
 // ---------------------------------------------------------------------------
 
-/// Landing a hit while ascending pulls some health back, and counts toward
-/// the stagger on the way out. Nothing happens to anybody else, or to her
-/// between ascensions.
+/// A hit she landed **gives back a spring** (2026-11-04): the damage and the
+/// movement in one act, and what makes her mobility sustained in a fight and
+/// only good out of one. Nothing happens to anybody else.
 pub fn landed_a_hit(p: &mut Player) {
-    let Mechanic::Meter {
-        ascending, landed, ..
-    } = &mut p.mechanic
-    else {
+    if let Mechanic::Meter { springs, .. } = &mut p.mechanic {
+        *springs = springs.saturating_sub(1);
+    }
+}
+
+/// **The spring out of an annihilation** (2026-11-04): she is gone a frame
+/// before the two beings collide where she stood. Up at `annihilation, the
+/// spring rises`, and along `along` (a flat unit, or nought) at `annihilation,
+/// the spring carries her`; each spring in one airtime worth `annihilation,
+/// each spring after is worth` of the one before. Never a bar: she has it from
+/// empty.
+pub fn spring(p: &mut Player, along: crate::math::V3) {
+    let Mechanic::Meter { springs, .. } = p.mechanic else {
         return;
     };
-    if *ascending == 0 {
-        return;
+    let mut worth = Fx::ONE;
+    for _ in 0..springs {
+        worth = worth.mul(t::spring_falloff());
     }
-    *landed = landed.saturating_add(1);
-    p.heal(t::ascension_refund());
+    let up = t::spring_lift().mul(worth);
+    let carry = along.scale(t::spring_along().mul(worth));
+    p.vel = crate::math::V3::new(carry.x, p.vel.y.max(Fx::ZERO).max(up), carry.z);
+    p.grounded = false;
+    if let Mechanic::Meter { springs, .. } = &mut p.mechanic {
+        *springs = springs.saturating_add(1);
+    }
+}
+
+/// The storm begins hunting her: for `storm, hunts her for`, from where she
+/// is standing.
+pub fn raise_the_storm(p: &mut Player) {
+    let at = p.pos;
+    if let Mechanic::Meter {
+        storm, storm_at, ..
+    } = &mut p.mechanic
+    {
+        *storm = t::storm_lasts();
+        *storm_at = at;
+    }
+}
+
+/// One frame of the storm following her: its point closes `storm, closes on
+/// her` of the way to where she is. True on the frames it strikes. A no-op,
+/// false, for anybody it is not hunting.
+pub fn storm_follows(p: &mut Player) -> Option<crate::math::V3> {
+    let pos = p.pos;
+    let Mechanic::Meter {
+        storm, storm_at, ..
+    } = &mut p.mechanic
+    else {
+        return None;
+    };
+    if *storm == 0 {
+        return None;
+    }
+    *storm_at = storm_at.add(pos.sub(*storm_at).scale(t::storm_follows()));
+    let every = t::storm_every().max(1);
+    (*storm % every == 0).then_some(*storm_at)
 }
 
 /// Is the dodge a blink right now?
 ///
 /// At the first tier, and **not** while ascending: she flies instead, and loss
 /// of control is loss of the option to decline.
-pub fn may_blink(p: &Player) -> bool {
-    tier(p) == Tier::Blink || tier(p) == Tier::Jump
+pub fn may_blink(_p: &Player) -> bool {
+    // **Never, since 2026-11-04.** Movement is the mage herself and power is
+    // behind the bars (the owner); and she does not teleport. Her dodge is
+    // everybody's dodge. See `docs/design/exploration/0037_dual_mage_the_razor_edge.md`.
+    false
 }
 
 /// May she dodge at all? Refused for the whole of ascension.
-pub fn may_dodge(p: &Player) -> bool {
-    !ascending(p)
+pub fn may_dodge(_p: &Player) -> bool {
+    // Always, since 2026-11-04: Ascension is a wave she stays ahead of by
+    // moving, and taking her dodge away would be taking her movement.
+    true
 }
 
 /// Is a press of space in the air a jump?
 ///
 /// Once per airtime at the second tier; every press while ascending, which is
 /// the wing beat.
-pub fn may_beat_wings(p: &Player) -> bool {
-    match p.mechanic {
-        Mechanic::Meter {
-            ascending, jumped, ..
-        } => ascending > 0 || (!jumped && tier(p) >= Tier::Jump),
-        _ => false,
-    }
+pub fn may_beat_wings(_p: &Player) -> bool {
+    // Never, since 2026-11-04: no bar buys her a jump. Her way up is the
+    // spring out of an annihilation (`moves::dual::ANNIHILATION`), which is
+    // hers from an empty bar.
+    false
 }
 
 /// Spend the second jump, so it pays for one takeoff and not two.
@@ -472,23 +520,25 @@ pub fn spend_wing_beat(p: &mut Player) {
     }
 }
 
-/// Feet on the floor: the second jump is back, and so is the air hop.
+/// Feet on the floor: the air hop is back, and every spring.
 pub fn feet_down(p: &mut Player) {
-    if let Mechanic::Meter { jumped, hopped, .. } = &mut p.mechanic {
+    if let Mechanic::Meter {
+        jumped,
+        hopped,
+        springs,
+        ..
+    } = &mut p.mechanic
+    {
         *jumped = false;
         *hopped = false;
+        *springs = 0;
     }
 }
 
 /// Does an auto thrown in the air rise like a jump? Once an airtime, and every
 /// time while ascending. See `state::hop_after_the_auto`.
 pub fn may_air_hop(p: &Player) -> bool {
-    match p.mechanic {
-        Mechanic::Meter {
-            ascending, hopped, ..
-        } => ascending > 0 || !hopped,
-        _ => false,
-    }
+    matches!(p.mechanic, Mechanic::Meter { hopped: false, .. })
 }
 
 /// Bank a jump for the end of the Flurry dash's run.
@@ -515,12 +565,9 @@ pub fn spend_air_hop(p: &mut Player) {
 
 /// What the fall cap is multiplied by: the slow fall at the second tier and
 /// above, one for everybody else.
-pub fn fall_scale(p: &Player) -> Fx {
-    if tier(p) >= Tier::Jump {
-        t::slow_fall()
-    } else {
-        Fx::ONE
-    }
+pub fn fall_scale(_p: &Player) -> Fx {
+    // One, since 2026-11-04: no bar changes how she falls.
+    Fx::ONE
 }
 
 /// How far the ordinary dodge would have carried her: where a blink goes.
@@ -687,8 +734,10 @@ pub fn curse_power(p: &Player) -> Fx {
 /// lower bar, and `auto, hop lifts at full` more at a full one, in proportion
 /// between. The lower bar because it is the frenzy -- what her body can do --
 /// and both beings have to be awake for her to rise.
-pub fn hop_lift(p: &Player) -> Fx {
-    t::auto_hop_lift().add(t::auto_hop_lift_full().mul(balance(p)))
+pub fn hop_lift(_p: &Player) -> Fx {
+    // **The same at every bar since 2026-11-04**: the hop is her stepping off
+    // her own strike's line, and no bar decides how she moves.
+    t::auto_hop_lift()
 }
 
 // ---------------------------------------------------------------------------

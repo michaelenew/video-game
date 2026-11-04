@@ -166,7 +166,12 @@ fn set_bars(w: &mut World, dark: i32, light: i32) {
         jumped: false,
         hopped: false,
         dash_jump: false,
-        landed: 0,
+        wave: Fx::ZERO,
+        springs: 0,
+        storm: 0,
+        storm_at: sim::math::V3::ZERO,
+        strike: 0,
+        strike_at: sim::math::V3::ZERO,
         singe: Fx::ZERO,
         veil: 0,
         warded: false,
@@ -192,10 +197,10 @@ fn stacks(w: &World) -> u8 {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn on_the_floor_the_clicks_are_the_autos_and_binary() {
+fn on_the_floor_the_clicks_are_the_autos_and_the_chain() {
     for (button, wanted) in [
         (keys::DARK, d::DARK_AUTO),
-        (keys::TWILIGHT, d::BINARY),
+        (keys::TWILIGHT, d::CHAIN),
         (keys::LIGHT, d::LIGHT_AUTO),
         (keys::DARK_MAJOR, d::ABYSS),
         (keys::LIGHT_MAJOR, d::JUDGEMENT),
@@ -207,10 +212,10 @@ fn on_the_floor_the_clicks_are_the_autos_and_binary() {
 }
 
 #[test]
-fn in_the_air_the_clicks_are_the_same_autos() {
+fn in_the_air_the_clicks_are_the_same() {
     for (button, wanted) in [
         (keys::DARK, d::DARK_AUTO),
-        (keys::TWILIGHT, d::PHASE),
+        (keys::TWILIGHT, d::CHAIN),
         (keys::LIGHT, d::LIGHT_AUTO),
         (keys::DARK_MAJOR, d::ABYSS),
         (keys::LIGHT_MAJOR, d::JUDGEMENT),
@@ -219,33 +224,6 @@ fn in_the_air_the_clicks_are_the_same_autos() {
         aloft(&mut w, 4.0);
         tap(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} in the air");
-    }
-}
-
-#[test]
-fn f_and_r_are_her_dark_and_light_spells() {
-    for (button, wanted) in [(keys::DARK_SPELL, d::DEVOUR), (keys::LIGHT_SPELL, d::SMITE)] {
-        for height in [0.0, 4.0] {
-            let mut w = alone();
-            if height > 0.0 {
-                aloft(&mut w, height);
-            }
-            step(&mut w, button);
-            assert_eq!(doing(&w), Some(wanted), "button {button:#x} at {height} m");
-        }
-    }
-}
-
-#[test]
-fn space_and_a_click_defends() {
-    for (button, wanted) in [
-        (keys::DARK, d::VEIL),
-        (keys::TWILIGHT, d::EQUINOX),
-        (keys::LIGHT, d::SANCTUARY),
-    ] {
-        let mut w = alone();
-        step(&mut w, SPACE | button);
-        assert_eq!(doing(&w), Some(wanted), "space and {button:#x}");
     }
 }
 
@@ -273,18 +251,6 @@ fn the_autos_reach_a_body_close_and_a_body_six_and_a_half_metres_off() {
         }
         assert!(!auto_lands(button, 8.0), "{button:#x} reaches eight metres");
     }
-}
-
-#[test]
-fn the_dark_auto_curses_and_the_light_auto_purges() {
-    let mut w = facing(2.5);
-    step(&mut w, keys::DARK);
-    until_free(&mut w, 60);
-    assert_eq!(stacks(&w), 1, "a stack");
-    run(&mut w, 45, 0);
-    step(&mut w, keys::LIGHT);
-    until_free(&mut w, 60);
-    assert_eq!(stacks(&w), 0, "purged");
 }
 
 /// Where an auto thrown with `held` down leaves her, and how high she got.
@@ -325,19 +291,6 @@ fn an_auto_with_a_direction_held_hops_her_that_way() {
         aside.sub(from).flat_len().raw() > t::auto_hop().raw(),
         "to the side: {} m",
         as_f(aside.sub(from).flat_len())
-    );
-}
-
-#[test]
-fn the_hop_lifts_her_higher_the_fuller_her_lower_bar() {
-    let (_, low) = after_an_auto(W, 0, 0.0);
-    let (_, high) = after_an_auto(W, 90, 0.0);
-    assert!(low.raw() > 0, "a hop leaves the floor: {}", as_f(low));
-    assert!(
-        high.raw() > low.add(metres(0.6)).raw(),
-        "from a full lower bar she rises {} m, from empty {} m",
-        as_f(high),
-        as_f(low)
     );
 }
 
@@ -386,37 +339,6 @@ fn a_hop_does_not_go_through_a_wall() {
 // ---------------------------------------------------------------------------
 // The curse
 // ---------------------------------------------------------------------------
-
-#[test]
-fn the_dark_auto_lays_a_curse_and_the_devour_two() {
-    let mut w = facing(2.0);
-    step(&mut w, keys::DARK);
-    until_free(&mut w, 120);
-    assert_eq!(stacks(&w), 1, "the auto: one stack");
-    // The Devour lands on the ground where she points: at their feet.
-    let feet = onto_their_feet(&w);
-    step_looking(&mut w, keys::DARK_SPELL, feet);
-    assert_eq!(doing(&w), Some(d::DEVOUR));
-    run_looking(&mut w, 50, feet);
-    assert_eq!(stacks(&w), 3, "the Devour: two more");
-}
-
-#[test]
-fn the_devour_drains_back_to_her() {
-    let mut w = facing(2.0);
-    w.players[0].health -= 300;
-    let feet = onto_their_feet(&w);
-    let before = w.players[0].health;
-    step_looking(&mut w, keys::DARK_SPELL, feet);
-    assert_eq!(doing(&w), Some(d::DEVOUR));
-    run_looking(&mut w, 40, feet);
-    assert!(
-        w.players[0].health > before,
-        "she drank: {} to {}",
-        before,
-        w.players[0].health
-    );
-}
 
 #[test]
 fn the_grasp_roots_whoever_it_closes_on() {
@@ -552,224 +474,13 @@ fn a_purge_is_worth_her_light_bar() {
 // Sigils
 // ---------------------------------------------------------------------------
 
-fn smite_at_their_feet(w: &mut World) {
-    let feet = onto_their_feet(w);
-    step_looking(w, keys::LIGHT_SPELL, feet);
-    assert_eq!(doing(w), Some(d::SMITE));
-    run_looking(w, 30, feet);
-}
-
-#[test]
-fn the_smite_writes_a_sigil_where_it_lands() {
-    let mut w = facing(4.0);
-    smite_at_their_feet(&mut w);
-    let sigils = effects(&w, EffectKind::Sigil);
-    assert_eq!(sigils.len(), 1, "a sigil");
-    assert!(
-        sigils[0].pos.sub(w.players[1].pos).flat_len().raw() < metres(1.0).raw(),
-        "under them"
-    );
-}
-
-#[test]
-fn the_smite_lifts_and_purges() {
-    let mut w = facing(4.0);
-    level(&mut w, 50);
-    cursed(&mut w, 2);
-    let mut highest = Fx::ZERO;
-    let feet = onto_their_feet(&w);
-    step_looking(&mut w, keys::LIGHT_SPELL, feet);
-    for _ in 0..40 {
-        step_looking(&mut w, 0, feet);
-        highest = highest.max(w.players[1].pos.y);
-    }
-    assert!(
-        highest.raw() > metres(0.5).raw(),
-        "lifted: {}",
-        as_f(highest)
-    );
-    assert_eq!(stacks(&w), 0, "and purged");
-}
-
-#[test]
-fn in_her_own_sigil_she_is_warded() {
-    let blow = |warded: bool| {
-        let mut w = facing(1.2);
-        if warded {
-            step(&mut w, SPACE | keys::LIGHT);
-            until_free(&mut w, 120);
-            run(&mut w, 60, 0);
-            assert!(w.players[0].grounded, "fixture: back down");
-            assert!(sim::dual::warded(&w.players[0]), "she stands in it");
-        }
-        let before = w.players[0].health;
-        let dealt = w.players[0].wound(100);
-        assert_eq!(before - w.players[0].health, dealt);
-        dealt
-    };
-    let open = blow(false);
-    let warded = blow(true);
-    assert_eq!(open, 100);
-    assert_eq!(warded, 100 - t::sigil_wards(), "a third off");
-}
-
-#[test]
-fn a_sigil_burns_anybody_else_in_it() {
-    let mut w = facing(4.0);
-    smite_at_their_feet(&mut w);
-    // They are lifted by the Smite; let them land, then stand them on it.
-    run(&mut w, 60, 0);
-    let sigil = effects(&w, EffectKind::Sigil)[0];
-    w.players[1].pos = sigil.pos;
-    let before = w.players[1].health;
-    run(&mut w, 60, 0);
-    assert!(w.players[1].health < before, "it burns them");
-}
-
-#[test]
-fn a_third_sigil_replaces_the_oldest() {
-    let mut w = alone();
-    for _ in 0..3 {
-        step(&mut w, SPACE | keys::LIGHT);
-        until_free(&mut w, 120);
-        run(&mut w, 60, 0);
-        w.players[0].pos.x = w.players[0].pos.x.add(metres(8.0));
-    }
-    assert_eq!(
-        effects(&w, EffectKind::Sigil).len(),
-        t::sigils_at_once(),
-        "two at a time"
-    );
-}
-
-#[test]
-fn sanctuary_writes_a_bigger_sigil_at_her_feet() {
-    let mut w = alone();
-    let from = w.players[0].pos;
-    step(&mut w, SPACE | keys::LIGHT);
-    run(&mut w, 12, 0);
-    let sigils = effects(&w, EffectKind::Sigil);
-    assert_eq!(sigils.len(), 1);
-    assert!(sigils[0].pos.sub(from).flat_len().raw() < metres(0.5).raw());
-    assert!(sigils[0].reach.raw() > t::sigil_radius().raw(), "bigger");
-    assert!(w.players[0].pos.y.raw() > 0, "and a hop out of it");
-}
-
 // ---------------------------------------------------------------------------
 // The twin stars
 // ---------------------------------------------------------------------------
 
-#[test]
-fn binary_raises_one_pair_of_stars_that_follows_her() {
-    let mut w = alone();
-    step(&mut w, keys::TWILIGHT);
-    until_free(&mut w, 120);
-    assert_eq!(effects(&w, EffectKind::Stars).len(), 1, "a pair");
-    w.players[0].pos.x = w.players[0].pos.x.add(metres(5.0));
-    run(&mut w, 2, 0);
-    let stars = effects(&w, EffectKind::Stars)[0];
-    for star in 0..2 {
-        let round = stars.star_at(star).sub(w.players[0].pos);
-        let flat = V3::new(round.x, Fx::ZERO, round.z).flat_len();
-        assert!(
-            flat.raw() < t::binary_radius().add(metres(0.1)).raw(),
-            "round her"
-        );
-    }
-    run(&mut w, 40, 0);
-    step(&mut w, keys::TWILIGHT);
-    until_free(&mut w, 120);
-    assert_eq!(effects(&w, EffectKind::Stars).len(), 1, "still one pair");
-}
-
-#[test]
-fn the_dark_star_curses_and_the_light_star_purges() {
-    let mut w = facing(1.4);
-    step(&mut w, keys::TWILIGHT);
-    let before = w.players[1].health;
-    let mut most = 0;
-    let mut purged = false;
-    for _ in 0..t::binary_orbits() as u32 {
-        let was = stacks(&w);
-        step(&mut w, 0);
-        most = most.max(stacks(&w));
-        purged |= was > 0 && stacks(&w) == 0;
-        // Hold them still beside her: the stars are what this asks about.
-        w.players[1].pos = at(-4.6, 0.0, 8.0);
-        w.players[1].vel = V3::ZERO;
-    }
-    assert!(most >= 1, "the dark star cursed them");
-    assert!(purged, "the light star purged it");
-    assert!(w.players[1].health < before, "and both struck");
-}
-
 // ---------------------------------------------------------------------------
 // Moving: the air row
 // ---------------------------------------------------------------------------
-
-/// A Shadowstep from the air at a fighter `gap` metres off, also aloft.
-fn shadowstep_at(gap: f32, curse: u8) -> World {
-    let mut w = facing(gap);
-    aloft(&mut w, 1.0);
-    w.players[1].pos.y = metres(1.0);
-    w.players[1].grounded = false;
-    if curse > 0 {
-        cursed(&mut w, curse);
-    }
-    let pitch = onto_them(&w);
-    w.press(0, d::SHADOWSTEP, Input::looking_at(0, LOOK_RIGHT, pitch));
-    assert_eq!(doing(&w), Some(d::SHADOWSTEP));
-    let m = sim::moves::get(Class::DualMage, d::SHADOWSTEP);
-    for _ in 0..m.startup + 2 {
-        // Keep them where they were: what is asked is where she went.
-        w.players[1].pos = at(-6.0 + gap, 1.0, 8.0);
-        w.players[1].vel = V3::ZERO;
-        step_looking(&mut w, 0, pitch);
-    }
-    w
-}
-
-#[test]
-fn the_shadowstep_puts_her_behind_the_body_and_curses_it() {
-    let w = shadowstep_at(6.0, 0);
-    assert!(
-        w.players[0].pos.x.raw() > w.players[1].pos.x.raw(),
-        "she is behind them: {} past {}",
-        as_f(w.players[0].pos.x),
-        as_f(w.players[1].pos.x)
-    );
-    assert!(stacks(&w) >= 1, "and her arrival cursed them");
-    assert!(!w.players[0].air_dodged, "a body found keeps the airdodge");
-}
-
-#[test]
-fn a_cursed_body_is_a_door_from_further() {
-    let gap = 11.0;
-    let clean = shadowstep_at(gap, 0);
-    let cursed = shadowstep_at(gap, 2);
-    assert!(
-        clean.players[0].pos.x.raw() < clean.players[1].pos.x.raw(),
-        "a clean body out of reach: she goes only so far"
-    );
-    assert!(clean.players[0].air_dodged, "and the airdodge is spent");
-    assert!(
-        cursed.players[0].pos.x.raw() > cursed.players[1].pos.x.raw(),
-        "a cursed one: behind them"
-    );
-}
-
-#[test]
-fn the_shadowstep_with_nobody_still_goes() {
-    let mut w = alone();
-    aloft(&mut w, 3.0);
-    let from = w.players[0].pos;
-    w.press(0, d::SHADOWSTEP, Input::looking_at(0, LOOK_RIGHT, 0));
-    let m = sim::moves::get(Class::DualMage, d::SHADOWSTEP);
-    run(&mut w, m.startup as u32 + 2, 0);
-    let went = w.players[0].pos.x.sub(from.x);
-    assert!(went.raw() > metres(3.0).raw(), "she went {} m", as_f(went));
-    assert!(w.players[0].air_dodged, "and paid for it");
-}
 
 #[test]
 fn descent_dives_where_she_points_and_writes_a_sigil() {
@@ -794,98 +505,9 @@ fn descent_dives_where_she_points_and_writes_a_sigil() {
     );
 }
 
-#[test]
-fn phase_puts_her_along_the_crosshair_once_a_trip() {
-    let mut w = alone();
-    aloft(&mut w, 3.0);
-    let from = w.players[0].pos;
-    tap(&mut w, keys::TWILIGHT);
-    let m = sim::moves::get(Class::DualMage, d::PHASE);
-    run(&mut w, m.startup as u32 + 1, 0);
-    let went = w.players[0].pos.x.sub(from.x);
-    assert!(
-        went.raw() > metres(3.0).raw(),
-        "she is through: {} m",
-        as_f(went)
-    );
-    assert!(w.players[0].air_dodged, "it spent the airdodge");
-    run(&mut w, 30, 0);
-    if !w.players[0].grounded {
-        step(&mut w, keys::TWILIGHT);
-        assert_ne!(doing(&w), Some(d::PHASE), "once a trip");
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Defending: the takeoffs
 // ---------------------------------------------------------------------------
-
-#[test]
-fn the_veil_is_untouchable_on_the_way_up() {
-    let mut w = facing(1.2);
-    step(&mut w, SPACE | keys::DARK);
-    assert!(w.players[0].untouchable(), "untouchable from the press");
-    let m = sim::moves::get(Class::DualMage, d::VEIL);
-    run(&mut w, m.startup as u32 + 1, 0);
-    assert!(w.players[0].untouchable(), "untouchable");
-    assert!(!w.players[0].grounded, "and rising");
-    let before = w.players[0].health;
-    // The Bulwark's poke, straight at her.
-    w.advance([
-        Input::looking_at(0, LOOK_RIGHT, 0),
-        Input::looking_at(Input::LEFT, LOOK_LEFT, 0),
-    ]);
-    run(&mut w, 6, 0);
-    assert_eq!(w.players[0].health, before, "nothing touched her");
-    run(&mut w, t::veil_for() as u32, 0);
-    assert!(!w.players[0].untouchable(), "and it ends");
-}
-
-#[test]
-fn the_veil_curses_whoever_was_beside_her() {
-    let mut w = facing(1.2);
-    step(&mut w, SPACE | keys::DARK);
-    run(&mut w, 10, 0);
-    assert_eq!(stacks(&w), 1);
-}
-
-#[test]
-fn equinox_levels_her_bars() {
-    let mut w = alone();
-    set_bars(&mut w, 70, 30);
-    step(&mut w, SPACE | keys::TWILIGHT);
-    let (dark, light) = bars(&w);
-    let gap = dark - light;
-    assert!(
-        gap <= 40 - 2 * t::equinox_levels() + 1,
-        "levelled: {dark} and {light}"
-    );
-    assert!(dark >= light, "and never crossed");
-}
-
-fn equinox_top(at: i32) -> Fx {
-    let mut w = alone();
-    level(&mut w, at);
-    step(&mut w, SPACE | keys::TWILIGHT);
-    let mut top = Fx::ZERO;
-    for _ in 0..90 {
-        step(&mut w, 0);
-        top = top.max(w.players[0].pos.y);
-    }
-    top
-}
-
-#[test]
-fn equinox_goes_higher_the_more_level_she_is() {
-    let empty = equinox_top(0);
-    let full = equinox_top(90);
-    assert!(
-        full.raw() > empty.add(metres(1.0)).raw(),
-        "level and full: {} m, empty: {} m",
-        as_f(full),
-        as_f(empty)
-    );
-}
 
 // ---------------------------------------------------------------------------
 // The majors
@@ -1135,7 +757,7 @@ fn hold_into(w: &mut World, button: u16, pitch: i16, wanted: u8, most: u32) -> b
 
 #[test]
 fn holding_a_click_past_its_wing_is_that_hand_s_long_hold() {
-    for (button, wanted) in [(keys::DARK, d::CHAIN_LIGHTNING), (keys::LIGHT, d::DISK_RAY)] {
+    for (button, wanted) in [(keys::DARK, d::STORM), (keys::LIGHT, d::LANCE)] {
         let mut w = alone();
         assert!(
             hold_into(&mut w, button, 0, wanted, 60),
@@ -1155,10 +777,10 @@ fn a_click_is_a_tap_or_a_hold_and_never_both() {
     // and the hold is not full, nothing has begun -- no wing, no cloud. Let
     // go and it is the wing, from that frame; hold it full and it is the
     // spell, and the wing never was.
-    let cap = sim::moves::get(Class::DualMage, d::CHAIN_LIGHTNING).channel as u32;
+    let cap = sim::moves::get(Class::DualMage, d::STORM).channel as u32;
     for (button, tap, hold) in [
-        (keys::DARK, d::DARK_AUTO, d::CHAIN_LIGHTNING),
-        (keys::LIGHT, d::LIGHT_AUTO, d::DISK_RAY),
+        (keys::DARK, d::DARK_AUTO, d::STORM),
+        (keys::LIGHT, d::LIGHT_AUTO, d::LANCE),
     ] {
         // Let go part of the way: the tap, and never the spell.
         let mut w = alone();
@@ -1181,7 +803,7 @@ fn a_click_is_a_tap_or_a_hold_and_never_both() {
         // Held full: the spell, and the wing never.
         let mut w = alone();
         level(&mut w, 50);
-        for _ in 0..cap + 40 {
+        for _ in 0..cap + 20 {
             step(&mut w, button);
             assert_ne!(
                 doing(&w),
@@ -1196,7 +818,7 @@ fn a_click_is_a_tap_or_a_hold_and_never_both() {
 fn a_long_hold_fills_its_bar() {
     let mut w = alone();
     level(&mut w, 40);
-    assert!(hold_into(&mut w, keys::DARK, 0, d::CHAIN_LIGHTNING, 60));
+    assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
     let p = &w.players[0];
     let (dark, light) = sim::dual::bars(p).unwrap();
     let want = 40 + t::hold_fills();
@@ -1276,89 +898,288 @@ fn the_sweet_spot_is_at_full_reach() {
     );
 }
 
-#[test]
-fn chain_lightning_strikes_the_body_under_the_crosshair_and_curses_it() {
-    let mut w = facing(9.0);
-    let pitch = onto_them(&w);
-    let before = w.players[1].health;
-    assert!(hold_into(&mut w, keys::DARK, pitch, d::CHAIN_LIGHTNING, 60));
-    run_looking(&mut w, 30, pitch);
-    assert!(w.players[1].health < before, "nine metres off, untouched");
-    assert!(stacks(&w) >= 1, "and not cursed");
-}
+// ---------------------------------------------------------------------------
+// Her magic is aimed at her (2026-11-04)
+// ---------------------------------------------------------------------------
+//
+// `docs/design/exploration/0037_dual_mage_the_razor_edge.md`: every strike
+// comes from behind her, through where she stands, at what she is looking
+// at, and she gets out of its way so it lands on them.
 
 #[test]
-fn chain_lightning_leaps_from_body_to_body() {
-    // Three gnats in a line, three metres apart, the crosshair on the first.
-    use sim::critter::{Critter, is};
-    use sim::species::{SpeciesId, gnats};
-    let mut w = World::hunt_of([Class::DualMage, Class::DualMage], SpeciesId::GNATS);
-    let sp = w.critters.sp();
-    for c in w.critters.iter_mut() {
-        *c = Critter::EMPTY;
-    }
-    let lane = sim::critcheck::lane();
-    for (k, x) in [6, 9, 12].into_iter().enumerate() {
-        let mut c = Critter::new(
-            sp,
-            gnats::GNAT,
-            lane.add(V3::new(Fx::from_int(x), Fx::ZERO, Fx::ZERO)),
-            1 << 15,
-        );
-        c.state = is::FLINCH;
-        c.timer = u16::MAX;
-        c.health = i16::MAX;
-        w.critters[k] = c;
-    }
-    w.pack.as_mut().unwrap().grace = u16::MAX;
-    w.players[0].pos = lane;
-    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
-    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(12));
-    let middle = w.critters[0].body(sp).middle();
-    let pitch = sim::aim::look_onto_closely(lane, 0, Fx::ZERO, Fx::ZERO, middle);
-    let mut struck = [false; 3];
-    for _ in 0..60 {
-        let before: Vec<i16> = (0..3).map(|k| w.critters[k].health).collect();
-        w.advance([
-            Input::looking_at(keys::DARK, 0, pitch),
-            Input::looking_at(0, 0, 0),
-        ]);
-        for k in 0..3 {
-            struck[k] |= w.critters[k].health < before[k];
-        }
-        if matches!(
-            w.players[0].action,
-            Action::Recovery {
-                kind: d::CHAIN_LIGHTNING,
-                ..
-            }
-        ) {
+fn the_lance_comes_from_behind_her_through_where_she_stood() {
+    let mut w = facing(10.0);
+    let pitch = onto_them(&w);
+    let before = w.players[1].health;
+    let stood = w.players[0].pos;
+    assert!(hold_into(&mut w, keys::LIGHT, pitch, d::LANCE, 60));
+    let m = sim::moves::get(Class::DualMage, d::LANCE);
+    let mut seen = false;
+    for _ in 0..m.startup + 2 {
+        step_looking(&mut w, 0, pitch);
+        if let Some(b) = sim::state::hitbox(&w.players[0]) {
+            // Behind her (she faces +X) and over her middle: over her
+            // shoulder, narrowly missing her.
+            assert!(
+                b.from.x.raw() < stood.x.sub(metres(1.5)).raw(),
+                "the lance leaves from {} m, in front of her back",
+                as_f(b.from.x)
+            );
+            assert!(
+                b.from.y.raw() > metres(1.2).raw(),
+                "from under her shoulder"
+            );
+            seen = true;
             break;
         }
     }
-    assert_eq!(struck, [true; 3], "the lightning did not reach all three");
+    assert!(seen, "the lance never struck");
+    run_looking(&mut w, 30, pitch);
+    assert!(w.players[1].health < before, "ten metres off, untouched");
 }
 
 #[test]
-fn the_disk_ray_strikes_from_above_and_purges() {
-    let mut w = facing(10.0);
-    cursed(&mut w, 3);
-    let pitch = onto_them(&w);
-    let before = w.players[1].health;
-    assert!(hold_into(&mut w, keys::LIGHT, pitch, d::DISK_RAY, 60));
-    let m = sim::moves::get(Class::DualMage, d::DISK_RAY);
-    // Its line leaves the disk over her head.
-    run_looking(&mut w, m.startup as u32, pitch);
-    if let Some(b) = sim::state::hitbox(&w.players[0]) {
-        assert!(
-            b.from.y.raw() > metres(2.0).raw(),
-            "the blast leaves from {} m up",
-            as_f(b.from.y)
+fn she_lunges_clear_of_her_own_lance() {
+    // Holding nothing she goes back from what she aimed at, rising; holding a
+    // direction she goes that way.
+    let lunge = |held: u16| -> V3 {
+        let mut w = facing(10.0);
+        let pitch = onto_them(&w);
+        let stood = w.players[0].pos;
+        assert!(hold_into(&mut w, keys::LIGHT, pitch, d::LANCE, 60));
+        let m = sim::moves::get(Class::DualMage, d::LANCE);
+        let mut top = Fx::ZERO;
+        for _ in 0..m.startup + 30 {
+            step_looking(&mut w, held, pitch);
+            top = top.max(w.players[0].pos.y);
+        }
+        assert!(top.raw() > metres(0.5).raw(), "she never left the floor");
+        w.players[0].pos.sub(stood)
+    };
+    let back = lunge(0);
+    assert!(
+        back.x.raw() < metres(-1.0).raw(),
+        "holding nothing: {} m",
+        as_f(back.x)
+    );
+    // `D` is to her right, which facing +X is +Z... or -Z: either way, sideways.
+    let side = lunge(Input::D);
+    assert!(
+        side.z.abs().raw() > metres(1.0).raw(),
+        "holding D: {:?}",
+        side
+    );
+    assert!(
+        side.z.abs().raw() > side.x.abs().raw(),
+        "holding D went {:?}",
+        side
+    );
+}
+
+#[test]
+fn both_clicks_at_once_annihilate_where_she_stood_as_she_springs_clear() {
+    let mut w = facing(2.0);
+    set_bars(&mut w, 50, 50);
+    let (mine, theirs) = (w.players[0].health, w.players[1].health);
+    step(&mut w, keys::DARK | keys::LIGHT);
+    assert_eq!(doing(&w), Some(d::ANNIHILATION));
+    let mut top = Fx::ZERO;
+    for _ in 0..40 {
+        step(&mut w, 0);
+        top = top.max(w.players[0].pos.y);
+    }
+    assert!(
+        top.raw() > metres(3.0).raw(),
+        "the spring rose {} m",
+        as_f(top)
+    );
+    assert!(
+        w.players[1].health < theirs,
+        "whoever was beside her was untouched"
+    );
+    assert_eq!(w.players[0].health, mine, "her own annihilation hurt her");
+    // Both beings were goaded: it fills both bars alike, so it never widens
+    // the gap.
+    let (dark, light) = bars(&w);
+    assert!(
+        dark > 50 && dark == light,
+        "the bars went to {dark} and {light}"
+    );
+}
+
+#[test]
+fn the_other_click_while_one_is_deciding_is_the_same_chord() {
+    for (first, second) in [(keys::DARK, keys::LIGHT), (keys::LIGHT, keys::DARK)] {
+        let mut w = alone();
+        step(&mut w, first);
+        step(&mut w, first);
+        step(&mut w, first | second);
+        assert_eq!(
+            doing(&w),
+            Some(d::ANNIHILATION),
+            "{first:#x} then {second:#x}"
         );
     }
-    run_looking(&mut w, 30, pitch);
-    assert!(w.players[1].health < before, "ten metres off, untouched");
-    assert_eq!(stacks(&w), 0, "the curse was not purged");
+}
+
+/// How high one spring takes her, after `springs` already this airtime.
+fn spring_rise(springs: u8) -> Fx {
+    let mut w = alone();
+    aloft(&mut w, 6.0);
+    w.players[0].vel = V3::ZERO;
+    if let Mechanic::Meter { springs: s, .. } = &mut w.players[0].mechanic {
+        *s = springs;
+    }
+    let from = w.players[0].pos.y;
+    step(&mut w, keys::DARK | keys::LIGHT);
+    let mut top = from;
+    for _ in 0..40 {
+        step(&mut w, 0);
+        top = top.max(w.players[0].pos.y);
+    }
+    top.sub(from)
+}
+
+#[test]
+fn each_spring_in_one_airtime_is_worth_less_than_the_last() {
+    let (one, two, three) = (spring_rise(0), spring_rise(1), spring_rise(2));
+    assert!(
+        one.raw() > two.raw() && two.raw() > three.raw(),
+        "{} {} {}",
+        as_f(one),
+        as_f(two),
+        as_f(three)
+    );
+    assert!(
+        one.raw() > metres(2.5).raw(),
+        "the first spring rose {} m",
+        as_f(one)
+    );
+}
+
+#[test]
+fn a_hit_she_lands_gives_a_spring_back_and_landing_gives_them_all() {
+    let mut w = facing(2.0);
+    if let Mechanic::Meter { springs, .. } = &mut w.players[0].mechanic {
+        *springs = 2;
+    }
+    aloft(&mut w, 0.5);
+    tap(&mut w, keys::DARK);
+    let mut fewer = false;
+    for _ in 0..20 {
+        step(&mut w, 0);
+        if let Mechanic::Meter { springs, .. } = w.players[0].mechanic {
+            fewer |= springs < 2;
+        }
+    }
+    assert!(fewer, "a ball that landed gave nothing back");
+    run(&mut w, 60, 0);
+    assert!(w.players[0].grounded);
+    assert!(matches!(
+        w.players[0].mechanic,
+        Mechanic::Meter { springs: 0, .. }
+    ));
+}
+
+#[test]
+fn her_movement_is_hers_from_an_empty_bar() {
+    // The owner, 2026-11-04: movement is the mage herself; power is behind
+    // the bars. The spring, the hop, the dodge and the fall are the same at
+    // every bar.
+    let spring_at = |bars: i32| {
+        let mut w = alone();
+        set_bars(&mut w, bars, bars);
+        step(&mut w, keys::DARK | keys::LIGHT);
+        let mut top = Fx::ZERO;
+        for _ in 0..40 {
+            step(&mut w, 0);
+            top = top.max(w.players[0].pos.y);
+        }
+        top
+    };
+    assert_eq!(spring_at(0), spring_at(90), "the spring read a bar");
+    let (empty, _) = after_an_auto(Input::D, 0, 0.0);
+    let (full, _) = after_an_auto(Input::D, 90, 0.0);
+    assert_eq!(empty, full, "the hop read a bar");
+    let mut w = alone();
+    set_bars(&mut w, 90, 90);
+    assert!(!sim::dual::may_blink(&w.players[0]));
+    assert!(!sim::dual::may_beat_wings(&w.players[0]));
+    assert_eq!(sim::dual::fall_scale(&w.players[0]), Fx::ONE);
+}
+
+#[test]
+fn the_chain_flies_through_where_she_stood_and_binds_the_first_body() {
+    let mut w = facing(6.0);
+    let pitch = onto_them(&w);
+    let before = w.players[1].health;
+    step_looking(&mut w, keys::TWILIGHT, pitch);
+    step_looking(&mut w, 0, pitch);
+    assert_eq!(doing(&w), Some(d::CHAIN));
+    let mut bound = false;
+    for _ in 0..30 {
+        step_looking(&mut w, 0, pitch);
+        let q = w.players[1];
+        bound |= q.slowed > 0 && q.slow_mul.raw() <= t::root_slow().raw();
+        if let Some(b) = sim::state::hitbox(&w.players[0]) {
+            assert!(
+                b.from.x.raw() < w.players[0].pos.x.raw(),
+                "the chain came from in front"
+            );
+        }
+    }
+    assert!(w.players[1].health < before, "six metres off, untouched");
+    assert!(bound, "not bound");
+}
+
+#[test]
+fn the_storm_hunts_her_and_strikes_whoever_is_near_where_she_was() {
+    let mut w = facing(2.5);
+    let (mine, theirs) = (w.players[0].health, w.players[1].health);
+    assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
+    let mut struck = 0;
+    let mut last = theirs;
+    for _ in 0..120 {
+        step(&mut w, 0);
+        let now = w.players[1].health;
+        if now < last {
+            struck += 1;
+        }
+        last = now;
+        // Hold the other where it stood: the storm follows her, not them.
+        w.players[1].pos = at(-3.5, 0.0, 8.0);
+    }
+    assert!(struck >= 3, "struck {struck} times beside her");
+    assert_eq!(w.players[0].health, mine, "her own storm hit her");
+}
+
+#[test]
+fn the_storm_strikes_a_beat_behind_her() {
+    let mut w = alone();
+    assert!(hold_into(&mut w, keys::DARK, 0, d::STORM, 60));
+    run(&mut w, 20, 0);
+    // She runs; where it thinks she is trails her.
+    for _ in 0..20 {
+        step(&mut w, Input::W);
+    }
+    let Mechanic::Meter {
+        storm, storm_at, ..
+    } = w.players[0].mechanic
+    else {
+        unreachable!()
+    };
+    assert!(storm > 0, "the storm is over already");
+    let behind = w.players[0].pos.sub(storm_at).len();
+    assert!(
+        behind.raw() > metres(0.3).raw(),
+        "it is on top of her: {} m",
+        as_f(behind)
+    );
+    assert!(
+        behind.raw() < metres(4.0).raw(),
+        "it lost her: {} m",
+        as_f(behind)
+    );
 }
 
 /// Throw the Flurry dash from `facing(gap)`, keeping the other where it
@@ -1513,46 +1334,14 @@ fn an_auto_in_the_air_rises_like_a_jump_once_an_airtime() {
 }
 
 #[test]
-fn phase_leaves_her_moving_along_it_and_rising() {
-    let mut w = alone();
-    aloft(&mut w, 3.0);
-    tap(&mut w, keys::TWILIGHT);
-    let m = sim::moves::get(Class::DualMage, d::PHASE);
-    run(&mut w, m.startup as u32 + 1, 0);
-    let v = w.players[0].vel;
-    assert!(
-        v.x.raw() > metres(3.0).raw(),
-        "carrying {} m/s along",
-        as_f(v.x)
-    );
-    assert!(v.y.raw() > 0, "and not rising: {} m/s", as_f(v.y));
-}
-
-#[test]
-fn the_equinox_blinks_as_she_leaves_the_floor() {
-    let mut w = alone();
-    let from = w.players[0].pos;
-    step(&mut w, SPACE | keys::TWILIGHT);
-    assert_eq!(doing(&w), Some(d::EQUINOX));
-    let m = sim::moves::get(Class::DualMage, d::EQUINOX);
-    run(&mut w, m.startup as u32 + 2, 0);
-    let went = w.players[0].pos.x.sub(from.x);
-    assert!(went.raw() > metres(2.5).raw(), "she went {} m", as_f(went));
-    assert!(
-        w.players[0].pos.y.raw() > 0,
-        "and she is still on the floor"
-    );
-}
-
-#[test]
 fn a_full_hold_is_a_commitment_and_not_a_charge() {
     // **An MMO spell, not a charge** (the owner, 2026-10-13): held long
     // enough, she is locked into the spell, it plays through whether the
     // button stays down or not, and how strong it is has nothing to do with
     // how long it was held.
     for (button, spell) in [
-        (keys::DARK, d::CHAIN_LIGHTNING),
-        (keys::LIGHT, d::DISK_RAY),
+        (keys::DARK, d::STORM),
+        (keys::LIGHT, d::LANCE),
         (keys::TWILIGHT, d::FLURRY_DASH),
     ] {
         let thrown = |keep: u32| {
@@ -1585,37 +1374,4 @@ fn a_full_hold_is_a_commitment_and_not_a_charge() {
             "{button:#x}: holding on changed what it was worth"
         );
     }
-}
-
-#[test]
-fn chain_lightning_strikes_a_creature_the_crosshair_is_on() {
-    // From play (2026-10-14): it never struck the Ridgeback. Bodies are not on
-    // the crosshair's ray, so the point under the crosshair is the floor
-    // behind a creature that size, metres past its nearest part; the bolt is
-    // drawn to the body nearest its whole line, not the line's end.
-    use sim::monster::{Doing, Monster};
-    let mut w = World::hunt([Class::DualMage; sim::state::MAX_PLAYERS]);
-    w.players[1].health = 0;
-    let me = at(-6.0, 0.0, 8.0);
-    w.players[0].pos = me;
-    w.players[0].grounded = true;
-    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
-    let stands = at(2.0, 0.0, 8.0);
-    let mut beast = Monster::new(sim::species::SpeciesId::RIDGEBACK);
-    beast.pos = stands;
-    beast.doing = Doing::Prowl;
-    beast.brain.think_left = u16::MAX;
-    beast.brain.seen = me;
-    w.monsters[0] = Some(beast);
-    let before = w.monsters[0].unwrap().health;
-    let pitch = onto(&w, at(2.0, 1.2, 8.0));
-    for f in 0..60 {
-        step_looking(&mut w, if f < 30 { keys::DARK } else { 0 }, pitch);
-        w.monsters[0].as_mut().unwrap().pos = stands;
-    }
-    let after = w.monsters[0].unwrap().health;
-    assert!(
-        after < before,
-        "the Ridgeback was not struck: {before} -> {after}"
-    );
 }

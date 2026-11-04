@@ -1,5 +1,5 @@
 ---
-status: direction agreed 2026-11-04 ("this is the class"); nothing built, nothing played
+status: built 2026-11-04 (the owner: "this is the class"; "go ahead and build it"); unplayed
 started: 2026-11-03
 supersedes (when built): the tiers' movement, the blink, Phase, the curse and purge, Binary, the takeoff row, Apotheosis
 keeps: the hop, the Flurry dash's run (as the chain ride), the two bars and the hill, the Abyss and Judgement's look
@@ -201,3 +201,21 @@ punishment for not keeping up.
    bring an unbidden strike now and then.
 5. **The majors**: whole bar, half, or down to the other bar.
 6. **The bind**: how long, and whether the chain ride drags the bound body with her or past.
+
+## Built, 2026-11-04
+
+All of it but `Q` and `E`, which the owner will make persistent later. Where the build chose:
+
+- **The default escape.** A tap's is a spot dodge: she stays unless a direction is held. The
+  lance's is up and back from what she aimed at. The annihilation's is straight up. The storm
+  has none of its own: the bolts fall a beat behind her, so the dodge is her ordinary movement.
+- **Apotheosis stays**, as the moment the wave arrives.
+- **Unbidden strikes never take her below one health**, the rule her burn already followed.
+- **The tap's line is still the ball** of 2026-10-13, from just behind her shoulder; only the
+  lance and the chain leave from the new point behind her. Whether the ball should leave from
+  there too is a look in the game, not a rule.
+- **The hand-timed dodge for a bonus** is not built.
+
+The kit as built is [../kits/dual-mage.md](../kits/dual-mage.md) §"Her hands, 2026-11-04", and
+the numbers and what moved are the feel log's entry of the same date.
+

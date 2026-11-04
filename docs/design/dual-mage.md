@@ -19,6 +19,15 @@ holding them level — and she gets what neither could give her alone: wings.
 The verb is **goad**. This is a containment story, not a channelling story: the human is not a
 conduit, they are a vessel under load, and the load is two things that want to be apart.
 
+> **Rebuilt 2026-11-04: her magic is aimed at her.**
+> ([exploration/0037](exploration/0037_dual_mage_the_razor_edge.md), the kit in
+> [kits/dual-mage.md](kits/dual-mage.md) §"Her hands, 2026-11-04".) The two beings are trying to
+> kill her; every strike comes from behind her, through where she stands, at what she is
+> looking at, and she gets out of its way so it lands on them. Both clicks at once and they
+> annihilate where she stood as she springs clear. **Movement is hers at every bar; power is
+> what the bars hold.** The two bars and the hill below are unchanged. What changed is in §"The
+> tiers" and §"Ascension".
+
 > **Built 2026-09-23**, all of it below through the wings, in one thread against
 > [plans/dual-mage-v2.md](plans/dual-mage-v2.md), and **played once the same day**: the first
 > values came back overtuned — too much damage, too little burn, bars that drained too fast,
@@ -114,14 +123,14 @@ numbers. An *exchange* is a Judgement's startup to the end of its recovery, twic
 
 | | The player does | What happens | Measured |
 | --- | --- | --- | --- |
-| **B1** | Alternates wings for half a round with everything landing on a target that never moves, the dummy in sword range | One to two and a quarter health bars, the last of it the ascension the climb reaches near the end | 1.43 bars (1.85 with the spellbook's litanies) |
-| **B2** | The dark wing only, on a target standing in all of it (since the majors spend, 2026-10-12) | The most the wings make: one and a quarter to two bars, and the dark runs away and burns her for two fifths to four fifths of her own. The same hand with the Abyss every fourth throw costs her nothing: the major is the valve | 1.59 bars dealt, 0.59 lost; with the Abyss, nothing |
+| **B1** | Alternates hands for half a round with everything landing on a target that never moves, the dummy in sword range | One to two and a quarter health bars, the last of it the ascension the climb reaches near the end | 1.08 bars since 2026-11-04 (the autos 14 → 17 when the curse went; 1.43 before) |
+| **B2** | The dark hand only, on a target standing in all of it | One to two bars (one and a quarter until the curse's ticks went, 2026-11-04), and the dark runs away and burns her for two fifths to four fifths of her own. The same hand with the Abyss every fourth throw costs her nothing: the major is the valve | 1.08 bars dealt; with the Abyss, nothing |
 | **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | passes |
-| **B4** | Alternates wings cleanly from empty, venting nothing | The blink in four to six seconds, the second jump in eight to twelve, the wings in eleven to sixteen, since the calm went (2026-10-14; it was five to eight, eleven to fifteen, sixteen to twenty-one, and ten to fourteen, sixteen to twenty-one, twenty to twenty-six before the thirds); in play every spell she vents slows it | 4.8 s, 10.0 s, 13.5 s |
-| **B5** | Stops at two thirds | Keeps the second jump through seven exchanges of stillness (since 2026-10-14, no calm; it used to be gone within an exchange and the blink inside seven) | passes |
+| **B4** | Alternates wings cleanly from empty, venting nothing | (The marks, since 2026-11-04: nothing is unlocked) The blink in four to six seconds, the second jump in eight to twelve, the wings in eleven to sixteen, since the calm went (2026-10-14; it was five to eight, eleven to fifteen, sixteen to twenty-one, and ten to fourteen, sixteen to twenty-one, twenty to twenty-six before the thirds); in play every spell she vents slows it | 4.8 s, 10.0 s, 13.5 s |
+| **B5** | Stops at two thirds | (The mark, since 2026-11-04) Keeps the second jump through seven exchanges of stillness (since 2026-10-14, no calm; it used to be gone within an exchange and the blink inside seven) | passes |
 | **B6** | Throws a major from level | Its bar is empty and the other is half a bar ahead. Answered with the other major, she is level again before it recovers; answered with the spent hand's wings, back inside the band within two exchanges | passes |
 | **B7** | Throws a major from level and ignores the runaway for ten seconds | Ten to twenty-five per cent of a health bar. Fully one-sided for half a round: half to four fifths, and never all of it. With no calm the burn runs until she cashes out (2026-10-14) | passes |
-| **B8** | One spell from level; two; a major; alternating | Inside the band; outside; outside; never outside | passes |
+| **B8** | One long hold from level; two; a major; alternating (since 2026-11-04: the spells that vented went) | Inside the band; outside; outside; never outside | passes |
 | **B9** | Throws the Abyss and Judgement in turn, over and over, with nothing built between | Since they spend, every one after the first is thrown from an empty bar: three quarters of a bar to a bar and a half in half a round, costing her nothing. The majors are what the building is for | 1.17 bars |
 
 What moved to get there, from the first pass: the pushes 8/18/38 → 5/9/20 and the band 30 →
@@ -157,71 +166,58 @@ read after its own push would be worth more than the bar said.
 **The two autos are exempt from the size half of it**, and only that half. Their reach is
 pinned to the punch that throws them — see [kits/dual-mage.md](kits/dual-mage.md).
 
-### The tiers — what frenzy does to her body
+### The tiers — power only, since 2026-11-04
 
-The lower bar gates them, so both beings have to be fed. Each is movement, which is the leg
-this class never had, and each falls out of the mechanic rather than from a new button. A tier
-is held while the lower bar is at or above its threshold and lost the frame it drops below —
-including mid-air.
+> **Rebuilt 2026-11-04** ([exploration/0037](exploration/0037_dual_mage_the_razor_edge.md)),
+> from the owner: *"movement should be the mage herself -- the elegant dancer on the knife's
+> edge -- and power should be behind the bars."* **Nothing about how she moves reads a bar.**
+> The blink, the second jump, the slow fall and the float are gone; she does not teleport at
+> all. Her way up is the spring out of an annihilation, hers from an empty bar
+> (`dual::spring`). The thresholds survive as marks: the HUD's ticks and the wings on her
+> back count them, so a wing arriving is still a reading of how much power she holds.
 
-| Lower bar at | She gains | Knobs |
+| Lower bar at | Was (to 2026-11-03) | Now |
 | --- | --- | --- |
-| **a third** (`tier_blink`, 33; half until 2026-10-12) | **The dodge is a blink.** Shift plus a direction puts her where the dodge would have ended, on its first frame, and she is invulnerable for the dodge's own window and then stands through its tail. In the air it is the airdodge, and it is spent the same way. A blink stops against the first terrain or stone in its way — `aim::blink_to` decides, and it is stricter than the Reaver's dash: a low platform her head would clear is still a wall to her feet | — |
-| **two thirds** (`tier_jump`, 67; three quarters until 2026-10-12) | **A second jump**, once per airtime, and a **slower fall**. The first class to answer the README's open double-jump row. Space in the air has one other exception, the Champion's uppercut; this is the second, and it is per class | `second_jump` 0.8 of the first · `slow_fall` 0.6 of the fall cap |
-| **both full** (`tier_wings`, 95) | **Ascension.** Wings erupt, and she may jump as often as she likes | below |
+| **a third** (`tier_blink`, 33) | The dodge was a blink | The first wing a side, a mark on the bar |
+| **two thirds** (`tier_jump`, 67) | A second jump and a slower fall | The second wing |
+| **both full** (`tier_wings`, 95) | Ascension, with a wing beat on every press | Ascension -- below |
 
-The tiers are on the *lower* bar and not on the sum for one reason: a sum can be reached
-one-sided. Requiring both to be high is what makes the climb a rhythm of alternating hands —
-dark hand, dark Lance, light hand, light Sweep — and that rhythm uses the two-form kit in both
-forms, which nothing in the old design ever forced.
+**What the lower bar reads now is annihilation.** When matter meets antimatter what can cancel
+is the lesser amount, so the lower bar is how hard a twilight move hits: the annihilation, the
+chain, the chain ride (`state::depth` with a twilight kind, unchanged since 2026-10-09).
 
-**Why "full" is 95 and not 100.** The calm runs every frame and the two bars are pushed by two
-different presses, so the moment one is topped up the other has already lost a little; both can
-never be at exactly the top on the same frame. The third tier is the lower bar at 95, which is
-what the other bar keeps through one move's worth of calm with room to spare. It is a threshold
-on the lower bar like the other two, which is also why it is written beside them.
+**Why "full" is 95 and not 100.** The calm used to run every frame and two presses could never
+top both bars on one frame; the calm is off since 2026-10-14 and the threshold stayed, so the
+top is a little short of full.
 
-### Ascension
+### Ascension — staying ahead of the crest, since 2026-11-04
 
-Both bars full. Nothing else triggers it, and the drift never delivers it — the drift pulls
-the bars apart, so the only way to the top is to goad both while holding them level, which is
-the hardest thing the class can do and is meant to be.
+Both bars full, held level to the top -- the hardest thing the class does, and nothing else
+triggers it.
 
-- **Wings erupt** and she may jump without limit: every press of space in the air is a wing
-  beat.
-- **No dodge.** She flies instead. Loss of control is loss of the option to decline.
+- **The beings stop waiting to be asked.** The **wave** (`Mechanic::Meter::wave`) rises on its
+  own at `ascension, the wave rises` (25 a second) and every move she throws pushes it back by
+  `ascension, a move she throws pushes the wave back` (20). Past `ascension, the wave breaks at`
+  (50) the beings strike at her **unbidden**: every `ascension, an unbidden strike every` (40
+  frames) at the break, twice as often with the wave at the top, one is called down where she
+  stands, marked on the floor, and lands `ascension, an unbidden strike lands after` (24 frames)
+  later -- an annihilation that hurts everybody else in it, and her for `ascension, an unbidden
+  strike hurts her` (60) if she is still there and not untouchable. Never past one health.
+- **So she has to keep pace.** Throwing a move every second or so keeps the wave under its
+  break and nothing comes; standing still through the whole of it costs her a fifth of a bar or
+  more (`tests/dual_mage.rs`). The only place anything of hers ever hurts her, and the
+  punishment for not keeping up.
 - **Casts fire at the top of the power curve**, because both bars are at the top.
-- **Health is the clock** — `ascension_frames` (360, six seconds) of `ascension_drain` (2) a
-  frame, about seventy per cent of a health bar, inside the "half to all of it" the original
-  design asked for — and **landing hits pulls some back**: `ascension_refund` (40) per hit, the
-  refund the old design wrote and never built. It was three seconds, and at three a player had
-  time for two or three abilities and it was over before they had noticed it had begun.
-- **It arrives as Apotheosis** (2026-10-12, [exploration/0015](exploration/0015_dual_mage_spellbook.md)):
-  the frame the wings erupt, a nova of both forces bursts round her — `apotheosis, damage` (60)
-  to everybody within `apotheosis, reaches` (5 m), and every curse in it purged at the top of
-  the curve. Every spell she casts goads a bar, so near the top she *will* ascend if she keeps
-  casting: the arrival is what makes the moment a decision. Hold at the brink, let the calm take
-  a little off, step in beside a body carrying five stacks, and cast the spell that tips her
-  over — or ascend alone in a corner and get wings and nothing else.
-- **It ends with both bars empty** and a stagger graduated by how much she landed: the share of
-  the drain her hits refunded, read against a ceiling (`ascension_stun`, 40 frames, for landing
-  nothing) and a floor (`ascension_stun_floor`, 10, for paying it all back). The vent. Then she
-  climbs again.
+- **Her movement is what it always is**: the dodge is hers, and there are no wing beats.
+- **It arrives as Apotheosis** (2026-10-12): the nova that bursts round her the frame she
+  ascends.
+- **It ends after `ascension_frames` (six seconds) with both bars and the wave empty**, and
+  nothing else: no stagger, because nothing about her movement was ever the bars' to take back.
 
-So a match has a shape: climb, hold a tier, ride it, ascend, vent, climb. In versus at sixty
-seconds twenty-one seconds of clean alternating reaches the wings, which against a person is
-roughly once per match if she is good, which is what a nova should be.
-
-**Loss of control does not mean loss of input. It means losing the ability to decline.** In a
-fighting game, control *is* the option to not commit — to wait, block, dodge, reposition, do
-nothing. Remove that, and you have genuine loss of control with every input still mattering
-completely. The analogy is a car with the accelerator stuck: you still steer, you cannot stop.
-
-**Counterplay** is what keeps it from degenerating into a race to nova every match. Opponents
-beat it by playing evasively — deny the hits and the refund never comes — by CC, because she
-cannot dodge out, and by blocking, which eats the damage and denies the refund. The Bulwark is
-ascension's hard counter. You win with it by timing it for when your opponent is already
-vulnerable, not by reaching it as fast as possible.
+*Was, to 2026-11-03*: wings and a wing beat on every press, no dodge, health drained as a clock
+and refunded by hits, and a stagger on the way out graduated by what she landed. The owner
+found it "lackluster and confusing"; the knobs `ascension_drain`, `ascension_refund`,
+`ascension_stun` and `ascension_stun_floor` are no longer read.
 
 ### On her back
 

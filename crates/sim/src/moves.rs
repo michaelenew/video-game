@@ -697,11 +697,11 @@ const NAMES: [&[&str]; 6] = [
     // `0016_dual_mage_controls.md`.
     &[
         "Dark auto",
-        "Binary",
+        "Chain",
         "Judgement",
         "Abyss",
         "Light auto",
-        "Shadowstep",
+        "Annihilation",
         "Descent",
         "Phase",
         "Veil",
@@ -711,8 +711,8 @@ const NAMES: [&[&str]; 6] = [
         "Devour",
         "Halo",
         "Smite",
-        "Chain lightning",
-        "Disk ray",
+        "Storm",
+        "Lance",
         "Flurry dash",
     ],
 ];
@@ -1117,8 +1117,12 @@ pub mod dual {
     /// Left click, on the floor or in the air: a wing of dark off the left
     /// arm, and a hop the way she is holding. One curse.
     pub const DARK_AUTO: u8 = 0;
-    /// Middle click on the floor: twin stars, one of each force, orbit her.
-    pub const BINARY: u8 = 1;
+    /// Middle click, tapped, on the floor or in the air (2026-11-04): **the
+    /// chain**. Both forces linked, flung at her from behind; she lets it go
+    /// by and it flies on along the crosshair's line, binding the first body
+    /// it meets. Held, she catches its tail instead: [`FLURRY_DASH`]. Was
+    /// Binary's row.
+    pub const CHAIN: u8 = 1;
     /// `E`: the light major. Columns of light, more the fuller her Light, and
     /// a great sigil.
     pub const JUDGEMENT: u8 = 2;
@@ -1127,9 +1131,11 @@ pub mod dual {
     /// Right click, on the floor or in the air: a wing of light off the right
     /// arm, and a hop. Purges.
     pub const LIGHT_AUTO: u8 = 4;
-    /// No button since the autos took the air (2026-10-12): she is behind the
-    /// first body on the line.
-    pub const SHADOWSTEP: u8 = 5;
+    /// Left and right click together (2026-11-04): **annihilation**. Both
+    /// beings lunge at her at once; she springs clear -- up, or the way she
+    /// holds -- and they meet where she was standing. Was the Shadowstep's
+    /// row. See `docs/design/exploration/0037_dual_mage_the_razor_edge.md`.
+    pub const ANNIHILATION: u8 = 5;
     /// No button since the autos took the air: down onto the ground as a
     /// smite, and a sigil.
     pub const DESCENT: u8 = 6;
@@ -1152,19 +1158,20 @@ pub mod dual {
     pub const HALO: u8 = 13;
     /// `R`: a column out of the sky where she points, and a sigil.
     pub const SMITE: u8 = 14;
-    /// Left click held (2026-10-12, the long hold): black lightning out of a
-    /// cloud over her head, onto the body nearest the crosshair's spot and
-    /// chaining from it to the next nearest, and on. Every link curses. See
-    /// `docs/design/exploration/0016_dual_mage_controls.md`.
-    pub const CHAIN_LIGHTNING: u8 = 15;
-    /// Right click held: a great disk of light over her head, facing the way
-    /// she faces, and a moment later a blast from it to the crosshair's
-    /// point. Purges what it passes through.
-    pub const DISK_RAY: u8 = 16;
-    /// Middle click held: a long line of blows along her look, and then she
-    /// dashes down it, untouchable, to its far end.
-    /// A middle click let go before the hold is Binary on the floor and Phase
-    /// in the air, as it always was.
+    /// Left click held (2026-11-04): **the storm hunts her**. For its active
+    /// window black lightning strikes where she was a beat ago and leaps from
+    /// there to the bodies nearest it; she keeps moving and drags it through
+    /// them. Was Chain lightning, out of a cloud at the crosshair.
+    pub const STORM: u8 = 15;
+    /// Right click held (2026-11-04): **the lance**. One great beam of light
+    /// from behind her, through where she stood, to the crosshair's point
+    /// (`aim::Kind::Behind`); she lunges clear as it comes. Was the Disk ray,
+    /// from a disk over her head.
+    pub const LANCE: u8 = 16;
+    /// Middle click held: **the chain ride**. Her blows cascading down the
+    /// line, and then she runs it, untouchable, to its far end -- the chain
+    /// she caught by the tail. A middle click let go before the hold is the
+    /// [`CHAIN`] itself.
     pub const FLURRY_DASH: u8 = 17;
 
     pub const COUNT: usize = 18;
@@ -1194,10 +1201,8 @@ pub mod dual {
     pub const fn force(kind: u8) -> Option<crate::class::Force> {
         use crate::class::Force;
         match kind {
-            DARK_AUTO | GRASPING_SHADE | DEVOUR | SHADOWSTEP | VEIL | ABYSS | CHAIN_LIGHTNING => {
-                Some(Force::Dark)
-            }
-            LIGHT_AUTO | HALO | SMITE | DESCENT | SANCTUARY | JUDGEMENT | DISK_RAY => {
+            DARK_AUTO | GRASPING_SHADE | DEVOUR | VEIL | ABYSS | STORM => Some(Force::Dark),
+            LIGHT_AUTO | HALO | SMITE | DESCENT | SANCTUARY | JUDGEMENT | LANCE => {
                 Some(Force::Light)
             }
             _ => None,
@@ -1206,14 +1211,14 @@ pub mod dual {
 
     /// Is this a twilight move -- the middle column, both forces at once?
     pub const fn twilight(kind: u8) -> bool {
-        matches!(kind, BINARY | PHASE | EQUINOX | FLURRY_DASH)
+        matches!(kind, CHAIN | PHASE | EQUINOX | FLURRY_DASH | ANNIHILATION)
     }
 
     /// Is this one of the three long holds? They fill `meter, a long hold
     /// fills` of the bar they are made of (both bars, for the twilight one).
     /// See `crate::dual::steer`.
     pub const fn is_a_long_hold(kind: u8) -> bool {
-        matches!(kind, CHAIN_LIGHTNING | DISK_RAY | FLURRY_DASH)
+        matches!(kind, STORM | LANCE | FLURRY_DASH)
     }
 
     /// Is this one of the two autos -- the wings on the bare clicks, thrown
@@ -1237,12 +1242,22 @@ pub mod dual {
     /// How many curse stacks a dark spell lays on a body it lands on. The
     /// Abyss lays its own, a stack every `abyss, curses every`, and is not
     /// counted here.
+    ///
+    /// **None, since 2026-11-04**: the curse and the purge were a habit --
+    /// left, then right, then left -- rather than a decision (the owner), and
+    /// went with the kit they belonged to. The Devour, the Grasp and the Veil,
+    /// which have no button, keep theirs.
     pub const fn curses_laid(kind: u8) -> u8 {
         match kind {
             DEVOUR => 2,
-            DARK_AUTO | GRASPING_SHADE | SHADOWSTEP | VEIL | CHAIN_LIGHTNING => 1,
+            GRASPING_SHADE | VEIL => 1,
             _ => 0,
         }
+    }
+
+    /// Does this move bind the body it lands on -- the root the Grasp has?
+    pub const fn binds(kind: u8) -> bool {
+        matches!(kind, GRASPING_SHADE | CHAIN)
     }
 
     /// Does this spell write a sigil where it lands?
@@ -1984,11 +1999,11 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             | dual::SANCTUARY
             | dual::VEIL
             | dual::DESCENT => Shape::Cylinder,
-            // The disk's blast is a line from the disk to the crosshair's
-            // point (`aim::Kind::Overhead`), whatever this says; a cylinder
-            // only so that it strikes. The flurry is a line of blows thrust
-            // along her look, again and again.
-            dual::DISK_RAY => Shape::Cylinder,
+            // The lance and the chain are lines from behind her, through
+            // where she stood, to the crosshair's point (`aim::Kind::Behind`),
+            // whatever this says; a cylinder only so that they strike. The
+            // flurry is a line of blows thrust along her look, again and again.
+            dual::LANCE | dual::CHAIN => Shape::Cylinder,
             dual::FLURRY_DASH => Shape::Cascade,
             _ => Shape::None,
         },

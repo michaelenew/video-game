@@ -1326,6 +1326,29 @@ scalars! {
     // **The least the walk keys steer in the air** (2026-11-03): a floor
     // under every class's steering. See `tuning::air_drift_floor`.
     AirDriftFloor,        "Air",      "Steering, the walk keys reach at least (m/s)",     Fixed, 0, fx(5,1);
+    // **The Dual mage's magic is aimed at her** (2026-11-04,
+    // `docs/design/exploration/0037_dual_mage_the_razor_edge.md`): where the
+    // beings strike from, the spring out of an annihilation, the lance's
+    // lunge, the storm that hunts her, and Ascension's wave and its unbidden
+    // strikes. Appended: `tuned::SCALARS` is read by this enum's own
+    // discriminant.
+    BehindBack,           "Dual mage", "Behind, the beings strike from this far back (m)",  Fixed, 0, fx(6,1);
+    BehindRise,           "Dual mage", "Behind, and this high over her middle (m)",          Fixed, 0, fx(3,1);
+    SpringLift,           "Dual mage", "Annihilation, the spring rises (m/s)",               Fixed, 0, fx(40,1);
+    SpringAlong,          "Dual mage", "Annihilation, the spring carries her (m/s)",         Fixed, 0, fx(30,1);
+    SpringFalloff,        "Dual mage", "Annihilation, each spring after is worth (share)",   Fixed, 0, fx(1,1);
+    LanceLunge,           "Dual mage", "Lance, she lunges clear at (m/s)",                   Fixed, 0, fx(40,1);
+    LanceLungeUp,         "Dual mage", "Lance, and rises at (m/s)",                          Fixed, 0, fx(30,1);
+    StormLasts,           "Dual mage", "Storm, hunts her for",                               Frames, 1, 240;
+    StormEvery,           "Dual mage", "Storm, strikes every",                               Frames, 1, 60;
+    StormFollows,         "Dual mage", "Storm, closes on her each frame (share)",            Fixed, fx(1,100), fx(1,1);
+    WaveRise,             "Dual mage", "Ascension, the wave rises (a second)",               Fixed, 0, fx(200,1);
+    WaveVent,             "Dual mage", "Ascension, a move she throws pushes the wave back",  Int, 0, 100;
+    WaveBreaks,           "Dual mage", "Ascension, the wave breaks at",                      Int, 0, 100;
+    UnbiddenEvery,        "Dual mage", "Ascension, an unbidden strike every, at the break",  Frames, 4, 240;
+    UnbiddenWarn,         "Dual mage", "Ascension, an unbidden strike lands after",          Frames, 1, 120;
+    UnbiddenDamage,       "Dual mage", "Ascension, an unbidden strike hurts her",            Int, 0, 400;
+    UnbiddenRadius,       "Dual mage", "Ascension, an unbidden strike reaches (m)",          Fixed, fx(1,10), fx(6,1);
 }
 
 // ---------------------------------------------------------------------------

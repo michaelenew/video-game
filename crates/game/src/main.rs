@@ -4526,6 +4526,38 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
     // throwing, in the last pieces of the pool.
     if part >= SPELL_PARTS - 3 {
         let k = (part - (SPELL_PARTS - 3)) as f32;
+        // **An unbidden strike coming** (2026-11-04): where it will land,
+        // marked on the floor by a ring of each force closing on the spot
+        // and a light gathering over it -- the warning she has to leave on.
+        if let sim::class::Mechanic::Meter {
+            strike, strike_at, ..
+        } = p.mechanic
+            && strike > 0
+        {
+            let warn = sim::tuning::unbidden_warn().max(1) as f32;
+            let closing = 1.0 - strike as f32 / warn;
+            let r = sim::tuning::unbidden_radius().to_f32_for_render();
+            let at = fx3(strike_at);
+            return match part - (SPELL_PARTS - 3) {
+                0 => Some(hoop(
+                    Skin::Dark,
+                    at + Vec3::Y * 0.05,
+                    Vec3::Y,
+                    r * (1.6 - 0.6 * closing),
+                )),
+                1 => Some(hoop(
+                    Skin::Light,
+                    at + Vec3::Y * 0.1,
+                    Vec3::Y,
+                    r * (0.4 + 0.6 * closing),
+                )),
+                _ => Some(floating_in(
+                    Skin::Sun,
+                    at + Vec3::Y * (height * 1.6),
+                    0.15 + 0.35 * closing,
+                )),
+            };
+        }
         if sim::dual::veiled(p) {
             let turn = w.frame as f32 * 0.4 + k * std::f32::consts::TAU / 3.0;
             return Some(floating_in(
@@ -4721,9 +4753,9 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
                 0.3,
             )
         }
-        // **Binary and Equinox**: one of each force gathering in her hands --
-        // the stars about to be raised, the bars about to be levelled.
-        d::BINARY | d::EQUINOX if startup => {
+        // **The chain and the Equinox**: one of each force gathering -- the
+        // chain about to be flung at her, the bars about to be levelled.
+        d::CHAIN | d::EQUINOX if startup => {
             let side = Vec3::new(
                 -p.facing.z.to_f32_for_render(),
                 0.0,
@@ -4743,18 +4775,66 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
                 _ => None,
             }
         }
-        // **The Shadowstep's going**: she thins into shadow on the spot.
-        d::SHADOWSTEP if startup => {
-            (part == 0).then(|| floating_in(Skin::Dark, waist, 0.7 * (1.0 - 0.6 * through)))
+        // **The chain** (2026-11-04): both forces linked, flung from behind
+        // her through where she stood, down the line the hit test uses -- a
+        // dark strand and a light one wound round each other.
+        d::CHAIN => {
+            let v = volume?;
+            let (from, to) = (fx3(v.from), fx3(v.to));
+            let along = (to - from).normalize_or(Vec3::X);
+            let across = along.cross(Vec3::Y).normalize_or(Vec3::Z);
+            let up = across.cross(along);
+            const LINKS: usize = 14;
+            (part < LINKS).then(|| {
+                let k = part as f32 / (LINKS - 1) as f32;
+                let twist = k * 9.0 + w.frame as f32 * 0.4;
+                let off = (across * twist.cos() + up * twist.sin()) * 0.18;
+                let skin = if part % 2 == 0 {
+                    Skin::Dark
+                } else {
+                    Skin::Light
+                };
+                let sign = if part % 2 == 0 { 1.0 } else { -1.0 };
+                floating_in(skin, from.lerp(to, k) + off * sign, 0.16)
+            })
+        }
+        // **Annihilation's wind-up** (2026-11-04): the two beings lunging at
+        // her from either shoulder, closing on her middle; she is gone the
+        // frame they meet.
+        d::ANNIHILATION if startup => {
+            let side = Vec3::new(
+                -p.facing.z.to_f32_for_render(),
+                0.0,
+                p.facing.x.to_f32_for_render(),
+            );
+            let back = -Vec3::new(
+                p.facing.x.to_f32_for_render(),
+                0.0,
+                p.facing.z.to_f32_for_render(),
+            );
+            let gap = 1.6 * (1.0 - through) + 0.15;
+            match part {
+                0 => Some(floating_in(
+                    Skin::Dark,
+                    waist + side * gap + back * 0.6 * (1.0 - through) + Vec3::Y * 0.5,
+                    0.35,
+                )),
+                1 => Some(floating_in(
+                    Skin::Light,
+                    waist - side * gap + back * 0.6 * (1.0 - through) + Vec3::Y * 0.5,
+                    0.35,
+                )),
+                _ => None,
+            }
         }
         // **The storm cloud**, full over her head through the wind-up and
         // as the bolts leave it. The bolts are the effects'.
-        d::CHAIN_LIGHTNING => hold_gathering(w, p, kind, if startup { through } else { 1.0 }, part),
+        d::STORM => hold_gathering(w, p, kind, if startup { through } else { 1.0 }, part),
         // **The disk**, full over her head through the wind-up; on the active
         // frames the blast runs from it to the point, drawn down the line the
         // hit test uses.
-        d::DISK_RAY if startup => hold_gathering(w, p, kind, through, part),
-        d::DISK_RAY => {
+        d::LANCE if startup => hold_gathering(w, p, kind, through, part),
+        d::LANCE => {
             let v = volume?;
             let (from, to) = (fx3(v.from), fx3(v.to));
             let swell = 1.0 + 0.25 * (w.frame as f32 * 0.9).sin();
@@ -4941,8 +5021,20 @@ fn hold_gathering(
     part: usize,
 ) -> Option<Piece> {
     use sim::moves::dual as d;
-    let over = fx3(sim::aim::overhead(p.pos));
     let height = sim::tuning::body_height().to_f32_for_render();
+    // **The sun-disk gathers behind her** (2026-11-04): where the lance will
+    // come from, over her shoulder, on the line to what she is aiming at.
+    // The storm cloud stays over her head.
+    let over = if kind == d::LANCE {
+        let mid = p.pos.add(sim::V3::new(
+            sim::Fx::ZERO,
+            sim::tuning::body_height().mul(sim::Fx::ratio(1, 2)),
+            sim::Fx::ZERO,
+        ));
+        fx3(sim::aim::behind(mid, p.aim_at()))
+    } else {
+        fx3(sim::aim::overhead(p.pos))
+    };
     let waist = fx3(p.pos) + Vec3::Y * height * 0.55;
     let spin = w.frame as f32;
     match kind {
@@ -4950,7 +5042,7 @@ fn hold_gathering(
         // room, flat underneath and heaped on top, wisps trailing off its
         // rim -- hung high enough (`overhead, hangs above her feet`) that the
         // bolts under it are what the camera sees, not the cloud.
-        d::CHAIN_LIGHTNING => {
+        d::STORM => {
             const PUFFS: usize = 18;
             const WISPS: usize = 10;
             let reach = 1.0 + 2.0 * full;
@@ -4990,7 +5082,7 @@ fn hold_gathering(
         // **The sun-disk** (2026-10-13): a flat plate of light upright across
         // her front, facing the way she faces, two rings round it and the
         // beads turning round the rim -- opening to full over the wind-up.
-        d::DISK_RAY => {
+        d::LANCE => {
             let face = Vec3::new(
                 p.facing.x.to_f32_for_render(),
                 0.0,
@@ -6010,7 +6102,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             // frame, and a black flash ringed in white where it landed. Each
             // stroke is a black rod inside a fatter white one of which only
             // the far side is drawn, so the white shows round the black.
-            if effect.slot == sim::moves::dual::CHAIN_LIGHTNING {
+            if effect.slot == sim::moves::dual::STORM {
                 const STROKES: usize = BOLT_STROKES;
                 let from = fx3(effect.home);
                 let hash = |n: f32| ((n * 12.9898).sin() * 43758.547).fract() - 0.5;
@@ -6077,12 +6169,31 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
                     }
                 });
             }
-            let skin = if effect.slot == sim::moves::dual::SHADOWSTEP {
-                Skin::Dark
-            } else {
-                Skin::Light
-            };
-            (part == 0).then(|| floating_in(skin, at, r * (0.4 + 0.6 * left)))
+            // **Annihilation** (2026-11-04): where dark met light -- a flash
+            // of both, white at the heart and blowing out to its edge, with
+            // what is left of each force burning off it. The unbidden strikes
+            // of an Ascension are the same flash.
+            if effect.slot == sim::moves::dual::ANNIHILATION {
+                let out = 1.0 - left;
+                // It is placed at her feet, where its column stands; the
+                // flash is drawn round where her middle was.
+                let at = at + Vec3::Y * sim::tuning::body_height().to_f32_for_render() * 0.5;
+                return match part {
+                    0 => Some(floating_in(
+                        Skin::Sun,
+                        at,
+                        r * (0.35 + 0.65 * out) * left.sqrt(),
+                    )),
+                    1 => Some(floating_in(Skin::Dark, at, r * (0.6 + 0.5 * out) * left)),
+                    2 => Some(floating_in(
+                        Skin::Light,
+                        at,
+                        r * (0.9 + 0.2 * out) * left * 0.8,
+                    )),
+                    _ => None,
+                };
+            }
+            (part == 0).then(|| floating_in(Skin::Light, at, r * (0.4 + 0.6 * left)))
         }
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,

@@ -212,7 +212,12 @@ impl Class {
                 jumped: false,
                 hopped: false,
                 dash_jump: false,
-                landed: 0,
+                wave: Fx::ZERO,
+                springs: 0,
+                storm: 0,
+                storm_at: crate::math::V3::ZERO,
+                strike: 0,
+                strike_at: crate::math::V3::ZERO,
                 singe: Fx::ZERO,
                 veil: 0,
                 warded: false,
@@ -1013,9 +1018,26 @@ pub enum Mechanic {
         /// A jump pressed in the last frames of the Flurry dash's run to the
         /// disk: thrown on arrival, carrying the run's speed (2026-10-13).
         dash_jump: bool,
-        /// Hits landed during this ascension. What the stagger on the way out
-        /// is graduated by -- see `crate::dual::end_ascension`.
-        landed: u16,
+        /// **The wave** (2026-11-04): how far Ascension's crest has got ahead
+        /// of her, from nought to `tuning::meter_max`. It rises on its own
+        /// while she ascends and every move she throws pushes it back; past
+        /// `ascension, the wave breaks at` the beings strike at her unbidden.
+        /// See `crate::dual::step`.
+        wave: Fx,
+        /// Springs out of an annihilation this airtime: each one is worth
+        /// less than the last, a hit she lands gives one back, landing gives
+        /// them all back. See `crate::dual::spring`.
+        springs: u8,
+        /// Frames left of the storm hunting her (the left click's hold).
+        storm: u16,
+        /// Where the storm thinks she is: a point that follows her a beat
+        /// behind, and where the lightning comes down. In world coordinates,
+        /// so it moves with `World::shift`.
+        storm_at: crate::math::V3,
+        /// Frames until an unbidden strike lands, nought for none coming.
+        strike: u8,
+        /// Where it will land: her feet when it was called down.
+        strike_at: crate::math::V3,
         /// The fraction of a health point the burn owes and has not yet taken.
         ///
         /// The burn is a rate per second small enough that a frame's worth is

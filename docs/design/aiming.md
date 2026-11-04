@@ -148,6 +148,15 @@ direction: where it starts and how far it goes were decided already.
 
 Every move declares which, in the move table (`aim::Kind`). There is no seventh.
 
+*The sixth leaves from behind her since 2026-11-04* (`aim::Kind::Behind`,
+`aim::behind_path`): the Dual mage's magic is aimed at her and she dodges it, so
+the lance and the chain come from `aim::behind` -- `tuning::behind_back` behind
+her middle on the line from the crosshair's point through her, and
+`tuning::behind_rise` over it, so the line passes over her shoulder -- and go
+on to the skillshot's target. Still one target, still the skillshot's; only the
+end it leaves from moved. See
+[exploration/0037](exploration/0037_dual_mage_the_razor_edge.md).
+
 *Was five until the Dual mage's Disk ray (2026-10-12)*: a blast out of a disk
 of light hung over her head, to the point the crosshair is on. Its target is
 the skillshot's -- `aim::overhead_path` asks `aim::skillshot_path` and keeps

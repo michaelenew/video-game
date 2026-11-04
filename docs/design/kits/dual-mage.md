@@ -1,5 +1,5 @@
 ---
-status: built — her spellbook since 2026-10-12, the hop and the long holds the same day, the ball autos and tap-or-hold 2026-10-13; unplayed
+status: built — her magic aimed at her since 2026-11-04 (exploration 0037); the ball autos, the hop and tap-or-hold kept from 2026-10-13; unplayed
 decided: 2026-09-10
 revised: 2026-10-12
 formerly: Statera
@@ -31,7 +31,55 @@ meaningless without it.
 > is the design and the answer to "what is missing from the controls". §"Her hands" below is
 > what was built; where it differs from §"Her spellbook", it wins.
 
-## Her hands — built 2026-10-12 and 2026-10-13 (second pass, three rounds)
+## Her hands, 2026-11-04 — her magic is aimed at her
+
+**Built 2026-11-04, unplayed.** The design and the reasoning are
+[../exploration/0037_dual_mage_the_razor_edge.md](../exploration/0037_dual_mage_the_razor_edge.md).
+The two beings are trying to kill her. Everything they throw comes **from behind her, through
+where she stands, at what she is looking at** (`aim::Kind::Behind`, `aim::behind`: `behind, the
+beings strike from this far back` 2.5 m behind her middle and `behind, and this high` 0.8 m
+over it, so the line narrowly misses her shoulder), and the press is her intent to dodge: the
+move carries the escape, and the keys choose where it goes. **Movement is hers at every bar;
+power is behind the bars.**
+
+| Input | Tapped | Held (`channel`, 10 frames) | Her escape |
+| --- | --- | --- | --- |
+| Left click | **Dark strike** (the ball, `Shape::Orb`), and the hop | **The storm**: for `storm, hunts her for` (72 frames), lightning falls every `storm, strikes every` (9) on a point that follows her a beat behind (`storm, closes on her each frame` 0.12) and leaps to the bodies near it (`aim::chain_next`); 12 a bolt | The hop the way she holds; the storm, by keeping moving -- she drags it through them |
+| Right click | **Light strike**, and the hop | **The lance**: a beam from behind her through where she stood to the crosshair, 16 m, 40 | The hop; the lance, a lunge clear at `lance, she lunges clear at` (14 m/s) the way she holds, or back from what she aimed at, rising at `lance, and rises at` (9) |
+| Middle click | **The chain**: both forces linked, from behind her down the crosshair's line, 12 m, 18, and it **binds** the first body (the Grasp's root) | **The chain ride** (the Flurry dash, kept): she catches its tail and runs the line, untouchable; a jump at the end keeps the run | A spot dodge; the ride is the escape |
+| Left + right together | **Annihilation**: both beings lunge at her, she springs clear, and they meet where she stood -- a burst of 3.5 m at her feet, 45, worth her lower bar, that never touches her | -- | **The spring**: up at `annihilation, the spring rises` (20 m/s) and the way she holds at `the spring carries her` (10); each in one airtime worth `each spring after is worth` (0.6) of the last, **a hit she lands gives one back**, landing gives them all back (`dual::spring`, `dual::landed_a_hit`) |
+| `Q` / `E` | **Abyss** / **Judgement**, unchanged -- each spends the whole of its bar | -- | -- |
+
+**The chord** (`state::dual_move`): both clicks on one frame, or the other click while the first
+is still deciding its hold (`step_channel`), is the annihilation. **Both forces are goaded
+alike** by it, the chain and the ride, by an auto's push, so they never widen the gap.
+
+**Four directions, one owner each**: round (the hop), up (the spring), along (the lance's lunge,
+the chain ride), down (the ride aimed at the floor below), and the strike's own hang holds her
+in the air as before. Each draws on a budget of its own, so the order is free.
+
+**Gone**: the blink, the second jump, the slow fall and the float (the tiers grant nothing now
+-- see [../dual-mage.md](../dual-mage.md) §"The tiers"); Phase, Binary, the Shadowstep; the
+takeoffs (the Veil, the Equinox and Sanctuary are in the table with no button); the Devour and
+the Smite on `F` and `R`; the curse and the purge on her clicks (the Grasp, the Veil and the
+Devour, with no button, keep their stacks, and the Abyss its own); the cloud and the disk over
+her head as the sources of her holds -- the storm's cloud is over the point that follows her,
+and the sun-disk gathers behind her. Ascension is a wave she stays ahead of:
+[../dual-mage.md](../dual-mage.md) §"Ascension".
+
+**Numbers that moved**: the autos 14 → 17 (the curse's ticks were a third of what they dealt;
+B1 and B2). Rows retuned in place, not renumbered (`moves::dual`): Binary's row is the chain,
+the Shadowstep's the annihilation, Chain lightning's the storm, the Disk ray's the lance.
+
+`tests/dual_spells.rs` holds the lance from behind, the lunge, the chord both ways, the
+spring's falloff and its refund, movement at every bar, the chain's bind and the storm;
+`tests/dual_mage.rs` the wave, the unbidden strike and its miss, and B8 on the holds.
+
+## Her hands — built 2026-10-12 and 2026-10-13 (second pass, three rounds) — replaced 2026-11-04
+
+> Kept as the record of what it replaced: the autos, the hop, tap-or-hold and the Flurry dash
+> below are still hers; the Disk ray, Chain lightning, Phase, Binary, the takeoffs and `F`/`R`
+> are not.
 
 | Input | Tapped | Held (a sixth of a second) |
 | --- | --- | --- |
