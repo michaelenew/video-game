@@ -9,7 +9,7 @@ when it does not, one of the two is wrong and both get fixed.
 **Unless otherwise instructed, anything new a person will load -- a place,
 a creature, a section of the world -- is built and handed over to three
 standards:** [`docs/design/level-design.md`](docs/design/level-design.md)
-(L1-L10), [`docs/design/monster-design.md`](docs/design/monster-design.md)
+(L1-L13), [`docs/design/monster-design.md`](docs/design/monster-design.md)
 (M1-M6) and [`docs/design/delivery.md`](docs/design/delivery.md) (D1-D6):
 plan before building, a play check before handing over (every route walked,
 `cargo run -p view --example camcheck`, `tests/spawns.rs`, the hunter for a
