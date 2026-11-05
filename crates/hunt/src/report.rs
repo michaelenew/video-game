@@ -790,7 +790,7 @@ impl Report {
                 }
             }
         }
-        g.objectives = sim::objective::standing(&after.lore, after.arena())
+        g.objectives = sim::objective::standing(&after.lore, &after.den())
             .map(|o| {
                 (
                     o.decl.name.to_string(),
