@@ -490,8 +490,10 @@ fn nothing_jutting_from_the_shaft_is_across_the_stair() {
 
 /// **A turn-around of 6.5 m off a wall 2.5 m out** (the bench's lane,
 /// `arena::bench::TURNS`, which the stack and the Hanging Stones' turns are
-/// sized from): every mover makes it, none without the wall -- and a metre
-/// higher is past the shortest jumpers.
+/// sized from): every mover makes it, none without the wall. (Until
+/// 2026-11-04 a metre higher was past the shortest jumpers, the Champion and
+/// the Blood mage; with the wall jump's rise at 0.9 of a takeoff, where it
+/// was 0.6, they make that too, and it is no longer pinned.)
 #[test]
 fn a_turn_around_of_six_and_a_half_metres_is_every_mover_s() {
     use sim::arena::bench;
@@ -518,11 +520,6 @@ fn a_turn_around_of_six_and_a_half_metres_is_every_mover_s() {
         }
         if pilot::turn_without_a_wall(&mut w, floor, roof, (1, 0)).is_ok() {
             failed.push(format!("{}: makes it without the wall", class.name()));
-        }
-        let (floor, roof) = lane(1);
-        let higher = pilot::turn_around(&mut w, floor, roof, (1, 0)).is_ok();
-        if matches!(class, Class::Champion | Class::BloodMage) && higher {
-            failed.push(format!("{}: makes a metre higher", class.name()));
         }
     }
     assert!(failed.is_empty(), "{}", failed.join("\n"));

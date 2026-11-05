@@ -79,6 +79,10 @@ pub mod galewing;
 
 pub mod siegeshell;
 
+/// The opening's creature: the Ridgeback's body, its own size, hide and
+/// sleep (`docs/design/opening.md` §6).
+pub mod warden;
+
 /// Which kind of creature. The one byte of species a `Monster` keeps in the
 /// snapshot; everything else is looked up.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
@@ -101,6 +105,8 @@ impl SpeciesId {
     /// The dev creature for the senses, the floor and the defended things:
     /// see [`sentinel`].
     pub const SENTINEL: SpeciesId = SpeciesId(12);
+    /// **The Warden**, the opening's creature: see [`warden`].
+    pub const WARDEN: SpeciesId = SpeciesId(13);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// is a bug in whoever built the monster, and gets the Ridgeback rather
@@ -121,7 +127,7 @@ impl SpeciesId {
 }
 
 /// How many ids there are, registered or not.
-pub const COUNT: usize = 13;
+pub const COUNT: usize = 14;
 
 /// The species registered under an id, if one is.
 pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
@@ -149,6 +155,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::GALEWING => Some(&galewing::SPECIES),
         SpeciesId::SIEGESHELL => Some(&siegeshell::SPECIES),
+        SpeciesId::WARDEN => Some(&warden::SPECIES),
         _ => None,
     }
 }

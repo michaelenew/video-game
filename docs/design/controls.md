@@ -730,13 +730,23 @@ within`, the cosine). On a slide:
 | --- | --- |
 | Into the wall | Starts a slide, falling beside one; on one, nothing more |
 | Away from it | Ends the slide |
-| Along it | Starts a slide; on one, steers it along up to `Wall slide, steered along at` (5 m/s) — never brakes a run going that way faster |
+| Along it | Starts a slide; on one, steers it toward `Wall slide, steered along at` (5 m/s) that way, gradually |
 | Nothing | Starts a slide, touching a wall; on one, keeps it |
 
-**A slide keeps the run you brought to it** (2026-10-20): speed along the wall loses only
-`Wall slide, keeps of its speed along, a frame` (×0.99) a frame to friction, where until then it
-was bled down to the stick's 2 m/s within a few frames — so a wall run into at an angle is slid
-along, not stopped on.
+**A slide bleeds the run you brought to it** (2026-11-04, the owner: "wall slides need to
+naturally and pretty quickly reduce lateral momentum towards 0, and changing directions is a
+gradual process on the wall"). Speed along the wall keeps `Wall slide, keeps of its speed along,
+a frame` (×0.94) of whatever is beyond what the stick asks — nothing, with the stick into the
+wall or let go — so a run onto a wall is down to a third in a third of a second and gone in a
+second. With the stick along the wall the slide is brought toward the steer that way by `Wall
+slide, steering arrives per frame` (0.05 of the gap a frame), from the other way as much as from
+standing: a turn round takes about half a second, where it used to flip in three frames. **The
+slide owns its speed along the wall**: the air steering does not add to it (it did, at full
+strength, which was the flip), and nothing makes it faster than it was the frame before but the
+stick's steer — which is what stopped a slide round a column speeding up for ever, the push that
+holds you into a curved wall turning a little into the run every frame. *(2026-10-20 to
+2026-11-04 the run was kept, ×0.99 a frame, so a wall run into at an angle was slid along; the
+kick's carry along the stick, below, is what keeps a gully's forward speed now.)*
 
 **Neither starting nor ending comes within `Wall slide, on or off no faster than` (8 frames) of
 the last.** The two answers meet at a line, and without the debounce a stick wobbling across it
@@ -752,9 +762,14 @@ That is the recovery: a wall reached is a fall cancelled or shortened.
 
 **Space on a wall, a few frames off one (`Wall jump, still off a wall left`, 8 since
 2026-10-20, 4 before), or a few frames before reaching one (`Wall jump, pressed before the wall
-and kept`, 6), jumps off it**: a fresh rise of `Wall jump, rise` (0.6 of the class's takeoff —
-about a metre on the Champion), never less than the rise you already had, and a push of `Wall
-jump, pushed off at` (7 m/s, a walk) away from the face, keeping your speed along it. **And it
+and kept`, 6), jumps off it**: a fresh rise of `Wall jump, rise` (0.9 of the class's takeoff —
+about two and a half metres on the Champion, a little over half his full held jump; 0.6 and a
+metre until 2026-11-04, when the owner found wall jumps "barely get off the wall"), never less
+than the rise you already had, and a push of `Wall jump, pushed off at` (9 m/s; 7 before) away
+from the face, keeping your speed along it. **For `Wall jump, stick into the wall not heard for`
+(14 frames) the air steering ignores the part of the stick pointing back into that wall** — you
+were holding into it to slide, and still are the frame you press; heard, it took the push back
+off in a few frames. **And it
 goes where the stick points** (2026-10-20): the stick's share along the wall carries you that
 way at least `Wall jump, along where the stick points at` (6 m/s) — the whole of it with the
 stick along the wall, none with it straight out — and a run already going that way faster is
@@ -774,12 +789,11 @@ it than `Wall jump, same wall within (m)` — so moving along a long wall, or to
 the same line, does not make it a new one. *(First built as "never twice running off the same
 wall"; changed the same day at the owner's request.)*
 
-**And each wall jump in an airtime rises less than the last** (`Wall jump, each one after`,
-×0.7, compounding). The same-wall drop is not enough on its own: an inside corner is two walls
-a step apart, and alternating between them never meets the same wall twice running. With the
-falloff the heights add up to a bounded sum however many walls there are — the argument the
-aerial hangs make above. A chimney or a corner can still be climbed a little; it cannot be
-climbed forever. Both reset on landing.
+**Every wall jump in an airtime rises as high as the first** (2026-11-04, the owner: "get rid
+of the decay per jump, I want people to be able to climb up wall jump sections"). So two walls
+facing each other — a chimney, an inside corner, a gully — are a ladder, kick by kick, and that
+is meant; one wall alone is not, by the same-wall drop above. *(2026-10-16 to 2026-11-04 each
+one was worth ×0.7 of the last, compounding, so that no pair of walls could be climbed.)*
 
 **Only enough wall is a wall** (2026-10-20, from play: the slide was drawn "on very thin
 platforms where I wouldn't be able to slide at all"). A face is slid on and jumped off only

@@ -1042,16 +1042,19 @@ scalars! {
     // **The wall slide and the wall jump** (2026-10-16). Falling against the
     // side of a solid slows the fall a little -- gravity and terminal
     // velocity both scaled -- and counts as footing for the fall rule, so a
-    // wall reached is a partial recovery. Space against it is a small jump
+    // wall reached is a partial recovery. Space against it is a jump up and
     // away from it; off the same face again only from lower down than the
-    // last, and each one in an airtime worth less than the last. See
-    // `state::cling_to_the_wall`.
+    // last. See `state::cling_to_the_wall`.
     WallSlideGravity,     "Air",      "Wall slide, gravity (x)",                             Fixed, fx(1,10), fx(1,1);
     WallSlideFall,        "Air",      "Wall slide, terminal velocity (x)",                   Fixed, fx(1,10), fx(1,1);
     WallStick,            "Air",      "Wall slide, held to the wall at (m/s)",               Fixed, 0, fx(4,1);
     WallJumpRise,         "Air",      "Wall jump, rise (x takeoff)",                         Fixed, 0, fx(3,2);
     WallJumpPush,         "Air",      "Wall jump, pushed off at (m/s)",                      Fixed, 0, fx(20,1);
-    WallJumpFalloff,      "Air",      "Wall jump, each one after (x)",                       Fixed, fx(1,10), fx(1,1);
+    // **Every wall jump as high as the first** (2026-11-04, the owner: "get
+    // rid of the decay per jump"): this slot was each one's falloff, and
+    // now carries how long the kick is not steered back into the wall --
+    // `tuned::SCALARS` is read by this enum's own discriminant.
+    WallJumpLock,         "Air",      "Wall jump, stick into the wall not heard for",        Frames, 0, 40;
     WallJumpGrace,        "Air",      "Wall jump, still off a wall left",                    Frames, 0, 12;
     WallSameTurn,         "Air",      "Wall jump, same wall within (cos)",                   Fixed, fx(1,2), fx(1,1);
     WallSameGap,          "Air",      "Wall jump, same wall within (m)",                     Fixed, 0, fx(4,1);
@@ -1070,8 +1073,9 @@ scalars! {
     WallSlideGrip,        "Air",      "Wall slide, steering arrives per frame (x)",          Fixed, fx(1,100), fx(1,1);
     // **The wall jump, overhauled** (2026-10-20, the owner: "really hard to
     // stick to a wall, really hard to get a wall jump, and even when I do
-    // it's really hard to have any momentum forward"). A slide keeps the
-    // speed it brought along the wall, losing only this much a frame; it
+    // it's really hard to have any momentum forward"). A slide bleeds the
+    // speed it brought along the wall by this much a frame (0.94 since
+    // 2026-11-04, when the owner asked for it to go "pretty quickly"); it
     // grabs a fall faster than its own cap down to it over a few frames,
     // which is what being caught by the wall feels like; the stick along
     // the wall at the jump carries the body that way at least this fast;

@@ -20,6 +20,9 @@
 //!   sparring bot plays, and its class ([`dummy`]). A duel always has it. The
 //!   number keys still pick what it does; this is where somebody who was
 //!   never told finds it.
+//! - **World**: the game's two worlds -- the valley, Hearth's square with
+//!   the journey kept (as `V` is), and the opening, the cell and the
+//!   Warden's keep -- the one you are in lit. A trip on the wire ([`world`]).
 //! - **Versus stages**: a button for every floating duel stage, every
 //!   five-point map, and every
 //!   King of the Hill map (`sim::versus`), the one you are on lit. A trip
@@ -252,6 +255,7 @@ pub fn draw(
             ui.label(egui::RichText::new("Click the arena to play. Esc brings this back.").weak());
             let ui = right;
             crate::tutorial::menu(ui, &mut sim, &mut coach);
+            world(ui, &mut sim);
             ui.separator();
             stages(ui, &mut sim);
             dummy(ui, &mut sim);
@@ -338,6 +342,46 @@ fn volume(ui: &mut egui::Ui, settings: &mut crate::settings::Settings) {
         settings.volume = level;
         settings.save();
     }
+}
+
+/// **World**: the game's two worlds, a button each, the one you are in
+/// lit -- **the valley** (`sim::valley`), Hearth's square with the journey
+/// kept, as `V` is (`Travel::VALLEY`); and **the opening**
+/// (`docs/design/opening.md`), the cell, the yard and the Warden's keep on
+/// its floating island, as a hunt of the Warden (`Travel::hunt`), built and
+/// not finished. Each a trip on the wire, so a peer comes too.
+fn world(ui: &mut egui::Ui, sim: &mut crate::Sim) {
+    use sim::arena::ArenaId;
+    use sim::species::SpeciesId;
+    ui.separator();
+    ui.heading("World");
+    ui.add_space(4.0);
+    let in_valley = sim.cur.valley.on;
+    if ui
+        .selectable_label(in_valley, "The valley")
+        .on_hover_text("Hearth's square, with your journey so far kept. V does the same.")
+        .clicked()
+        && !in_valley
+    {
+        sim.travel = sim::input::Travel::VALLEY;
+    }
+    let in_opening = sim.cur.arena == ArenaId::WARDEN;
+    if ui
+        .selectable_label(in_opening, "The opening: the Warden's keep")
+        .on_hover_text(
+            "Out of the cell, across the yard and the causeway, into the Warden's keep. It sleeps until you come in.",
+        )
+        .clicked()
+        && !in_opening
+    {
+        sim.travel = sim::input::Travel::hunt(SpeciesId::WARDEN);
+    }
+    ui.label(
+        egui::RichText::new(
+            "The opening is unfinished: the Warden moves like a big Ridgeback for now. You start in the cell.",
+        )
+        .weak(),
+    );
 }
 
 /// **Versus stages**: a row of buttons for the floating duel stages and one

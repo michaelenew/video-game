@@ -42,9 +42,10 @@ result:
   valley: a route that cannot be finished fails.
 - **The camera check** along every route, a turn of the view at each stop:
   `cargo run -p view --example camcheck -- <arena> "x,z,from; ..."`
-  (`view::camcheck`). It fails on a camera jump, the eye in the land, a wall
-  cut away on one frame in fifty or more, or the arm pulled in on one frame
-  in twenty or more.
+  (`view::camcheck`). It fails on any unexplained camera jump, the eye in
+  the land, the arm snapping in or out against something solid on one frame
+  in a hundred or more, a wall cut away on one frame in fifty or more, or
+  the arm pulled in close on one frame in twenty or more.
 - **Every start clear**: `crates/sim/tests/spawns.rs`.
 - **For a fight**, the scripted hunter's report
   ([monster-design.md](monster-design.md), M6).

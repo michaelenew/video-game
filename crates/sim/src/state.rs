@@ -524,9 +524,14 @@ pub struct Player {
     /// with an aerial's hang to buy the time, and another wall jump is a
     /// ladder. Cleared on landing.
     pub wall_jumped: Wall,
-    /// How many wall jumps this airtime, for `tuning::wall_jump_falloff`.
+    /// How many wall jumps this airtime: what the renderer and the sound
+    /// read a kick off. Every one rises as high as the first (2026-11-04).
     /// Reset on landing.
     pub wall_jumps: u8,
+    /// **Frames the last wall jump still has the stick off the wall**
+    /// (`tuning::wall_jump_lock`): while it runs, air steering back into the
+    /// face just jumped off is not heard. Zero otherwise.
+    pub wall_kick: u8,
     /// **A press of jump kept for a wall** (`tuning::wall_jump_buffer`):
     /// frames it has left, or zero. Set by a press in the air that did
     /// nothing else, spent by the wall jump it becomes.
@@ -538,6 +543,11 @@ pub struct Player {
     /// Frames before the slide may start or end again
     /// (`tuning::wall_slide_flip`).
     pub slide_flip: u8,
+    /// **The slide's speed along its wall**, signed along the wall's own
+    /// across (`hold_to_the_wall`), as it left it last frame. Kept so the
+    /// next frame's reading of the velocity can lose speed but never gain
+    /// it: see there for why.
+    pub slide_run: Fx,
     /// The ledge this fighter is holding, or [`Ledge::NONE`]. See [`hang_on`].
     pub ledge: Ledge,
     /// Frames before a ledge can be caught again (`tuning::ledge_regrab`).
@@ -1606,9 +1616,11 @@ impl Default for Player {
             wall_since: u8::MAX,
             wall_jumped: Wall::NONE,
             wall_jumps: 0,
+            wall_kick: 0,
             wall_press: 0,
             sliding: false,
             slide_flip: 0,
+            slide_run: Fx::ZERO,
             ledge: Ledge::NONE,
             ledge_regrab: 0,
             hit_used: false,
@@ -7293,9 +7305,11 @@ fn step_player(
         p.wall_since = u8::MAX;
         p.wall_jumped = Wall::NONE;
         p.wall_jumps = 0;
+        p.wall_kick = 0;
         p.wall_press = 0;
         p.sliding = false;
         p.slide_flip = 0;
+        p.slide_run = Fx::ZERO;
         p.ledge_regrab = 0;
     }
     p.ledge_regrab = p.ledge_regrab.saturating_sub(1);
@@ -7900,7 +7914,8 @@ fn step_player(
         // whoever it just launched -- keeps the speed it had and steers with it,
         // rather than being driven along a line its feet have left.
         if steering {
-            air_accelerate(p, move_dir(input.aim_turns(), ax, az), mob.air_speed);
+            let wish = off_the_kicked_wall(p, move_dir(input.aim_turns(), ax, az));
+            air_accelerate(p, wish, mob.air_speed);
         }
     } else if let Some(drive) = attack_step(p) {
         // **A move carrying the body.** The step is the move's own motion, down
@@ -7971,10 +7986,12 @@ fn step_player(
     // not rising, and nobody else's -- a fighter knocked into a wall or
     // spiked past one is being thrown, and a throw is not slowed by the wall
     // it goes past. Held to it, unless steering away from it.
+    let held = p.sliding;
     let sliding = keep_sliding(p, on_wall, input);
     if sliding {
-        hold_to_the_wall(p, input);
+        hold_to_the_wall(p, input, held);
     }
+    p.wall_kick = p.wall_kick.saturating_sub(1);
 
     // Space is a vertical takeoff, whatever your feet are doing. Holding a
     // direction while jumping carries your momentum up with you; it does not
@@ -8315,10 +8332,10 @@ fn step_player(
 ///   space, on one, just off   the wall jump: `wall_jump_rise` of a takeoff
 ///   or just before one        straight up, `wall_jump_push` away from it,
 ///                             and `wall_jump_carry` the way the stick points
-///                             along it. Off the same wall again only from
-///                             `wall_jump_drop` below the last, and each one
-///                             in an airtime worth `wall_jump_falloff` of
-///                             the one before.
+///                             along it, the stick back into the wall not
+///                             heard for `wall_jump_lock`. Off the same wall
+///                             again only from `wall_jump_drop` below the
+///                             last; every one as high as the first.
 /// ```
 ///
 /// **A wall is reached, not given.** The slide is a partial recovery -- some
@@ -8329,16 +8346,18 @@ fn step_player(
 /// give back the airdodge, the jump attack or anything else an airtime
 /// spends: it is height and a direction, and nothing more.
 ///
-/// **Why there is no ladder.** Two rules, because one is not enough. Off the
-/// same wall again only from `wall_jump_drop` below where the last jump off
-/// it left (`Wall::same_as`, a face rather than a box) answers jumping off a
-/// wall, steering back with an aerial's hang and jumping off it again: every
-/// return leaves from lower down, so the climb runs downhill. It does not
-/// answer an inside corner, which is two walls a step apart; the falloff
-/// does, because the heights it allows add up to a bounded sum however many
-/// walls there are. (Until 2026-10-16 the same wall was refused outright;
-/// the owner asked for a drop instead, so a wall can be used again on the
-/// way down.)
+/// **Two walls are a ladder; one is not** (2026-11-04, the owner: "get rid
+/// of the decay per jump, I want people to be able to climb up wall jump
+/// sections"). Off the same wall again only from `wall_jump_drop` below
+/// where the last jump off it left (`Wall::same_as`, a face rather than a
+/// box) answers jumping off a wall, steering back with an aerial's hang and
+/// jumping off it again: every return leaves from lower down, so one face
+/// alone is never climbed. Two faces facing each other -- a chimney, an
+/// inside corner, a gully -- are climbed kick by kick, and that is meant:
+/// until 2026-11-04 each jump in an airtime was worth less than the last
+/// (`wall_jump_falloff`, 0.7) so that no pair of walls could be climbed.
+/// (Until 2026-10-16 the same wall was refused outright; the owner asked for
+/// a drop instead, so a wall can be used again on the way down.)
 ///
 /// Called after the resolve with the wall it reported, if it reported one.
 fn cling_to_the_wall(p: &mut Player, normal: V3, ground: &Terrain) {
@@ -8396,39 +8415,79 @@ fn keep_sliding(p: &mut Player, on_wall: bool, input: Input) -> bool {
 }
 
 /// Hold a sliding body to its wall: its speed into the wall becomes
-/// `tuning::wall_stick`, and **what it carried along the wall is kept**
-/// (2026-10-20), losing `tuning::wall_slide_keep`'s share a frame to
-/// friction. The stick along the wall steers it toward
-/// `tuning::wall_slide_steer` that way, arrived at by `wall_slide_grip` a
-/// frame -- but only ever up to it: speed already going the stick's way
-/// faster is the run, and the stick does not brake it. Into the wall, let go,
-/// or away from it until the slide ends (`keep_sliding`), only holds it.
+/// `tuning::wall_stick`, and its speed along the wall goes where the stick
+/// asks, gradually (2026-11-04, the owner: "wall slides need to naturally and
+/// pretty quickly reduce lateral momentum towards 0, and changing directions
+/// is a gradual process on the wall").
 ///
-/// Until 2026-10-20 the slide bled the run down to the steer within a few
-/// frames, so a jump off a wall run into at an angle went straight out of it.
-fn hold_to_the_wall(p: &mut Player, input: Input) {
+/// ```text
+///   stick into the wall,     the run bleeds toward nothing, keeping
+///   away, or let go          `wall_slide_keep` of itself a frame
+///   stick along the wall     toward `wall_slide_steer` that way: from below
+///                            it (or the other way) by `wall_slide_grip` of
+///                            the gap a frame, so a turn round is a turn and
+///                            not a flip; from above it, bled down to it as
+///                            if let go
+/// ```
+///
+/// **The slide owns its speed along the wall.** It is read off the velocity
+/// each frame, but never more than it left last frame (`held`,
+/// `Player::slide_run`): anything that adds to it on the way round is
+/// refused. Two things did. The air steering ran ahead of this at full
+/// strength, so pushing the other way turned a run round in three frames --
+/// the "flip". And on a round face the push into the wall at `wall_stick` is
+/// along the next frame's wall a little, since the wall has turned under the
+/// body, so every frame round a column added to the run and it went faster
+/// and faster.
+///
+/// Until 2026-11-04 the slide kept 99% of its run a frame (2026-10-20, so a
+/// jump off a wall run into at an angle went forward); a kick still goes the
+/// way the stick points along the wall (`wall_jump_carry`), which is what
+/// that was for.
+fn hold_to_the_wall(p: &mut Player, input: Input, held: bool) {
     let n = p.wall.normal;
     let across = V3::new(n.z.neg(), Fx::ZERO, n.x);
-    let mut along = p
-        .vel
-        .x
-        .mul(across.x)
-        .add(p.vel.z.mul(across.z))
-        .mul(t::wall_slide_keep());
-    if let Lean::Along(dir) = lean_against(input, n) {
-        let want = dir.dot(across).mul(t::wall_slide_steer());
-        let beyond = if want.raw() >= 0 {
-            along.raw() >= want.raw()
-        } else {
-            along.raw() <= want.raw()
-        };
-        if !beyond {
-            along = along.add(want.sub(along).mul(t::wall_slide_grip()));
-        }
-    }
+    let read = p.vel.x.mul(across.x).add(p.vel.z.mul(across.z));
+    let mut along = if held {
+        let most = p.slide_run.abs();
+        read.max(most.neg()).min(most)
+    } else {
+        read
+    };
+    let want = match lean_against(input, n) {
+        Lean::Along(dir) => dir.dot(across).mul(t::wall_slide_steer()),
+        _ => Fx::ZERO,
+    };
+    let short = (want.raw() > 0 && along.raw() < want.raw())
+        || (want.raw() < 0 && along.raw() > want.raw());
+    along = if short {
+        along.add(want.sub(along).mul(t::wall_slide_grip()))
+    } else {
+        want.add(along.sub(want).mul(t::wall_slide_keep()))
+    };
+    p.slide_run = along;
     let into = t::wall_stick().neg();
     p.vel.x = across.x.mul(along).add(n.x.mul(into));
     p.vel.z = across.z.mul(along).add(n.z.mul(into));
+}
+
+/// **Off the wall just kicked from** (2026-11-04): for `tuning::wall_jump_lock`
+/// frames after a wall jump, the part of the stick that points back into
+/// that face is not steered by. The player was holding into the wall to
+/// slide on it, and still is the frame they press jump; heard, the air
+/// steering took the push back off within a few frames and the jump "barely
+/// got off the wall". Along the wall and away from it steer as ever.
+fn off_the_kicked_wall(p: &Player, wish: V3) -> V3 {
+    if p.wall_kick == 0 {
+        return wish;
+    }
+    // The last wall touched: the one kicked off, until another is reached.
+    let n = p.wall.normal;
+    let out = wish.x.mul(n.x).add(wish.z.mul(n.z));
+    if out.raw() >= 0 {
+        return wish;
+    }
+    V3::new(wish.x.sub(n.x.mul(out)), wish.y, wish.z.sub(n.z.mul(out)))
 }
 
 /// **Catching a ledge** (2026-10-16): the forgiving way up. One rule, asked
@@ -8648,6 +8707,7 @@ fn let_go_of_the_ledge(p: &mut Player, into_a_slide: bool, ground: &Terrain) {
         p.pos = V3::new(edge.at.x.add(n.x.mul(r)), hang.y, edge.at.z.add(n.z.mul(r)));
         p.vel = V3::ZERO;
         p.sliding = true;
+        p.slide_run = Fx::ZERO;
         p.wall = Wall {
             at: p.pos,
             normal: n,
@@ -8691,10 +8751,7 @@ fn may_wall_jump(p: &Player) -> bool {
 /// leaves no record against the next: the ladder rules are for walls that
 /// stand still.
 fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input, moves: bool) {
-    let mut rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
-    for _ in 0..if moves { 0 } else { p.wall_jumps } {
-        rise = rise.mul(t::wall_jump_falloff());
-    }
+    let rise = t::jump_speed().mul(jump).mul(t::wall_jump_rise());
     p.vel.y = p.vel.y.max(rise);
     let n = p.wall.normal;
     let away = p.vel.x.mul(n.x).add(p.vel.z.mul(n.z));
@@ -8725,6 +8782,7 @@ fn jump_off_the_wall(p: &mut Player, jump: Fx, input: Input, moves: bool) {
         }
     }
     p.jump_hold = 0;
+    p.wall_kick = t::wall_jump_lock();
     if !moves {
         p.wall_jumped = Wall {
             at: p.pos,
@@ -12522,6 +12580,11 @@ fn hash_player(h: &mut Fnv, p: &Player) {
         hash_v3(h, &p.wall_jumped.at);
         hash_v3(h, &p.wall_jumped.normal);
         h.write_u32(p.wall_jumps as u32);
+    }
+    if p.wall_kick != 0 || p.slide_run != Fx::ZERO {
+        h.write_u32(0x3A13);
+        h.write_u32(p.wall_kick as u32);
+        h.write_i32(p.slide_run.raw());
     }
     // The same for the slide's state and a ledge: a fight that never slides
     // or hangs hashes as it did before either existed.
