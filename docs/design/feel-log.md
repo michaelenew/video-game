@@ -216,7 +216,8 @@ The play scripts are in the dated entries for that day.
 ### 2026-11-04 — the Dual mage's bars build to her finishers; strikes prime the holds
 
 **Changed** A bar fills on a landed hit (6), never on a press; the lance spends 20 of her light;
-the majors spend theirs as before. No calm, hill, drift or burn. Only the majors read a bar --
+the majors spend theirs as before. Then the same day, from the owner: the storm spends 20 of
+her dark the same way, and neither big hold fills anything on a hit. No calm, hill, drift or burn. Only the majors read a bar --
 everything else hits at ×1. Both bars full makes the next annihilation the **grand** one (2× as
 wide, 3.5× the worth: 280 at its base, both bars spent); Ascension no longer starts on its own.
 A landed strike **primes** the next hold for 40 frames: thrown then, its wind-up is a quarter

@@ -1072,7 +1072,7 @@ fn a_strike_that_lands_fills_its_own_bar_and_both_fill_both() {
     for (kind, dark_by, light_by) in [
         (dual::DARK_AUTO, 1, 0),
         (dual::LIGHT_AUTO, 0, 1),
-        (dual::STORM, 1, 0),
+        (dual::STORM, 0, 0),
         (dual::CHAIN, 1, 1),
         (dual::ANNIHILATION, 1, 1),
         (dual::LANCE, 0, 0),

@@ -5317,7 +5317,8 @@ pub fn primed_share() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PrimedShare)).clamp(Fx::ZERO, Fx::ONE)
 }
 
-/// How much of her light bar the lance spends on the press.
+/// How much of its own bar a big hold spends on the press: the lance her
+/// light, the storm her dark.
 pub fn lance_spends() -> i32 {
     oven::scalar(Scalar::LanceSpends).max(0)
 }

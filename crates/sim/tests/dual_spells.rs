@@ -1393,3 +1393,13 @@ fn the_lance_spends_her_light() {
     let (dark, light) = bars(&w);
     assert_eq!((dark, light), (50, 50 - t::lance_spends()));
 }
+
+#[test]
+fn the_storm_spends_her_dark() {
+    let mut w = facing(7.0);
+    set_bars(&mut w, 50, 50);
+    let pitch = onto_their_feet(&w);
+    assert!(hold_into(&mut w, keys::DARK, pitch, d::STORM, 60));
+    let (dark, light) = bars(&w);
+    assert_eq!((dark, light), (50 - t::lance_spends(), 50));
+}

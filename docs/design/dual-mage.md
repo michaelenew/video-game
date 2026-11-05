@@ -29,8 +29,8 @@ conduit, they are a vessel under load, and the load is two things that want to b
 >
 > - **A bar fills when a hit lands** (`dual::filled_by_a_hit`), never on a press: a strike its
 >   own bar, a move of both (the chain, its ride, an annihilation) both, `meter, an auto moves`
->   (6) a hit. The lance fills nothing and **spends** `lance, spends of her light` (20) on the
->   press; a major spends its whole bar.
+>   (6) a hit. The two big holds fill nothing and **spend** `a big hold spends of its bar` (20)
+>   on the press -- the lance her light, the storm her dark; a major spends its whole bar.
 > - **Nothing moves the bars on their own and nothing burns her**: no calm, no hill, no drift,
 >   no burn. The band and the gap read nothing.
 > - **Only the majors read a bar** (`dual::depth_at`); everything else hits the same at any bar.

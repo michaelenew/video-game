@@ -266,9 +266,9 @@ pub fn steer(p: &mut Player, kind: u8) {
     }
     // **On the press, only spending** (2026-11-04): a major spends the
     // whole of its bar -- worth the bar it was thrown from, since
-    // `Player::thrown_at` was read before this -- and the lance spends
-    // `lance, spends of her light`, the price of the strongest thing on her
-    // mouse. Everything fills on a hit, never on a press
+    // `Player::thrown_at` was read before this -- and the two big holds
+    // spend `a big hold spends of its bar`: the lance her light, the storm
+    // her dark, the price of the strongest things on her mouse. Everything fills on a hit, never on a press
     // (`filled_by_a_hit`): pressing at nothing no longer builds anything.
     use crate::moves::dual as d;
     let spend = |bar: Fx, by: i32| bar.sub(Fx::from_int(by)).max(Fx::ZERO);
@@ -280,6 +280,8 @@ pub fn steer(p: &mut Player, kind: u8) {
         }
     } else if kind == d::LANCE {
         light = spend(light, t::lance_spends());
+    } else if kind == d::STORM {
+        dark = spend(dark, t::lance_spends());
     }
     let colour = d::force(kind).unwrap_or(colour);
     if let Mechanic::Meter {
@@ -297,11 +299,12 @@ pub fn steer(p: &mut Player, kind: u8) {
 
 /// **A hit she landed fills a bar** (2026-11-04): the bar of the move's
 /// force by `meter, an auto moves`, and both for a move of both (the chain,
-/// its ride, an annihilation). Not the majors, which spend, and not the
-/// lance, which costs. So the bars are built by fighting, at a body.
+/// its ride, an annihilation). Not the majors, which spend, and not the two
+/// big holds, the storm and the lance, which cost. So the bars are built by
+/// fighting, at a body.
 pub fn filled_by_a_hit(p: &mut Player, kind: u8) {
     use crate::moves::dual as d;
-    if d::is_the_finisher(kind) || kind == d::LANCE {
+    if d::is_the_finisher(kind) || kind == d::LANCE || kind == d::STORM {
         return;
     }
     let Mechanic::Meter {

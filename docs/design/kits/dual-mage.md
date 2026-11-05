@@ -53,7 +53,7 @@ power is behind the bars.**
 
 **The bars build to her finishers** (the same day, after the first play; see
 [../dual-mage.md](../dual-mage.md) at the top): a landed hit fills a bar, the lance spends 20 of
-her light, `Q`/`E` spend theirs, both full makes the next annihilation the grand one (twice as
+her light and the storm 20 of her dark, `Q`/`E` spend theirs, both full makes the next annihilation the grand one (twice as
 wide, three and a half times the worth, both bars spent), nothing burns her, and only the majors
 read a bar. **A landed strike primes the next hold** for 40 frames: thrown then, the storm or the
 lance keeps a quarter of its wind-up -- the strike is the way into the big spells. The strikes

@@ -1354,7 +1354,7 @@ scalars! {
     // enum's own discriminant.
     PrimedFor,            "Dual mage", "Primed, a landed strike primes a hold for",          Frames, 0, 120;
     PrimedShare,          "Dual mage", "Primed, a primed hold keeps this share of its wind-up", Fixed, 0, fx(1,1);
-    LanceSpends,          "Dual mage", "Lance, spends of her light",                         Int, 0, 100;
+    LanceSpends,          "Dual mage", "A big hold spends of its bar (the lance light, the storm dark)", Int, 0, 100;
     GrandSize,            "Dual mage", "Grand annihilation, size (x)",                       Fixed, fx(1,1), fx(5,1);
     GrandPower,           "Dual mage", "Grand annihilation, worth (x)",                      Fixed, fx(1,1), fx(10,1);
 }
