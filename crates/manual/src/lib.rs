@@ -471,27 +471,27 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Blood mage",
         in_browser: true,
-        blurb: "Her blood spreads like a sickness, and she fights from inside it. Every press costs health, and what it costs lands as a stain where you aimed it; every hit you land leaves a stain of the other body's blood -- except the Black spike, which leaves none and is how you set the stains off. Everything you throw claims the floor it touches as your ground -- a dark violet stain across the floor -- and stains are your ground too, and bleed into it as they fade; patches of it near each other join up, and a field that is fed and joined lasts. On your ground you are strong: every move you start there, and every bleed and eruption you set off standing on it, hits half again harder, and you glow with it. Off it your moves leave more ground behind: throw from the edge, step in, hit. Lost health stays grey for two seconds and then drains fast: spend it. A tap is the quick thing, a hold the bigger one, and a hold kept to its end is a finisher that spends all your grey. The combo is bleed, then spike: the Thorn lash's bleed lays stains as they walk, and a spike sets them off. Rebuilt 2026-10-18, the spike reworked 2026-10-19; docs/design/exploration/0021_blood_mage_territory.md is the design.",
+        blurb: "Whatever she cuts bleeds -- a fighter, a creature, the floor itself -- and where blood falls something grows. Every press costs health, and what it costs lands as a stain; every hit you land, and every cut you make in the floor, leaves a pool. Her scythe sows, her spike grows a thorned plant out of a pool, and her scythe reaps it. Everything you throw claims the floor it touches as your ground -- a dark violet stain -- and patches of it near each other join up. On your ground every move you start hits half again harder. Lost health stays grey for two seconds and then drains fast: drink it back from your stains and your plants, never past your grey. The loop: cast the scythe's head, raise the pool its bite left, zip in, rend or seize, keep them close so every drop feeds the patch, and reap. Rebuilt 2026-11-04 (the world bleeds); docs/design/exploration/0038_blood_mage_the_world_bleeds.md is the design.",
         entries: &[
             e(
-                "Left click: thorns",
-                "Tapped, the Thorn lash: a bolt of thorns down the crosshair that opens a bleed -- a bleeding body drips stains as it goes, and every stain is your ground -- and lays your ground where it lands, hit or miss. Held, the Bramble: a field of thorns on the floor where you aim that grows for as long as you hold, hurting and slowing everybody in it and claiming the floor under it. Held to its end, the Black vines: barbed vines erupt out from its middle, hitting and bleeding everything they reach, and stand for five seconds bleeding and slowing whatever walks in.",
+                "Left click: the Red Hand",
+                "Her other hand, gloved in her own blood clotted hard -- what she fights with inside the scythe's reach. Tapped, Rend: a fast claw, the fastest thing she has; tap again while it recovers and it strings, up to three, the third harder. Every hit spills a pool. Held, Seize: a grab nobody can block. With one of your plants near them you throw them onto it, impaled, and the plant drinks what it dealt; with none you slam them into the floor and they bleed a ring of pools round them. In the air it drives them down onto what is below.",
             ),
             e(
-                "Middle click: spikes",
-                "The Black spike: one spike out of the floor at the crosshair for a tap, and more spikes over a wider area the longer you hold, up to seven. It leaves no stain. A spike that lands erupts out of its own blow at once; on a stain the stain erupts instead. An eruption hits for the blood that was in its stain -- a big pool is a big blast, a bleed's little stains little ones -- and it spreads out over a moment, and every stain its edge reaches goes up in turn, a chain of blasts -- an eruption spends its stain, and drinking it is how a spike heals you. In the air it is the Stake: thrown down the crosshair, it pins anybody already in the air and lands in an area on the floor. Held to its end, the Crimson cascade: rings of eruptions roll out from the crosshair, setting off every stain of yours they cross.",
+                "Middle click: the spike",
+                "The Black spike raises a pool of your blood under the crosshair -- only a pool: on bare ground nothing happens and it costs nothing, because nothing there bled. A small pool rises fast, a fighter's in about a quarter of a second, a big one slower. It erupts for what the pool held, launches whatever is over it -- you too, so cut the floor, stand on the cut and spike it to go up -- and stands for two seconds as a thorned plant: solid, a foothold, cover, and every half second it lashes and slows any enemy within two metres of it. Three plants at a time; a fourth replaces the oldest.",
             ),
             e(
                 "Right click: the scythe",
-                "Tapped, the Sweep: the scythe across your front, fast and sure. Tap again while it recovers and it strings, up to three: the second comes back the other way, the third hits harder. Held, the Reap: a lunge into a heavy swing, further the longer you held it and further again from your own ground. Held to its end, the Harvest: one great turning reap all the way round you that drinks every stain in its reach.",
+                "Tapped, the Sweep: the scythe across your front, strung to three; on the floor it cuts the floor too, leaving a pool to raise. Held, the Cast: the head flies on its chain down the crosshair and bites the first thing it meets. A fighter bleeds, is slowed and is leashed -- neither of you can get further apart than the chain, and neither is dragged. A wall, the floor or a creature bleeds a pool where it bit. Left alone, it wrenches free -- a short stagger and a shove toward you -- and drags home along the floor, drinking your stains and reaping your plants on its way. Press right again while it holds: the zip -- you are hauled to the head, keeping most of the speed, and a jump pressed as you arrive is thrown there. The same in the air.",
+            ),
+            e(
+                "Reaping a plant",
+                "The scythe through one of your plants -- the Sweep, the Rising reap or the head dragged home -- breaks it, and its thorns fly on the way the blade was going, a cone about eight metres long, hitting each enemy once for the thorns and all the blood the plant held. What you paid into it comes back to you, never past your grey. Raise is slow and hits where they stand; reap is fast and hits along a line: step off the pool to dodge the raise and you may have stepped into the reap.",
             ),
             e(
                 "Space + a click",
-                "The takeoffs, from the floor and once in the air. Space and left is Thornfall: a burst along your aim, any way at all, landing in a ring of thorns that claims the floor. Space and middle is the Upheaval: a geyser at the crosshair that launches, with a hop for you -- Stake them up there. Space and right is the Rising reap: a sweep up and out in front of you that hurls your thralls along it, drinks your stains in it and lightly hits whoever is there.",
-            ),
-            e(
-                "Jump or dodge while holding the spike",
-                "Stores it in your vessel as far as it had charged: you jump or dodge as normal, and a fresh press of the middle click lets it go from wherever you are, in the air too. A stored charge bleeds you slowly while you carry it, and a hit while you are still holding loses it.",
+                "The takeoffs, from the floor and once in the air. Space and left is the Rising rend: the claw, jumping, and it lifts whoever it catches. Space and middle is the Rising spike: the pool at your own feet raised under you -- nothing if there is none. Space and right is the Rising reap: a sweep up and out in front of you that cuts the floor you leave, so there is a pool under you to spike, and reaps any plant in its arc.",
             ),
             e(
                 "E: a heart",
@@ -506,16 +506,12 @@ pub const SECTIONS: &[Section] = &[
                 "Coagulate: every stain of yours near the crosshair slides there and they merge into one.",
             ),
             e(
-                "Shift, crosshair on a stain",
-                "The teleport, up to eighteen metres: you are at the stain, you drink it, and you arrive in a burst of thorns -- from the air too. It comes first, wherever you stand.",
-            ),
-            e(
                 "Shift, on your ground",
                 "Swim: you sink into your ground, fast and short -- most blows go over you. Let go and you come up; click and you come up as that move, the strong one; jump and you come up jumping; a hit brings you up. Swim off the edge of your ground and you burst out of it. Off your ground, shift and a direction is an ordinary dodge.",
             ),
             e(
                 "Walking into a stain",
-                "Drinks it, whoever's blood it is -- as much as your grey health can take back. The rest stays on the floor.",
+                "Drinks it, whoever's blood it is -- as much as your grey health can take back. The rest stays on the floor. A pool the floor bled is yours to raise but never to drink.",
             ),
         ],
     },

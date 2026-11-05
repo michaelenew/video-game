@@ -12,12 +12,12 @@ use crate::moves::blood::*;
 pub static TUTORIAL: Tutorial = Tutorial {
     class: Class::BloodMage,
     arena: ArenaId::HALL_BLOOD,
-    what: "The Blood mage pays for every spell with her own health, and the blood she spills -- \
-           hers and her enemy's -- stays on the floor as red stains and a dark ground that \
-           belongs to her.",
-    plays: "Standing on her ground she hits half again as hard and can sink into it and swim. \
-            Cut the enemy so they bleed a trail of stains, drive a spike into the stains to blow \
-            them up, and walk over stains to drink back the health you spent.",
+    what: "Whatever the Blood mage cuts bleeds -- a fighter, a creature, the floor -- and where \
+           blood falls something grows. Every spell costs her own health, and the blood spilled \
+           stays on the floor as pools and a dark ground that belongs to her.",
+    plays: "The scythe sows: its bite and its sweep leave pools. The spike grows: it raises a \
+            pool, and only a pool, into a thorned plant that launches and lashes. The scythe \
+            reaps: through a plant it throws the thorns and gives back what you paid.",
     wins: "She wins by fighting inside her patch: cast the head, raise the pool its bite left, \
            zip in, rend or seize, and reap the plants, so every drop spilled feeds what grows.",
     rooms: &ROOMS,
