@@ -23,10 +23,11 @@ pub static TUTORIAL: Tutorial = Tutorial {
     plays: "Left click is Dark and right click is Light: a quick strike she steps off, and a \
             hop the way you hold. Hold a click for the big one -- right after a strike lands, \
             it comes out fast. Both at once and the two collide where she was standing as she \
-            springs clear. Every hit she lands fills a bar; Q and E spend one, and both full \
-            makes the next annihilation the grand one.",
+            springs clear. Every hit she lands fills a bar; the big holds spend a little of \
+            theirs, Q and E all of one, and both full makes the next annihilation the grand one.",
     wins: "She wins by staying just out of reach -- in close enough that the strikes she dodges \
-           land on them -- and spending full bars on her majors.",
+           land on them -- and building both bars to a grand annihilation, or spending one on a \
+           major.",
     rooms: &ROOMS,
 };
 
@@ -174,7 +175,8 @@ pub const ROOMS: [Room; 10] = [
                 and it flies on into whatever she faces. Hold a direction as you tap and she hops \
                 that way. Held a moment, the storm: she dashes to the crosshair, the lightning \
                 aimed at her comes down there as she dashes out -- back where she was, or the \
-                way you hold -- and it leaps to whoever is near.",
+                way you hold -- and it leaps to whoever is near. It spends a little of your \
+                Dark bar.",
         tasks: &[
             Task {
                 what: "Dark strike, on the floor",
@@ -207,9 +209,11 @@ pub const ROOMS: [Room; 10] = [
     Room {
         title: "Right click: Light",
         advanced: false,
-        intro: "Tapped, right click is the same strike in light, and fills your Light bar. \
+        intro: "Tapped, right click is the same strike in light; one that lands fills your Light \
+                bar. \
                 Held, the lance: a great beam from behind her, through where she stood, to the \
-                crosshair -- and she lunges clear of it, back, or the way you hold.",
+                crosshair -- and she lunges clear of it, back, or the way you hold. It spends a \
+                little of your Light bar.",
         tasks: &[
             Task {
                 what: "Light strike",
