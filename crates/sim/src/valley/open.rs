@@ -708,6 +708,12 @@ fn shift_player(p: &mut Player, d: V3) {
                 s.launch_from = s.launch_from.add(d);
             }
         }
+        Mechanic::Blood(garden) => {
+            for s in garden.plants.iter_mut().flatten() {
+                s.at = s.at.add(d);
+                s.launch_from = s.launch_from.add(d);
+            }
+        }
         Mechanic::Meter {
             storm_at,
             strike_at,
@@ -716,6 +722,6 @@ fn shift_player(p: &mut Player, d: V3) {
             *storm_at = storm_at.add(d);
             *strike_at = strike_at.add(d);
         }
-        Mechanic::Forms { .. } | Mechanic::Blood => {}
+        Mechanic::Forms { .. } => {}
     }
 }

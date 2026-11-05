@@ -1,10 +1,8 @@
-//! The Haemorrhage: left click in the air, a bolt that opens a bleed, and a
-//! bleed that lays a trail of pools. See `docs/design/kits/blood-mage.md`.
-//!
-//! It was the right click from the floor until the three-clicks remap
-//! (`docs/design/exploration/0009_blood_mage_on_three_clicks.md`): the left
-//! click is *my blood*, which on the floor is the Blood nova and only in the
-//! air the bolt. So every cast here is thrown from a height.
+//! The bleed: what the Cast's bite opens (2026-11-04, exploration 0038 -- the
+//! Haemorrhage's bolt before it), and a bleed that lays a trail of pools. See
+//! `docs/design/kits/blood-mage.md`. The head itself -- the leash, the wrench,
+//! the drag home -- is `tests/world_bleeds.rs`; here it is taken off once it
+//! has bitten, so what is measured is the bleed alone.
 
 use sim::class::Class;
 use sim::effects::{Effect, EffectKind};
@@ -42,13 +40,29 @@ fn bolts(w: &World) -> usize {
     w.effects
         .iter()
         .flatten()
-        .filter(|e| e.kind == EffectKind::Haemorrhage)
+        .filter(|e| e.kind == EffectKind::ScytheHead)
         .count()
+}
+
+/// Is her head in him?
+fn bitten(w: &World) -> bool {
+    w.effects.iter().flatten().any(|e| {
+        e.kind == EffectKind::ScytheHead && e.head_state() == sim::effects::Head::Fighter(1)
+    })
+}
+
+/// Take her head off, so the bleed is all there is.
+fn unhook(w: &mut World) {
+    for slot in w.effects.iter_mut() {
+        if slot.is_some_and(|e| e.kind == EffectKind::ScytheHead) {
+            *slot = None;
+        }
+    }
 }
 
 /// A pitch that points the bolt at the other fighter's middle.
 fn pitch_at(w: &World, target: V3) -> i16 {
-    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
+    let m = sim::moves::get(Class::BloodMage, b::CAST);
     let stones = sim::stones::gather(&w.players);
     let players = w.players;
     let effects = w.effects;
@@ -75,48 +89,41 @@ fn pitch_at(w: &World, target: V3) -> i16 {
         .expect("the scan is not empty")
 }
 
-/// Hold her a metre and a half off the floor, in the air, so the left click
-/// is the Haemorrhage and the aim taken before the press is the aim it leaves
-/// on.
-fn aloft(w: &mut World) {
-    w.players[0].pos.y = Fx::ratio(3, 2);
-    w.players[0].vel.y = Fx::ZERO;
-    w.players[0].grounded = false;
-}
-
-/// Cast the bolt from the air along `pitch`, with the other fighter pressing
-/// `b`: held up through the press and the wind-up, then let fall.
+/// Cast the head along `pitch`, with the other fighter pressing `b`: the
+/// scythe held past the tap's window, then let go.
 fn cast_bolt(w: &mut World, pitch: i16, b: u16) {
-    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
-    for f in 0..m.startup as u32 + 2 {
-        aloft(w);
-        let mine = if f < 2 { keys::THORNS } else { 0 };
-        looking(w, 1, mine, pitch, b);
+    for _ in 0..t::hold_from() as u32 + 2 {
+        looking(w, 1, keys::SCYTHE, pitch, b);
+    }
+    for _ in 0..60 {
         if bolts(w) > 0 {
             break;
         }
+        looking(w, 1, 0, pitch, b);
     }
-    assert!(
-        bolts(w) > 0,
-        "fixture: the left click in the air threw no bolt"
-    );
+    assert!(bolts(w) > 0, "fixture: the scythe held threw no head");
 }
 
-/// Throw the bolt at the dummy standing `away` metres ahead, and run until it
-/// has landed or flown its whole reach. Gives back what the bolt itself dealt.
+/// Cast at the dummy standing `away` metres ahead, run until the head has
+/// bitten him, and take it off. Gives back what the bite dealt.
 fn bolt_the_dummy(w: &mut World, away: i32) -> i32 {
     w.players[1].pos = V3::new(Fx::from_int(away), Fx::ZERO, Fx::ZERO);
     let full = w.players[1].health;
-    aloft(w);
     let pitch = pitch_at(w, w.players[1].pos);
     cast_bolt(w, pitch, 0);
-    looking(w, t::haemorrhage_flight() as u32 + 2, 0, pitch, 0);
+    for _ in 0..30 {
+        if bitten(w) {
+            break;
+        }
+        looking(w, 1, 0, pitch, 0);
+    }
+    unhook(w);
     full - w.players[1].health
 }
 
 #[test]
-fn left_click_in_the_air_throws_a_bolt_that_cuts_and_opens_a_bleed() {
-    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
+fn the_cast_bites_and_opens_a_bleed() {
+    let m = sim::moves::get(Class::BloodMage, b::CAST);
     let mut w = mage();
     let paid = w.players[0].cost_of(m.cost);
     let dealt = bolt_the_dummy(&mut w, 4);
@@ -137,9 +144,11 @@ fn left_click_in_the_air_throws_a_bolt_that_cuts_and_opens_a_bleed() {
         "the bolt landed and opened no bleed"
     );
     assert_eq!(w.players[1].bled_by, 0, "the bleed is not hers");
-    assert_eq!(bolts(&w), 0, "the bolt flew on after it landed");
     // The cut spilled, like every hit of hers.
-    assert_eq!(pools(&w).len(), 1, "the bolt's cut left no pool");
+    assert!(
+        pools(&w).iter().any(|p| p.covers(w.players[1].pos)),
+        "the bite's cut left no pool under him"
+    );
 }
 
 #[test]
@@ -150,7 +159,7 @@ fn the_bleed_ticks_for_its_whole_length_and_then_stops() {
     // Opened when the bolt landed, part way through its flight.
     let opened = w.players[1].bleeding;
     assert!(
-        opened <= t::bleed_lasts() && opened > t::bleed_lasts() - t::haemorrhage_flight() - 4,
+        opened <= t::bleed_lasts() && opened > t::bleed_lasts() - 30,
         "the bleed opened at {opened} of {}",
         t::bleed_lasts()
     );
@@ -327,8 +336,11 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted() && e.age == 1)
             .count();
     }
+    // Two at least since 2026-11-04: a bleed tick's small pool rises in
+    // `tuning::spike_rise_small`, half a fighter's, so the trail laid while
+    // it rises is shorter than when every spike took sixteen frames.
     assert!(
-        eruptions >= 3,
+        eruptions >= 2,
         "a spike on the trail set off only {eruptions} eruptions"
     );
     // The chain reached them: an eruption's blow, not just the bleed's ticks.
@@ -354,40 +366,20 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
 }
 
 #[test]
-fn the_bolt_is_the_easier_thing_to_land() {
-    // Wider than the blade, and it does not need leading the way a spike
-    // does: it is the one thing in the kit meant to connect.
-    assert!(
-        t::haemorrhage_radius().raw() > t::bloodletter_radius().raw(),
-        "the bolt is no wider than the blade"
-    );
-    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
-    assert!(m.drink > 0, "the bolt collects nothing");
-    assert!(m.cost > 0);
-}
-
-#[test]
 fn a_guarded_bolt_is_spent_and_opens_nothing() {
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(0));
-    aloft(&mut w);
     let pitch = pitch_at(&w, w.players[1].pos);
     // The Bulwark guards on his right click the whole time.
     cast_bolt(&mut w, pitch, Input::RIGHT);
-    looking(
-        &mut w,
-        t::haemorrhage_flight() as u32 + 2,
-        0,
-        pitch,
-        Input::RIGHT,
-    );
+    looking(&mut w, 30, 0, pitch, Input::RIGHT);
     assert_eq!(
         w.players[1].health,
         w.players[1].full_health(),
         "a guard let the bolt through"
     );
     assert_eq!(w.players[1].bleeding, 0, "a guarded bolt opened a bleed");
-    assert_eq!(bolts(&w), 0, "the bolt flew on through a guard");
+    assert!(!bitten(&w), "the head bit through a guard");
 }
 
 #[test]
@@ -400,13 +392,13 @@ fn the_bleed_does_not_kill() {
 }
 
 #[test]
-fn a_bolt_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
-    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
+fn a_bite_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
+    let m = sim::moves::get(Class::BloodMage, b::CAST);
     let mut w = mage();
     w.players[0].health = t::max_health() - 300;
     w.players[0].grey = 300;
     let at = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO);
-    let mut pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 200);
+    let mut pool = Effect::pool(0, Class::BloodMage, b::CAST, at, 200);
     // Settled: a stain is drunk only once it has (`tuning::stain_settles`).
     pool.age = t::stain_settles();
     w.effects[0] = Some(pool);
@@ -414,18 +406,17 @@ fn a_bolt_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
     let paid = w.players[0].cost_of(m.cost);
     bolt_the_dummy(&mut w, 4);
     let got = w.players[0].health - (before - paid);
-    // What the cast cost lands where she aimed it -- on this stain, which it
-    // joins -- so the drink is of both (2026-10-13).
-    let expect = m.drinks(200 + paid);
+    // What the cast cost lands where she aimed it, which may be on this
+    // stain, so the drink is of it and perhaps the cost (2026-10-13).
+    let (least, most) = (m.drinks(200), m.drinks(200 + paid));
     assert!(
-        got >= expect - 4 && got <= expect,
-        "the bolt drank {got} of a pool of 200 and its cost at {}%",
+        got >= least - 4 && got <= most,
+        "the bite drank {got} of a pool of 200 at {}%",
         m.drink
     );
-    // One and done: only the cut's own fresh pool is left.
-    let left = pools(&w);
-    assert_eq!(left.len(), 1, "the pool it drank is still there");
-    // What the cut spilled: its own blow, what the stain added to it, and a
-    // tick or two of the bleed it opened, gathered into the same figure.
-    assert!(left[0].pool_volume() <= m.damage + t::stain_hit_bonus(200) + 2 * t::bleed_damage());
+    // One and done: the pool it drank is gone.
+    assert!(
+        pools(&w).iter().all(|p| p.pool_volume() < 150),
+        "the pool it drank is still there"
+    );
 }

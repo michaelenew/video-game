@@ -376,6 +376,61 @@ pub enum EffectKind {
     /// him and all bringing the overhead down at once. See
     /// `docs/design/kits/shadow-reaver.md`.
     Reaping,
+    /// Blood mage, **the scythe's head on its chain** (2026-11-04, exploration
+    /// 0038): the Cast. `pos` is where it was thrown from and `dir` the line
+    /// it flies, at `tuning::cast_speed`, until it **embeds** in the first
+    /// thing it meets -- a fighter, a creature, the world. `home` is the head
+    /// where it is now, live, and drawn there with its chain back to her
+    /// hand. Embedded, `reach` is the leash. Which of its lives it is in, and
+    /// for how long, is [`Effect::head_state`]. See `state::World::step_the_head`.
+    ScytheHead,
+}
+
+/// What the scythe's head is doing (`EffectKind::ScytheHead`), kept in its
+/// `banked`: see [`Effect::head_state`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Head {
+    /// On its way out along the line.
+    Flying,
+    /// Bitten into a fighter, who is leashed to her.
+    Fighter(usize),
+    /// Bitten into the world -- a wall, the floor, a stone, a critter.
+    World,
+    /// Bitten into a creature (its slot of `World::monsters`).
+    Creature(usize),
+    /// Torn free, dragging home along the floor.
+    Home,
+    /// She is being hauled to it.
+    Zipping,
+}
+
+impl Head {
+    const fn code(self) -> i32 {
+        match self {
+            Head::Flying => 0,
+            Head::World => 1,
+            Head::Home => 2,
+            Head::Zipping => 3,
+            Head::Fighter(v) => 8 + v as i32,
+            Head::Creature(slot) => 64 + slot as i32,
+        }
+    }
+
+    const fn of_code(code: i32) -> Head {
+        match code {
+            1 => Head::World,
+            2 => Head::Home,
+            3 => Head::Zipping,
+            8..=63 => Head::Fighter((code - 8) as usize),
+            64.. => Head::Creature((code - 64) as usize),
+            _ => Head::Flying,
+        }
+    }
+
+    /// Is it holding on to something -- the leash, the zip's anchor?
+    pub const fn holds(self) -> bool {
+        matches!(self, Head::Fighter(_) | Head::World | Head::Creature(_))
+    }
 }
 
 /// The bit of `Effect::banked` that says wind has caught fire.
@@ -514,6 +569,7 @@ impl EffectKind {
             EffectKind::Cascade => "crimson cascade",
             EffectKind::Surge => "surge",
             EffectKind::Reaping => "reaping",
+            EffectKind::ScytheHead => "scythe's head",
         }
     }
 
@@ -600,6 +656,8 @@ impl EffectKind {
             | EffectKind::Cascade => true,
             // Stood up on the floor behind whoever took the cut.
             EffectKind::Reaping => true,
+            // Thrown along the crosshair's line.
+            EffectKind::ScytheHead => false,
         }
     }
 
@@ -625,6 +683,7 @@ impl EffectKind {
                 | EffectKind::ShadowFan
                 | EffectKind::Crescent
                 | EffectKind::Javelin
+                | EffectKind::ScytheHead
         )
     }
 
@@ -753,6 +812,8 @@ impl EffectKind {
             35 => Some(EffectKind::Vines),
             // 36 was the Blood golem, retired 2026-10-18.
             37 => Some(EffectKind::Cascade),
+            // The Cast's head, 2026-11-04: thrown from her hand along the aim.
+            38 => Some(EffectKind::ScytheHead),
             _ => None,
         }
     }
@@ -851,6 +912,9 @@ impl EffectKind {
             // (`Effect::surge`).
             EffectKind::Surge => 1,
             EffectKind::Reaping => t::reaping_life(),
+            // No clock: it is gone when it is home, or when she arrives at
+            // it -- see `state::World::step_the_head`.
+            EffectKind::ScytheHead => u16::MAX,
         }
     }
 
@@ -934,6 +998,8 @@ impl EffectKind {
             EffectKind::Vines | EffectKind::Cascade | EffectKind::Surge => m.damage,
             // The Reaping is a picture: the blow that cashed did the damage.
             EffectKind::Thrall | EffectKind::Heart | EffectKind::Reaping => 0,
+            // The bite is the move's own number.
+            EffectKind::ScytheHead => m.damage,
         }
     }
 }
@@ -1363,6 +1429,8 @@ impl Effect {
             EffectKind::Surge => self.source().radius,
             // Nothing is tested against it.
             EffectKind::Reaping => self.reach,
+            // The head is as thick as the row says.
+            EffectKind::ScytheHead => self.source().radius,
         }
     }
 
@@ -1960,6 +2028,15 @@ impl Effect {
         }
     }
 
+    /// **Is this the world's blood** (2026-11-04) -- a pool the floor, a
+    /// wall or a critter bled where her scythe cut it, rather than a body's?
+    /// A pool for a spike to raise like any of hers, and nothing for her to
+    /// drink: the heal stays a refund. Marked by a power of nought, which no
+    /// pool otherwise has.
+    pub fn is_world_blood(&self) -> bool {
+        self.is_a_pool() && self.power.raw() == 0
+    }
+
     /// Is this a thrall -- blood on legs?
     pub const fn is_a_thrall(&self) -> bool {
         matches!(self.kind, EffectKind::Thrall)
@@ -2108,6 +2185,34 @@ impl Effect {
     /// anything else, but nothing holds a Ridgeback on a leash.
     pub fn caught(&self) -> Option<usize> {
         (0..crate::state::MAX_PLAYERS).find(|i| self.already_hit(0, *i))
+    }
+
+    // -- The scythe's head (2026-11-04) -------------------------------------
+
+    /// What the scythe's head is doing: the low byte of `banked`.
+    pub const fn head_state(&self) -> Head {
+        Head::of_code(self.banked & 0xff)
+    }
+
+    /// How many frames it has been doing it: the rest of `banked`.
+    pub const fn head_for(&self) -> u16 {
+        (self.banked >> 8) as u16
+    }
+
+    /// Set what the head is doing, from its first frame of it.
+    pub fn set_head(&mut self, head: Head) {
+        self.banked = head.code();
+    }
+
+    /// One more frame of what the head is doing.
+    pub fn hold_the_head(&mut self) {
+        let frames = self.head_for().saturating_add(1) as i32;
+        self.banked = (self.banked & 0xff) | (frames << 8);
+    }
+
+    /// Is this a scythe's head holding on to something?
+    pub fn is_a_head_holding(&self) -> bool {
+        self.kind == EffectKind::ScytheHead && self.head_state().holds()
     }
 }
 

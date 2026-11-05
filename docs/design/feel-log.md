@@ -10239,3 +10239,74 @@ Strangler); a Sentinel above its first shelf only by a tool.
 falls short and too late is off a stone already slowing -- and whether a fifth of a second for
 the Champion is a skill or a coin flip; whether the hoists make the Sentinels' crowns a place
 people go.
+
+### 2026-11-04 — the Blood mage: the world bleeds, slice 1
+
+**Changed** Her clicks, her aerials and her takeoffs
+([exploration/0038](exploration/0038_blood_mage_the_world_bleeds.md), slice 1;
+[kits/blood-mage.md](kits/blood-mage.md) §"The world bleeds"). Left is the Red Hand -- Rend
+tapped and strung to three, Seize held. Middle raises a pool of hers into a spike, and on bare
+ground does nothing and costs nothing; the spike launches whoever is over it, her too, and
+stands for two seconds as a plant that is solid and lashes. Right is the Sweep tapped (which now
+cuts the floor in front of her: a pool) and the Cast held -- the scythe's head on a chain, which
+embeds in a fighter (bleed, slow, leash), a creature or the world (a pool), wrenches free and
+drags home reaping her stains and plants, or is zipped to on a second press. The air row is the
+floor row. Space + click is the Rising rend, the Rising spike (a pool at her feet raised under
+her) and the Rising reap (cuts the floor she leaves). Cut: the Thorn lash, the Bramble, the
+vines, Thornfall, the Reap and the Harvest, the spike's tiers and the Crimson cascade, the
+Stake, the Upheaval, and the teleport to a stain on `shift`. The rows were retuned, not
+renumbered; 30 knobs appended to the Blood mage's section.
+
+**Why** The owner (2026-11-03): the left and right clicks felt unimpactful, spiking their feet
+was still the best play, and her jump-left-click blinked her along an area spell. 0038's law --
+"it is not possible to change without bleeding" -- makes the scythe the thing that sows, the
+spike the thing that grows, the scythe again the thing that reaps, and frees her movement from
+hurting anybody: there is always floor to cut.
+
+**Numbers, first guesses** The spike's row 100 → 60 (an eruption is still worth its pool); its
+rise is the pool's, 8 f for 30 or less, 16 f at a fighter's 110, 20 f from 250. The Cast 28 (not
+0038's ~40: it is slot nought, the poke the feel properties read, and the spike's 60 has to be
+more than twice it) at 40 m/s to 16 m, held 45 f, a 12 f stagger and a 6 m/s shove on the wrench, home at 20 m/s; the
+zip 30 m/s, keeping 75%, a jump in its last 6 f. Rend 25 at 1.6 m in 5 f; Seize 1.8 m, slammed
+40 or impaled 50 and the plant's blood. A plant lashes 12 every 30 f within 2 m; reaped, 30 and
+its blood in an 8 m cone. The floor a Sweep cuts bleeds 25.
+
+**Design changes the properties record** `feel.rs`'s *every class has a move that carries the
+body* measures her zip now, not the blink to a pool. Its *the Blood mage pays for everything*
+and *the lockout leaves something faster to do* skip her four rows no button throws
+(`moves::blood::thrown`: the reaped thorns, the lash, Seize's two endings), which are what a
+thing she made does, never pressed. For slot nought as the poke and slot one as the committed
+move, the Cast walks at 40% and Rend at 20%, Seize's row stuns 30 (its endings' own), and the
+Rising reap recovers in 12. `effects.rs`'s *the spike takes long enough
+to be seen coming* is held at a fighter's pool (16 f): a small pool rises in 8, inside reaction
+time, and is a small blow. `essence.rs`: a spike on bare ground costs nothing. `broodmother.rs`'s
+slam window: her standing reach is the scythe and the Red Hand, so she reaches the slammed sacs
+with the Cast, as the Elementalist does with her shots. `haemorrhage.rs` measures the bleed off
+the Cast's bite, the head taken off, and its chain test wants two eruptions where it wanted
+three: a bleed tick's small pool rises in 8 frames, before the trail is as long.
+
+**The movement search, re-run for her** (`envelope -- search --fixtures --class Blood_mage`,
+the search's Blood mage tools now the Cast at a point and the zip; her fixture lines replaced).
+Widest gap off the runway, shared blocks / whole kit, by rise:
+
+| rise | -8 | -4 | -2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 30 | 45 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| before | 33.7/33.7 | 32.3/34.3 | 33.7/34.4 | 35.9/35.9 | 33.1/33.1 | 36.1/36.9 | 33.0/33.6 | 13.7/15.2 | 12.3/18.9 | 14.0/14.7 | -/- | -/- | -/- | -/- | -/- | -/- | -/- |
+| after | 23.9/25.3 | 21.7/21.7 | 19.6/21.8 | 17.4/17.4 | 15.2/30.5 | 17.6/17.9 | 15.6/17.3 | 13.1/49.7 | 11.1/36.5 | 9.0/10.9 | -/36.2 | -/- | -/- | -/11.1 | -/23.6 | -/- | -/- |
+
+The shared blocks lost a third at the low rises: space and a click found Thornfall's burst along
+the aim, which is cut. The whole kit gained where the zip reaches a lip -- 50 m at +4, a ledge
+at +8, +16 and +20 she never reached -- and her own kit is now most of her reach rather than 5%
+of it. A search is a lower bound, and this one is 1,500 runs a cell.
+
+**Tried and dropped, the same day** *The spike's disc at 1.2 m* (was 2.2): a small stain's
+eruption no longer reached a fighter walking off it, and the bleed-then-spike chain stopped
+catching them. Back to 2.2 -- the problem was that it came up anywhere, not how wide. *The world's
+blood drinkable*: a Sweep's cut in the floor and a walk through it refunded every cast's cost
+for nothing; the world's blood is a pool to raise and never a heal.
+
+**Verdict** open -- unplayed. To feel for: whether the Cast's 12-frame window plus its own
+startup reads as committed or as slow; whether the leash is felt, since it holds against the
+other's last position and only stops the one walking away; whether the zip's carry and banked
+jump make her a mover worth a course; whether Seize's unblockable grab is the brawler's answer
+or a panic button; whether a plant's lash at 2 m is cover or clutter.

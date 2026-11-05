@@ -109,6 +109,8 @@ pub const SLOT_MECHANIC: u8 = 3;
 pub const SLOT_HEAVY: u8 = 3;
 pub use crate::tuning::max_health;
 
+mod bleeds;
+
 // The Bulwark's shield and the Reaver's shadow used to keep their numbers here,
 // as `const`s beside the code that read them. They are in the Oven now: a
 // shield's speed and range decide the class's whole spacing game, which makes
@@ -1097,7 +1099,7 @@ impl Player {
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
             // Nothing on the class is gated by the bars: what they change is
             // power and what her body can do, never availability.
-            Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => true,
+            Mechanic::Forms { .. } | Mechanic::Blood(_) | Mechanic::Meter { .. } => true,
         }
     }
 
@@ -3761,7 +3763,10 @@ impl World {
         }
         // And a body that let go of one keeps its speed.
         self.let_riders_go(carried);
-        self.land_the_thornfall(&seen);
+        // The Blood mage's chain (2026-11-04): the leash on what her head
+        // holds, and the zip to it.
+        self.hold_the_leashes(&seen);
+        self.tend_the_zips(&seen);
         // **Falls** (bestiary P6), and **noise** (P5): both read what the step
         // just did to each body, against the body as the frame found it.
         self.land(&seen);
@@ -3852,32 +3857,6 @@ impl World {
                 spawn_effect(&mut self.effects, burst);
             }
         }
-        // A blink **drinks** its pool (2026-10-12): the teleport is a heal and
-        // a door at once, as walking into it would be -- her own blood is
-        // still only a door. Done here rather than in the dodge branch
-        // because the branch only has her body, and the pool is an effect.
-        for i in 0..MAX_PLAYERS {
-            let slot = self.players[i].blinked as usize;
-            if slot < MAX_EFFECTS
-                && let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool())
-            {
-                self.players[i].absorb(pool.banked * t::stain_walk_drinks() / 100);
-                // And she arrives in a burst of it: Thornfall's ring, at its
-                // size.
-                let m = moves::get(Class::BloodMage, moves::blood::THORNFALL);
-                self.effects[slot] = Some(Effect::cast(
-                    EffectKind::Nova,
-                    i as u8,
-                    Class::BloodMage,
-                    moves::blood::THORNFALL,
-                    pool.pos,
-                    V3::ZERO,
-                    m.radius,
-                ));
-            }
-            self.players[i].blinked = NO_POOL;
-        }
-
         // What a move does *as it comes out*, on its first active frame: the
         // leap of a leaping move, and whatever it leaves standing in the world.
         for (i, input) in inputs.into_iter().enumerate() {
@@ -3890,10 +3869,6 @@ impl World {
             if let Action::Channel { kind, held: 0 } = p.action {
                 if p.class == Class::Elementalist && kind == moves::elementalist::AIR_BALL {
                     self.raise_the_ball(i);
-                }
-                // The Bramble begins where she is aiming when the hold opens.
-                if p.class == Class::BloodMage && kind == moves::blood::BRAMBLE {
-                    self.lay_the_plague(i);
                 }
             }
             let Action::Active { kind, left } = p.action else {
@@ -4190,17 +4165,19 @@ impl World {
                 // pool in one go -- the payoff placement, and the pool is
                 // spent whether or not she had grey to fill.
                 let mut place = true;
-                // **The Black spike's higher tiers** (2026-10-12): three
-                // spikes in a triangle round the point, or a field there that
-                // comes up in waves. Each is an area that does its own hitting,
-                // so the move's disc lands nothing; a stain under any of them
-                // erupts as well.
+                // **The Black spike raises a pool** (2026-11-04): the pool
+                // of hers its disc touches erupts and stands as a plant, and
+                // the move's disc lands nothing. With no pool, nothing.
                 if leaves == EffectKind::BlackSpike
                     && p.class == Class::BloodMage
                     && kind == moves::blood::BLACK_SPIKE
                 {
                     self.players[i].hit_used = true;
-                    self.raise_the_tier(i, born);
+                    self.raise_from_the_pool(i, kind, born.pos, m.radius);
+                    place = false;
+                } else if leaves == EffectKind::ScytheHead {
+                    // **The Cast**: the head leaves her hand.
+                    self.throw_the_head(i, born);
                     place = false;
                 } else if leaves == EffectKind::BlackSpike {
                     match self.pool_covering(i as u8, born.pos) {
@@ -4250,8 +4227,9 @@ impl World {
                 continue;
             }
             // **The Black spike leaves no stain** (2026-10-19), its cost
-            // included: what she paid for it is only grey.
-            if p.class == Class::BloodMage && kind == moves::blood::BLACK_SPIKE {
+            // included: what she paid for it is held by the plant it left
+            // (2026-11-04), or nothing when no pool rose.
+            if p.class == Class::BloodMage && moves::blood::raises_a_pool(kind) {
                 self.players[i].paid = 0;
                 continue;
             }
@@ -4316,6 +4294,9 @@ impl World {
                 if let Some(mut hit) =
                     resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
                 {
+                    // The Blood mage's Seize (2026-11-04): fed to a plant, or
+                    // slammed into the floor -- the blow is its ending's.
+                    let seized = self.seize_how(attacker, defender, &mut hit);
                     // The Reaver's cash-in: any blow of hers spends the marks on
                     // whoever it lands on. A no-op for every other blow in the
                     // game, and for anybody carrying no marks.
@@ -4329,6 +4310,9 @@ impl World {
                         hit.damage.min(snapshot[defender].health)
                     };
                     apply_hit(&mut self.players[defender], hit);
+                    if let Some(how) = seized {
+                        self.seize_lands(attacker, defender, how, dealt);
+                    }
                     // A full shield's Slam staggers what its shake catches
                     // unguarded: the area stagger weight buys. Blocked, it is an
                     // ordinary blocked Slam -- its frames do not change with weight.
@@ -4373,7 +4357,8 @@ impl World {
                         {
                             self.players[defender].slow(t::slow_frames(), t::spike_slow());
                         }
-                        if dealt > 0 {
+                        // A Seize's blood went where its ending put it.
+                        if dealt > 0 && seized.is_none() {
                             // Through a stain, the blow is harder for it, and the
                             // blood it spills is the whole of what it dealt.
                             let mut spilt = dealt;
@@ -4475,6 +4460,8 @@ impl World {
         // puts through the blood, and it does not need a body in the way.
         for i in 0..MAX_PLAYERS {
             self.collect_with_the_scythe(i);
+            // And reaps her plants (2026-11-04).
+            self.reap_with_the_scythe(i);
         }
         // And so do her feet: a stain she walks into is drunk.
         self.drink_underfoot();
@@ -7483,7 +7470,7 @@ fn step_player(
 
     // **The Blood mage under her ground, and her Sweep strung** (2026-10-18).
     swim_or_surface(p, input);
-    string_the_sweep(p, input);
+    let pressed_scythe = string_the_sweep(p, input, pressed_earth);
 
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -7501,6 +7488,7 @@ fn step_player(
     if pressed_space {
         shadow::bank_dash_jump(p);
         bank_the_flurry_jump(p);
+        bleeds::bank_the_zip_jump(p);
     }
     step_mechanic(p, scene.arena);
     hold_the_churn(p, input);
@@ -7567,7 +7555,10 @@ fn step_player(
     // on a number running down: held, it winds on and re-aims; released, it
     // throws the move it was winding. Falling through to the input below would
     // read the same press again and buy the same ability twice.
-    if let Some((kind, held)) = p.action.channelling() {
+    if bleeds::zip_to_the_head(p, who, pressed_scythe, scene) {
+        // **The Blood mage's zip** (2026-11-04): the press that hauls her to
+        // her scythe's head throws nothing else.
+    } else if let Some((kind, held)) = p.action.channelling() {
         p.action = step_channel(p, who, kind, held, input, scene);
     } else {
         p.action = match countdown(p, want_guard, input) {
@@ -7631,7 +7622,12 @@ fn step_player(
                 // Which move a click asks for. After the mechanic, so that Rush
                 // can be started while a click is held down, and before the dodge,
                 // because a click is what disambiguates shift.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, &out))
+                // **A Blood mage's spike needs a pool** (2026-11-04): on bare
+                // ground the press raises nothing and costs nothing, and the
+                // pool's size is how long it takes to rise -- the startup.
+                else if let Some((kind, rise)) = clicked_move(p, input)
+                    .filter(|k| p.can_throw(*k, &out))
+                    .and_then(|k| bleeds::spike_rise(p, who, k, input, scene).map(|r| (k, r)))
                 {
                     // A no-op for anybody who is not the Champion; the weapon in
                     // hand and the dash underneath it are that class's alone.
@@ -7639,7 +7635,12 @@ fn step_player(
                     back_to_the_floor(p, kind, scene);
                     spend_the_rise(p, kind);
                     begin_champion(p, kind);
-                    begin_move(p, who, kind, input, scene, true)
+                    match (begin_move(p, who, kind, input, scene, true), rise) {
+                        (Action::Startup { kind, .. }, Some(left)) => {
+                            Action::Startup { kind, left }
+                        }
+                        (begun, _) => begun,
+                    }
                 }
                 // The Elementalist's Raise: an instant on the earth click's
                 // press, the way it was on the mechanic key. See
@@ -7647,10 +7648,9 @@ fn step_player(
                 else if raise_on_the_click(p, pressed_earth) {
                     mechanic_action(p, who, input, scene);
                     Action::Free
-                } else if dives_in(p, who, input, scene) {
+                } else if dives_in(p, input) {
                     // **The Blood mage sinks into her ground** (2026-10-18):
-                    // `shift` on it, with no stain under the crosshair for
-                    // the teleport, is the swim rather than the dodge.
+                    // `shift` on it is the swim rather than the dodge.
                     p.swim = SWIM_UNDER;
                     Action::Free
                 } else if input.has(Input::SHIFT)
@@ -7697,28 +7697,6 @@ fn step_player(
                         // instead, and loss of control is loss of the option
                         // to decline. See `docs/design/dual-mage.md`.
                         Action::Free
-                    } else if let Some(pool) = (may_commit || p.class == Class::BloodMage)
-                        .then(|| pool_under_the_crosshair(p, who, input, scene))
-                        .flatten()
-                    {
-                        // The Blood mage's blink: a dodge thrown with the
-                        // reticle on one of her pools puts her in it, and the
-                        // pool is spent. The Reaver's dash pointed at the
-                        // class's object instead of at a body -- and with
-                        // nothing to cross, the crossing is instant. The
-                        // airborne one spends the airdodge, like hers -- and is
-                        // there even once it is spent, since a stain is on the
-                        // floor and so is she when she arrives: the zip to the
-                        // blood she sent from a jump (2026-10-12).
-                        if !p.grounded {
-                            p.air_dodged = true;
-                        }
-                        p.pos = scene.effects[pool].map_or(p.pos, |e| e.pos);
-                        p.vel = V3::ZERO;
-                        p.blinked = pool as u16;
-                        Action::Dodge {
-                            left: t::dodge_frames(),
-                        }
                     } else if let Some(slot) = may_commit
                         .then(|| stone_under_the_crosshair(p, who, input, dir, scene))
                         .flatten()
@@ -8947,15 +8925,15 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
 /// displaces something rather than adding to it — on the floor that key is the
 /// mechanic and has no frames at all — so it is answered by
 /// [`keyed_move`] beside the rest of the mechanic grammar.
-/// Which move the Blood mage's three clicks throw: left is thorns, middle
-/// the spikes, right the scythe -- the row is where her feet are, and a
-/// charge in her vessel takes its own click back. See `moves::blood`.
+/// Which move the Blood mage's three clicks throw: left is the Red Hand,
+/// middle the spike, right the scythe -- the same on the floor and in the
+/// air, with space a takeoff (2026-11-04). See `moves::blood`.
 fn blood_move(p: &Player, input: Input) -> Option<u8> {
     use moves::blood as b;
     use moves::blood::keys;
     // Left before middle before right, the tie-break every class makes.
-    let click = if input.has(keys::THORNS) {
-        keys::THORNS
+    let click = if input.has(keys::HAND) {
+        keys::HAND
     } else if input.has(keys::SPIKES) {
         keys::SPIKES
     } else if input.has(keys::SCYTHE) {
@@ -8963,35 +8941,28 @@ fn blood_move(p: &Player, input: Input) -> Option<u8> {
     } else {
         return None;
     };
-    // **A stored charge answers its own click first**, wherever her feet
-    // are: the vessel is what a jump or a dodge out of a hold kept, and the
-    // click that charged it is the click that lets it go.
-    if p.vessel != NO_VESSEL && b::click_of(p.vessel) == click {
-        return p.vessel_ready.then_some(p.vessel);
-    }
     let takeoff = match click {
-        keys::THORNS => b::THORNFALL,
-        keys::SPIKES => b::UPHEAVAL,
+        keys::HAND => b::RISING_REND,
+        keys::SPIKES => b::RISING_SPIKE,
         _ => b::RISING_REAP,
     };
-    // **A tap is the quick thing and a hold is the bigger one** (2026-10-13,
-    // 2026-10-18): on the floor and in the air the left click is the Thorn
-    // lash and the right click the Sweep, each turning into its hold -- the
-    // Bramble, the Reap -- when held past its startup (`countdown`); the
-    // middle click is the spike, charged in tiers on the floor and the Stake
-    // in the air. Space
-    // with a click is a takeoff from the floor, on the window the
-    // Elementalist's use (`rise_window`), and **once a jump in the air** as
-    // well, as the Reaver's are.
+    // **A tap is the quick thing and a hold is the bigger one**: the left
+    // click is Rend, turning into Seize when held past the Champion's window
+    // (`tuning::hold_from`), and the right click the Sweep, turning into the
+    // Cast; the middle click raises a pool. **The air is the floor** -- the
+    // same three. Space with a click is a takeoff from the floor, on the
+    // window the Elementalist's use (`rise_window`), and **once a jump in
+    // the air** as well, as the Reaver's are.
+    let plain = match click {
+        keys::HAND => b::REND,
+        keys::SPIKES => b::BLACK_SPIKE,
+        _ => b::SWEEP,
+    };
     if p.grounded {
         if !p.aboard() && p.rise.window > 0 {
             return Some(takeoff);
         }
-        return Some(match click {
-            keys::THORNS => b::THORN_LASH,
-            keys::SPIKES => b::BLACK_SPIKE,
-            _ => b::SWEEP,
-        });
+        return Some(plain);
     }
     if !p.aboard() && p.rise.window > 0 && p.rise.lifted <= t::floor_grace() {
         return Some(takeoff);
@@ -8999,11 +8970,7 @@ fn blood_move(p: &Player, input: Input) -> Option<u8> {
     if !p.aboard() && input.has(Input::SPACE) && !p.rise.used {
         return Some(takeoff);
     }
-    Some(match click {
-        keys::THORNS => b::THORN_LASH,
-        keys::SPIKES => b::STAKE,
-        _ => b::SWEEP,
-    })
+    Some(plain)
 }
 
 fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
@@ -9069,7 +9036,7 @@ fn elementalist_takeoff(class: Class, kind: u8) -> bool {
     use moves::elementalist as e;
     match class {
         Class::Elementalist => matches!(kind, e::EARTH_JUMP | e::FIRE_FOUNTAIN | e::UPDRAFT),
-        Class::BloodMage => matches!(kind, b::THORNFALL | b::UPHEAVAL | b::RISING_REAP),
+        Class::BloodMage => matches!(kind, b::RISING_REND | b::RISING_SPIKE | b::RISING_REAP),
         Class::DualMage => moves::dual::is_takeoff(kind),
         Class::ShadowReaver => moves::reaver::is_takeoff(kind),
         Class::Bulwark => moves::bulwark::is_takeoff(kind),
@@ -10720,8 +10687,7 @@ fn ramming(p: &Player) -> Option<V3> {
 
 fn attack_step(p: &Player) -> Option<V3> {
     let kind = p.action.attack_kind()?;
-    let mut m = moves::get(p.class, kind);
-    m.step = reap_step(p, kind, m.step);
+    let m = moves::get(p.class, kind);
     if m.step.raw() == 0 {
         return None;
     }
@@ -10754,24 +10720,6 @@ fn attack_step(p: &Player) -> Option<V3> {
         Fx::ZERO,
         p.facing.z.mul(speed),
     ))
-}
-
-/// **How far the Reap lunges** (2026-10-18): half its row's step for a hold
-/// of nothing, all of it for the longest (`Player::channelled`), and
-/// `tuning::reap_ground_step` times that thrown from her ground. Every other
-/// move's step is its own.
-fn reap_step(p: &Player, kind: u8, step: Fx) -> Fx {
-    if p.class != Class::BloodMage || kind != moves::blood::REAP {
-        return step;
-    }
-    let half = Fx::ratio(1, 2);
-    let held = half.add(half.mul(p.channelled.clamp(Fx::ZERO, Fx::ONE)));
-    let ground = if p.thrown_at.raw() > Fx::ONE.raw() {
-        t::reap_ground_step()
-    } else {
-        Fx::ONE
-    };
-    step.mul(held).mul(ground)
 }
 
 /// Bank a jump pressed **during** the hammer's finisher, so it can be spent on
@@ -11300,12 +11248,6 @@ fn step_channel(
             kind,
             left: m.active,
         },
-        // **The Reap**: how far into its hold she let go is how far it
-        // lunges (`reap_step`).
-        _ if p.class == Class::BloodMage && kind == moves::blood::REAP => {
-            p.channelled = Fx::ratio(held.min(cap) as i32, cap.max(1) as i32);
-            throw_move(p, kind, input, true)
-        }
         _ => {
             p.channelled = p.aim_path.length();
             throw_move(p, kind, input, true)
@@ -11486,16 +11428,21 @@ fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, sc
     // read for the way it rolls.
     // A field is laid where the crosshair is when the hold opens, and grows
     // there: its marker is that spot, not a point walking out with the hold.
-    if !matches!(
-        moves::charge(p.class, kind),
-        Some(
-            moves::Charge::Strike
-                | moves::Charge::Gather
-                | moves::Charge::Tier
-                | moves::Charge::Field
-                | moves::Charge::TapOrHold
+    // The Blood mage's Cast is aimed at the point the crosshair is on, as
+    // any skillshot is: the hold was the tap's window, not a reach.
+    let cast = p.class == Class::BloodMage && kind == moves::blood::CAST;
+    if !cast
+        && !matches!(
+            moves::charge(p.class, kind),
+            Some(
+                moves::Charge::Strike
+                    | moves::Charge::Gather
+                    | moves::Charge::Tier
+                    | moves::Charge::Field
+                    | moves::Charge::TapOrHold
+            )
         )
-    ) {
+    {
         p.aim_path.to = p.aim_path.at(m.reach_after(held));
     }
 }
@@ -11931,7 +11878,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
         }
 
         // Health is the resource; there is no separate button.
-        Mechanic::Blood => {}
+        Mechanic::Blood(_) => {}
 
         // The meter is steered by which button attacks, not by this one.
         Mechanic::Meter { .. } => {}
@@ -12166,16 +12113,15 @@ fn worth_of(p: &Player, kind: Option<u8>) -> Fx {
 }
 
 /// **Does the Blood mage sink into her ground** on this frame's `shift`?
-/// On the floor, on her ground, not already under or waiting for `shift` to
-/// come up, and with no stain under the crosshair -- the teleport comes
-/// first, exactly as before.
-fn dives_in(p: &Player, who: usize, input: Input, scene: &Scene) -> bool {
+/// On the floor, on her ground, and not already under or waiting for `shift`
+/// to come up. The teleport to a stain that came first was cut on 2026-11-04
+/// (exploration 0038): the zip replaced it.
+fn dives_in(p: &Player, input: Input) -> bool {
     p.class == Class::BloodMage
         && input.has(Input::SHIFT)
         && p.grounded
         && p.on_blood
         && p.swim == SWIM_NONE
-        && pool_under_the_crosshair(p, who, input, scene).is_none()
 }
 
 /// **Swimming, one frame** (2026-10-18). Under, she stays under while `shift`
@@ -12211,29 +12157,33 @@ fn swim_or_surface(p: &mut Player, input: Input) {
 /// Sweep's recovery ends it, and the next Sweep is the next blow of the
 /// string -- the second back the other way, the third heavier -- up to
 /// three. Its own press edge, kept on the fighter as the Reaver keeps hers.
-fn string_the_sweep(p: &mut Player, input: Input) {
+///
+/// **And Rend, on the left click** (2026-11-04): the Red Hand's claws strung
+/// the same way, off the left click's own press edge (`pressed_hand`).
+/// Returns the right click's press edge, which the zip reads.
+fn string_the_sweep(p: &mut Player, input: Input, pressed_hand: bool) -> bool {
     if p.class != Class::BloodMage {
-        return;
+        return false;
     }
     let click = moves::blood::keys::SCYTHE;
     let pressed = input.has(click) && !p.right_held;
     p.right_held = input.has(click);
-    if !pressed {
-        return;
-    }
     let place = p.string & !STRINGING;
     if let Action::Recovery { kind, .. } = p.action
-        && kind == moves::blood::SWEEP
+        && ((kind == moves::blood::SWEEP && pressed)
+            || (kind == moves::blood::REND && pressed_hand))
         && place < 2
     {
         p.string = (place + 1) | STRINGING;
         p.action = Action::Free;
     }
+    pressed
 }
 
-/// Which blow of a string this Sweep is, if it is one: nought, one or two.
+/// Which blow of a string this Sweep or Rend is, if it is one: nought, one
+/// or two.
 fn string_place(p: &Player, kind: u8) -> Option<u8> {
-    (p.class == Class::BloodMage && kind == moves::blood::SWEEP).then_some(p.string & !STRINGING)
+    (p.class == Class::BloodMage && moves::blood::strung(kind)).then_some(p.string & !STRINGING)
 }
 
 /// **What a swing of the Blood mage's is worth beside its row** (2026-10-18):
@@ -12242,12 +12192,11 @@ fn string_place(p: &Player, kind: u8) -> Option<u8> {
 /// grey it spent (`Player::fuel`). One for everything else.
 fn blood_blow(p: &Player, kind: u8) -> Fx {
     if string_place(p, kind) == Some(2) {
-        return t::sweep_third();
-    }
-    if p.class == Class::BloodMage && kind == moves::blood::HARVEST {
-        let m = moves::get(p.class, kind);
-        let extra = Fx::from_int(p.fuel as i32).mul(t::finisher_per_grey());
-        return Fx::ONE.add(extra.div(Fx::from_int(m.damage.max(1))));
+        return if kind == moves::blood::REND {
+            t::rend_third()
+        } else {
+            t::sweep_third()
+        };
     }
     Fx::ONE
 }
@@ -12256,9 +12205,6 @@ fn blood_blow(p: &Player, kind: u8) -> Fx {
 /// every class, and **the Harvest pays back the grey it burned**, as every
 /// finisher of hers does (`tuning::finisher_repays`, `Player::owed`).
 fn swing_leech(p: &Player, kind: u8, dealt: i32) -> i32 {
-    if p.class == Class::BloodMage && kind == moves::blood::HARVEST {
-        return dealt.max(0) * t::finisher_repays() / 100;
-    }
     moves::get(p.class, kind).leeched(dealt)
 }
 
@@ -12477,7 +12423,26 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                 }
             }
         }
-        Mechanic::Blood => h.write_u32(6),
+        Mechanic::Blood(garden) => {
+            h.write_u32(6);
+            // Her plants and her zip, only once she has any, so a snapshot
+            // without them hashes as it always did.
+            if *garden != class::Garden::EMPTY {
+                for (slot, plant) in garden.plants.iter().enumerate() {
+                    match plant {
+                        Some(s) => {
+                            hash_v3(h, &s.at);
+                            h.write_u32(s.age as u32);
+                            h.write_i32(s.scale.raw());
+                        }
+                        None => h.write_u32(0),
+                    }
+                    h.write_u32(garden.blood[slot] as u32);
+                    h.write_u32(garden.paid[slot] as u32);
+                }
+                h.write_u32(garden.zipping as u32 | (garden.zip_jump as u32) << 1);
+            }
+        }
         Mechanic::Meter {
             dark,
             light,
@@ -13826,7 +13791,7 @@ fn stagger_the_cashed(p: &mut Player) {
 /// hazard that only exists in versus is not a hazard.
 impl World {
     fn step_effects(&mut self) {
-        self.step_plagues();
+        self.step_the_gardens();
         self.light_the_fuses();
         self.step_hearts();
         self.step_thralls();
@@ -14057,7 +14022,7 @@ impl World {
             }
             let dealt = self.players[i].wound(self.bleed_tick_of(owner));
             let class = self.players[owner].class;
-            self.spill_under(owner as u8, class, moves::blood::THORN_LASH, &p, dealt);
+            self.spill_under(owner as u8, class, moves::blood::CAST, &p, dealt);
         }
     }
 
@@ -14080,13 +14045,6 @@ impl World {
         }
         if effect.kind == EffectKind::Quake {
             self.erupt_the_quake(effect);
-            return;
-        }
-        if effect.kind == EffectKind::Nail
-            && effect.class == Class::BloodMage
-            && effect.slot == moves::blood::STAKE
-        {
-            self.land_the_stake(effect);
             return;
         }
         if effect.kind != EffectKind::Bloodletter || effect.banked <= 0 {
@@ -14533,6 +14491,7 @@ impl World {
             // **The Black vines** and **the Crimson cascade**: each frame
             // decides for itself what lands on it.
             EffectKind::Vines => self.step_the_vines(effect),
+            EffectKind::ScytheHead => self.step_the_head(effect),
             // The Rising reap's sweep, which is only to look at.
             EffectKind::Cascade => {}
             // Fissure's surge. See `step_the_surge`.
@@ -15612,9 +15571,7 @@ impl World {
                 if self.gore_the_creature(effect, 0, at, radius) > 0 {
                     spent = true;
                 }
-                // **The Stake goes through** whoever it pins, on to the floor
-                // at the end of its flight, where it lands (`pay_out`).
-                if spent && effect.slot != moves::blood::STAKE {
+                if spent {
                     effect.age = effect.life;
                 }
             }
@@ -16109,38 +16066,6 @@ enum EffectReach {
 /// left of the hold, which is the Bulwark's Grapple unchanged: its catch is
 /// already at arm's length, so there is nothing to haul and the two phases
 /// collapse into the behaviour it always had.
-/// Which of this fighter's pools the crosshair is on, with a clear line to
-/// it -- the two questions the Reaver's dash asks about her shadow, pointed
-/// at the class's object instead. Both are `aim`'s to answer; this only
-/// decides which pool, and the nearest is the one a player means.
-fn pool_under_the_crosshair(p: &Player, who: usize, input: Input, scene: &Scene) -> Option<usize> {
-    if !p.class.wounds_go_grey() {
-        return None;
-    }
-    let mut best: Option<(usize, Fx)> = None;
-    for (slot, e) in scene.effects.iter().enumerate() {
-        let Some(e) = e else { continue };
-        if !e.is_a_pool() || e.owner != who as u8 {
-            continue;
-        }
-        let wide = e.pool_radius().add(t::body_radius());
-        let tall = e.pool_height().add(t::pool_lock());
-        if !aim::pointing_at_disc(who, input, e.pos, wide, tall, scene)
-            || !aim::clear_between(p.pos, e.pos, scene)
-        {
-            continue;
-        }
-        let far = e.pos.sub(p.pos).len();
-        if far.raw() > t::teleport_reach().raw() {
-            continue;
-        }
-        if best.is_none_or(|(_, seen)| far.raw() < seen.raw()) {
-            best = Some((slot, far));
-        }
-    }
-    best.map(|(slot, _)| slot)
-}
-
 /// Which of the Elementalist's own stones a dodge along `dir` goes into, with
 /// the crosshair on it, if any -- the nearest, when it is on more than one.
 ///
@@ -16258,10 +16183,28 @@ impl World {
     /// without counting it as damage dealt: what a cast cost her, and what a
     /// thrall had left when it was killed.
     fn pool_blood(&mut self, owner: u8, class: Class, slot: u8, at: V3, volume: i32) {
+        self.pool_blood_as(owner, class, slot, at, volume, false);
+    }
+
+    /// [`Self::pool_blood`], and whether it is **the world's blood**
+    /// (`Effect::is_world_blood`): a pool of hers to raise, not to drink.
+    /// Blood of a body's merged into it makes it a body's.
+    fn pool_blood_as(
+        &mut self,
+        owner: u8,
+        class: Class,
+        slot: u8,
+        at: V3,
+        volume: i32,
+        world: bool,
+    ) {
         if volume <= 0 || !class.wounds_go_grey() {
             return;
         }
-        let born = Effect::pool(owner, class, slot, at, volume);
+        let mut born = Effect::pool(owner, class, slot, at, volume);
+        if world {
+            born.power = Fx::ZERO;
+        }
         // Onto one of hers already there: merge.
         let overlapping = self.effects.iter().position(|e| {
             e.is_some_and(|e| {
@@ -16281,6 +16224,9 @@ impl World {
         if let Some(i) = overlapping {
             if let Some(pool) = self.effects[i].as_mut() {
                 pool.banked += volume;
+                if !world {
+                    pool.power = Fx::ONE;
+                }
             }
             return;
         }
@@ -16384,6 +16330,7 @@ impl World {
         for (slot, e) in self.effects.iter().enumerate() {
             let Some(e) = e else { continue };
             if !e.is_a_pool()
+                || e.is_world_blood()
                 || e.owner != owner as u8
                 || e.age <= older_than.max(t::stain_settles())
             {
@@ -16443,6 +16390,7 @@ impl World {
                 };
                 // A lit stain is going up, not to be drunk.
                 if !e.is_a_pool()
+                    || e.is_world_blood()
                     || e.owner != i as u8
                     || e.age <= t::stain_settles()
                     || e.life != UNLIT
@@ -16491,6 +16439,7 @@ impl World {
         for slot in 0..MAX_EFFECTS {
             let over = self.effects[slot].is_some_and(|e| {
                 e.is_a_pool()
+                    && !e.is_world_blood()
                     && e.owner == who as u8
                     && e.age > t::stain_settles()
                     && crate::math::segment_gap(
@@ -16520,7 +16469,12 @@ impl World {
         if !pool.is_a_pool() {
             return 0;
         }
-        let take = m.drinks(pool.banked);
+        // The world's blood is spent, and gives her nothing back.
+        let take = if pool.is_world_blood() {
+            0
+        } else {
+            m.drinks(pool.banked)
+        };
         let got = self.players[owner].absorb(take);
         self.effects[slot] = None;
         got
@@ -18099,113 +18053,25 @@ impl World {
         );
     }
 
-    /// **The Blood mage's moves, on the frame each comes out** (2026-10-12):
-    /// what each puts in the world besides its row's own volume or effect.
-    /// The Thorn lash, the spike and the Bramble are their rows' effects,
-    /// thrown in `advance` with the rest; the Sweep and the Reap are swings.
+    /// **The Blood mage's moves, on the frame each comes out** (2026-10-12,
+    /// 2026-11-04): what each puts in the world besides its row's own volume
+    /// or effect. The spike and the Cast are their rows' effects, thrown in
+    /// `advance` with the rest; the Sweep, the Rising reap, Rend and Seize
+    /// are swings.
     fn blood_comes_out(&mut self, i: usize, kind: u8) {
         use moves::blood as b;
         match kind {
-            b::THORNFALL => self.thornfall(i),
-            b::STAKE => self.throw_the_stake(i),
             b::COAGULATE => self.coagulate(i),
-            b::RISING_REAP => self.rising_reap(i),
             b::HEART => self.plant_a_heart(i),
-            b::HARVEST => self.harvest(i),
-            // The geyser is the row's own disc where it was aimed; the floor
-            // under it is hers.
-            b::UPHEAVAL => {
-                let at = self.floor_at_aim(i);
-                let radius = moves::get(Class::BloodMage, b::UPHEAVAL).radius;
-                self.lay_touch(i, at, radius);
+            // The floor the scythe cuts bleeds.
+            b::SWEEP | b::RISING_REAP => self.the_floor_bleeds(i, kind),
+            // The pool at her own feet rises, and her with it.
+            b::RISING_SPIKE => {
+                let at = self.players[i].pos;
+                self.raise_from_the_pool(i, kind, at, t::body_radius());
             }
-            // The vines were made from the field the moment the hold ran out
-            // (`step_plagues`); the cascade goes out on its active frame.
-            b::CASCADE => self.start_the_cascade(i),
             _ => {}
         }
-    }
-
-    /// **Thornfall** (2026-10-18; Blood wings before it): a burst along her
-    /// aim, any way at all, stopped at the first wall or stone. Where it ends
-    /// she lands in a ring of thorns (`land_the_thornfall`).
-    fn thornfall(&mut self, i: usize) {
-        let p = self.players[i];
-        let m = moves::get(p.class, moves::blood::THORNFALL);
-        let stones = stones::gather(&self.players);
-        let seen = self.players;
-        let effects = self.effects;
-        let scene = aim::Scene {
-            stones: &stones,
-            players: &seen,
-            effects: &effects,
-            quarry: &self.monsters,
-            critters: &self.critters,
-            arena: &self.terrain(),
-        };
-        let dir = p.aim_path.dir();
-        let from = aim::origin(p.pos);
-        let path = aim::Path {
-            from,
-            to: from.add(dir.scale(m.reach)),
-        };
-        let reach = match aim::first_along(
-            path,
-            t::body_radius(),
-            i as u8,
-            &scene,
-            aim::Targets::none().terrain().stones(),
-        ) {
-            Some(c) => c.dist().sub(t::body_radius()),
-            None => m.reach,
-        };
-        if reach.raw() <= 0 {
-            self.ring_of_thorns(i, p.pos);
-            return;
-        }
-        let frames = t::wings_frames();
-        let speed = reach.div(Fx::from_int(frames as i32).mul(DT));
-        begin_haul(
-            &mut self.players[i],
-            p.pos.add(dir.scale(reach)),
-            speed,
-            frames + 1,
-        );
-        self.players[i].grounded = false;
-    }
-
-    /// **Thornfall lands**: every Blood mage whose Thornfall haul ended this
-    /// frame, still in the move, bursts into a ring of thorns where she is.
-    /// `seen` is the fighters as the frame found them.
-    fn land_the_thornfall(&mut self, seen: &[Player; MAX_PLAYERS]) {
-        for (i, was) in seen.iter().enumerate() {
-            let now = self.players[i];
-            if now.class == Class::BloodMage
-                && was.haul > 0
-                && now.haul == 0
-                && now.action.attack_kind() == Some(moves::blood::THORNFALL)
-            {
-                self.ring_of_thorns(i, now.pos);
-            }
-        }
-    }
-
-    /// A ring of thorns at `at`, Thornfall's row's size and blow, and her
-    /// ground under it (its first frame, `touches_the_floor`).
-    fn ring_of_thorns(&mut self, i: usize, at: V3) {
-        let p = self.players[i];
-        let m = moves::get(p.class, moves::blood::THORNFALL);
-        let mut ring = Effect::cast(
-            EffectKind::Nova,
-            i as u8,
-            p.class,
-            moves::blood::THORNFALL,
-            at,
-            V3::ZERO,
-            m.radius,
-        );
-        ring.power = depth(&p);
-        spawn_effect(&mut self.effects, ring);
     }
 
     /// **The Thorn lash lands**: at the end of its flight -- the body it
@@ -18437,18 +18303,6 @@ impl World {
         }
     }
 
-    /// **The Harvest** (2026-10-18; the golem's row): the finisher of the
-    /// Reap. Its blow is the great turning swing itself; what comes out
-    /// with it is that every stain of hers within `tuning::harvest_reach`
-    /// is drunk, as the blade goes round through them.
-    fn harvest(&mut self, i: usize) {
-        let p = self.players[i];
-        let m = moves::get(p.class, moves::blood::HARVEST);
-        for slot in self.stains_within(i, p.pos, t::harvest_reach()) {
-            self.drink_from(slot, i, &m);
-        }
-    }
-
     /// **Coagulate**: every stain of hers within `tuning::coagulate_reach` of
     /// the crosshair's spot on the floor slides there (`slide_the_stains`)
     /// and they merge into one.
@@ -18513,73 +18367,6 @@ impl World {
         }
     }
 
-    /// **Rising reap**: a sweep up and out in the cone she faces,
-    /// `move.reach` long. It hurls her thralls in it along it, drinks her
-    /// stains in it, and is a light hit on whoever is in it -- which bleeds,
-    /// as every blow does.
-    fn rising_reap(&mut self, i: usize) {
-        let p = self.players[i];
-        let m = moves::get(p.class, moves::blood::RISING_REAP);
-        let look = p.aim_path.dir();
-        let dir = V3::new(look.x, Fx::ZERO, look.z).normalized();
-        let in_cone = |at: V3| {
-            let off = V3::new(at.x.sub(p.pos.x), Fx::ZERO, at.z.sub(p.pos.z));
-            let far = off.flat_len();
-            far.raw() <= m.reach.raw()
-                && (far.raw() <= t::body_radius().raw()
-                    || off.dot(dir).raw() >= far.mul(t::reap_cone()).raw())
-        };
-        let mut drunk = 0;
-        for slot in 0..MAX_EFFECTS {
-            let Some(mut e) = self.effects[slot] else {
-                continue;
-            };
-            if e.owner != i as u8 || !in_cone(e.pos) {
-                continue;
-            }
-            if e.is_a_thrall() {
-                e.dir = dir;
-                e.power = Fx::from_int(t::reap_hurl_for() as i32);
-                self.effects[slot] = Some(e);
-            } else if e.is_a_pool() && e.age >= t::stain_settles() {
-                drunk += e.banked;
-                self.effects[slot] = None;
-            }
-        }
-        if drunk > 0 {
-            self.players[i].absorb(drunk);
-        }
-        for j in 0..MAX_PLAYERS {
-            let q = self.players[j];
-            if !self.effects_reach(j, i as u8) || q.action.invulnerable() || !in_cone(q.pos) {
-                continue;
-            }
-            // Up the cone as far as it reaches out.
-            if q.pos.y.raw() > p.pos.y.add(m.reach).raw() {
-                continue;
-            }
-            let dealt = self.players[j].wound(m.damage);
-            self.players[j].vel.y = self.players[j].vel.y.max(m.launch);
-            self.players[j].grounded = false;
-            self.spill(i as u8, p.class, moves::blood::RISING_REAP, q.pos, dealt);
-        }
-        let half = Fx::from_raw(m.reach.raw() / 2);
-        let mid = p.pos.add(dir.scale(half));
-        let mut sweep = Effect::cast(
-            EffectKind::Cascade,
-            i as u8,
-            p.class,
-            moves::blood::RISING_REAP,
-            p.pos,
-            dir,
-            m.reach,
-        );
-        sweep.life = t::spell_flash();
-        self.gore_each(&mut sweep, 0, mid, half, Fx::ONE);
-        self.gore_critters(&mut sweep, mid, half, Fx::ONE);
-        spawn_effect(&mut self.effects, sweep);
-    }
-
     /// The blow out on a thrall this frame, if any: the most of any enemy
     /// fighter's attack volume touching it, or the creature's. Nought if
     /// none.
@@ -18623,102 +18410,6 @@ impl World {
         let at = self.players[i].aim_at();
         let lift = V3::new(at.x, at.y.add(Fx::ONE), at.z);
         V3::new(at.x, self.terrain().ground_under(lift), at.z)
-    }
-
-    /// **A finisher's blow**: the row's own damage, and
-    /// `tuning::finisher_per_grey` for every point of grey she spent
-    /// on it (`Player::fuel`). Always more than the row; more the more she had.
-    fn finisher_blow(&self, i: usize, kind: u8) -> i32 {
-        let p = self.players[i];
-        let m = moves::get(p.class, kind);
-        m.damage
-            + Fx::from_int(p.fuel as i32)
-                .mul(t::finisher_per_grey())
-                .to_int()
-    }
-
-    /// **The Bramble is laid**: a field of thorns on the floor where she is
-    /// aiming, growing while she holds (`step_plagues`). One of hers at a
-    /// time.
-    fn lay_the_plague(&mut self, i: usize) {
-        let p = self.players[i];
-        let floor = self.floor_at_aim(i);
-        let mut cloud = Effect::cast(
-            EffectKind::Plague,
-            i as u8,
-            p.class,
-            moves::blood::BRAMBLE,
-            floor,
-            V3::ZERO,
-            t::plague_from(),
-        );
-        cloud.banked = GROWING;
-        spawn_the_only_one(&mut self.effects, cloud);
-    }
-
-    /// How far into her hold of `kind` she is, nought to one, while she is
-    /// holding it; `None` once she is not.
-    fn hold_of(&self, owner: usize, kind: u8) -> Option<Fx> {
-        match self.players.get(owner).map(|p| p.action) {
-            Some(Action::Channel { kind: k, held }) if k == kind => {
-                let cap = moves::get(self.players[owner].class, kind).channel.max(1);
-                Some(Fx::ratio(held.min(cap) as i32, cap as i32))
-            }
-            _ => None,
-        }
-    }
-
-    /// Is she in the finisher `kind` -- winding it up or throwing it?
-    fn finishing(&self, owner: usize, kind: u8) -> bool {
-        self.players
-            .get(owner)
-            .and_then(|p| p.action.attack_kind())
-            .is_some_and(|k| k == kind)
-    }
-
-    /// **Every growing Bramble, one frame.** While she holds it, it grows
-    /// from `tuning::plague_from` to `plague_to` and its life does not run.
-    /// Let go, it stands at the size it reached for `plague_lasts`. Held to
-    /// its end, it becomes the Black vines.
-    fn step_plagues(&mut self) {
-        for slot in 0..MAX_EFFECTS {
-            let Some(mut cloud) =
-                self.effects[slot].filter(|e| e.kind == EffectKind::Plague && e.banked == GROWING)
-            else {
-                continue;
-            };
-            let owner = cloud.owner as usize;
-            if let Some(share) = self.hold_of(owner, moves::blood::BRAMBLE) {
-                cloud.reach = t::plague_from().add(t::plague_to().sub(t::plague_from()).mul(share));
-                // Its life does not run while she holds it.
-                cloud.life = cloud.life.saturating_add(1);
-            } else if self.finishing(owner, moves::blood::VINES) {
-                self.effects[slot] = None;
-                self.grow_the_vines(owner, &cloud);
-                continue;
-            } else {
-                cloud.banked = 0;
-            }
-            self.effects[slot] = Some(cloud);
-        }
-    }
-
-    /// **The Black vines**: out of the cloud's middle to `tuning::vines_size`
-    /// of its radius, carrying the finisher's blow.
-    fn grow_the_vines(&mut self, owner: usize, cloud: &Effect) {
-        let blow = self.finisher_blow(owner, moves::blood::VINES);
-        self.players[owner].fuel = 0;
-        let mut vines = Effect::cast(
-            EffectKind::Vines,
-            owner as u8,
-            cloud.class,
-            moves::blood::VINES,
-            cloud.pos,
-            V3::ZERO,
-            cloud.reach.mul(t::vines_size()),
-        );
-        vines.banked = blow;
-        spawn_the_only_one(&mut self.effects, vines);
     }
 
     /// How far out the vines have got: the whole reach after
@@ -18795,32 +18486,6 @@ impl World {
         }
     }
 
-    /// Her stains with their middles within `reach` of `at`, nearest first,
-    /// as slots.
-    fn stains_within(
-        &self,
-        owner: usize,
-        at: V3,
-        reach: Fx,
-    ) -> impl Iterator<Item = usize> + use<> {
-        let mut found = [(usize::MAX, i32::MAX); MAX_EFFECTS];
-        for (slot, e) in self.effects.iter().enumerate() {
-            let Some(e) = e else { continue };
-            if !e.is_a_pool() || e.owner as usize != owner {
-                continue;
-            }
-            let far = V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z)).flat_len();
-            if far.raw() <= reach.raw() {
-                found[slot] = (slot, far.raw());
-            }
-        }
-        found.sort_unstable_by_key(|(_, d)| *d);
-        found
-            .into_iter()
-            .filter(|(s, _)| *s != usize::MAX)
-            .map(|(s, _)| s)
-    }
-
     /// How many thralls she has standing.
     fn thralls_of(&self, owner: usize) -> i32 {
         self.effects
@@ -18845,40 +18510,6 @@ impl World {
         }
     }
 
-    /// **The Crimson cascade** (2026-10-14): the impact at the floor under
-    /// the crosshair erupts for the finisher's blow, and spills
-    /// `tuning::cascade_first` pools round its edge holding all the grey
-    /// she spent between them (`Player::fuel`). Each erupts
-    /// `cascade_fuse` frames later and spills `cascade_branch` smaller pools
-    /// further out (`erupt_from`), for `cascade_generations`. Every pool it
-    /// spills **reaches for her nearest stain** within `cascade_track`,
-    /// however small, so a bleed's trail is followed to its end.
-    fn start_the_cascade(&mut self, i: usize) {
-        let p = self.players[i];
-        let to = self.floor_at_aim(i);
-        let m = moves::get(p.class, moves::blood::CASCADE);
-        let blow = self.finisher_blow(i, moves::blood::CASCADE);
-        let fuel = (p.fuel as i32).max(0);
-        self.players[i].fuel = 0;
-        let mut impact = Effect::cast(
-            EffectKind::BlackSpike,
-            i as u8,
-            p.class,
-            moves::blood::BLACK_SPIKE,
-            to,
-            V3::ZERO,
-            t::cascade_step(),
-        );
-        let row = moves::get(p.class, moves::blood::BLACK_SPIKE).damage.max(1);
-        impact.banked = SPIKE_SCALED + blow * PERCENT / row;
-        spawn_effect(&mut self.effects, impact);
-        self.light_round(i, to, t::cascade_step());
-        let n = t::cascade_first().max(1);
-        let each = (fuel / n).max(t::cascade_least()).max(m.damage / n);
-        let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
-        self.spill_the_cascade(i, to, ahead, n, each, 1, Fx::ONE);
-    }
-
     /// Light every unlit stain of hers within `reach` of `at` (and its own
     /// edge) to go up `tuning::chain_delay` frames from now.
     fn light_round(&mut self, owner: usize, at: V3, reach: Fx) {
@@ -18896,88 +18527,6 @@ impl World {
         }
     }
 
-    /// **A cascade spills `n` pools of `each` from `from`**, generation
-    /// `generation`. Each goes **toward her nearest unlit stain** within
-    /// `tuning::cascade_track` that no other of these is going for -- a step
-    /// of `cascade_step` along the way, or lighting it outright if it is
-    /// that close -- and the rest fan out round `ahead` across `spread` of
-    /// a turn, a little off even, so it grows like roots rather than rings.
-    #[allow(clippy::too_many_arguments)]
-    fn spill_the_cascade(
-        &mut self,
-        owner: usize,
-        from: V3,
-        ahead: V3,
-        n: i32,
-        each: i32,
-        generation: i32,
-        spread: Fx,
-    ) {
-        let step = t::cascade_step();
-        let mut taken = [false; MAX_EFFECTS];
-        for k in 0..n {
-            // Her nearest stain in reach not already being gone for.
-            let mut target: Option<(usize, V3, Fx)> = None;
-            for (slot, e) in self.effects.iter().enumerate() {
-                let Some(e) = e else { continue };
-                if !e.is_a_pool()
-                    || e.owner != owner as u8
-                    || e.life != UNLIT
-                    || e.slot == moves::blood::CASCADE
-                    || taken[slot]
-                {
-                    continue;
-                }
-                let far = V3::new(e.pos.x.sub(from.x), Fx::ZERO, e.pos.z.sub(from.z)).flat_len();
-                if far.raw() <= t::cascade_track().raw()
-                    && target.is_none_or(|(_, _, b)| far.raw() < b.raw())
-                {
-                    target = Some((slot, e.pos, far));
-                }
-            }
-            let way = match target {
-                Some((slot, at, far)) => {
-                    taken[slot] = true;
-                    if far.raw() <= step.add(t::body_radius()).raw() {
-                        if let Some(e) = self.effects[slot].as_mut() {
-                            e.life = t::cascade_fuse().max(1);
-                        }
-                        continue;
-                    }
-                    V3::new(at.x.sub(from.x), Fx::ZERO, at.z.sub(from.z)).normalized()
-                }
-                None => {
-                    // Fanned round `ahead`, and a little crooked: the turn is
-                    // nudged by a few hundredths that depend on where it is.
-                    let n_f = n.max(1);
-                    let base = if spread.raw() >= Fx::ONE.raw() {
-                        Fx::ratio(k, n_f)
-                    } else {
-                        spread.mul(Fx::ratio(2 * k + 1 - n_f, 2 * n_f))
-                    };
-                    let wobble = ((from.x.raw() ^ from.z.raw().rotate_left(7)) as u32 >> 8) % 9;
-                    let turn = base.add(Fx::ratio(wobble as i32 - 4, 100));
-                    let (c, s) = (crate::fixed::cos_turns(turn), crate::fixed::sin_turns(turn));
-                    V3::new(
-                        ahead.x.mul(c).sub(ahead.z.mul(s)),
-                        Fx::ZERO,
-                        ahead.x.mul(s).add(ahead.z.mul(c)),
-                    )
-                }
-            };
-            let flat = from.add(way.scale(step));
-            let lift = V3::new(flat.x, from.y.add(Fx::ONE), flat.z);
-            let at = V3::new(flat.x, self.terrain().ground_under(lift), flat.z);
-            let class = self.players[owner].class;
-            let mut pool = Effect::pool(owner as u8, class, moves::blood::CASCADE, at, each);
-            pool.life = t::cascade_fuse().max(1);
-            pool.power = Fx::from_int(generation);
-            pool.dir = way;
-            pool.age = t::stain_settles().saturating_add(1);
-            spawn_effect(&mut self.effects, pool);
-        }
-    }
-
     /// A spike came up on the pool in `slot`: the pool erupts, at its own
     /// size, and every pool of hers the eruption covers is lit to erupt
     /// `tuning::chain_delay` frames later (`light_the_fuses`).
@@ -18986,10 +18535,6 @@ impl World {
     /// a spike on a pool standing among others is the floor coming up across
     /// the whole fight, running outward link by link. Each eruption drinks its
     /// own pool, so the chain cannot run twice over the same blood.
-    ///
-    /// **A Crimson cascade's pool** is her spent grey, not blood she won: it
-    /// is not drunk, it hits for what it held (`tuning::cascade_power`), and
-    /// it spills the next generation (`spill_the_cascade`).
     fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
         let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
             return;
@@ -18999,10 +18544,7 @@ impl World {
         let radius = t::erupt_radius()
             .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
             .max(m.radius);
-        let cascade = pool.slot == moves::blood::CASCADE;
-        if !cascade {
-            self.drink_from(slot, owner, &m);
-        }
+        self.drink_from(slot, owner, &m);
         self.effects[slot] = None;
         let mut born = Effect::cast(
             EffectKind::BlackSpike,
@@ -19013,13 +18555,7 @@ impl World {
             V3::ZERO,
             radius,
         );
-        born.banked = if cascade {
-            let share =
-                Fx::ratio(pool.banked.max(0), t::pool_full().max(1)).mul(t::cascade_power());
-            SPIKE_SCALED + share.mul(Fx::from_int(PERCENT)).to_int()
-        } else {
-            SPIKE_ERUPTION
-        };
+        born.banked = SPIKE_ERUPTION;
         // Her ground's strength as she stands now: a chain she set off is
         // her blow (2026-10-19). What it sets off, it sets off as it spreads
         // (`Effect::spreads`).
@@ -19027,32 +18563,10 @@ impl World {
         // **Worth its stain** (2026-10-19): the blow is the blood that was in
         // it, `tuning::stain_erupts` to the point, rather than the row's --
         // carried on the power, which every hit an effect lands is scaled by.
-        if !cascade {
-            let row = Fx::from_int(m.damage.max(1)).mul(t::erupt_damage());
-            let worth = Fx::from_int(pool.pool_volume().max(0)).mul(t::stain_erupts());
-            born.power = born.power.mul(worth.div(row.max(Fx::ONE)));
-        }
+        let row = Fx::from_int(m.damage.max(1)).mul(t::erupt_damage());
+        let worth = Fx::from_int(pool.pool_volume().max(0)).mul(t::stain_erupts());
+        born.power = born.power.mul(worth.div(row.max(Fx::ONE)));
         spawn_effect(&mut self.effects, born);
-        if cascade {
-            let generation = pool.power.to_int();
-            let next = Fx::from_int(pool.banked).mul(t::cascade_share()).to_int();
-            if generation < t::cascade_generations() && next >= t::cascade_least() {
-                let ahead = if pool.dir == V3::ZERO {
-                    V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
-                } else {
-                    pool.dir
-                };
-                self.spill_the_cascade(
-                    owner,
-                    pool.pos,
-                    ahead,
-                    t::cascade_branch(),
-                    next,
-                    generation + 1,
-                    Fx::ratio(1, 4),
-                );
-            }
-        }
     }
 
     /// **A Black spike's blow erupts** (2026-10-19): a spike of the row
@@ -19112,66 +18626,6 @@ impl World {
             } else {
                 self.effects[slot] = None;
             }
-        }
-    }
-
-    /// **The Black spike, let go** (2026-10-13): one spike for a tap, and
-    /// more the longer the hold -- up to `tuning::spikes_most` -- the first at
-    /// the aimed point and the rest on a ring round it, as wide as
-    /// `spike_spread_most` at a full hold. A spike on a stain erupts it.
-    fn raise_the_tier(&mut self, i: usize, born: Effect) {
-        let p = self.players[i];
-        let share = p.channelled.max(Fx::ZERO).min(Fx::ONE);
-        let more = Fx::from_int((t::spikes_most() - 1).max(0))
-            .mul(share)
-            .add(Fx::ratio(1, 2))
-            .to_int()
-            .max(0);
-        let ring = t::spike_spread_most().mul(share);
-        let f = p.facing;
-        let ahead = V3::new(f.x, Fx::ZERO, f.z).normalized();
-        let side = V3::new(Fx::ZERO.sub(ahead.z), Fx::ZERO, ahead.x);
-        let centre = born.pos;
-        // **The swarm goes for her stains first** (2026-10-14): the spikes
-        // past the first land on stains of hers inside the ring, nearest
-        // first, however small; only what is left stands on the ring.
-        let mut on_stains = 0;
-        if more > 0 {
-            let reach = ring.add(t::body_radius());
-            for slot in self.stains_within(i, centre, reach) {
-                if on_stains >= more {
-                    break;
-                }
-                if self.effects[slot].is_some_and(|e| e.is_a_pool() && e.life == UNLIT) {
-                    self.erupt_from(i, moves::blood::BLACK_SPIKE, slot);
-                    on_stains += 1;
-                }
-            }
-        }
-        for k in 0..=(more - on_stains) {
-            let at = if k == 0 {
-                centre
-            } else {
-                let turn = Fx::ratio(k - 1, (more - on_stains).max(1));
-                let (c, s) = (crate::fixed::cos_turns(turn), crate::fixed::sin_turns(turn));
-                let off = ahead.scale(c).add(side.scale(s)).scale(ring);
-                let flat = V3::new(
-                    centre.x.add(off.x),
-                    centre.y.add(Fx::ONE),
-                    centre.z.add(off.z),
-                );
-                V3::new(flat.x, self.terrain().ground_under(flat), flat.z)
-            };
-            let reach = moves::get(p.class, moves::blood::BLACK_SPIKE).radius;
-            if let Some(slot) = self.pool_touching(i as u8, at, reach) {
-                self.erupt_from(i, moves::blood::BLACK_SPIKE, slot);
-                continue;
-            }
-            let mut spike = born;
-            spike.pos = at;
-            spike.reach = moves::get(p.class, moves::blood::BLACK_SPIKE).radius;
-            spike.banked = SPIKE_AREA;
-            spawn_effect(&mut self.effects, spike);
         }
     }
 
@@ -19483,56 +18937,6 @@ impl World {
             }
         }
         best.map(|(who, at, _)| (who, at))
-    }
-
-    /// **The Stake** leaves her hand along the solved line, to the point the
-    /// crosshair was on: through anybody in the air on the way, pinning them,
-    /// and into the floor at the end, where it lands in an area
-    /// (`pay_out`).
-    fn throw_the_stake(&mut self, i: usize) {
-        let p = self.players[i];
-        let path = p.aim_path;
-        spawn_effect(
-            &mut self.effects,
-            Effect::cast(
-                EffectKind::Nail,
-                i as u8,
-                p.class,
-                moves::blood::STAKE,
-                path.from,
-                path.dir(),
-                path.length().max(Fx::ONE),
-            ),
-        );
-    }
-
-    /// **The Stake lands**: at the end of its flight, in the floor under the
-    /// point the crosshair was on -- an area that hurts and slows, as a spike
-    /// does. On a stain of hers, the stain erupts instead.
-    fn land_the_stake(&mut self, effect: &Effect) {
-        let owner = effect.owner as usize;
-        if owner >= MAX_PLAYERS {
-            return;
-        }
-        let end = effect.pos.add(effect.dir.scale(effect.reach));
-        let lift = V3::new(end.x, end.y.add(Fx::ONE), end.z);
-        let at = V3::new(end.x, self.terrain().ground_under(lift), end.z);
-        if let Some(slot) = self.pool_covering(effect.owner, at) {
-            self.erupt_from(owner, moves::blood::STAKE, slot);
-            return;
-        }
-        let m = effect.source();
-        let mut area = Effect::cast(
-            EffectKind::BlackSpike,
-            effect.owner,
-            effect.class,
-            moves::blood::STAKE,
-            at,
-            V3::ZERO,
-            m.radius,
-        );
-        area.banked = SPIKE_AREA;
-        spawn_effect(&mut self.effects, area);
     }
 
     /// **The Bramble's tick**: everyone inside the field is hurt by the
@@ -20192,7 +19596,7 @@ impl World {
                     self.terrain().ground_under(beast.pos),
                     beast.pos.z,
                 );
-                self.spill(owner as u8, class, moves::blood::THORN_LASH, at, dealt);
+                self.spill(owner as u8, class, moves::blood::CAST, at, dealt);
             }
         }
     }

@@ -629,27 +629,29 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
     // here with empty hands.
     use sim::state::hitbox;
     let mut w = World::with_classes([sim::class::Class::BloodMage; 2]);
-    // Close in front of her, where a swing would reach.
+    // In front of her, a little past where a swing would reach.
     w.players[1].pos = w.players[0]
         .pos
-        .add(sim::V3::new(Fx::from_int(2), Fx::ZERO, Fx::ZERO));
+        .add(sim::V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
     let before = w.players[1].health;
-    // The Haemorrhage, tapped: a bolt from her hand, which does the hitting.
-    for i in 0..40 {
-        let bits = if i < 2 {
-            sim::moves::blood::keys::THORNS
+    // The Cast, the scythe held: its head flies from her hand and does the
+    // hitting.
+    let hold = sim::tuning::hold_from() as u32 + 2;
+    for i in 0..60 {
+        let bits = if i < hold {
+            sim::moves::blood::keys::SCYTHE
         } else {
             0
         };
         w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
         assert!(
             hitbox(&w.players[0]).is_none(),
-            "the thrown bolt drew a hitbox on the caster"
+            "the thrown head drew a hitbox on the caster"
         );
     }
     assert!(
         w.players[1].health < before,
-        "fixture: the bolt never hit anybody"
+        "fixture: the head never hit anybody"
     );
 }
 

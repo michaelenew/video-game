@@ -61,10 +61,8 @@ pub(super) struct Cues {
 const CHAIN_HOLD: u16 = 30;
 /// How close to the opponent the shadow has to be for her to cash in on it.
 const SHADOW_CLOSE: Fx = Fx::ratio(25, 10);
-/// How close to the opponent a pool has to be to be worth blinking to.
+/// How close to the opponent a pool has to be to be worth a spike.
 const POOL_CLOSE: Fx = Fx::ratio(25, 10);
-/// The furthest a blink is worth taking.
-const BLINK_FAR: Fx = Fx::from_int(12);
 /// Frames a stone takes to come up, for leading someone walking.
 const STONE_RISE: i32 = 14;
 /// How far a Rush carries him, near enough: twenty frames at nineteen metres a
@@ -261,7 +259,7 @@ impl Duelist {
             Mechanic::Shield(shield) => self.bulwark(me, seen, shield, dist, &mut out),
             Mechanic::Shadow(_) => self.reaver(me, seen, dist),
             Mechanic::Structures(_) => self.elementalist(me, seen, dist, toward),
-            Mechanic::Blood => self.blood(me, seen, w, dist),
+            Mechanic::Blood(_) => self.blood(me, seen, w, dist),
             Mechanic::Meter { .. } => self.dual(me, seen, dist, toward, &mut out),
         }
         out
@@ -593,57 +591,51 @@ impl Duelist {
             .or_else(|| mine.iter().find(|t| pushes(t.bits) && ready(t)))
     }
 
-    /// Pools: blink to one by them to swing, or one far from them to get out.
+    /// **The world bleeds** (2026-11-04): the zip to her scythe's head while
+    /// it holds, and a Rend out of it; the Cast from range; and the spike on
+    /// a pool by them.
     fn blood(&mut self, me: &Player, seen: &Seen, w: &World, dist: Fx) {
+        use moves::blood::keys;
         if !self.ready(me) {
             return;
         }
         let them = &seen.them;
-        let red = me.health * 100 / me.full_health().max(1);
-        let mut near_them: Option<V3> = None;
-        let mut away: Option<(V3, Fx)> = None;
-        for (at, _) in self.pools(w) {
-            let from_me = flat(at.sub(me.pos)).flat_len();
-            if from_me.raw() > BLINK_FAR.raw() || from_me.raw() < Fx::from_int(2).raw() {
-                continue;
-            }
-            let from_them = flat(at.sub(them.pos)).flat_len();
-            if from_them.raw() < POOL_CLOSE.raw() {
-                near_them = Some(at);
-            }
-            if away.is_none_or(|(_, d)| from_them.raw() > d.raw()) {
-                away = Some((at, from_them));
-            }
-        }
-        let in_trouble = red < 35 || (dist.raw() < Fx::from_int(2).raw() && self.mood < -10);
-        if in_trouble
-            && let Some((at, d)) = away
-            && d.raw() > Fx::from_int(6).raw()
-            && self.chance(self.style.caution / 3)
-        {
-            self.gesture = Some(self.blink(me, at, None));
-            self.cool(60, 120);
+        let who = self.who as u8;
+        let heads = |holding: bool| {
+            w.effects.iter().flatten().any(|e| {
+                e.kind == EffectKind::ScytheHead
+                    && e.owner == who
+                    && (!holding || e.is_a_head_holding())
+            })
+        };
+        if heads(true) && self.chance(20 + self.style.aggression / 2) {
+            let rend = self.mine.iter().find(|t| t.bits == keys::HAND);
+            let then = rend.map_or(After::Nothing, |t| After::Swing(t, 4));
+            self.gesture = Some(Gesture::press(keys::SCYTHE, them.pos).then(then));
+            self.cool(40, 90);
             return;
         }
-        if let Some(at) = near_them
+        let cast = moves::get(me.class, moves::blood::CAST);
+        if !heads(false)
             && dist.raw() > Fx::from_int(5).raw()
+            && dist.raw() < cast.reach.sub(Fx::from_int(2)).raw()
             && self.chance(self.style.aggression / 3)
         {
-            let sweep = self
-                .mine
-                .iter()
-                .find(|t| t.bits == moves::blood::keys::SCYTHE);
-            let blink = self.blink(me, at, sweep.map(|t| After::Swing(t, 3)));
-            self.gesture = Some(blink);
+            let hold = sim::tuning::hold_from().saturating_add(4);
+            self.gesture = Some(Gesture::press(keys::SCYTHE, them.pos).free().held(hold));
             self.cool(60, 140);
+            return;
         }
-    }
-
-    fn blink(&self, me: &Player, at: V3, then: Option<After>) -> Gesture {
-        Gesture::press(Input::SHIFT, at)
-            .walking(flat(at.sub(me.pos)).normalized())
-            .free()
-            .then(then.unwrap_or(After::Nothing))
+        let by_them = self
+            .pools(w)
+            .map(|(at, _)| at)
+            .find(|at| flat(at.sub(them.pos)).flat_len().raw() < POOL_CLOSE.raw());
+        if let Some(at) = by_them
+            && self.chance(self.style.aggression / 3)
+        {
+            self.gesture = Some(Gesture::press(keys::SPIKES, at).free());
+            self.cool(50, 120);
+        }
     }
 
     /// The bars are kept level by `dual_bias`. This is the body they unlock:

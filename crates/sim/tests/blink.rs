@@ -1,16 +1,15 @@
-//! The blink, the haul onto her feet, and the spike on a pool.
+//! The spike on a pool.
 //!
-//! A pool is a heal or a door. A dodge thrown with the crosshair on one of
-//! her pools puts the Blood mage in it and spends it; the Grasp hauls a
-//! victim to her feet, or her to the creature; and the Black spike seeds a
-//! pool on bare floor or erupts one it is cast on. See
-//! `docs/design/blood-mage.md` and `plans/blood-mage-v1.md` M3.
+//! A pool is a heal and a plant. The blink to a pool was cut on 2026-11-04
+//! (exploration 0038: the zip replaced it, `tests/world_bleeds.rs`), and the
+//! file keeps its name for the spike on a pool it always held: the Black
+//! spike erupts a pool it is raised out of, at the pool's size, and the
+//! eruption sets off every pool it covers. See `docs/design/blood-mage.md`.
 
 use sim::class::Class;
 use sim::effects::{Effect, EffectKind};
 use sim::moves::blood as b;
 use sim::moves::blood::keys;
-use sim::state::Action;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
 
@@ -39,16 +38,6 @@ fn pools(w: &World) -> Vec<Effect> {
         .collect()
 }
 
-/// A pool of hers `far` metres ahead, and nobody in the way.
-fn pool_ahead(w: &mut World, far: i32) -> V3 {
-    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    let at = w.players[0]
-        .pos
-        .add(w.players[0].facing.scale(Fx::from_int(far)));
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 200));
-    at
-}
-
 /// The pitch that puts the crosshair on a spot on the floor.
 fn pitch_onto(w: &World, at: V3) -> i16 {
     let stones = sim::stones::gather(&w.players);
@@ -75,153 +64,22 @@ fn pitch_onto(w: &World, at: V3) -> i16 {
         .expect("the scan is not empty")
 }
 
-/// Dodge forward with the crosshair on `at`.
-fn dodge_at(w: &mut World, at: V3) {
-    let pitch = pitch_onto(w, at);
-    looking(w, 1, Input::SHIFT | Input::W, pitch, 0);
-}
-
 #[test]
-fn a_dodge_with_the_crosshair_on_a_pool_puts_her_in_it_and_spends_it() {
-    let mut w = mage();
-    let at = pool_ahead(&mut w, 8);
-    dodge_at(&mut w, at);
-    let landed = w.players[0].pos.sub(at).flat_len();
-    assert!(
-        landed.raw() < Fx::ratio(1, 4).raw(),
-        "she is {} m from the pool she blinked to",
-        landed.to_f32_for_render()
-    );
-    assert!(
-        matches!(w.players[0].action, Action::Dodge { .. }),
-        "the blink is not a dodge"
-    );
-    assert!(pools(&w).is_empty(), "the pool survived the blink");
-}
-
-#[test]
-fn the_blink_is_refused_with_no_pool_under_the_crosshair() {
-    let mut w = mage();
-    let at = pool_ahead(&mut w, 8);
-    // Look well off it: up, into the sky. Negative pitch is down, the way
-    // the scan in `pitch_onto` finds the floor.
-    looking(&mut w, 1, Input::SHIFT | Input::W, 8000, 0);
-    let moved = w.players[0].pos.sub(at).flat_len();
-    assert!(
-        moved.raw() > Fx::from_int(6).raw(),
-        "she blinked with the crosshair nowhere near the pool"
-    );
-    assert!(
-        matches!(w.players[0].action, Action::Dodge { .. }),
-        "an ordinary dodge was refused too"
-    );
-    assert_eq!(pools(&w).len(), 1, "a refused blink spent the pool");
-}
-
-#[test]
-fn the_blink_is_refused_when_a_stone_blocks_the_line() {
-    let mut w = World::with_classes([Class::BloodMage, Class::Elementalist]);
-    let at = pool_ahead(&mut w, 8);
-    // A stone in the way, raised by the Elementalist between the two.
-    let between = w.players[0]
-        .pos
-        .add(w.players[0].facing.scale(Fx::from_int(4)));
-    sim::stones::raise(&mut w.players[1], sim::class::Structure::raised(between));
-    for _ in 0..t::structure_rise() as u32 + 2 {
-        run(&mut w, 1, 0, 0);
-    }
-    let start = w.players[0].pos;
-    dodge_at(&mut w, at);
-    let crossed = w.players[0].pos.sub(start).flat_len();
-    assert!(
-        crossed.raw() < Fx::from_int(2).raw(),
-        "she blinked {} m through a stone",
-        crossed.to_f32_for_render()
-    );
-    assert_eq!(pools(&w).len(), 1, "a refused blink spent the pool");
-}
-
-#[test]
-fn the_blink_is_taken_in_the_air_even_once_the_airdodge_is_spent() {
-    // Off the floor the blink is the airdodge, aimed. A pool is on the floor,
-    // so a blink taken in the air lands her -- and since 2026-10-12 it is
-    // there even with the airdodge already spent: the zip to the blood she
-    // sent from a jump is her traversal, and a door on the floor is no second
-    // jump.
-    let mut w = mage();
-    let at = pool_ahead(&mut w, 8);
-    run(&mut w, 1, Input::SPACE, 0);
-    run(&mut w, 6, 0, 0);
-    assert!(!w.players[0].grounded, "fixture: she never left the floor");
-    dodge_at(&mut w, at);
-    let landed = w.players[0].pos.sub(at).flat_len();
-    assert!(
-        landed.raw() < Fx::ratio(1, 4).raw(),
-        "the airborne blink left her {} m from the pool",
-        landed.to_f32_for_render()
-    );
-    assert!(
-        pools(&w).is_empty(),
-        "the airborne blink did not spend the pool"
-    );
-
-    // Again, with the airdodge already spent this airtime.
-    let mut w = mage();
-    let at = pool_ahead(&mut w, 8);
-    run(&mut w, 1, Input::SPACE, 0);
-    run(&mut w, 6, 0, 0);
-    w.players[0].air_dodged = true;
-    dodge_at(&mut w, at);
-    let landed = w.players[0].pos.sub(at).flat_len();
-    assert!(
-        landed.raw() < Fx::ratio(1, 4).raw(),
-        "with the airdodge spent she stayed {} m from the pool",
-        landed.to_f32_for_render()
-    );
-}
-
-#[test]
-fn nobody_else_blinks_to_her_pools() {
-    let mut w = World::with_classes([Class::Bulwark, Class::BloodMage]);
+fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
+    let w = mage();
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    // A spot on the floor eight metres out, and the crosshair on it.
     let at = w.players[0]
         .pos
         .add(w.players[0].facing.scale(Fx::from_int(8)));
-    w.effects[0] = Some(Effect::pool(1, Class::BloodMage, b::THORN_LASH, at, 200));
-    let start = w.players[0].pos;
-    dodge_at(&mut w, at);
-    assert!(
-        w.players[0].pos.sub(start).flat_len().raw() < Fx::from_int(2).raw(),
-        "the Bulwark blinked"
-    );
-}
-
-#[test]
-fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
-    let mut w = mage();
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    // Where the spike lands with the crosshair level: find it once.
-    looking(&mut w, 2, keys::SPIKES, 0, 0);
-    let mut where_ = None;
-    for _ in 0..spike.startup as u32 + 4 {
-        run(&mut w, 1, 0, 0);
-        if let Some(e) = w
-            .effects
-            .iter()
-            .flatten()
-            .find(|e| e.kind == EffectKind::BlackSpike)
-        {
-            where_ = Some(e.pos);
-            break;
-        }
-    }
-    let at = where_.expect("the spike never came up");
+    let pitch = pitch_onto(&w, at);
 
     // Now a big pool there, the dummy standing where the eruption reaches
     // but the spike's own disc does not, and grey to fill.
     let mut w = mage();
     w.players[0].health = t::max_health() - 500;
     w.players[0].grey = 500;
-    let pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 300);
+    let pool = Effect::pool(0, Class::BloodMage, b::CAST, at, 300);
     w.effects[0] = Some(pool);
     let radius = t::erupt_radius().mul(Fx::from_int(300).sqrt());
     assert!(
@@ -232,12 +90,12 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     let full = w.players[1].health;
     let before = w.players[0].health;
     let paid = w.players[0].cost_of(spike.cost);
-    looking(&mut w, 2, keys::SPIKES, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, pitch, 0);
     // Past the frames it spreads out over (2026-10-19), so it has reached
     // its edge.
     run(
         &mut w,
-        spike.startup as u32 + 2 + t::erupt_spread() as u32,
+        t::spike_rise_big() as u32 + 2 + t::erupt_spread() as u32,
         0,
         0,
     );
@@ -277,87 +135,15 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
 }
 
 #[test]
-fn a_spike_on_bare_floor_leaves_no_stain_and_erupts_out_of_its_blow() {
-    // The Black spike spills nothing, its cost included (2026-10-19): the
-    // stain it would have dropped erupts at once instead, sized by what it
-    // dealt.
-    let mut w = mage();
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    w.players[0].health = t::max_health() - 500;
-    w.players[0].grey = 500;
-    // Find where it lands, then stand the dummy there.
-    looking(&mut w, 2, keys::SPIKES, 0, 0);
-    let mut at = None;
-    for _ in 0..spike.startup as u32 + 4 {
-        run(&mut w, 1, 0, 0);
-        if let Some(e) = w
-            .effects
-            .iter()
-            .flatten()
-            .find(|e| e.kind == EffectKind::BlackSpike)
-        {
-            at = Some(e.pos);
-            break;
-        }
-    }
-    let at = at.expect("the spike never came up");
-    let mut w = mage();
-    w.players[0].health = t::max_health() - 500;
-    w.players[0].grey = 500;
-    w.players[1].pos = V3::new(at.x, Fx::ZERO, at.z);
-    let before = w.players[0].health;
-    let paid = w.players[0].cost_of(spike.cost);
-    looking(&mut w, 2, keys::SPIKES, 0, 0);
-    run(&mut w, spike.startup as u32 + 4, 0, 0);
-    assert!(
-        w.players[1].health < w.players[1].full_health(),
-        "fixture: the spike missed"
-    );
-    assert_eq!(
-        w.players[0].health,
-        before - paid,
-        "a spike on bare floor returned health"
-    );
-    assert!(w.players[1].slowed > 0, "the spike did not slow");
-    assert!(
-        pools(&w).is_empty(),
-        "the spike left {} stains",
-        pools(&w).len()
-    );
-    let echo = w
-        .effects
-        .iter()
-        .flatten()
-        .find(|e| e.kind == EffectKind::BlackSpike && e.banked >= sim::state::SPIKE_ECHO)
-        .expect("its blow erupted");
-    assert!(
-        echo.pos.sub(at).flat_len().raw() < Fx::from_int(1).raw(),
-        "the eruption is not where the spike hit"
-    );
-}
-
-#[test]
 fn an_eruption_sets_off_every_pool_it_covers() {
     // The chain: a spike on one pool among others brings up all of them, each
     // at its own size. The skill is in arranging the pools; the spike is what
     // cashes them in at once.
-    let mut w = mage();
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    looking(&mut w, 2, keys::SPIKES, 0, 0);
-    let mut at = None;
-    for _ in 0..spike.startup as u32 + 4 {
-        run(&mut w, 1, 0, 0);
-        if let Some(e) = w
-            .effects
-            .iter()
-            .flatten()
-            .find(|e| e.kind == EffectKind::BlackSpike)
-        {
-            at = Some(e.pos);
-            break;
-        }
-    }
-    let at = at.expect("the spike never came up");
+    let w = mage();
+    let at = w.players[0]
+        .pos
+        .add(w.players[0].facing.scale(Fx::from_int(8)));
+    let pitch = pitch_onto(&w, at);
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
     w.players[0].health = t::max_health() - 600;
@@ -365,18 +151,18 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     // Three pools: one under the spike, one a stride away, one further still
     // -- inside the second's eruption but outside the first's.
     let first = t::erupt_radius().mul(Fx::from_int(300).sqrt());
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 300));
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::CAST, at, 300));
     w.effects[1] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::THORN_LASH,
+        b::CAST,
         V3::new(at.x, Fx::ZERO, at.z.add(first.sub(Fx::ratio(1, 2)))),
         300,
     ));
     w.effects[2] = Some(Effect::pool(
         0,
         Class::BloodMage,
-        b::THORN_LASH,
+        b::CAST,
         V3::new(
             at.x,
             Fx::ZERO,
@@ -385,12 +171,12 @@ fn an_eruption_sets_off_every_pool_it_covers() {
         100,
     ));
     let before = w.players[0].health;
-    looking(&mut w, 2, keys::SPIKES, 0, 0);
+    looking(&mut w, 2, keys::SPIKES, pitch, 0);
     // Link by link since 2026-10-13: each waits `tuning::chain_delay`, and
     // since 2026-10-19 an eruption reaches the next only as it spreads.
     let link = t::chain_delay() as u32 + t::erupt_spread() as u32;
     let mut eruptions = 0;
-    for _ in 0..spike.startup as u32 + 4 * link + 4 {
+    for _ in 0..t::spike_rise_big() as u32 + 4 * link + 4 {
         run(&mut w, 1, 0, 0);
         eruptions += w
             .effects

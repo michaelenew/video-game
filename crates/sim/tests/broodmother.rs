@@ -107,7 +107,10 @@ fn the_slam_brings_every_living_sac_inside_every_classs_reach() {
     for class in ALL_CLASSES {
         for site in 0..bm::SAC_COUNT {
             let r = reach(crashed(), class, site);
-            let ranged = class == Class::Elementalist && skillshot_lands(crashed(), site, 9, 0);
+            // The Blood mage's the same since 2026-11-04: the Cast, her
+            // scythe's head thrown along the crosshair.
+            let ranged = matches!(class, Class::Elementalist | Class::BloodMage)
+                && skillshot_lands_by(class, crashed(), site, 9, 0);
             assert!(
                 r.standing || ranged,
                 "{class:?} cannot reach the {} standing in the slam ({r:?})",
@@ -120,7 +123,13 @@ fn the_slam_brings_every_living_sac_inside_every_classs_reach() {
 /// An Elementalist `metres` from a sac's floor point, on `bearing`, standing,
 /// with the crosshair on the sac's middle: does either auto pop some of it?
 fn skillshot_lands(doing: Doing, site: usize, metres: i32, bearing: i32) -> bool {
-    let mut base = reachcheck::stage(SpeciesId::BROODMOTHER, Class::Elementalist);
+    skillshot_lands_by(Class::Elementalist, doing, site, metres, bearing)
+}
+
+/// [`skillshot_lands`] for a caster of `class`: the Elementalist's two autos,
+/// or the Blood mage's Cast -- her scythe held past the tap's window.
+fn skillshot_lands_by(class: Class, doing: Doing, site: usize, metres: i32, bearing: i32) -> bool {
+    let mut base = reachcheck::stage(SpeciesId::BROODMOTHER, class);
     let centre = reachcheck::centre(&base);
     reachcheck::pin_with(&mut base, doing, centre, ONLY[site]);
     let part = bm::sac_part(site);
@@ -128,7 +137,15 @@ fn skillshot_lands(doing: Doing, site: usize, metres: i32, bearing: i32) -> bool
     let dir = V3::from_turns(Fx::from_raw(bearing));
     let from = V3::new(target.x, Fx::ZERO, target.z).add(dir.scale(Fx::from_int(metres)));
     let slot = bm::SPECIES.break_slot(part).expect("a sac is breakable");
-    [Input::LEFT, Input::RIGHT].into_iter().any(|button| {
+    let (buttons, held): (&[u16], u32) = if class == Class::BloodMage {
+        (
+            &[sim::moves::blood::keys::SCYTHE],
+            sim::tuning::hold_from() as u32 + 2,
+        )
+    } else {
+        (&[Input::LEFT, Input::RIGHT], 1)
+    };
+    buttons.iter().copied().any(|button| {
         let mut w = base.clone();
         w.players[0].pos = from;
         let before = w.monsters[0].expect("her").breaks[slot];
@@ -138,7 +155,11 @@ fn skillshot_lands(doing: Doing, site: usize, metres: i32, bearing: i32) -> bool
             let d = target.sub(p.pos);
             let aim = (sim::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16;
             let pitch = sim::aim::look_onto_closely(p.pos, aim, p.aloft, p.clear, target);
-            let bits = if frame == 3 { button } else { 0 };
+            let bits = if (3..3 + held).contains(&frame) {
+                button
+            } else {
+                0
+            };
             w.advance([Input::looking_at(bits, aim, pitch), Input::default()]);
             w.monsters[0].expect("her").breaks[slot] < before
         })

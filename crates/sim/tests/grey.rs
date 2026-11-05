@@ -9,7 +9,6 @@
 use sim::class::{ALL_CLASSES, Class};
 use sim::moves::blood as b;
 use sim::moves::blood::keys;
-use sim::state::Action;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
 
@@ -52,8 +51,8 @@ fn red_plus_grey_plus_gone_is_the_bar_and_gone_only_grows_by_the_fade() {
     // blood, which must not heal her either.
     let script = [
         (keys::SCYTHE, 30u32),
-        (keys::THORNS, 60),
-        (keys::THORNS, 30),
+        (keys::HAND, 60),
+        (keys::HAND, 30),
         (keys::SPIKES, 70),
         (keys::SCYTHE, 30),
     ];
@@ -96,12 +95,11 @@ fn a_cast_at_full_health_opens_grey_by_its_cost() {
     // Every press she makes is paid in red, in the air and on the floor
     // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md).
     for (slot, button, airborne) in [
-        (b::THORN_LASH, keys::THORNS, true),
-        (b::THORN_LASH, keys::THORNS, false),
+        (b::REND, keys::HAND, true),
+        (b::REND, keys::HAND, false),
         (b::SWEEP, keys::SCYTHE, false),
         (b::COAGULATE, keys::GATHER, false),
         (b::HEART, keys::PLANT, false),
-        (b::BLACK_SPIKE, keys::SPIKES, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
@@ -174,18 +172,20 @@ fn grey_fades_and_nothing_but_the_fade_takes_it() {
 #[test]
 fn a_committed_casts_worth_of_grey_survives_one_exchange() {
     // The starting fade rate, from the design: the grey a committed cast
-    // opens -- the spike, the dearest thing she throws -- should still be more
-    // than half there after one whole exchange: its own startup, active and
-    // recovery, and a dodge on the end of it. Faster and the blade never gets
-    // long enough to matter.
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
-    let exchange = spike.whiff_cost() as u32 + t::dodge_frames() as u32;
+    // opens -- the Cast, since 2026-11-04 the scythe held, its tap's cost and
+    // its own -- should still be more than half there after one whole
+    // exchange: its own startup, active and recovery, and a dodge on the end
+    // of it. Faster and the blade never gets long enough to matter.
+    let cast = sim::moves::get(Class::BloodMage, b::CAST);
+    let exchange = cast.whiff_cost() as u32 + t::dodge_frames() as u32;
     let mut w = mage();
-    let paid = w.players[0].cost_of(spike.cost);
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    run(&mut w, 2, keys::SPIKES, 0);
+    run(&mut w, t::hold_from() as u32 + 2, keys::SCYTHE, 0);
     let opened = w.players[0].grey;
-    assert_eq!(opened, paid);
+    assert!(
+        opened >= w.players[0].cost_of(cast.cost),
+        "the Cast cost her"
+    );
     run(&mut w, exchange, 0, 0);
     assert!(
         w.players[0].grey * 2 > opened,
@@ -217,24 +217,21 @@ fn nobody_else_goes_grey() {
 
 #[test]
 fn a_tap_is_the_quick_thing_and_a_hold_is_the_field() {
-    // The buttons, and what each one throws -- on the map of 0016
-    // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md): the
-    // left click tapped is the Haemorrhage, held the Hemoplague; the right
-    // click tapped is Command, held the Carpet. `tests/blood_mage.rs` holds the
-    // whole map.
+    // The buttons, and what each one throws -- on the map of 0038
+    // (docs/design/exploration/0038_blood_mage_the_world_bleeds.md): the
+    // left click tapped is Rend, held Seize; the right click tapped is the
+    // Sweep, held the Cast. `tests/blood_mage.rs` holds the whole map.
     let mut w = mage();
     w.players[0].pos.y = Fx::from_int(3);
     w.players[0].grounded = false;
-    run(&mut w, 1, keys::THORNS, 0);
-    assert_eq!(w.players[0].action.attack_kind(), Some(b::THORN_LASH));
+    run(&mut w, 1, keys::HAND, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(b::REND));
     let mut w = mage();
     run(&mut w, 1, keys::SCYTHE, 0);
     assert_eq!(w.players[0].action.attack_kind(), Some(b::SWEEP));
-    let start = sim::moves::get(Class::BloodMage, b::THORN_LASH).startup as u32;
     let mut w = mage();
-    run(&mut w, start + 2, keys::THORNS, 0);
-    assert_eq!(w.players[0].action.attack_kind(), Some(b::BRAMBLE));
-    assert!(matches!(w.players[0].action, Action::Channel { .. }));
+    run(&mut w, t::hold_from() as u32 + 2, keys::HAND, 0);
+    assert_eq!(w.players[0].action.attack_kind(), Some(b::SEIZE));
 }
 
 #[test]
@@ -243,19 +240,19 @@ fn a_cast_costs_a_share_of_what_she_has_so_the_wounded_pay_less() {
     // cast opens a big wound, which is how she gets reach quickly, and at low
     // health it opens a small one, so getting back into the fight never costs
     // the fight. And never the last point.
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    let spike = sim::moves::get(Class::BloodMage, b::SWEEP);
     let at = |health: i32| {
         let mut w = mage();
         w.players[0].health = health;
         w.players[0].grey = 0;
-        run(&mut w, 2, keys::SPIKES, 0);
+        run(&mut w, 2, keys::SCYTHE, 0);
         health - w.players[0].health
     };
     let full = at(t::max_health());
     let low = at(t::max_health() / 5);
     assert!(
         full > low * 3,
-        "a spike at full health cost {full} and at a fifth {low}"
+        "a Sweep at full health cost {full} and at a fifth {low}"
     );
     assert_eq!(full, t::max_health() * spike.cost / 100);
     assert_eq!(at(1), 0, "a cast at one health took the last point");

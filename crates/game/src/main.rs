@@ -1048,7 +1048,7 @@ fn shot_blood(w: &mut World) {
             )
         };
         for k in 0..5 {
-            let stain = Effect::pool(0, p.class, b::THORN_LASH, spot(6, 3 * k - 6), 50);
+            let stain = Effect::pool(0, p.class, b::CAST, spot(6, 3 * k - 6), 50);
             if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
                 *slot = Some(stain);
             }
@@ -1093,19 +1093,17 @@ fn shot_blood(w: &mut World) {
     );
     heart.banked = 600;
     put(heart);
-    put(at(
-        EffectKind::Vines,
-        b::VINES,
-        ahead(7, -6),
-        sim::Fx::from_int(3),
-    ));
+    // A plant standing, for its shape.
+    if let sim::class::Mechanic::Blood(garden) = &mut w.players[0].mechanic {
+        garden.plants[0] = Some(sim::class::Structure::planted(ahead(7, -6)));
+    }
     // Stains of a few sizes, one of them lit and about to go up, so their
     // shapes show.
     for (k, (forward, side, volume)) in [(4, 3, 120), (6, 4, 60), (3, -3, 90)]
         .into_iter()
         .enumerate()
     {
-        let mut stain = Effect::pool(0, p.class, b::THORN_LASH, ahead(forward, side), volume);
+        let mut stain = Effect::pool(0, p.class, b::CAST, ahead(forward, side), volume);
         if k == 2 {
             stain.life = 30;
         }
@@ -2504,6 +2502,9 @@ struct EffectLook {
     stone: Handle<StandardMaterial>,
     /// A stone with fire on it. See `sim::class::Structure::lit`.
     stone_lit: Handle<StandardMaterial>,
+    /// A Blood mage's plant (2026-11-04): a dark, thorned stalk of her
+    /// blood set hard, where a spike rose out of a pool.
+    plant: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
     /// frames, so it has to read instantly or not at all.
@@ -2978,6 +2979,13 @@ fn setup(
             emissive: LinearRgba::rgb(4.0, 4.0, 4.0),
             emissive_texture: Some(images.add(fx::ember_texture())),
             perceptual_roughness: 0.9,
+            ..default()
+        }),
+        plant: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.22, 0.03, 0.05),
+            base_color_texture: Some(stone_tex.clone()),
+            emissive: LinearRgba::rgb(0.35, 0.02, 0.04),
+            perceptual_roughness: 0.55,
             ..default()
         }),
         beam: materials.add(StandardMaterial {
@@ -3705,7 +3713,10 @@ fn place_structures(
         };
         // Lit, it glows: what a stone is worth to stand on or hide behind
         // is a thing the other player has to be able to read.
-        let want = if raised.lit > 0 {
+        let index = tag.owner * sim::class::MAX_STRUCTURES + tag.index;
+        let want = if sim::stones::is_a_plant(&sim.cur.players, index) {
+            &look.plant
+        } else if raised.lit > 0 {
             &look.stone_lit
         } else {
             &look.stone
@@ -6199,6 +6210,18 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             }
             (part == 0).then(|| floating_in(Skin::Light, at, r * (0.4 + 0.6 * left)))
         }
+        // **The Cast** (2026-11-04): the scythe's head where it is, and its
+        // chain back to her hand, a row of links.
+        EffectKind::ScytheHead if part == 0 => Some(floating_in(
+            Skin::Blood,
+            fx3(effect.home),
+            effect.field_radius().to_f32_for_render() * 1.5,
+        )),
+        EffectKind::ScytheHead if part < sim::effects::TETHER_BEADS => Some(floating_in(
+            Skin::Dark,
+            fx3(effect.tether_bead(part)),
+            sim::tuning::body_radius().to_f32_for_render() * TETHER_BEAD * 0.6,
+        )),
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),
@@ -6244,11 +6267,9 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // floor from the middle to the front, barbs standing off them, over
         // a faint dark wash -- see `vine_piece`.
         EffectKind::Vines if part < VINE_PARTS => Some(vine_piece(effect, at, part)),
-        // The Rising reap's sweep: balls of blood flung out along the cone,
-        // the far ones the widest.
-        EffectKind::Cascade
-            if effect.slot != sim::moves::blood::CASCADE && part < sim::effects::TETHER_BEADS =>
-        {
+        // A reaped plant's thorns (2026-11-04): balls of blood flung out
+        // along the cone, the far ones the widest.
+        EffectKind::Cascade if part < sim::effects::TETHER_BEADS => {
             let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
             let life = effect.life.max(1) as f32;
             let out = (effect.age as f32 / life * 2.0).min(1.0);

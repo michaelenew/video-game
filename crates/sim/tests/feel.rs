@@ -330,8 +330,9 @@ fn best_case(m: &Move) -> i32 {
     match EffectKind::from_code(m.effect) {
         Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
         Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
-        // The bolt cuts once, and then the bleed it opened runs its length.
-        Some(EffectKind::Haemorrhage) => {
+        // The bolt cuts once, and then the bleed it opened runs its length;
+        // the Cast's head bites once and opens the same bleed.
+        Some(EffectKind::Haemorrhage | EffectKind::ScytheHead) => {
             EffectKind::Haemorrhage.damage(m)
                 + t::bleed_damage() * (t::bleed_lasts() / t::bleed_tick()) as i32
         }
@@ -457,9 +458,16 @@ fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
     // tuning pass from quietly making an ability cost more than landing it
     // perfectly can ever return, which is the one way this class breaks that
     // looks like a balance choice rather than a bug.
+    //
+    // **What she throws** (2026-11-04): the four rows no button throws --
+    // her plants' lash and reaped thorns, Seize's two endings -- are what a
+    // thing she made does, never pressed and never paid for.
     for class in ALL_CLASSES {
         let blood = class == sim::class::Class::BloodMage;
-        for m in moves::table(class) {
+        for (kind, m) in moves::table(class).iter().enumerate() {
+            if blood && !moves::blood::thrown(kind as u8) {
+                continue;
+            }
             assert_eq!(
                 m.cost > 0,
                 blood,
@@ -1011,10 +1019,15 @@ fn the_lockout_always_leaves_something_faster_to_do_than_wait() {
             if idle == 0 {
                 continue;
             }
+            // Something she can throw: not one of the Blood mage's rows no
+            // button throws (`moves::blood::thrown`).
             let cheapest_other = table
                 .iter()
                 .enumerate()
                 .filter(|(j, _)| *j != i)
+                .filter(|(j, _)| {
+                    class != sim::class::Class::BloodMage || moves::blood::thrown(*j as u8)
+                })
                 .map(|(_, n)| n.whiff_cost())
                 .min()
                 .expect("every class has more than one move");
@@ -1381,60 +1394,61 @@ fn every_class_has_a_move_that_carries_the_body() {
                 "the leap to the shield is no faster than a walk"
             ),
             Class::BloodMage => {
-                // A dodge with the crosshair on a pool: she is there. Measured
-                // against what a dodge of the same length covers.
-                let mut w = sim::World::with_classes([Class::BloodMage, Class::Bulwark]);
-                let far = Fx::from_int(8);
-                let at = w.players[0].pos.add(w.players[0].facing.scale(far));
-                w.effects[0] = Some(sim::effects::Effect::pool(
-                    0,
-                    Class::BloodMage,
-                    moves::blood::THORN_LASH,
-                    at,
-                    200,
-                ));
-                // The crosshair on the pool: the pitch that lands the
-                // floor ray nearest it, scanned rather than typed.
-                let pitch = {
-                    let stones = sim::stones::gather(&w.players);
-                    let players = w.players;
-                    let effects = w.effects;
-                    let scene = sim::aim::Scene {
-                        stones: &stones,
-                        players: &players,
-                        effects: &effects,
-                        quarry: &[None; sim::monster::MAX_MONSTERS],
-                        critters: &sim::critter::Critters::NONE,
-                        arena: &sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
-                    };
-                    (-40..=80)
-                        .map(|step| -(step * 200) as i16)
-                        .min_by_key(|pitch| {
-                            let look = sim::Input::looking_at(0, 0, *pitch);
-                            sim::aim::grounded_path(0, look, Fx::from_int(20), &scene)
-                                .to
-                                .sub(at)
-                                .len()
-                                .raw()
-                        })
-                        .expect("the scan is not empty")
+                // **The zip** (2026-11-04; the blink to a pool before it):
+                // the scythe's head cast into the floor, and right click
+                // again hauls her to it. Measured against what a dodge
+                // covers, over the zip's own frames.
+                let fresh = || {
+                    let mut w = sim::World::with_classes([Class::BloodMage, Class::Bulwark]);
+                    w.players[1].pos =
+                        w.players[0]
+                            .pos
+                            .add(sim::V3::new(Fx::from_int(-30), Fx::ZERO, Fx::ZERO));
+                    w
                 };
-                let start = w.players[0].pos;
-                for _ in 0..t::dodge_frames() as u32 {
+                let scythe = moves::blood::keys::SCYTHE;
+                let step = |w: &mut sim::World, bits: u16, pitch: i16| {
                     w.advance([
-                        sim::Input::looking_at(sim::Input::SHIFT | sim::Input::W, 0, pitch),
+                        sim::Input::looking_at(bits, 0, pitch),
                         sim::Input::default(),
-                    ]);
+                    ])
+                };
+                let mut bitten = None;
+                for pitch in [-3000, -2500, -3500, -2000, -4000] {
+                    let mut w = fresh();
+                    for _ in 0..t::hold_from() as u32 + 2 {
+                        step(&mut w, scythe, pitch);
+                    }
+                    for _ in 0..60 {
+                        step(&mut w, 0, pitch);
+                        let holds = w.effects.iter().flatten().find(|e| {
+                            e.kind == sim::effects::EffectKind::ScytheHead && e.is_a_head_holding()
+                        });
+                        if let Some(head) = holds {
+                            if head.home.sub(w.players[0].pos).flat_len().raw()
+                                > Fx::from_int(8).raw()
+                            {
+                                bitten = Some(w);
+                            }
+                            break;
+                        }
+                    }
+                    if bitten.is_some() {
+                        break;
+                    }
+                }
+                let mut w = bitten.expect("the head bit the floor eight metres out");
+                let start = w.players[0].pos;
+                step(&mut w, scythe, 0);
+                for _ in 0..t::dodge_frames() as u32 {
+                    step(&mut w, 0, 0);
                 }
                 let crossed = w.players[0].pos.sub(start).flat_len();
-                // What a dodge really covers, decaying as it goes -- not its
-                // speed times its length, a bound a dodge never reaches, which
-                // the 26-frame dodge of 2026-10-22 pushed past the 8 m pool.
                 let dodge = sim::dual::dodge_travel(true);
                 assert!(
                     crossed.raw() > dodge.raw()
                         && crossed.raw() > walks_in(t::dodge_frames()).raw(),
-                    "the blink covered {} m, which a dodge ({} m) could have",
+                    "the zip covered {} m, which a dodge ({} m) could have",
                     crossed.to_f32_for_render(),
                     dodge.to_f32_for_render()
                 );

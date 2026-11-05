@@ -596,10 +596,10 @@ fn every_move_touches_a_gnat_wherever_it_touches_a_fighter() {
         if class == sim::class::Class::Elementalist {
             continue;
         }
-        // The Blood mage's slot zero is the Reap, a hold; her tapped left
-        // click is the Thorn lash (2026-10-18).
+        // The Blood mage's slot zero is the Cast, a hold; her tapped left
+        // click is Rend (2026-11-04).
         let kind = if class == sim::class::Class::BloodMage {
-            sim::moves::blood::THORN_LASH
+            sim::moves::blood::REND
         } else {
             0
         };

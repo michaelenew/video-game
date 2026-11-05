@@ -98,6 +98,36 @@ fn thrall(w: &mut World, pos: V3, essence: i32) {
     place(w, e);
 }
 
+/// **Where the crosshair meets the floor** at `pitch`, as she stands in
+/// [`mage`]: where a spike aimed there rises. Found the way a player finds it
+/// -- the scythe's head cast there bites the floor under the crosshair -- since
+/// a spike on bare ground (2026-11-04) raises nothing to see.
+fn crosshair_floor(pitch: i16) -> V3 {
+    let mut w = mage();
+    for _ in 0..t::hold_from() as u32 + 2 {
+        step_looking(&mut w, keys::SCYTHE, pitch);
+    }
+    for _ in 0..80 {
+        step_looking(&mut w, 0, pitch);
+        if let Some(e) = effects_of(&w, EffectKind::ScytheHead)
+            .into_iter()
+            .find(|e| e.head_state() == sim::effects::Head::World)
+        {
+            return e.home;
+        }
+    }
+    panic!("the head never bit the floor at {pitch}");
+}
+
+/// A settled stain of hers where the crosshair meets the floor at `pitch`.
+fn stain_at_the_crosshair(w: &mut World, pitch: i16, volume: i32) -> V3 {
+    let spot = crosshair_floor(pitch);
+    let mut e = Effect::pool(0, Class::BloodMage, b::CAST, spot, volume);
+    e.age = t::stain_settles() + 1;
+    place(w, e);
+    spot
+}
+
 // ---------------------------------------------------------------------------
 // The ground
 // ---------------------------------------------------------------------------
@@ -106,6 +136,7 @@ fn thrall(w: &mut World, pos: V3, essence: i32) {
 fn a_spike_lays_her_ground_where_it_comes_up() {
     let mut w = mage();
     assert!(patches(&w).is_empty(), "clean floor to start");
+    stain_at_the_crosshair(&mut w, -2500, 60);
     step_looking(&mut w, keys::SPIKES, -2500);
     run(&mut w, 40, 0);
     let ground = patches(&w);
@@ -120,21 +151,6 @@ fn a_spike_lays_her_ground_where_it_comes_up() {
 }
 
 #[test]
-fn the_thorn_lash_lays_ground_where_it_lands_hit_or_miss() {
-    let mut w = mage();
-    // Down at the floor a few metres ahead: a miss.
-    step_looking(&mut w, keys::THORNS, -5000);
-    run(&mut w, 40, 0);
-    let her = w.players[0].pos;
-    assert!(
-        patches(&w)
-            .iter()
-            .any(|p| p.at.sub(her).flat_len().raw() > metres(1.0).raw()),
-        "a missed lash still claimed where it struck the floor"
-    );
-}
-
-#[test]
 fn thrown_off_her_ground_a_move_seeds_more_than_on_it() {
     let seeded = |on: bool| {
         let mut w = mage();
@@ -142,6 +158,7 @@ fn thrown_off_her_ground_a_move_seeds_more_than_on_it() {
             home(&mut w);
         }
         let before = patches(&w).len();
+        stain_at_the_crosshair(&mut w, -2500, 60);
         step_looking(&mut w, keys::SPIKES, -2500);
         run(&mut w, 40, 0);
         let her = w.players[0].pos;
@@ -165,10 +182,7 @@ fn thrown_off_her_ground_a_move_seeds_more_than_on_it() {
 fn a_stain_is_her_ground_and_bleeds_into_it_as_it_fades() {
     let mut w = mage();
     let spot = at(0.0, 0.0, 8.0);
-    place(
-        &mut w,
-        Effect::pool(0, Class::BloodMage, b::THORN_LASH, spot, 12),
-    );
+    place(&mut w, Effect::pool(0, Class::BloodMage, b::CAST, spot, 12));
     assert!(w.on_blood(0, spot), "a standing stain is her ground");
     assert!(patches(&w).is_empty(), "and no patch yet");
     run(&mut w, 240, 0);
@@ -266,31 +280,6 @@ fn on_her_ground_her_moves_hit_harder() {
     assert!(
         strong > weak,
         "on her ground it hit harder: {weak} then {strong}"
-    );
-}
-
-#[test]
-fn on_her_ground_the_reap_lunges_further() {
-    let lunge = |home_ground: bool| {
-        let mut w = mage();
-        if home_ground {
-            home(&mut w);
-        }
-        let from = w.players[0].pos;
-        let open =
-            (sim::moves::get(Class::BloodMage, b::SWEEP).startup as u32).max(t::hold_from() as u32);
-        for _ in 0..open + 10 {
-            step_looking(&mut w, keys::SCYTHE, -2000);
-        }
-        run(&mut w, 40, 0);
-        w.players[0].pos.sub(from).flat_len()
-    };
-    let (weak, strong) = (lunge(false), lunge(true));
-    assert!(
-        strong.raw() > weak.raw(),
-        "{} then {}",
-        as_f(weak),
-        as_f(strong)
     );
 }
 
@@ -409,11 +398,11 @@ fn a_click_brings_her_up_as_its_strong_move() {
     let mut w = mage();
     home(&mut w);
     run(&mut w, 5, Input::SHIFT);
-    step(&mut w, Input::SHIFT | keys::SPIKES);
+    step(&mut w, Input::SHIFT | keys::HAND);
     assert_ne!(w.players[0].swim, SWIM_UNDER, "she came up");
     assert!(
-        w.players[0].action.attack_kind() == Some(b::BLACK_SPIKE),
-        "as the spike"
+        w.players[0].action.attack_kind() == Some(b::REND),
+        "as Rend"
     );
     assert!(
         w.players[0].thrown_at.raw() > Fx::ONE.raw(),
@@ -666,7 +655,7 @@ fn the_meter_fills_with_the_damage_she_deals() {
 #[test]
 fn her_own_costs_fill_nothing() {
     let mut w = mage();
-    step_looking(&mut w, keys::SPIKES, -2500);
+    step_looking(&mut w, keys::HAND, -2500);
     run(&mut w, 60, 0);
     assert!(w.players[0].grey > 0, "fixture: it cost her");
     assert_eq!(w.players[0].heart_meter, 0, "a miss deals nothing");
@@ -686,27 +675,22 @@ fn planting_a_heart_empties_the_meter() {
 
 #[test]
 fn one_bleed_is_worth_more_than_one_spike() {
-    // The bolt has to land and the bleed takes its time; the spike is what
-    // finishes it. So the bleed, start to end, is the bigger number than a
-    // tapped spike and the eruption out of its blow.
-    let lash = sim::moves::get(Class::BloodMage, b::THORN_LASH).damage;
+    // The head has to land and the bleed takes its time; the spike is what
+    // finishes it. So the Cast and its bleed, start to end, is the bigger
+    // number than the spike's row (2026-11-04: a spike rises only out of a
+    // pool, and is worth the pool besides).
+    let cast = sim::moves::get(Class::BloodMage, b::CAST).damage;
     let ticks = (t::bleed_lasts() / t::bleed_tick()) as i32;
-    let bleed = lash + ticks * t::bleed_damage();
-    let spike = Fx::from_int(sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).damage)
-        .mul(t::spike_two_power())
-        .to_int();
-    let erupts = Fx::from_int(spike).mul(t::spike_hit_erupts()).to_int();
-    assert!(
-        bleed > spike + erupts,
-        "a bleed is {bleed}, a spike and its eruption {}",
-        spike + erupts
-    );
+    let bleed = cast + ticks * t::bleed_damage();
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).damage;
+    assert!(bleed > spike, "a bleed is {bleed}, a spike {spike}");
 }
 
 #[test]
 fn an_eruption_spreads_out_rather_than_appearing_whole() {
     let mut w = mage();
-    let pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, at(4.0, 0.0, 8.0), 300);
+    let spot = crosshair_floor(-3500);
+    let pool = Effect::pool(0, Class::BloodMage, b::CAST, spot, 300);
     place(&mut w, pool);
     let mut sizes = Vec::new();
     step_looking(&mut w, keys::SPIKES, -3500);
@@ -749,28 +733,15 @@ fn a_spike_a_stride_short_of_a_stain_sets_it_off() {
     // The spike's disc touching a stain is enough (2026-10-19): one that
     // landed short of the stain it was aimed at used to drink it in passing
     // and start no chain.
-    let mut w = mage();
-    step_looking(&mut w, keys::SPIKES, -3500);
-    let mut landed = None;
-    for _ in 0..40 {
-        step_looking(&mut w, 0, -3500);
-        if let Some(e) = effects_of(&w, EffectKind::BlackSpike).first() {
-            landed = Some(e.pos);
-            break;
-        }
-    }
-    let landed = landed.expect("fixture: the spike came up");
+    let landed = crosshair_floor(-3500);
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     let mut w = mage();
-    let stain = Effect::pool(0, Class::BloodMage, b::THORN_LASH, landed, 50);
+    let stain = Effect::pool(0, Class::BloodMage, b::CAST, landed, 50);
     // Off to the side, its edge just inside the spike's disc and its middle
     // well outside what it covers.
     let off = stain.pool_radius().add(spike.radius).sub(metres(0.2));
     let at = V3::new(landed.x, landed.y, landed.z.add(off));
-    place(
-        &mut w,
-        Effect::pool(0, Class::BloodMage, b::THORN_LASH, at, 50),
-    );
+    place(&mut w, Effect::pool(0, Class::BloodMage, b::CAST, at, 50));
     step_looking(&mut w, keys::SPIKES, -3500);
     let mut erupted = false;
     for _ in 0..40 {
@@ -787,28 +758,17 @@ fn an_eruption_is_worth_the_blood_in_its_stain() {
     // 2026-10-19: every stain used to erupt for the spike's row whatever its
     // size, so a bleed's scattered ticks went up as a minefield. Now the blow
     // is the blood that was in it.
-    let landed = {
-        let mut w = mage();
-        step_looking(&mut w, keys::SPIKES, -3500);
-        let mut at = None;
-        for _ in 0..40 {
-            step_looking(&mut w, 0, -3500);
-            if let Some(e) = effects_of(&w, EffectKind::BlackSpike).first() {
-                at = Some(e.pos);
-                break;
-            }
-        }
-        at.expect("fixture: the spike came up")
-    };
+    let landed = crosshair_floor(-3500);
     let dealt = |volume: i32| {
         let mut w = mage();
-        let stain = Effect::pool(0, Class::BloodMage, b::THORN_LASH, landed, volume);
+        let stain = Effect::pool(0, Class::BloodMage, b::CAST, landed, volume);
         let edge = stain.pool_radius().max(metres(1.0));
         place(&mut w, stain);
         w.players[1].pos = V3::new(landed.x, landed.y, landed.z.add(edge));
         let full = w.players[1].health;
         step_looking(&mut w, keys::SPIKES, -3500);
-        run_looking(&mut w, 60, -3500);
+        // Short of the plant it leaves lashing him.
+        run_looking(&mut w, 30, -3500);
         full - w.players[1].health
     };
     for volume in [50, 200] {

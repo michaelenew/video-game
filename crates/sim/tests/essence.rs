@@ -41,58 +41,23 @@ fn pools(w: &World) -> Vec<Effect> {
         .collect()
 }
 
-/// Stand the dummy a few metres off, inside the Haemorrhage's reach.
+/// Stand the dummy in front of her, inside Rend's reach.
 fn in_reach(w: &mut World) {
     w.players[1].pos = w.players[0]
         .pos
-        .add(V3::new(Fx::from_int(5), Fx::ZERO, Fx::ZERO));
+        .add(V3::new(Fx::ratio(6, 5), Fx::ZERO, Fx::ZERO));
 }
 
-/// The Haemorrhage, tapped at the dummy's middle, and the frames it takes to
-/// land.
+/// Rend, tapped at the dummy, and the frames it takes to land.
 fn bolt_at_him(w: &mut World) {
-    let pitch = pitch_at(w, w.players[1].pos);
-    looking(w, 2, keys::THORNS, pitch, 0);
-    looking(w, 30, 0, pitch, 0);
+    looking(w, 1, keys::HAND, 0, 0);
+    looking(w, 30, 0, 0, 0);
 }
 
 /// Open some grey on her, so a drink has something to convert.
 fn wounded(w: &mut World, grey: i32) {
     w.players[0].health = t::max_health() - grey;
     w.players[0].grey = grey;
-}
-
-/// A pitch that points the Bloodletter at the other fighter's middle.
-fn pitch_at(w: &World, target: V3) -> i16 {
-    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
-    let stones = sim::stones::gather(&w.players);
-    let players = w.players;
-    let effects = w.effects;
-    let scene = sim::aim::Scene {
-        stones: &stones,
-        players: &players,
-        effects: &effects,
-        quarry: &w.monsters,
-        critters: &sim::critter::Critters::NONE,
-        arena: &w.terrain(),
-    };
-    let middle = V3::new(
-        target.x,
-        target.y.add(t::body_height().div(Fx::from_int(2))),
-        target.z,
-    );
-    let miss = |pitch: i16| {
-        let look = Input::looking_at(0, LOOK_RIGHT, pitch);
-        let path = sim::aim::skillshot_path(0, look, m.reach, &scene);
-        let dir = path.dir();
-        let toward = middle.sub(path.from);
-        let down = toward.dot(dir).max(Fx::ZERO).min(m.reach);
-        path.from.add(dir.scale(down)).sub(middle).len().raw()
-    };
-    (-40..=80)
-        .map(|step| -(step * 200) as i16)
-        .min_by_key(|pitch| miss(*pitch))
-        .expect("the scan is not empty")
 }
 
 #[test]
@@ -124,17 +89,11 @@ fn every_hit_she_lands_spills_a_pool_under_the_target() {
 
 #[test]
 fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
-    let small = sim::moves::get(Class::BloodMage, b::UPHEAVAL);
+    let small = sim::moves::get(Class::BloodMage, b::RISING_REND);
     let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     let life_of = |volume: i32| -> (Fx, u32) {
         let mut w = mage();
-        w.effects[0] = Some(Effect::pool(
-            0,
-            Class::BloodMage,
-            b::THORN_LASH,
-            V3::ZERO,
-            volume,
-        ));
+        w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::CAST, V3::ZERO, volume));
         let radius = w.effects[0].expect("placed").pool_radius();
         for frame in 1..20_000 {
             run(&mut w, 1, 0, 0);
@@ -148,13 +107,13 @@ fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
     let (big_r, big_life) = life_of(spike.damage);
     assert!(
         big_r.raw() > small_r.raw(),
-        "a spike's pool is no wider than an Upheaval's"
+        "a spike's pool is no wider than a Rising rend's"
     );
-    // A spike's pool outlives an Upheaval's by at least the ratio of their damage:
+    // A spike's pool outlives a Rising rend's by at least the ratio of their damage:
     // the drain is a rate, so life is volume over rate.
     assert!(
         big_life * small.damage as u32 >= small_life * spike.damage as u32,
-        "a spike's pool lives {big_life}f and an Upheaval's {small_life}f, against a \
+        "a spike's pool lives {big_life}f and a Rising rend's {small_life}f, against a \
          damage ratio of {}:{}",
         spike.damage,
         small.damage
@@ -163,41 +122,35 @@ fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
 
 #[test]
 fn hits_that_land_on_one_spot_make_one_pool() {
-    // The Hemoplague's ticks land on one body standing in it, again and again,
-    // and every one spills to the cloud's centre. One stain, not one a tick --
-    // the merge is what keeps a fight that stays in one place from becoming
-    // a floor of clutter.
+    // A plant's lash lands on one body standing beside it, again and again,
+    // and every one spills under him. One stain, not one a lash -- the merge
+    // is what keeps a fight that stays in one place from becoming a floor of
+    // clutter.
     let mut w = mage();
     let spot = w.players[0]
         .pos
         .add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
-    w.players[1].pos = spot;
-    let plague = sim::moves::get(Class::BloodMage, b::BRAMBLE);
-    let slot = w.effects.iter().position(|e| e.is_none()).expect("room");
-    w.effects[slot] = Some(Effect::cast(
-        EffectKind::Plague,
-        0,
-        Class::BloodMage,
-        b::BRAMBLE,
-        spot,
-        V3::ZERO,
-        plague.radius,
-    ));
+    let beside = spot.add(V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO));
+    if let sim::class::Mechanic::Blood(g) = &mut w.players[0].mechanic {
+        g.plants[0] = Some(sim::class::Structure::planted(spot));
+    }
+    let lash = sim::moves::get(Class::BloodMage, b::LASH);
     let full = w.players[1].health;
-    for _ in 0..(t::plague_tick() as u32 * 3 + 1) {
-        w.players[1].pos = spot;
+    for _ in 0..(t::plant_lash_every() as u32 * 3 + 1) {
+        w.players[1].pos = beside;
+        w.players[1].action = sim::state::Action::Free;
         run(&mut w, 1, 0, 0);
     }
     let dealt = full - w.players[1].health;
     assert!(
-        dealt >= plague.damage * 3,
-        "fixture: only {dealt} landed of three ticks"
+        dealt >= lash.damage * 3,
+        "fixture: only {dealt} landed of three lashes"
     );
     let made = pools(&w);
-    assert_eq!(made.len(), 1, "three ticks made {} pools", made.len());
+    assert_eq!(made.len(), 1, "three lashes made {} pools", made.len());
     assert!(
-        made[0].pool_volume() > plague.damage * 2,
-        "the stain did not gather the ticks: {} after {dealt} dealt",
+        made[0].pool_volume() > lash.damage * 2,
+        "the stain did not gather the lashes: {} after {dealt} dealt",
         made[0].pool_volume()
     );
 }
@@ -211,7 +164,7 @@ fn past_the_cap_her_oldest_stain_makes_way() {
     let mut w = mage();
     let far = |i: i32| V3::new(Fx::from_int(-40 + i * 2), Fx::ZERO, Fx::from_int(-20));
     for i in 0..t::pool_cap() as i32 {
-        let mut pool = Effect::pool(0, Class::BloodMage, b::THORN_LASH, far(i), 100);
+        let mut pool = Effect::pool(0, Class::BloodMage, b::CAST, far(i), 100);
         // Older the lower the index.
         pool.age = (t::pool_cap() as i32 - i) as u16 * 10 + 30;
         w.effects[i as usize] = Some(pool);
@@ -249,11 +202,12 @@ fn every_cost_she_pays_is_a_stain_but_the_spikes() {
     // where she aimed it as a stain like any other, hers to take back
     // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md).
     // **Except the Black spike** (2026-10-19), which leaves no stain at all:
-    // a spike on one spot no longer lays the stain the next one sets off.
+    // a spike on one spot no longer lays the stain the next one sets off --
+    // and on bare ground (2026-11-04) it costs nothing, since nothing rises.
     for (button, airborne) in [
         (keys::SCYTHE, false),
-        (keys::THORNS, true),
-        (keys::THORNS, false),
+        (keys::HAND, true),
+        (keys::HAND, false),
     ] {
         let mut w = mage();
         w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
@@ -276,8 +230,11 @@ fn every_cost_she_pays_is_a_stain_but_the_spikes() {
     w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
     looking(&mut w, 2, keys::SPIKES, -2000, 0);
     run(&mut w, 70, 0, 0);
-    assert!(w.players[0].grey > 0, "fixture: the spike cost her nothing");
-    assert!(pools(&w).is_empty(), "the spike's cost is on the floor");
+    assert_eq!(
+        w.players[0].grey, 0,
+        "on bare ground the spike costs nothing"
+    );
+    assert!(pools(&w).is_empty(), "and leaves nothing");
 }
 
 #[test]
@@ -315,13 +272,13 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
     // and landed over a pool of its own making it returns more than it cost.
     // The first cast makes the pool; the second, thrown as soon as she is
     // free, is the one measured.
-    let cases = [(b::THORN_LASH, keys::THORNS)];
+    let cases = [(b::REND, keys::HAND)];
     for (slot, button) in cases {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
         in_reach(&mut w);
         wounded(&mut w, 300);
-        let pitch = pitch_at(&w, w.players[1].pos);
+        let pitch = 0;
         // First cast: make the pool. Then wait out the move and its repeat
         // lockout, so the second press is a press she can spend.
         looking(&mut w, 2, button, pitch, 0);

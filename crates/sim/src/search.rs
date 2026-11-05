@@ -654,12 +654,16 @@ fn palette(class: Class, kit: Kit, rng: &mut Rng) -> Act {
             2 => Act::Press(FIRE),
             _ => Act::Press(3),
         },
+        // The world bleeds (2026-11-04): the Cast -- right click held past
+        // the tap's window, at a point -- and the zip, right click pressed
+        // again while its head holds.
         Class::BloodMage => match rng.range(0, 2) {
             0 | 1 => {
                 let base = if rng.chance(2) { Base::Mid } else { Base::Lip };
-                Act::At(3, aim(rng, base), rng.range(1, 30) as u8)
+                let hold = crate::tuning::hold_from() as i32 + 2;
+                Act::At(1, aim(rng, base), rng.range(hold, hold + 16) as u8)
             }
-            _ => Act::Press(3),
+            _ => Act::Press(1),
         },
         Class::Champion => match rng.range(0, 2) {
             0 => Act::Press(6),
@@ -861,6 +865,9 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
             }
         }
         Class::BloodMage => {
+            // The Cast held, and the zip pressed once its head is out.
+            let cast = crate::tuning::hold_from().saturating_add(2) as u8;
+            let zip = 24u16;
             for back in [300u16, 800] {
                 let e = edge_frame(back);
                 out.push(Program {
@@ -870,7 +877,8 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                     still: 0,
                     events: vec![
                         (e.saturating_sub(1), Act::Jump(18)),
-                        (e + 12, Act::At(3, lip(100, 0), 8)),
+                        (e + 2, Act::At(1, lip(100, 0), cast)),
+                        (e + 2 + cast as u16 + zip, Act::Press(1)),
                     ],
                 });
                 out.push(Program {
@@ -880,7 +888,8 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                     still: 0,
                     events: vec![
                         (e.saturating_sub(1), Act::Jump(18)),
-                        (e + 20, Act::At(3, lip(50, 50), 15)),
+                        (e + 6, Act::At(1, lip(50, 50), cast)),
+                        (e + 6 + cast as u16 + zip, Act::Press(1)),
                         (e + 70, Act::Dodge),
                     ],
                 });
@@ -1013,10 +1022,19 @@ pub fn finishers(class: Class, at: u16) -> Vec<Vec<(u16, Act)>> {
                 })
             })
             .collect(),
-        Class::BloodMage => [(50i16, 50i16, 8u8), (100, 0, 15), (0, 100, 25)]
-            .iter()
-            .map(|(f, u, h)| vec![(at, Act::At(3, lip(*f, *u), *h))])
-            .collect(),
+        // The Cast at the far lip, and the zip to it.
+        Class::BloodMage => {
+            let cast = crate::tuning::hold_from().saturating_add(2) as u8;
+            [(50i16, 50i16, 20u16), (100, 0, 24), (0, 100, 30)]
+                .iter()
+                .map(|(f, u, z)| {
+                    vec![
+                        (at, Act::At(1, lip(*f, *u), cast)),
+                        (at + cast as u16 + z, Act::Press(1)),
+                    ]
+                })
+                .collect()
+        }
         Class::Champion => vec![vec![(at, Act::Press(6))]],
         _ => Vec::new(),
     }

@@ -328,8 +328,8 @@ const EXEMPT: &[(&str, &str)] = &[
         "A binding, not a magnitude: which button is the Bulwark's guard click.",
     ),
     (
-        "pub const THORNS: u16 = Input::LEFT",
-        "A binding, not a magnitude: which button is the Blood mage's thorns click.",
+        "pub const HAND: u16 = Input::LEFT",
+        "A binding, not a magnitude: which button is the Blood mage's Red Hand click (Rend and Seize).",
     ),
     (
         "pub const SPIKES: u16 = Input::MIDDLE",
@@ -337,7 +337,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "pub const SCYTHE: u16 = Input::RIGHT",
-        "A binding, not a magnitude: which button is the Blood mage's right click (the Sweep and the Reap).",
+        "A binding, not a magnitude: which button is the Blood mage's right click (the Sweep, the Cast and the zip).",
     ),
     (
         "pub const SPIKE_FIELD: i32 = 2",

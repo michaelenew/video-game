@@ -205,7 +205,7 @@ const LANDED: [(Class, usize, usize, u16, u32, i32); 5] = [
     (Class::Champion, 1, 0, Input::LEFT, 2, 2),
     (Class::ShadowReaver, 1, 0, Input::LEFT, 2, 4),
     (Class::Elementalist, 2, 0, Input::MIDDLE, 2, 6),
-    (Class::BloodMage, 1, 0, Input::LEFT, 2, 6),
+    (Class::BloodMage, 1, 0, Input::LEFT, 2, 1),
     (Class::DualMage, 1, 0, Input::LEFT, 2, 4),
 ];
 
@@ -410,12 +410,12 @@ fn the_dual_mages_hop_and_hold_are_ticked() {
 #[test]
 fn the_blood_mages_holds_are_ticked() {
     use Look::Dummy as D;
-    let bramble: Script = &[(L, 40, D), (0, 30, D)];
-    assert_eq!(run(Class::BloodMage, 1, 1, 6, bramble), 1, "the Bramble");
+    let seize: Script = &[(L, 40, D), (0, 30, D)];
+    assert_eq!(run(Class::BloodMage, 1, 1, 6, seize), 1, "Seize");
     assert_eq!(
-        run(Class::BloodMage, 1, 0, 6, bramble),
+        run(Class::BloodMage, 1, 0, 6, seize),
         0,
-        "a hold is not a lash"
+        "a hold is not a rend"
     );
     let sweep: Script = &[(R, 2, D), (0, 40, D)];
     assert!(run(Class::BloodMage, 3, 0, 2, sweep) >= 1, "a Sweep");

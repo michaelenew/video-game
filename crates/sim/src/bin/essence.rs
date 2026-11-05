@@ -146,9 +146,9 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
 fn kit() -> [(u8, u16); 4] {
     [
         (b::SWEEP, Input::RIGHT),
-        (b::THORN_LASH, Input::LEFT),
+        (b::REND, Input::LEFT),
         (b::BLACK_SPIKE, Input::MIDDLE),
-        (b::BRAMBLE, Input::MECHANIC),
+        (b::HEART, Input::MECHANIC),
     ]
 }
 
@@ -344,9 +344,9 @@ fn grey_over_time() {
 }
 
 fn bleed_table() {
-    let m = sim::moves::get(Class::BloodMage, b::THORN_LASH);
+    let m = sim::moves::get(Class::BloodMage, b::CAST);
     println!(
-        "Haemorrhage: the bolt on the dummy, and the bleed after it -- {} frames, a tick every {} of {} -- \
+        "The Cast: the head's bite on the dummy, and the bleed after it -- {} frames, a tick every {} of {} -- \
          standing still and walking away. The trail is read half way through the bleed",
         t::bleed_lasts(),
         t::bleed_tick(),
@@ -372,9 +372,14 @@ fn bleed_table() {
         };
         // Thrown by hand rather than through `cast`, which runs on past the
         // landing and would fold the first ticks into the bolt.
-        let pitch = pitch_at(&w, b::THORN_LASH, w.players[1].pos);
-        looking(&mut w, 2, Input::RIGHT, pitch, 0);
-        for _ in 0..m.startup as u32 + t::haemorrhage_flight() as u32 + 2 {
+        let pitch = pitch_at(&w, b::CAST, w.players[1].pos);
+        looking(&mut w, t::hold_from() as u32 + 2, Input::RIGHT, pitch, 0);
+        let flight = m
+            .reach
+            .div(t::cast_speed().max(Fx::ONE))
+            .div(sim::DT)
+            .to_int() as u32;
+        for _ in 0..m.startup as u32 + flight + 2 {
             looking(&mut w, 1, 0, pitch, 0);
             count_ticks(w.players[1].health, &mut ticks);
         }

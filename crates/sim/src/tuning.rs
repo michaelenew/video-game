@@ -5325,3 +5325,155 @@ pub fn grand_size() -> Fx {
 pub fn grand_power() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GrandPower)).max(Fx::ONE)
 }
+
+// The world bleeds (2026-11-04, exploration 0038).
+
+/// How fast the scythe's head flies out on its chain.
+pub fn cast_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastSpeed).max(0))
+}
+
+/// How long the head holds what it bit before it wrenches free.
+pub fn cast_holds() -> u16 {
+    oven::scalar(Scalar::CastHolds).clamp(0, u16::MAX as i32) as u16
+}
+
+/// What a fighter the head holds moves at.
+pub fn cast_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastSlow).max(0))
+}
+
+/// The shortest the chain is held at: the leash is the distance at the bite, never less than this.
+pub fn cast_least_leash() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastLeastLeash).max(0))
+}
+
+/// How long the wrench staggers a fighter it tears free of.
+pub fn cast_stagger() -> u16 {
+    oven::scalar(Scalar::CastStagger).clamp(0, u16::MAX as i32) as u16
+}
+
+/// How hard the wrench shoves that fighter toward her: not all the way.
+pub fn cast_shove() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastShove).max(0))
+}
+
+/// How fast the head drags home along the floor, reaping what is on its line.
+pub fn cast_drag() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastDrag).max(0))
+}
+
+/// How much a bite in terrain bleeds: the pool it leaves.
+pub fn cast_bleeds() -> i32 {
+    oven::scalar(Scalar::CastBleeds).max(0)
+}
+
+/// How fast the zip hauls her to the head.
+pub fn zip_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipSpeed).max(0))
+}
+
+/// How much of the zip's speed she keeps on arrival.
+pub fn zip_keeps() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipKeeps).max(0))
+}
+
+/// A jump pressed within this many frames of the zip's end is thrown on arrival, the Reaver's dash jump.
+pub fn zip_jump_buffer() -> u16 {
+    oven::scalar(Scalar::ZipJumpBuffer).clamp(0, u16::MAX as i32) as u16
+}
+
+/// What the third Rend of a string hits for.
+pub fn rend_third() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RendThird).max(0))
+}
+
+/// How near a plant of hers has to be to the one she seized for her to throw them on to it.
+pub fn seize_plant_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SeizePlantReach).max(0))
+}
+
+/// How far out round the slammed body its blood lands.
+pub fn seize_ring() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SeizeRing).max(0))
+}
+
+/// How hard an air seize drives them down at what is below.
+pub fn seize_drive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SeizeDrive).max(0))
+}
+
+/// A pool this small or smaller rises fastest.
+pub fn spike_small_pool() -> i32 {
+    oven::scalar(Scalar::SpikeSmallPool).max(0)
+}
+
+/// A pool this big or bigger rises slowest.
+pub fn spike_big_pool() -> i32 {
+    oven::scalar(Scalar::SpikeBigPool).max(0)
+}
+
+/// How long a small pool takes to rise: a footprint, a cut in stone.
+pub fn spike_rise_small() -> u16 {
+    oven::scalar(Scalar::SpikeRiseSmall).clamp(0, u16::MAX as i32) as u16
+}
+
+/// How long a fighter's worth of blood (the pool full-sized at its volume) takes to rise.
+pub fn spike_rise_body() -> u16 {
+    oven::scalar(Scalar::SpikeRiseBody).clamp(0, u16::MAX as i32) as u16
+}
+
+/// How long a big pool takes to rise: a creature's.
+pub fn spike_rise_big() -> u16 {
+    oven::scalar(Scalar::SpikeRiseBig).clamp(0, u16::MAX as i32) as u16
+}
+
+/// How fast her own spike throws her up when it comes up under her: her way up.
+pub fn spike_launches_her() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeLaunchesHer).max(0))
+}
+
+/// How long a spike stands as a plant after it erupts.
+pub fn plant_stands() -> u16 {
+    oven::scalar(Scalar::PlantStands).clamp(0, u16::MAX as i32) as u16
+}
+
+/// How big a plant stands, as a share of the Elementalist's stone: its width and its height.
+pub fn plant_scale() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlantScale).max(0))
+}
+
+/// How near an enemy has to be to a plant's edge for it to lash them.
+pub fn plant_lash_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlantLashReach).max(0))
+}
+
+/// How often a plant lashes.
+pub fn plant_lash_every() -> u16 {
+    oven::scalar(Scalar::PlantLashEvery).clamp(0, u16::MAX as i32) as u16
+}
+
+/// What a lash slows its victim to.
+pub fn plant_lash_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PlantLashSlow).max(0))
+}
+
+/// How far a reaped plant's thorns fly.
+pub fn thorns_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThornsReach).max(0))
+}
+
+/// How wide the cone of thorns opens: the cosine of its half-angle.
+pub fn thorns_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThornsCone).max(0))
+}
+
+/// How much the floor a grounded Sweep cuts bleeds: the pool it leaves at the arc's middle.
+pub fn sweep_bleeds() -> i32 {
+    oven::scalar(Scalar::SweepBleeds).max(0)
+}
+
+/// How much the floor the Rising reap cuts as she leaves it bleeds.
+pub fn rising_reap_bleeds() -> i32 {
+    oven::scalar(Scalar::RisingReapBleeds).max(0)
+}
