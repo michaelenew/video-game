@@ -3804,6 +3804,28 @@ impl World {
                 self.apotheosis(i);
             }
         }
+        for i in 0..MAX_PLAYERS {
+            self.hunt_the_mage(i);
+        }
+        // **The storm's dash in arrives** (2026-11-04): the lightning comes
+        // down where she is and she dashes out of it.
+        for (i, was) in seen.iter().enumerate() {
+            let dashing_in = |q: &Player| {
+                q.class == Class::DualMage
+                    && q.haul > 0
+                    && matches!(
+                        q.action,
+                        Action::Recovery {
+                            kind: moves::dual::STORM,
+                            ..
+                        }
+                    )
+                    && matches!(q.mechanic, Mechanic::Meter { storm: 1, .. })
+            };
+            if dashing_in(was) && !dashing_in(&self.players[i]) {
+                self.storm_strikes(i, inputs[i]);
+            }
+        }
         // **The Flurry dash's disk breaks** (2026-10-13) the frame her run
         // reaches it: a burst where it stood, the size of the disk.
         for (i, was) in seen.iter().enumerate() {
@@ -3979,8 +4001,13 @@ impl World {
             // `docs/design/exploration/0015_dual_mage_spellbook.md`.
             if p.class == Class::DualMage {
                 match kind {
-                    moves::dual::BINARY => self.raise_the_stars(i),
-                    moves::dual::SHADOWSTEP => self.shadowstep(i),
+                    // **Her magic is aimed at her** (2026-11-04): the two
+                    // beings collide where she stood as she springs clear;
+                    // the lance goes through where she was as she lunges out
+                    // of its way; the storm starts hunting her. See
+                    // `docs/design/exploration/0037_dual_mage_the_razor_edge.md`.
+                    moves::dual::ANNIHILATION => self.annihilate(i, input),
+                    moves::dual::LANCE => self.lunge_clear(i, input),
                     moves::dual::PHASE => self.phase(i, true),
                     // **The Equinox blinks as she leaves the floor** (2026-10-12):
                     // Phase's blink along the crosshair, rising out of it and
@@ -3994,7 +4021,7 @@ impl World {
                         self.players[i].vel.y = self.players[i].vel.y.add(lift);
                         self.players[i].grounded = false;
                     }
-                    moves::dual::CHAIN_LIGHTNING => self.chain_lightning(i),
+                    moves::dual::STORM => self.storm_in(i),
                     moves::dual::SMITE => {
                         self.write_sigil(i, p.aim_at(), t::sigil_radius(), p.thrown_at)
                     }
@@ -5359,10 +5386,10 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
             };
             (beam.from, stop, false)
         }
-        // From the disk over her head to the point the crosshair was on: the
-        // whole line, every active frame. The disk follows her; the point
-        // was locked when the blast began.
-        aim::Kind::Overhead => (aim::overhead(p.pos), p.aim_path.to, false),
+        // From behind her, through where she stood, to the point the
+        // crosshair was on: the whole line, every active frame, locked when
+        // the strike began. She is leaving it; it does not follow her.
+        aim::Kind::Behind => (p.aim_path.from, p.aim_path.to, false),
         // Where the thing was planted. The burst that comes with it has to be
         // there too, or the ability is two abilities pointing different ways.
         aim::Kind::Grounded => return Some(disc(p.aim_at())),
@@ -5851,17 +5878,28 @@ fn spell_lands_on_fighter(players: &mut [Player; MAX_PLAYERS], by: usize, victim
     if players[by].class != Class::DualMage || by == victim {
         return;
     }
+    landed_by_the_mage(&mut players[by], kind);
     let laid = moves::dual::curses_laid(kind);
     if laid > 0 {
         let v = &mut players[victim];
         dual::lay_curse(&mut v.curse, &mut v.curse_clock, by, laid);
     }
-    if kind == moves::dual::GRASPING_SHADE {
+    if moves::dual::binds(kind) {
         players[victim].slow(t::root_for(), t::root_slow());
     }
     if moves::dual::force(kind) == Some(Force::Light) {
         let power = dual::depth_at(&players[by], Some(kind));
         purge_the_fighter(players, by, victim, power);
+    }
+}
+
+/// **What landing a hit does for her** (2026-11-04, from play): it fills a
+/// bar -- the bars are built by fighting, never by pressing at nothing -- and
+/// a strike primes the next hold to come out fast.
+fn landed_by_the_mage(p: &mut Player, kind: u8) {
+    dual::filled_by_a_hit(p, kind);
+    if moves::dual::is_an_auto(kind) {
+        dual::prime(p);
     }
 }
 
@@ -5906,11 +5944,12 @@ fn spell_lands_on_creature(
     if players[by].class != Class::DualMage || !beast.alive() {
         return;
     }
+    landed_by_the_mage(&mut players[by], kind);
     let laid = moves::dual::curses_laid(kind);
     if laid > 0 {
         dual::lay_curse(&mut beast.curse, &mut beast.curse_clock, by, laid);
     }
-    if kind == moves::dual::GRASPING_SHADE {
+    if moves::dual::binds(kind) {
         root_the_creature(beast, t::root_for());
     }
     if moves::dual::force(kind) == Some(Force::Light) {
@@ -9115,9 +9154,8 @@ fn keyed_f(p: &Player) -> Option<u8> {
         // it left carries the Cinder spray, whose click the pillar took.
         Class::Elementalist if p.grounded => Some(moves::elementalist::CINDER),
         Class::Elementalist => Some(moves::elementalist::DOWNDRAFT),
-        // The Dual mage's dark spell, on the key the hand that moves can
-        // reach, since her clicks became her autos (2026-10-12).
-        Class::DualMage => Some(moves::dual::DEVOUR),
+        // The Dual mage's `F` carried the Devour from 2026-10-12 to
+        // 2026-11-04; her kit is her three clicks and her two majors now.
         _ => None,
     }
 }
@@ -9127,8 +9165,6 @@ fn keyed_f(p: &Player) -> Option<u8> {
 fn keyed_r(p: &Player) -> Option<u8> {
     match p.class {
         Class::Elementalist if p.grounded => Some(moves::elementalist::TREMOR),
-        // And her light one.
-        Class::DualMage => Some(moves::dual::SMITE),
         _ => None,
     }
 }
@@ -9317,6 +9353,14 @@ fn reaver_move(p: &Player, input: Input) -> Option<u8> {
 fn dual_move(p: &Player, input: Input) -> Option<u8> {
     use moves::dual as d;
     use moves::dual::keys;
+    // **Both at once is annihilation** (2026-11-04): each being strikes at
+    // her, so a dark strike and a light one thrown together meet at one point,
+    // where she is standing, and she is gone a frame before they collide. A
+    // press of the other click while one is still deciding is the same chord;
+    // see `step_channel`.
+    if input.has(keys::DARK) && input.has(keys::LIGHT) && !p.locked_out(d::ANNIHILATION) {
+        return Some(d::ANNIHILATION);
+    }
     // Left before middle before right, the tie-break every class makes.
     let click = if input.has(keys::DARK) {
         keys::DARK
@@ -9334,16 +9378,9 @@ fn dual_move(p: &Player, input: Input) -> Option<u8> {
     // the owner up -- see `docs/design/exploration/0016_dual_mage_controls.md`.
     // Space and a click in a jump's first frames is still a takeoff, from the
     // floor only: in the air space is her second jump and her wing beat.
-    let takeoff = match click {
-        keys::DARK => d::VEIL,
-        keys::TWILIGHT => d::EQUINOX,
-        _ => d::SANCTUARY,
-    };
-    let rising =
-        !p.aboard() && p.rise.window > 0 && (p.grounded || p.rise.lifted <= t::floor_grace());
-    if rising {
-        return Some(takeoff);
-    }
+    // **She has no takeoffs since 2026-11-04**: the Veil, the Equinox and
+    // Sanctuary are in the table with no button. A click in a jump's first
+    // frames is the click.
     // **Every click opens its long hold, and is a tap until it fills**
     // (2026-10-13, from the owner: "either / or, never both animations even
     // in part"). Let go before it is full and the tap comes out then -- the
@@ -9351,8 +9388,8 @@ fn dual_move(p: &Player, input: Input) -> Option<u8> {
     // full and the spell does, and the tap never began. With the spell
     // locked out the tap is thrown at once.
     let (hold, tap) = match click {
-        keys::DARK => (d::CHAIN_LIGHTNING, Some(d::DARK_AUTO)),
-        keys::LIGHT => (d::DISK_RAY, Some(d::LIGHT_AUTO)),
+        keys::DARK => (d::STORM, Some(d::DARK_AUTO)),
+        keys::LIGHT => (d::LANCE, Some(d::LIGHT_AUTO)),
         _ => (d::FLURRY_DASH, twilight_tap(p)),
     };
     if !p.locked_out(hold) { Some(hold) } else { tap }
@@ -9363,21 +9400,18 @@ fn dual_move(p: &Player, input: Input) -> Option<u8> {
 fn tap_of(p: &Player, hold: u8) -> Option<u8> {
     use moves::dual as d;
     match hold {
-        d::CHAIN_LIGHTNING => Some(d::DARK_AUTO),
-        d::DISK_RAY => Some(d::LIGHT_AUTO),
+        d::STORM => Some(d::DARK_AUTO),
+        d::LANCE => Some(d::LIGHT_AUTO),
         _ => twilight_tap(p),
     }
 }
 
 /// What a tap of the middle click is: Binary on the floor, Phase in the air --
 /// which spends the airdodge, so once a trip.
-fn twilight_tap(p: &Player) -> Option<u8> {
-    use moves::dual as d;
-    if p.grounded {
-        Some(d::BINARY)
-    } else {
-        (!p.air_dodged).then_some(d::PHASE)
-    }
+fn twilight_tap(_p: &Player) -> Option<u8> {
+    // The chain, on the floor and in the air (2026-11-04). Binary and Phase
+    // went with the teleports and the stars.
+    Some(moves::dual::CHAIN)
 }
 
 /// **The Flurry dash's dash** (2026-10-12; 2026-10-13, to the disk): on the
@@ -11060,6 +11094,20 @@ fn step_channel(
             held: held + 1,
         };
     }
+    // **The other click while one is still deciding is annihilation**
+    // (2026-11-04): the chord a player rarely presses on one frame. Only while
+    // the hold is undecided -- a storm or a lance already coming is not
+    // called back.
+    if p.class == Class::DualMage && charge == Some(moves::Charge::TapOrHold) && held < cap {
+        let other = match kind {
+            moves::dual::STORM => Some(moves::dual::keys::LIGHT),
+            moves::dual::LANCE => Some(moves::dual::keys::DARK),
+            _ => None,
+        };
+        if other.is_some_and(|b| input.has(b)) && !p.locked_out(moves::dual::ANNIHILATION) {
+            return begin_move(p, who, moves::dual::ANNIHILATION, input, scene, true);
+        }
+    }
     // **The Champion's finisher**: held long enough, counted from the press,
     // and the link is that weapon's finisher, aimed now as any move is on its
     // first frame.
@@ -11135,7 +11183,21 @@ fn step_channel(
         // spell comes out on its own; let go sooner and the click was a tap,
         // and the tap is thrown now -- the wing, or Binary or Phase. Nothing
         // of either had begun while it was undecided.
-        Some(moves::Charge::TapOrHold) if held >= cap => throw_move(p, kind, input, true),
+        // **Primed** (2026-11-04, from play): a strike of hers landed a moment
+        // ago, and the hold comes out with most of its wind-up skipped -- the
+        // strike is the way into the big spells.
+        Some(moves::Charge::TapOrHold) if held >= cap => match throw_move(p, kind, input, true) {
+            Action::Startup { kind, left } if p.class == Class::DualMage && dual::take_prime(p) => {
+                Action::Startup {
+                    kind,
+                    left: Fx::from_int(left as i32)
+                        .mul(t::primed_share())
+                        .to_int()
+                        .max(1) as u16,
+                }
+            }
+            thrown => thrown,
+        },
         Some(moves::Charge::TapOrHold) => match tap_of(p, kind).filter(|tap| !p.locked_out(*tap)) {
             Some(tap) => begin_move(p, who, tap, input, scene, true),
             None => Action::Free,
@@ -11302,8 +11364,8 @@ const fn channel_button(class: Class, kind: u8) -> u16 {
     // held on, the light wing's, and the middle click from its press.
     if matches!(class, Class::DualMage) {
         match kind {
-            moves::dual::CHAIN_LIGHTNING => return moves::dual::keys::DARK,
-            moves::dual::DISK_RAY => return moves::dual::keys::LIGHT,
+            moves::dual::STORM => return moves::dual::keys::DARK,
+            moves::dual::LANCE => return moves::dual::keys::LIGHT,
             moves::dual::FLURRY_DASH => return moves::dual::keys::TWILIGHT,
             _ => {}
         }
@@ -11428,7 +11490,16 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
         }
         aim::Kind::Grounded => aim::grounded_path(who, input, reach, scene),
         aim::Kind::Skillshot => aim::skillshot_path(who, input, reach, scene),
-        aim::Kind::Overhead => aim::overhead_path(who, input, reach, scene),
+        // Which shoulder: the being of the move's force, over her right for
+        // light and her left for dark; both from dead behind.
+        aim::Kind::Behind => {
+            let side = match moves::dual::force(kind).filter(|_| p.class == Class::DualMage) {
+                Some(Force::Light) => Fx::ONE,
+                Some(Force::Dark) => Fx::ONE.neg(),
+                None => Fx::ZERO,
+            };
+            aim::behind_path(who, input, reach, side, scene)
+        }
         // Not aimed at anything -- a body moving. What it commits to is the
         // **plane** it swings in: the yaw is the facing, which is locked
         // already, and the pitch is the rest of the same look, dead-zoned so
@@ -12153,8 +12224,11 @@ fn swing_leech(p: &Player, kind: u8, dealt: i32) -> i32 {
 /// Read live rather than from `thrown_at`, unlike [`depth`]. It is not what a
 /// cast is worth -- it is where she *is*, and where she is has to match what
 /// the renderer is drawing on the frame it draws it.
-pub fn floating(p: &Player) -> bool {
-    dual::ascending(p) || dual::tier(p) >= dual::Tier::Jump
+pub fn floating(_p: &Player) -> bool {
+    // Never, since 2026-11-04: no bar changes how she moves, Ascension
+    // included. Movement is the mage herself (the owner). Kept as a question
+    // so the walk and the pose have one place to ask it if it comes back.
+    false
 }
 
 /// The same curve as it applies to the **size** of what a move puts in the
@@ -12377,10 +12451,16 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             jumped,
             hopped,
             dash_jump,
-            landed,
+            wave,
+            springs,
+            storm,
+            storm_at,
+            strike,
+            strike_at,
             singe,
             veil,
             warded,
+            primed,
         } => {
             h.write_u32(7);
             h.write_i32(dark.raw());
@@ -12388,8 +12468,22 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*colour as u32);
             h.write_u32(*ascending as u32);
             h.write_u32(*jumped as u32);
-            h.write_u32(*landed as u32);
+            // Where the ascension's landed hits were counted until
+            // 2026-11-04, and nought outside one, as the wave is.
+            h.write_i32(wave.raw());
             h.write_i32(singe.raw());
+            // The razor's edge, 2026-11-04: only when any is set, so a mage
+            // who has thrown none of it hashes as she did.
+            if *primed != 0 {
+                h.write_u32(*primed as u32);
+            }
+            if *springs != 0 || *storm != 0 || *strike != 0 {
+                h.write_u32(*springs as u32);
+                h.write_u32(*storm as u32);
+                hash_v3(h, storm_at);
+                h.write_u32(*strike as u32);
+                hash_v3(h, strike_at);
+            }
             // The spellbook's, 2026-10-12: only when any is set, so a mage
             // who has thrown nothing hashes as she did.
             if *veil != 0 || *warded {
@@ -18976,15 +19070,269 @@ impl World {
         }
     }
 
-    /// **Chain lightning** (2026-10-12): black lightning out of a cloud over
-    /// her head, onto the body nearest the crosshair's point and from it to
-    /// the nearest body it has not struck yet, and on, `chain lightning,
+    /// **Annihilation** (2026-11-04): both beings lunged at her at once and
+    /// meet where she stood -- a burst there, `annihilation`'s radius, that
+    /// hurts everybody in it but her, worth her lower bar -- and she is gone a
+    /// frame before: the spring, up, and the way she holds
+    /// (`dual::spring`). The burst never touches her and the spring is not
+    /// its push: one rule for the blast, and her movement is her own leap.
+    fn annihilate(&mut self, i: usize, input: Input) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::dual::ANNIHILATION);
+        // **Both bars full: the grand annihilation** (2026-11-04, from play).
+        // What she built is what goes off -- bigger, worth far more -- and
+        // both bars go with it. Short of full it is the ordinary one, and
+        // costs nothing.
+        let grand = dual::brimming(&p);
+        let (radius, power) = if grand {
+            (m.radius.mul(t::grand_size()), t::grand_power())
+        } else {
+            (m.radius, p.thrown_at)
+        };
+        if grand {
+            dual::spend_both(&mut self.players[i]);
+        }
+        // At her feet: a burst reaches as a column standing on its point, so
+        // from her waist it would pass over anything knee-high.
+        let mut blast = Effect::cast(
+            EffectKind::Burst,
+            i as u8,
+            p.class,
+            moves::dual::ANNIHILATION,
+            p.pos,
+            V3::ZERO,
+            radius,
+        );
+        blast.home = p.pos;
+        blast.power = power;
+        spawn_effect(&mut self.effects, blast);
+        let (ax, az) = input.move_axis();
+        let along = move_dir(input.aim_turns(), ax, az);
+        dual::spring(&mut self.players[i], along);
+    }
+
+    /// **The lance's lunge** (2026-11-04): the beam is coming through where
+    /// she stands, and she lunges clear of it -- the way she holds, or back
+    /// from what she aimed at holding nothing -- rising as she goes.
+    fn lunge_clear(&mut self, i: usize, input: Input) {
+        let p = self.players[i];
+        let (ax, az) = input.move_axis();
+        let held = move_dir(input.aim_turns(), ax, az);
+        let along = if held == V3::ZERO {
+            let d = p.aim_path.dir();
+            V3::new(d.x.neg(), Fx::ZERO, d.z.neg()).normalized()
+        } else {
+            held
+        };
+        let carry = along.scale(t::lance_lunge());
+        let q = &mut self.players[i];
+        q.vel = V3::new(
+            carry.x,
+            q.vel.y.max(Fx::ZERO).max(t::lance_lunge_up()),
+            carry.z,
+        );
+        q.grounded = false;
+    }
+
+    /// **What hunts a Dual mage this frame** (2026-11-04): while she ascends
+    /// with the wave past its break, the beings themselves, unbidden. A no-op
+    /// for anybody else.
+    fn hunt_the_mage(&mut self, i: usize) {
+        if self.players[i].class != Class::DualMage {
+            return;
+        }
+        self.unbidden_strikes(i);
+    }
+
+    /// **The storm, in** (2026-11-04, from play): she dashes to the
+    /// crosshair's spot (`aim::flurry_dash_to`, short of anything solid) at
+    /// `storm, she dashes in and out at`, untouchable on the way, and the
+    /// lightning that is coming for her comes down there as she arrives --
+    /// `storm_strikes`, the frame the run ends.
+    fn storm_in(&mut self, i: usize) {
+        let p = self.players[i];
+        let to = {
+            let stones = stones::gather(&self.players);
+            let seen = self.players;
+            let effects = self.effects;
+            let scene = aim::Scene {
+                stones: &stones,
+                players: &seen,
+                effects: &effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &self.terrain(),
+            };
+            aim::flurry_dash_to(p.pos, p.aim_path.to, &scene)
+        };
+        let speed = t::storm_dash();
+        let frames = to
+            .sub(p.pos)
+            .len()
+            .div(speed.mul(DT))
+            .to_int()
+            .clamp(1, 120) as u16
+            + 1;
+        let q = &mut self.players[i];
+        if let Mechanic::Meter {
+            storm, storm_at, ..
+        } = &mut q.mechanic
+        {
+            *storm = 1;
+            *storm_at = p.pos;
+        }
+        begin_haul(q, to, speed, frames + 1);
+        dual::veil_for(q, frames.saturating_add(1).min(u8::MAX as u16) as u8);
+        q.action = Action::Recovery {
+            kind: moves::dual::STORM,
+            left: frames + 2,
+        };
+    }
+
+    /// **The storm comes down, and she is out** (2026-11-04, from play): the
+    /// frame her dash in arrives, the lightning that was aimed at her strikes
+    /// where she stands -- onto the body nearest it and on to the next
+    /// (`chain_lightning`) -- and she dashes out of it: the way she holds,
+    /// `storm, out the way she holds this far` (`aim::hop_to`), or back where
+    /// she came from holding nothing. Hits from wherever she chooses, in and
+    /// out, the class's dodge made into a reach.
+    fn storm_strikes(&mut self, i: usize, input: Input) {
+        let p = self.players[i];
+        let Mechanic::Meter { storm_at, .. } = p.mechanic else {
+            return;
+        };
+        self.chain_lightning(i, p.pos);
+        let (ax, az) = input.move_axis();
+        let dir = move_dir(input.aim_turns(), ax, az);
+        let out = {
+            let stones = stones::gather(&self.players);
+            let seen = self.players;
+            let effects = self.effects;
+            let scene = aim::Scene {
+                stones: &stones,
+                players: &seen,
+                effects: &effects,
+                quarry: &self.monsters,
+                critters: &self.critters,
+                arena: &self.terrain(),
+            };
+            if dir == V3::ZERO {
+                aim::flurry_dash_to(p.pos, storm_at, &scene)
+            } else {
+                aim::hop_to(p.pos, dir, t::storm_out(), Fx::ZERO, &scene)
+            }
+        };
+        let speed = t::storm_dash();
+        let frames = out
+            .sub(p.pos)
+            .len()
+            .div(speed.mul(DT))
+            .to_int()
+            .clamp(1, 120) as u16
+            + 1;
+        let m = moves::get(p.class, moves::dual::STORM);
+        let q = &mut self.players[i];
+        if let Mechanic::Meter { storm, .. } = &mut q.mechanic {
+            *storm = 2;
+        }
+        begin_haul(q, out, speed, frames + 1);
+        q.action = Action::Recovery {
+            kind: moves::dual::STORM,
+            left: frames.saturating_add(m.recovery),
+        };
+    }
+
+    /// **Ascension's unbidden strikes** (2026-11-04): once the wave is past
+    /// `ascension, the wave breaks at`, the beings stop waiting to be asked.
+    /// Every `ascension, an unbidden strike every` -- twice as often with the
+    /// wave at the top -- one is called down where she is, and lands
+    /// `ascension, an unbidden strike lands after` later: a burst that hurts
+    /// everybody else in it, and her, if she is still there and not
+    /// untouchable. The one thing of hers that ever hurts her, and the
+    /// punishment for not keeping pace.
+    fn unbidden_strikes(&mut self, i: usize) {
+        let p = self.players[i];
+        let Mechanic::Meter {
+            ascending,
+            wave,
+            strike,
+            strike_at,
+            ..
+        } = p.mechanic
+        else {
+            return;
+        };
+        if strike > 0 {
+            let left = strike - 1;
+            if let Mechanic::Meter { strike, .. } = &mut self.players[i].mechanic {
+                *strike = left;
+            }
+            if left > 0 {
+                return;
+            }
+            let radius = t::unbidden_radius();
+            let mut blast = Effect::cast(
+                EffectKind::Burst,
+                i as u8,
+                p.class,
+                moves::dual::ANNIHILATION,
+                strike_at,
+                V3::ZERO,
+                radius,
+            );
+            blast.home = strike_at;
+            blast.power = t::depth_ceiling();
+            spawn_effect(&mut self.effects, blast);
+            let q = &mut self.players[i];
+            if q.pos.sub(strike_at).len().raw() <= radius.raw() && !q.untouchable() && q.health > 0
+            {
+                // Never past one health: dying to her own beings is not a
+                // decision anybody made, the rule the burn follows.
+                let most = (q.health - 1).max(0);
+                q.wound(t::unbidden_damage().min(most));
+            }
+            return;
+        }
+        if ascending == 0 {
+            return;
+        }
+        let top = Fx::from_int(t::meter_max().max(1));
+        let breaks = Fx::from_int(t::wave_breaks());
+        if wave.raw() < breaks.raw() {
+            return;
+        }
+        let over = wave
+            .sub(breaks)
+            .div(top.sub(breaks).max(Fx::ONE))
+            .clamp(Fx::ZERO, Fx::ONE);
+        let every = t::unbidden_every();
+        let every = Fx::from_int(every as i32)
+            .sub(Fx::from_int(every as i32 / 2).mul(over))
+            .to_int()
+            .max(1) as u32;
+        if self.frame % every != 0 {
+            return;
+        }
+        let at = p.pos;
+        if let Mechanic::Meter {
+            strike, strike_at, ..
+        } = &mut self.players[i].mechanic
+        {
+            *strike = t::unbidden_warn();
+            *strike_at = at;
+        }
+    }
+
+    /// **Chain lightning** (2026-10-12; 2026-11-04, the storm): black
+    /// lightning out of a cloud over `near`, onto the body nearest it and from
+    /// it to the nearest body it has not struck yet, and on, `chain lightning,
     /// bodies it strikes` at most -- each one a burst where it lands, which
-    /// hurts and curses (`EffectKind::Burst`, slot [`moves::dual::CHAIN_LIGHTNING`]),
-    /// with `home` the point its bolt came from so the picture runs from link
-    /// to link. Where it goes is `aim::chain_next`'s. With nobody there it
-    /// strikes the crosshair's point.
-    fn chain_lightning(&mut self, i: usize) {
+    /// hurts (`EffectKind::Burst`, slot [`moves::dual::STORM`]), with `home`
+    /// the point its bolt came from so the picture runs from link to link.
+    /// Where it goes is `aim::chain_next`'s. With nobody there it strikes
+    /// `near` itself. The storm asks it every `storm, strikes every` with
+    /// `near` the point that follows her a beat behind.
+    fn chain_lightning(&mut self, i: usize, near: V3) {
         let p = self.players[i];
         let versus = self.pvp();
         let mut links = [None::<(V3, V3)>; 6];
@@ -19000,8 +19348,9 @@ impl World {
                 critters: &self.critters,
                 arena: &self.terrain(),
             };
-            let cloud = aim::overhead(p.pos);
-            let (mut from, mut near, mut reach) = (cloud, p.aim_at(), t::chain_first());
+            let cloud = aim::overhead(near);
+            let first = near;
+            let (mut from, mut near, mut reach) = (cloud, near, t::chain_first());
             // Never somebody it may not hurt.
             let mut spent = self.allies(i) as u32;
             for link in links.iter_mut().take(t::chain_links()) {
@@ -19014,7 +19363,7 @@ impl World {
                 (from, near, reach) = (at, at, t::chain_hop());
             }
             if links[0].is_none() {
-                links[0] = Some((cloud, p.aim_at()));
+                links[0] = Some((cloud, first));
             }
         }
         for (from, at) in links.into_iter().flatten() {
@@ -19022,7 +19371,7 @@ impl World {
                 EffectKind::Burst,
                 i as u8,
                 p.class,
-                moves::dual::CHAIN_LIGHTNING,
+                moves::dual::STORM,
                 at,
                 V3::ZERO,
                 t::chain_radius(),
@@ -19031,7 +19380,7 @@ impl World {
             bolt.power = p.thrown_at;
             // It strikes on its first frame and stands for the rest of the
             // move's active window, so the hit has time to be seen.
-            let m = moves::get(p.class, moves::dual::CHAIN_LIGHTNING);
+            let m = moves::get(p.class, moves::dual::STORM);
             bolt.life = bolt.life.saturating_add(m.active);
             spawn_effect(&mut self.effects, bolt);
         }
@@ -19066,97 +19415,6 @@ impl World {
             aim::floor_along(path, &scene).map_or(met, |floor| floor.min(met))
         } else {
             met
-        }
-    }
-
-    /// **Binary**: the twin stars, raised round her. One pair at a time; a
-    /// second Binary renews it rather than adding another.
-    fn raise_the_stars(&mut self, i: usize) {
-        let p = self.players[i];
-        let mut stars = Effect::cast(
-            EffectKind::Stars,
-            i as u8,
-            p.class,
-            moves::dual::BINARY,
-            p.pos,
-            V3::ZERO,
-            Fx::ZERO,
-        );
-        stars.home = V3::new(
-            p.pos.x,
-            p.pos.y.add(t::body_height().mul(Fx::ratio(1, 2))),
-            p.pos.z,
-        );
-        stars.power = p.thrown_at;
-        spawn_the_only_one(&mut self.effects, stars);
-    }
-
-    /// **The Shadowstep**: she is behind the first body on the crosshair's line
-    /// (`aim::shadowstep_to`) -- further for a cursed one -- and arrives in a
-    /// burst that lays its curse, and the airdodge is hers again. With nobody
-    /// there she still goes, once a trip: it spends the airdodge, and with it
-    /// spent a step at nothing goes nowhere. Paid in aim.
-    fn shadowstep(&mut self, i: usize) {
-        let p = self.players[i];
-        let m = moves::get(p.class, moves::dual::SHADOWSTEP);
-        let stones = stones::gather(&self.players);
-        let seen = self.players;
-        let effects = self.effects;
-        let step = {
-            let scene = aim::Scene {
-                stones: &stones,
-                players: &seen,
-                effects: &effects,
-                quarry: &self.monsters,
-                critters: &self.critters,
-                arena: &self.terrain(),
-            };
-            aim::shadowstep_to(
-                i,
-                p.aim_path.dir(),
-                m.reach,
-                t::shadowstep_cursed(),
-                t::shadowstep_bare(),
-                t::shadowstep_behind(),
-                self.pvp(),
-                &scene,
-            )
-        };
-        // **A step at nothing is once a trip**, as Phase and the airdodge are
-        // -- all three spend the airdodge -- and a step to a body refunds it,
-        // so stepping from body to body chains as far as there are bodies.
-        if step.struck.is_none() && p.air_dodged {
-            return;
-        }
-        let q = &mut self.players[i];
-        q.pos = step.to;
-        // Arriving at a body she stops there and her fall is caught; with
-        // nobody she goes on falling as she was. Reach paid in aim, never
-        // free: a Shadowstep at nothing is a step, not a glide.
-        let fall = if step.struck.is_some() {
-            q.vel.y.max(Fx::ZERO)
-        } else {
-            q.vel.y
-        };
-        q.vel = V3::new(Fx::ZERO, fall, Fx::ZERO);
-        q.air_dodged = step.struck.is_none();
-        if let Some(at) = step.struck {
-            // Turned to face what she came for: she arrived behind it.
-            let back = V3::new(at.x.sub(step.to.x), Fx::ZERO, at.z.sub(step.to.z));
-            if back.flat_len().raw() > 0 {
-                q.facing = back.normalized();
-            }
-            let mut burst = Effect::cast(
-                EffectKind::Burst,
-                i as u8,
-                p.class,
-                moves::dual::SHADOWSTEP,
-                at,
-                V3::ZERO,
-                m.radius.mul(p.thrown_at),
-            );
-            burst.power = p.thrown_at;
-            spawn_effect(&mut self.effects, burst);
         }
     }
 

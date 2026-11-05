@@ -152,8 +152,8 @@ pub enum Extra {
     Nothing,
     /// The airdodge, forward, this many frames after takeoff.
     Airdodge(u32),
-    /// The Dual mage's second jump at this many frames, her bars set to the
-    /// tier that grants it.
+    /// The Dual mage's second jump at this many frames: since 2026-11-04 the
+    /// spring out of an annihilation, which no bar gates.
     SecondJump(u32),
     /// The second jump, then the airborne blink a number of frames after it.
     SecondJumpBlink(u32, u32),
@@ -209,9 +209,15 @@ fn air_buttons(extra: Extra, after: u32) -> u16 {
     match extra {
         Extra::Nothing => Input::SPACE,
         Extra::Airdodge(k) => Input::SPACE | if after == k { Input::SHIFT } else { 0 },
+        // **The spring** since 2026-11-04: her way up in the air is both
+        // clicks at once -- the annihilation she springs clear of -- where it
+        // was a second press of space on a tier. The name stays, because the
+        // routes measure "the Dual mage's second jump" and this is what it is.
         Extra::SecondJump(k) | Extra::SecondJumpBlink(k, _) => {
-            let space = if after <= sustain || (after >= k && after < k + sustain) {
+            let space = if after <= sustain {
                 Input::SPACE
+            } else if after == k {
+                Input::LEFT | Input::RIGHT
             } else {
                 0
             };

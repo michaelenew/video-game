@@ -224,7 +224,11 @@ const PINNED: [(Class, u64); 6] = [
     // Seize, the Cast and the zip, and the spike raises nothing on bare
     // ground.
     (Class::BloodMage, 0xf0c6e7449bd1df67),
-    (Class::DualMage, 0x554de5cef74c00c9),
+    // The Dual mage moved again 2026-11-04, deliberately: her kit is new --
+    // both clicks at once annihilate, the holds are the storm and the lance,
+    // middle click is the chain, and nothing she moves with reads a bar
+    // (exploration 0037; feel-log.md, 2026-11-04).
+    (Class::DualMage, 0x4dd8bfdb914aa250),
     (Class::Elementalist, 0xaa3bf62007f5de6b),
 ];
 

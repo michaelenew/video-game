@@ -212,10 +212,16 @@ impl Class {
                 jumped: false,
                 hopped: false,
                 dash_jump: false,
-                landed: 0,
+                wave: Fx::ZERO,
+                springs: 0,
+                storm: 0,
+                storm_at: crate::math::V3::ZERO,
+                strike: 0,
+                strike_at: crate::math::V3::ZERO,
                 singe: Fx::ZERO,
                 veil: 0,
                 warded: false,
+                primed: 0,
             },
         }
     }
@@ -1052,9 +1058,28 @@ pub enum Mechanic {
         /// A jump pressed in the last frames of the Flurry dash's run to the
         /// disk: thrown on arrival, carrying the run's speed (2026-10-13).
         dash_jump: bool,
-        /// Hits landed during this ascension. What the stagger on the way out
-        /// is graduated by -- see `crate::dual::end_ascension`.
-        landed: u16,
+        /// **The wave** (2026-11-04): how far Ascension's crest has got ahead
+        /// of her, from nought to `tuning::meter_max`. It rises on its own
+        /// while she ascends and every move she throws pushes it back; past
+        /// `ascension, the wave breaks at` the beings strike at her unbidden.
+        /// See `crate::dual::step`.
+        wave: Fx,
+        /// Springs out of an annihilation this airtime: each one is worth
+        /// less than the last, a hit she lands gives one back, landing gives
+        /// them all back. See `crate::dual::spring`.
+        springs: u8,
+        /// Where the storm's dash is (2026-11-04, from play): nought, or one
+        /// while she dashes in to the crosshair's spot, two while she dashes
+        /// out of the lightning coming down on it.
+        storm: u16,
+        /// Where she dashed in from: where the dash out takes her back to,
+        /// holding nothing. In world coordinates, so it moves with
+        /// `World::shift`.
+        storm_at: crate::math::V3,
+        /// Frames until an unbidden strike lands, nought for none coming.
+        strike: u8,
+        /// Where it will land: her feet when it was called down.
+        strike_at: crate::math::V3,
         /// The fraction of a health point the burn owes and has not yet taken.
         ///
         /// The burn is a rate per second small enough that a frame's worth is
@@ -1064,6 +1089,11 @@ pub enum Mechanic {
         /// Frames of the Veil left: untouchable while it runs. See
         /// `crate::dual::veiled`.
         veil: u8,
+        /// **Primed** (2026-11-04, from play): frames left in which a hold
+        /// thrown comes out with most of its wind-up skipped, because a strike
+        /// of hers just landed. The strike is the way into the big spells.
+        /// See `crate::dual::prime`.
+        primed: u8,
         /// Standing in one of her own sigils this frame, so a wound is cut by
         /// `sigil, wards her by`. Set by the world, which knows where the
         /// sigils are, once a frame; read by `state::Player::wound`.

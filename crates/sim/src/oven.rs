@@ -1330,6 +1330,37 @@ scalars! {
     // **The least the walk keys steer in the air** (2026-11-03): a floor
     // under every class's steering. See `tuning::air_drift_floor`.
     AirDriftFloor,        "Air",      "Steering, the walk keys reach at least (m/s)",     Fixed, 0, fx(5,1);
+    // **The Dual mage's magic is aimed at her** (2026-11-04,
+    // `docs/design/exploration/0037_dual_mage_the_razor_edge.md`): where the
+    // beings strike from, the spring out of an annihilation, the lance's
+    // lunge, the storm that hunts her, and Ascension's wave and its unbidden
+    // strikes. Appended: `tuned::SCALARS` is read by this enum's own
+    // discriminant.
+    BehindBack,           "Dual mage", "Behind, the beings strike from this far back (m)",  Fixed, 0, fx(6,1);
+    BehindRise,           "Dual mage", "Behind, and this high over her middle (m)",          Fixed, 0, fx(3,1);
+    SpringLift,           "Dual mage", "Annihilation, the spring rises (m/s)",               Fixed, 0, fx(40,1);
+    SpringAlong,          "Dual mage", "Annihilation, the spring carries her (m/s)",         Fixed, 0, fx(30,1);
+    SpringFalloff,        "Dual mage", "Annihilation, each spring after is worth (share)",   Fixed, 0, fx(1,1);
+    LanceLunge,           "Dual mage", "Lance, she lunges clear at (m/s)",                   Fixed, 0, fx(40,1);
+    LanceLungeUp,         "Dual mage", "Lance, and rises at (m/s)",                          Fixed, 0, fx(30,1);
+    StormDash,            "Dual mage", "Storm, she dashes in and out at (m/s)",              Fixed, fx(5,1), fx(120,1);
+    StormOut,             "Dual mage", "Storm, out the way she holds this far (m)",          Fixed, 0, fx(16,1);
+    WaveRise,             "Dual mage", "Ascension, the wave rises (a second)",               Fixed, 0, fx(200,1);
+    WaveVent,             "Dual mage", "Ascension, a move she throws pushes the wave back",  Int, 0, 100;
+    WaveBreaks,           "Dual mage", "Ascension, the wave breaks at",                      Int, 0, 100;
+    UnbiddenEvery,        "Dual mage", "Ascension, an unbidden strike every, at the break",  Frames, 4, 240;
+    UnbiddenWarn,         "Dual mage", "Ascension, an unbidden strike lands after",          Frames, 1, 120;
+    UnbiddenDamage,       "Dual mage", "Ascension, an unbidden strike hurts her",            Int, 0, 400;
+    UnbiddenRadius,       "Dual mage", "Ascension, an unbidden strike reaches (m)",          Fixed, fx(1,10), fx(6,1);
+    BehindSide,           "Dual mage", "Behind, and this far to the side, over her shoulder (m)", Fixed, 0, fx(3,1);
+    // **Strikes prime the holds; the lance costs; the grand annihilation**
+    // (2026-11-04, from play). Appended: `tuned::SCALARS` is read by this
+    // enum's own discriminant.
+    PrimedFor,            "Dual mage", "Primed, a landed strike primes a hold for",          Frames, 0, 120;
+    PrimedShare,          "Dual mage", "Primed, a primed hold keeps this share of its wind-up", Fixed, 0, fx(1,1);
+    LanceSpends,          "Dual mage", "A big hold spends of its bar (the lance light, the storm dark)", Int, 0, 100;
+    GrandSize,            "Dual mage", "Grand annihilation, size (x)",                       Fixed, fx(1,1), fx(5,1);
+    GrandPower,           "Dual mage", "Grand annihilation, worth (x)",                      Fixed, fx(1,1), fx(10,1);
     // **The Blood mage: the world bleeds** (2026-11-04, exploration 0038):
     // the Cast and its zip, the Red Hand, the spike only from a pool and the
     // plant it leaves, and the floor the scythe cuts. Appended:

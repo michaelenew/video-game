@@ -1321,7 +1321,7 @@ impl Hands {
         if bits & casts != 0 {
             let mut keep = 0;
             for (b, kind) in [
-                (Input::MIDDLE, moves::dual::BINARY),
+                (Input::MIDDLE, moves::dual::CHAIN),
                 (Input::SPECIAL, moves::dual::ABYSS),
                 (Input::MECHANIC, moves::dual::JUDGEMENT),
             ] {
@@ -1350,43 +1350,27 @@ impl Hands {
         Input { bits, ..input }
     }
 
-    /// The second jump, off the three-quarter tier: a plan holding jump in the
-    /// air on the way down wants height, and this is where she has more.
+    /// The spring, where the second jump was (2026-11-04): a plan holding
+    /// jump in the air on the way down wants height, and her way up is both
+    /// clicks at once -- the two beings colliding where she was as she springs
+    /// clear. Once a fall, so a plan holding jump does not spend every spring.
     fn second_jump(&mut self, me: &Player, input: Input) -> Input {
         if me.grounded {
             self.second_used = false;
             self.second = 0;
             return input;
         }
-        match self.second {
-            2 => {
-                self.second = 1;
-                return Input {
-                    bits: input.bits & !Input::SPACE,
-                    ..input
-                };
-            }
-            1 => {
-                self.second = 0;
-                return Input {
-                    bits: input.bits | Input::SPACE,
-                    ..input
-                };
-            }
-            _ => {}
-        }
         if !self.second_used
             && input.bits & Input::SPACE != 0
             && me.vel.y.raw() < 0
             && !me.aboard()
-            && sim::dual::tier(me) >= sim::dual::Tier::Jump
-            && !sim::dual::ascending(me)
+            && me.action.actionable()
+            && !me.locked_out(moves::dual::ANNIHILATION)
         {
             self.second_used = true;
-            self.second = 1;
             self.uses.second_jumps += 1;
             return Input {
-                bits: input.bits & !Input::SPACE,
+                bits: (input.bits & !Input::SPACE) | Input::LEFT | Input::RIGHT,
                 ..input
             };
         }

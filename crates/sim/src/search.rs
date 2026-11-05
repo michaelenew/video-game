@@ -69,7 +69,7 @@ pub struct Aim {
 const EARTH: u8 = 0;
 const FIRE: u8 = 2;
 
-pub const BUTTONS: [u16; 7] = [
+pub const BUTTONS: [u16; 8] = [
     Input::LEFT,
     Input::RIGHT,
     Input::MIDDLE,
@@ -77,7 +77,14 @@ pub const BUTTONS: [u16; 7] = [
     Input::KEY_F,
     Input::KEY_R,
     Input::MECHANIC,
+    // **Both clicks at once** (2026-11-04): the Dual mage's annihilation, and
+    // the spring out of it -- her way up. Appended, so every recorded index
+    // above still means what it did.
+    Input::LEFT | Input::RIGHT,
 ];
+
+/// The Dual mage's chord, as an index into [`BUTTONS`].
+const BOTH_CLICKS: u8 = 7;
 
 /// One timed input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -663,9 +670,11 @@ fn palette(class: Class, kit: Kit, rng: &mut Rng) -> Act {
             1 => Act::Vault,
             _ => Act::Press(rng.range(0, 2) as u8),
         },
-        Class::DualMage => match rng.range(0, 1) {
-            0 => Act::Press(6),
-            _ => Act::Press(3),
+        // Since 2026-11-04 her own tools in the air are the spring (both
+        // clicks) and the chain ride (middle held); nothing waits on a bar.
+        Class::DualMage => match rng.range(0, 2) {
+            0 | 1 => Act::Press(BOTH_CLICKS),
+            _ => Act::Press(2),
         },
         Class::Bulwark => shared(rng),
     }
