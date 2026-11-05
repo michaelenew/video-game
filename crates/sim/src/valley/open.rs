@@ -708,6 +708,14 @@ fn shift_player(p: &mut Player, d: V3) {
                 s.launch_from = s.launch_from.add(d);
             }
         }
-        Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => {}
+        Mechanic::Meter {
+            storm_at,
+            strike_at,
+            ..
+        } => {
+            *storm_at = storm_at.add(d);
+            *strike_at = strike_at.add(d);
+        }
+        Mechanic::Forms { .. } | Mechanic::Blood => {}
     }
 }

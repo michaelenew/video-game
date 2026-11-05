@@ -21,10 +21,16 @@ fn mage_with(dark: i32, light: i32, ascending: u16) -> World {
         jumped: false,
         hopped: false,
         dash_jump: false,
-        landed: 0,
+        wave: Fx::ZERO,
+        springs: 0,
+        storm: 0,
+        storm_at: sim::math::V3::ZERO,
+        strike: 0,
+        strike_at: sim::math::V3::ZERO,
         singe: Fx::ZERO,
         veil: 0,
         warded: false,
+        primed: 0,
     };
     w
 }

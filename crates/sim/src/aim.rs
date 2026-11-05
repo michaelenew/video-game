@@ -146,11 +146,12 @@ pub enum Kind {
     /// ball, which rolls the same way from where she raised it, its hold buying
     /// size rather than distance. [`racing_path`].
     Racing,
-    /// **From a point over the caster's head** to the point the crosshair is
-    /// on (2026-10-12): the Dual mage's Disk ray, a blast out of a great disk
-    /// of light hung above her. The target is the skillshot's; only the end it
-    /// leaves from is not her hand. [`overhead_path`].
-    Overhead,
+    /// **From behind the caster, through where she stands**, to the point the
+    /// crosshair is on (2026-11-04; it left from over her head from 2026-10-12):
+    /// the Dual mage's magic is aimed at her, and she dodges it so it lands on
+    /// what she was looking at -- the lance and the chain. The target is the
+    /// skillshot's; only the end it leaves from is not her hand. [`behind_path`].
+    Behind,
 }
 
 impl Kind {
@@ -160,7 +161,7 @@ impl Kind {
     /// already decided -- which way their body is facing, or where they put the
     /// mechanic -- and consult nothing.
     pub const fn is_a_skillshot(self) -> bool {
-        matches!(self, Kind::Grounded | Kind::Skillshot | Kind::Overhead)
+        matches!(self, Kind::Grounded | Kind::Skillshot | Kind::Behind)
     }
 
     pub const fn name(self) -> &'static str {
@@ -170,7 +171,7 @@ impl Kind {
             Kind::Swing => "swing",
             Kind::AtTheMechanic => "mechanic",
             Kind::Racing => "racing",
-            Kind::Overhead => "overhead",
+            Kind::Behind => "behind",
         }
     }
 
@@ -183,7 +184,7 @@ impl Kind {
             2 => Kind::Skillshot,
             3 => Kind::AtTheMechanic,
             4 => Kind::Racing,
-            5 => Kind::Overhead,
+            5 => Kind::Behind,
             _ => Kind::Swing,
         }
     }
@@ -195,7 +196,7 @@ impl Kind {
             Kind::Skillshot => 2,
             Kind::AtTheMechanic => 3,
             Kind::Racing => 4,
-            Kind::Overhead => 5,
+            Kind::Behind => 5,
         }
     }
 }
@@ -837,15 +838,32 @@ pub fn overhead(pos: V3) -> V3 {
     V3::new(pos.x, pos.y.add(t::overhead_height()), pos.z)
 }
 
-/// The line an **overhead** cast travels: from [`overhead`] to the point a
-/// skillshot thrown now would go to. The crosshair picks the target exactly
+/// **Where a strike aimed at her comes from** (2026-11-04): `behind, the
+/// beings strike from this far back` behind `through` -- her middle -- on the
+/// line from `to` through it, `behind, and this high` over it, and `side`
+/// times `behind, and this far to the side` to her right (negative to her
+/// left): the being over that shoulder. The light one stands over her right,
+/// the dark one over her left, and a strike of both from dead behind, so the
+/// line passes over her shoulder and narrowly misses her. See
+/// `docs/design/exploration/0037_dual_mage_the_razor_edge.md`.
+pub fn behind(through: V3, to: V3, side: Fx) -> V3 {
+    let dir = to.sub(through).normalized();
+    let right = V3::new(dir.z, Fx::ZERO, dir.x.neg()).normalized();
+    through
+        .sub(dir.scale(t::behind_back()))
+        .add(V3::new(Fx::ZERO, t::behind_rise(), Fx::ZERO))
+        .add(right.scale(t::behind_side().mul(side)))
+}
+
+/// The line a strike **from behind her** travels: from [`behind`] to the point
+/// a skillshot thrown now would go to. The crosshair picks the target exactly
 /// as it does for a skillshot -- [`skillshot_path`] is asked, and only its far
-/// end is kept -- so the blast lands where the reticle is, from wherever the
-/// disk hangs.
-pub fn overhead_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+/// end is kept -- so it lands where the reticle is, having come through where
+/// she stood.
+pub fn behind_path(who: usize, look: Input, reach: Fx, side: Fx, scene: &Scene) -> Path {
     let shot = skillshot_path(who, look, reach, scene);
     Path {
-        from: overhead(scene.players[who].pos),
+        from: behind(shot.from, shot.to, side),
         to: shot.to,
     }
 }

@@ -39,7 +39,7 @@ use crate::versus;
 pub fn pointed_reach(class: Class) -> Fx {
     moves::table(class)
         .iter()
-        .filter(|m| matches!(m.aim(), Aim::Skillshot | Aim::Grounded | Aim::Overhead))
+        .filter(|m| matches!(m.aim(), Aim::Skillshot | Aim::Grounded | Aim::Behind))
         .map(|m| m.reach)
         .max_by_key(|r| r.raw())
         .unwrap_or(Fx::ZERO)

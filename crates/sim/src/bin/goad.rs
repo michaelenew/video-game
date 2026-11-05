@@ -117,10 +117,16 @@ impl Script {
             jumped: false,
             hopped: false,
             dash_jump: false,
-            landed: 0,
+            wave: Fx::ZERO,
+            springs: 0,
+            storm: 0,
+            storm_at: sim::math::V3::ZERO,
+            strike: 0,
+            strike_at: sim::math::V3::ZERO,
             singe: Fx::ZERO,
             veil: 0,
             warded: false,
+            primed: 0,
         };
         match self {
             // Level at the first tier, with the carried bar at the far edge
@@ -207,7 +213,7 @@ fn greedy(w: &World) -> u16 {
     };
     if fits(t::meter_finisher_push()) && p.repeat_lock[major as usize] == 0 {
         key
-    } else if p.repeat_lock[d::BINARY as usize] == 0 {
+    } else if p.repeat_lock[d::CHAIN as usize] == 0 {
         // Binary goads both bars, so it never widens the gap.
         d::keys::TWILIGHT
     } else {

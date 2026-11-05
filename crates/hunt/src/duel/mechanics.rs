@@ -715,9 +715,8 @@ impl Duelist {
             self.cool(90, 180);
             return;
         }
-        let tier = sim::dual::tier(me);
-        if tier >= sim::dual::Tier::Jump
-            && !me.grounded
+        // The spring is hers at every bar (2026-11-04): no tier to wait for.
+        if !me.grounded
             && me.vel.y.raw() < 0
             && self.jump_left == 0
             && self.second_jump == 0

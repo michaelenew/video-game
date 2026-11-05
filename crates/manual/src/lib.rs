@@ -219,11 +219,11 @@ pub const SECTIONS: &[Section] = &[
             e("W A S D", "Move, relative to the camera."),
             e(
                 "Space",
-                "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial. On the Dual mage, a second press in the air jumps again while the lower of her two bars is at two thirds, and every press is a wing beat while she is ascended.",
+                "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial.",
             ),
             e(
                 "Shift + direction",
-                "Dodge, and shift's only job. Airborne, an airdodge — once per jump. It used to also be the attack modifier, and a modifier whose meaning depends on what else your hand is doing is one you cannot trust. On the Dual mage with the lower bar at half it is a blink: you are where the dodge would have ended, at once, and you stand through its tail.",
+                "Dodge, and shift's only job. Airborne, an airdodge — once per jump. It used to also be the attack modifier, and a modifier whose meaning depends on what else your hand is doing is one you cannot trust.",
             ),
             e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
             e(
@@ -240,7 +240,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "U or middle click",
-                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is twilight -- spells on herself, Binary's stars on the floor and Phase in the air -- and the Elementalist's is fire: the pillar on the floor, the carpet in the air.",
+                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is both her forces linked -- the chain, tapped, and riding it, held -- and the Elementalist's is fire: the pillar on the floor, the carpet in the air.",
             ),
             e(
                 "Mouse side buttons (or I and O)",
@@ -314,63 +314,39 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Dual mage",
         in_browser: true,
-        blurb: "Two forces, one in each hand, and a bar for each. Your clicks throw balls of dark and light, from the beings inside you, and every one of them hops you the way you are holding -- so you fight by darting in, striking and darting out again, lifted a little further off the floor each time as your bars fill. Everything on the mouse fills the bars; F and R let a little out; Q and E let a whole bar out at once. Stay level and just under the top. Reworked on 2026-10-12 and unplayed; docs/design/exploration/0016_dual_mage_controls.md is the latest.",
+        blurb: "Two beings, one dark and one light, that are trying to kill her. Everything they throw comes from behind her, through where she stands, at what she is looking at -- and she gets out of the way, so it lands on whoever is in front of her. So she never stops moving, and she fights at the edge of close range. Every hit she lands fills a bar; her two majors each spend one, and both full makes her next annihilation the grand one. Nothing about how she moves depends on the bars. Rebuilt 2026-11-04 and lightly played; docs/design/exploration/0037_dual_mage_the_razor_edge.md is the design.",
         entries: &[
             e(
                 "Left and right click",
-                "Tapped, your autos, on the floor and in the air: a ball of dark (left) or light (right) thrown from just outside and behind your shoulder, bowing out a little and coming back in to finish straight in front of you six metres out, leaving a trail. Wherever it meets someone on the way it hits; landing it right at the end, on the sweet spot, hits half again as hard -- so the place to stand is six metres away. The dark ball lays a curse; the light ball purges one. Each fills its own bar. Holding a direction as the ball arrives, you hop three metres that way, and the hop is the rest of the swing. Each hop lifts you, more the fuller your lower bar; the first hop of each jump in the air lifts you like a second jump, and while ascending every one does.",
+                "Tapped, a strike of dark (left) or light (right): a ball from just behind your shoulder that finishes straight in front of you six metres out -- landing it right at the end, on the sweet spot, hits half again as hard. Holding a direction, you hop three metres that way as it arrives: you are stepping off its line, and a run of strikes is a run of hops. The first hop of each jump in the air rises like a second jump. A strike that lands fills its own bar, and primes your next hold.",
             ),
             e(
                 "Holding a click",
-                "A click is a tap or a hold, never both: while you hold it nothing has started, let go and it is the tap, keep it held a sixth of a second and it is that hand's spell -- and then you are committed: the spell plays out whether you keep holding or not, and holding longer does not make it stronger. Left held is Chain lightning: a storm cloud gathers high over your head and black lightning strikes the body nearest your crosshair and leaps to the next, up to four, cursing each. Right held is the Disk ray: a sun-disk opens high over your head, facing where you face, and blasts the point your crosshair is on, purging what it passes through. Middle click held is the Flurry dash: your blows cascade out one into the next to the spot your crosshair is on and strike a disk there; then you dash to it, untouchable, through whoever is on the way, and break it -- jump just as you arrive and you keep the dash's speed. Each fills its bar a little (the dash, both).",
-            ),
-            e(
-                "F",
-                "Devour, the dark spell: a maw that snaps shut where you point. Two curses, and half of what it does drained back to you. Spends a little of your dark bar.",
-            ),
-            e(
-                "R",
-                "The Smite, the light spell: a column out of the sky where you point, lifting whoever it catches and writing a sigil there. Spends a little of your light bar.",
+                "A click is a tap or a hold, never both: while you hold it nothing has started, let go and it is the tap, keep it held a sixth of a second and it is that hand's big spell -- and then you are committed, and holding longer does not make it stronger. Thrown just after a strike of yours lands, a hold skips most of its wind-up: strike, then hold. Left held is the storm: you dash to the spot under your crosshair, the lightning aimed at you comes down there as you arrive and leaps to whoever is near, and you dash out -- back where you came from, or the way you hold. Right held is the lance: a great beam from over your right shoulder, through where you stood, to your crosshair, while you lunge clear -- back, or the way you hold. Each spends a fifth of its own bar (the storm dark, the lance light) and fills nothing.",
             ),
             e(
                 "Middle click",
-                "Twilight, on yourself, when tapped: it fills both bars and is worth your lower one. On the floor, Binary: twin stars, one dark and one light, orbit you for four seconds -- the dark one curses what it passes through and the light one purges. In the air, Phase: you blink a few metres along the crosshair and come out of it rising and still moving -- it spends your airdodge.",
+                "Both forces, linked. Tapped, the chain: flung at you from behind, you let it go by and it flies on down your crosshair's line, binding the first body it meets. Held, you catch its tail and ride it: your blows cascade out to the spot your crosshair is on, and you run them, untouchable, through whoever is on the way -- jump just as you arrive and you keep the run's speed. Aimed at the floor below, it is your dive. A hit with either fills both bars.",
             ),
             e(
-                "Leaving the floor",
-                "A click in a jump's first moments is a takeoff. Space and left click is the Veil: you leave the floor as shadow, untouchable on the way up, cursing whoever was beside you. Space and right click is Sanctuary: a sigil at your feet, a pulse of light through it, and a hop up out of it. Space and middle click is Equinox: your bars are levelled -- twelve from the higher to the lower -- and you blink along the crosshair as you leave the floor and jump as high as the lower bar is full.",
+                "Left and right together",
+                "Annihilation. Both beings lunge at you at once; you spring clear -- straight up, or the way you hold -- and they meet where you were standing. The blast hurts everyone in it but you. It is your way up in the air: each spring in one jump goes less high than the last, every hit you land gives one back, and landing gives them all back -- so you stay up as long as you keep hitting. Pressing the second click while the first is still deciding counts too.",
             ),
             e(
                 "Q",
-                "The Abyss, the dark major: a black sun where the crosshair meets the floor, bigger the fuller your dark bar. Everything under it is pinned, hurt on the tick, drained to you, and cursed again every third of a second; when it ends it collapses in one more blow. It spends your whole dark bar: the reward for building it, and the way out when the dark is running away.",
+                "The Abyss, the dark major: a black sun where the crosshair meets the floor, bigger and stronger the fuller your dark bar. Everything under it is pinned and hurt on the tick, and it collapses in one more blow. It spends your whole dark bar.",
             ),
             e(
                 "E",
-                "Judgement, the light major: columns of light out of the sky where the crosshair is -- one from an empty light bar, up to five from a full one, every one purging -- and a great sigil left burning that makes you fast. Bigger the fuller your light bar. Abyss, then Judgement through it, is the class's spectacle. It spends your whole light bar.",
+                "Judgement, the light major: columns of light out of the sky where the crosshair is -- one from an empty light bar, up to five from a full one -- and a field left burning that makes you fast. Bigger and stronger the fuller your light bar; the Abyss and then Judgement through it is a spectacle. It spends your whole light bar.",
             ),
             e(
-                "The curse and the purge",
-                "Every dark spell that lands lays stacks of a curse, up to five, drawn as dark motes circling the body. They tick, a little each, drained to you, and fade one at a time. A light spell that lands on a curse purges it: every stack at once, each worth more than the last -- five stacks is the biggest thing your hands make, and three or more staggers. So: dark, dark, dark, then light.",
-            ),
-            e(
-                "Sigils",
-                "The Smite, Sanctuary and Judgement write a sigil -- a turning ring of light on the floor -- for four seconds, two at a time. Stand in your own and you are warded: every wound is cut by a third. Anybody else standing in it burns.",
-            ),
-            e(
-                "Each bar is its spells' power",
-                "Everything you throw is worth what the bar of its force says, all the way along it: empty is thin, full is the most you can hold -- damage, the purge, how big a sigil or the black sun is. A middle-click spell reads your lower bar. What never changes is the frame data, or how far anything is thrown.",
-            ),
-            e(
-                "The hill",
-                "The two bars are compared every frame. Level -- within sixteen of each other -- nothing moves. Further apart than that, the higher one rises and the lower one falls, faster the wider the gap, and you burn. Both bars fall slowly on their own, always, so a height you stop feeding is a height you lose. Middle click feeds both and never widens the gap. Running away is the high bar climbing, so spending it -- Q for dark, E for light -- is the way back.",
-            ),
-            e(
-                "Blink, second jump, wings",
-                "The **lower** bar is what your body can do. At a third the dodge is a blink. At two thirds you have a second jump and you fall slower -- which is also why your takeoffs are from the floor only: in the air, space is that jump. Both full and you ascend, and every spell climbs you, so near the top you choose the moment: the wings erupt in Apotheosis, a nova of both forces round you that purges every curse in it at full power -- ascend beside a cursed body, not alone in a corner. Then a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and both bars empty and a stagger.",
+                "The bars",
+                "Dark on the left, light on the right, filled only by hits that land -- pressing at nothing builds nothing. They never move on their own and never cost you anything; only your majors read them. Fill both to the top and your next annihilation is the grand one: twice as wide, worth three and a half times as much, and it spends both bars.",
             ),
             e(
                 "On your back",
-                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
+                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each third of that bar. Three and three is a mage about to unleash the grand annihilation.",
             ),
         ],
     },
