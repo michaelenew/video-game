@@ -38,16 +38,23 @@ swing round: as a starting guide, about eight metres across and five metres
 to any ceiling. Tighter is allowed only where the camera check
 ([delivery.md](delivery.md), D3) passes in it.
 
-**L4 · Walls that enclose are land, or thick enough to hold the camera.**
-Unless otherwise instructed, a wall that bounds a space is the arena's rim
-or the valley's land (`arena::rim`, as `CLAUDE.md` already requires of a
-fight's edge), or a box at least as thick and broad as the Oven's `Camera
-held off by a box this thick` and `... this broad` (8 m and 20 m as of
-2026-11-02). **A thinner box is not a wall to the camera**: it passes
-through it, the game draws it see-through round the fighter, and the arm
-lands on whatever is behind -- the jumping camera of the first blockout. An
-opening in a wall (a window, a door) is a gap in thick stone or in the land,
-never thin boxes stacked round a hole.
+**L4 · Walls that enclose are land or thick stone, and spaces are wide
+enough that the camera seldom meets them.** Unless otherwise instructed, a
+wall that bounds a space is the arena's rim or the valley's land
+(`arena::rim`, as `CLAUDE.md` already requires of a fight's edge), or stone
+thick enough to read as a wall. The camera keeps out of any box at least
+the Oven's `Camera held off by a box this thick` and `... this broad` (1 m
+and 4 m as of 2026-11-03): **it snaps its arm in when the view swings into
+one, and lets it out again as fast once it is clear.** That is the camera's
+designed answer and some of it is unavoidable beside anything solid; in a
+narrow space with solid on every side it happens on every turn of the view,
+which is what the first blockout's ten-metre well did and what a player
+calls the camera jumping. A smaller box (a post, a thin ledge) is cut away
+round the fighter instead. An opening in a wall is a gap in thick stone or
+in the land.
+
+*Corrected 2026-11-03: this rule first said 8 m and 20 m, which are the top
+of those two knobs' ranges, not their values.*
 
 **L5 · Every start is clear.** Unless otherwise instructed, every fighter's
 start stands on something, inside nothing, apart from the other's, and
@@ -86,3 +93,38 @@ A stand-in drawn for a screenshot lives in that screenshot set only.
 how a place looks is judged from the fight's own camera, along the route,
 at the moments that matter. A camera placed by hand is for an establishing
 view and is labelled so; it is never the evidence that a place works.
+
+**L11 · An optional climb pays.** Unless otherwise instructed, a mobility
+section that is not the only way on gives something the other way does not
+-- a better start to a fight, a view, a shortcut, a thing to find -- and the
+place makes that plain, so a player learns that the climbs are worth
+taking even when they could walk round (the owner, 2026-11-03). The
+opening's climb up the keep's outside wall opens the fight with the Warden
+toppled ([opening.md](opening.md) §5).
+
+**L12 · Height is reached with the moves everyone has.** Unless otherwise
+instructed, every level of a fight space -- and every height a place wants
+to show off -- is reachable with the moves every class shares: the held
+jump, the wall jump, the ledge catch and climb. A class's own tools are a
+faster or a different way up, never the only one, and a test walks the way
+up with every mover (`tests/opening.rs` is the pattern). Places are built
+tall: the scale and the verticality are the game's (the owner,
+2026-11-03).
+
+**L13 · A thing that blocks a way commits.** Unless otherwise instructed,
+a feature put in the way is one of two things and never in between. **A
+step** is low enough to jump and narrow enough to walk round, and nothing
+says otherwise. **A barrier** declares how it is passed -- a gap, a door, a
+climb -- and *is* impassable by every other means with the moves every
+class shares: taller than a held jump and a ledge's catch (twelve metres
+is clear of both; nine for a wall with no run-up to it), running into
+another barrier or off over the drop at both ends with no way round them,
+and no way under them on a fall. A test runs and jumps every mover at it,
+straight on and round its ends, and finds it held; the same test with the
+barrier lowered must fail, or it proves nothing. A low wall with room
+round both ends is a step that has been dressed as a barrier: it forces
+nothing, and the player who walks round it learns that walls here do not
+mean what they say (the owner, 2026-11-04). A class's own movement tool
+over a barrier is allowed, and is a skill's reward (L12); say so where the
+barrier is written down.
+

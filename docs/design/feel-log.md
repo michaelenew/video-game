@@ -317,6 +317,61 @@ feeling or one more button; whether 20 m/s is big and sudden enough; whether the
 behind her reads as being hunted; whether the unbidden strikes' warning (rings closing on the
 floor) is enough to leave on; whether the strike from behind reads from the other seat.
 
+### 2026-11-04 — wall slides bleed, wall jumps climb
+
+The owner: "The wall slides preserve all lateral momentum, which isn't right.
+Changing direction during a wall slide just flips the sign of your lateral
+momentum ... if you wall slide around a round object, you will keep
+accelerating laterally ... wall jumps are really bad feeling. They barely get
+off the wall ... something more like a Mario Odyssey wall jump."
+
+**Changed**
+- **The slide bleeds its run.** `Wall slide, keeps of its speed along, a
+  frame` 0.99 → 0.94, and it now pulls toward what the stick asks rather than
+  only to nothing: let go or into the wall, a run onto a wall is a third of
+  itself in a third of a second; along it, it settles at the steer (5 m/s).
+- **Turning round on a wall is gradual.** `Wall slide, steering arrives per
+  frame` 0.2 → 0.05, and -- the actual cause of the flip -- the air steering
+  no longer acts on a slide's speed along the wall. It ran ahead of the slide
+  at full strength (about 1.6 m/s a frame), so the stick the other way
+  reversed a run in three frames. The slide keeps its own run
+  (`Player::slide_run`) and a frame's reading of the velocity may lose speed
+  against it but never gain it.
+- **Round a column the slide no longer speeds up.** Two causes, both fixed.
+  The collision's face direction for a round or turned solid was read back
+  off the push, a millimetre or two long, and at 16.16 came out up to a fifth
+  longer than one (`SidePush::normal` now carries it, from the offset from the
+  axis); and the push into the wall that holds a body on it is, on a curve, a
+  little along the next frame's face, which the run-never-gains rule now
+  refuses.
+- **Wall jumps.** `Wall jump, rise` 0.6 → 0.9 of the takeoff (about 1.1 m →
+  2.5 m on the Champion, a little over half his full held jump); `Wall jump,
+  pushed off at` 7 → 9 m/s; **no falloff** (`Wall jump, each one after` 0.7
+  is gone -- its slot is the next knob); and **`Wall jump, stick into the wall
+  not heard for` 14 frames** (new): the part of the air steering pointing back
+  into the wall just kicked off is dropped, since the player is still holding
+  into it from the slide. So two facing walls are a ladder: every mover is
+  six metres up a three-metre flue within six kicks (`tests/wall_jump.rs`);
+  until now the falloff held a flue to about a jump's height. One wall alone
+  is still not climbed: the same-wall drop (1 m) is unchanged.
+
+**What it moved**
+- **A gully is now climbed if you kick on every touch.** The test pilot
+  (`tests/pilot`, `kick_across`) used to press on every touch; that now goes
+  up and over a gully's walls. It tries that first and then what a person
+  learns: let the slide bring you back to the takeoff's height before the next
+  kick. Every mover crosses the Hanging Stones' gullies that way.
+- **The bench's turn-around a metre higher (7.5 m) is no longer past the
+  Champion and the Blood mage** (`tests/spire.rs`): no longer pinned.
+- One envelope line (Champion, lab lane 8) crosses 3 cm less than its
+  fixture claimed, 69.58 m for 69.61; the claim is moved to what it does.
+
+**Verdict** open -- unplayed. To feel for: whether 0.94 bleeds too fast for a
+gully run (the kick's carry along the stick, 6 m/s, is what keeps forward
+speed now); whether 14 frames of lock reads as the push carrying you or as
+the stick going dead; whether the gully walls (12 m over the takeoff) now
+want to be climbed to a top that leads nowhere.
+
 ### 2026-11-03 — the Elementalist off the ledge: tilt, columns, lips and falls
 
 **Changed**

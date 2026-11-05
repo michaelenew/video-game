@@ -124,6 +124,9 @@ pub fn authored(id: SpeciesId) -> Option<&'static dyn Authored> {
 
         SpeciesId::GALEWING => Some(&galewing::GALEWING),
         SpeciesId::SIEGESHELL => Some(&siegeshell::SIEGESHELL),
+        // The Warden moves as the Ridgeback does: its table is the
+        // Ridgeback's (`sim::species::warden`).
+        SpeciesId::WARDEN => Some(&ridgeback::RIDGEBACK),
         _ => None,
     }
 }

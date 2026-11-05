@@ -477,11 +477,21 @@ pub struct Solid {
 /// out sideways by the shorter way, how far that is, and -- for a box -- which
 /// axis it is along (0 for x, 2 for z), so a box keeps exactly the push it
 /// always had.
+///
+/// **And the face's own direction, unit length** (`normal`, 2026-11-04).
+/// It used to be read back off `push` by dividing it by its own length, and a
+/// push is usually a millimetre or two: at 16.16 a direction worked out from
+/// a vector that short came out as much as a fifth too long, which every
+/// frame of a wall slide round a column then multiplied into the run (the
+/// owner: "if you wall slide around a round object, you will keep
+/// accelerating laterally"). A round solid's is now worked out from the body's
+/// offset from its axis, metres long, and a turned box's from its bearing.
 #[derive(Clone, Copy, Debug)]
 pub struct SidePush {
     pub push: (Fx, Fx),
     pub depth: Fx,
     pub axis: Option<u8>,
+    pub normal: (Fx, Fx),
 }
 
 impl Solid {
@@ -751,17 +761,20 @@ impl Solid {
                 }
                 let px = min_penetration(x, min_x, max_x);
                 let pz = min_penetration(z, min_z, max_z);
+                let sign = |v: Fx| if v.raw() < 0 { Fx::ONE.neg() } else { Fx::ONE };
                 Some(if px.abs().raw() <= pz.abs().raw() {
                     SidePush {
                         push: (px, Fx::ZERO),
                         depth: px.abs(),
                         axis: Some(0),
+                        normal: (sign(px), Fx::ZERO),
                     }
                 } else {
                     SidePush {
                         push: (Fx::ZERO, pz),
                         depth: pz.abs(),
                         axis: Some(2),
+                        normal: (Fx::ZERO, sign(pz)),
                     }
                 })
             }
@@ -816,10 +829,21 @@ impl Solid {
                         ),
                     )
                 };
+                // Out from the axis (or into the hole), from the offset
+                // itself rather than the push: see `SidePush`.
+                let out = crate::math::wide_normalized(V3::new(dx, Fx::ZERO, dz));
+                let normal = if d.raw() == 0 {
+                    (Fx::ONE, Fx::ZERO)
+                } else if sign < 0 {
+                    (out.x.neg(), out.z.neg())
+                } else {
+                    (out.x, out.z)
+                };
                 Some(SidePush {
                     push,
                     depth,
                     axis: None,
+                    normal,
                 })
             }
             Shape::Turned {
@@ -835,18 +859,20 @@ impl Solid {
                 }
                 let px = min_penetration(lx, hx.neg(), hx);
                 let pz = min_penetration(lz, hz.neg(), hz);
-                let (ux, uz, depth) = if px.abs().raw() <= pz.abs().raw() {
-                    (px, Fx::ZERO, px.abs())
+                let sign = |v: Fx| if v.raw() < 0 { Fx::ONE.neg() } else { Fx::ONE };
+                let (ux, uz, depth, nx, nz) = if px.abs().raw() <= pz.abs().raw() {
+                    (px, Fx::ZERO, px.abs(), sign(px), Fx::ZERO)
                 } else {
-                    (Fx::ZERO, pz, pz.abs())
+                    (Fx::ZERO, pz, pz.abs(), Fx::ZERO, sign(pz))
                 };
                 // Back into the floor plane: length along (cos, sin), across
                 // along (-sin, cos).
-                let push = (ux.mul(cos).sub(uz.mul(sin)), ux.mul(sin).add(uz.mul(cos)));
+                let turn = |a: Fx, b: Fx| (a.mul(cos).sub(b.mul(sin)), a.mul(sin).add(b.mul(cos)));
                 Some(SidePush {
-                    push,
+                    push: turn(ux, uz),
                     depth,
                     axis: None,
+                    normal: turn(nx, nz),
                 })
             }
         }
@@ -1617,34 +1643,16 @@ fn too_steep_to_climb(ground: &Terrain, pos: &mut V3, vel: &mut V3) -> bool {
     true
 }
 
-/// The velocity with its part into a side push's face taken off: what a body
-/// keeps sliding round a round or turned solid.
 /// **Which way a side push faces**: out of the solid and level, as a unit
 /// vector. Exact on a box's face, radial off a round one.
 fn face_of(side: SidePush) -> V3 {
-    let (px, pz) = side.push;
-    let sign = |v: Fx| if v.raw() < 0 { Fx::ONE.neg() } else { Fx::ONE };
-    match side.axis {
-        Some(0) => V3::new(sign(px), Fx::ZERO, Fx::ZERO),
-        Some(_) => V3::new(Fx::ZERO, Fx::ZERO, sign(pz)),
-        None => {
-            let d = crate::math::wide_flat_len(V3::new(px, Fx::ZERO, pz));
-            if d.raw() == 0 {
-                V3::ZERO
-            } else {
-                V3::new(px.div(d), Fx::ZERO, pz.div(d))
-            }
-        }
-    }
+    V3::new(side.normal.0, Fx::ZERO, side.normal.1)
 }
 
+/// The velocity with its part into a side push's face taken off: what a body
+/// keeps sliding round a round or turned solid.
 fn off_the_face(vel: V3, side: SidePush) -> V3 {
-    let (px, pz) = side.push;
-    let d = crate::math::wide_flat_len(V3::new(px, Fx::ZERO, pz));
-    if d.raw() == 0 {
-        return vel;
-    }
-    let (nx, nz) = (px.div(d), pz.div(d));
+    let (nx, nz) = side.normal;
     let into = vel.x.mul(nx).add(vel.z.mul(nz));
     if into.raw() >= 0 {
         return vel;

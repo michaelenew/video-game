@@ -657,13 +657,7 @@ pub fn draw_place(
         }
     }
 
-    // The Warden's blockout is posed at launch (`warden`), not a table.
-    let posed = if arena.id == ArenaId::WARDEN {
-        warden::props()
-    } else {
-        Vec::new()
-    };
-    for prop in dressing.props.iter().chain(posed.iter()) {
+    for prop in dressing.props {
         // Past a rim, the rim's own woods and rocks stand instead
         // (`crate::land::draw_arena`, and the valley's land on the map).
         if let Some(rim) = arena.rim.filter(|r| !r.drop) {

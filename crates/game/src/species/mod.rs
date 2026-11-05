@@ -269,7 +269,7 @@ impl Build {
 /// A species' [`Build`]: its own, or the default.
 pub fn build(id: SpeciesId) -> &'static Build {
     match id {
-        SpeciesId::RIDGEBACK => &ridgeback::BUILD,
+        SpeciesId::RIDGEBACK | SpeciesId::WARDEN => &ridgeback::BUILD,
         SpeciesId::GALEWING => &galewing::BUILD,
         SpeciesId::MANTIS => &mantis::BUILD,
         _ => &Build::DEFAULT,

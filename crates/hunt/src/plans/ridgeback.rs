@@ -152,6 +152,11 @@ pub struct Ridgeback {
     /// is what decides which of the creature's surfaces are a route and which
     /// are a wall. Measured by jumping, in `play`, rather than typed.
     hop: Fx,
+    /// **Jumps the slam** as it jumps the sweep: the Warden's slam is a
+    /// shockwave along the floor, cleared by being off it
+    /// (`docs/design/opening.md` §6). The Ridgeback's is not, and is run
+    /// from or dodged.
+    jumps_slam: bool,
     /// Its class (`crate::class`): what the plan's poke, dodge and wait are
     /// for whoever is holding it.
     hands: Hands,
@@ -177,6 +182,7 @@ impl Ridgeback {
             rng: 0x9E37_79B9 ^ (who as u32).wrapping_mul(0x85EB_CA6B) | 1,
             leap_left: 0,
             hop: Fx::ZERO,
+            jumps_slam: false,
             hands: Hands::new(who, 0),
         }
     }
@@ -192,6 +198,12 @@ impl Ridgeback {
     /// Tell it how high it can jump. See `hop`.
     pub fn knowing_hop(mut self, hop: Fx) -> Ridgeback {
         self.hop = hop;
+        self
+    }
+
+    /// Jump the slam rather than run from it or dodge it: the Warden's.
+    pub fn jumping_the_slam(mut self) -> Ridgeback {
+        self.jumps_slam = true;
         self
     }
 
@@ -595,7 +607,9 @@ impl Ridgeback {
                         .mul(sim::DT)
                         .raw()
                         > run_room.raw();
-                if seen.kind == ridgeback::SWEEP {
+                if seen.kind == ridgeback::SWEEP
+                    || (self.jumps_slam && seen.kind == ridgeback::SLAM)
+                {
                     // **A held jump, not a tap**, and timed so the feet are
                     // over the tail when it arrives rather than on the way
                     // back down.
@@ -939,3 +953,93 @@ pub static CARD: crate::plans::Card = crate::plans::Card {
     tally: None,
     gamble: None,
 };
+
+/// **The Warden's hunter** (`sim::species::warden`): the Ridgeback's plan,
+/// for the Ridgeback's body at the Warden's size -- get to its back, walk to
+/// the soft places, ride the buck. Its own words for the report.
+pub static WARDEN: crate::plans::Card = crate::plans::Card {
+    species: sim::species::SpeciesId::WARDEN,
+    plan: |who, seed, hop| {
+        Box::new(WardenWay {
+            who,
+            inner: Ridgeback::new(who)
+                .seeded(seed)
+                .knowing_hop(hop)
+                .jumping_the_slam(),
+            walking: true,
+        })
+    },
+    bucks,
+    words: crate::plans::Words {
+        weak_hits: "hits on its back",
+        broken: "legs broken",
+        into_breakables: "damage into feet",
+        into_breakables_why: "the slow way, from the floor",
+        worst: "worst foot",
+        ride_for: "long enough to reach the nape?",
+        toppled_pool: "off the pool under a Warden on its side",
+    },
+    tally: None,
+    gamble: None,
+};
+
+/// **The way to the Warden, then the Ridgeback's plan.** The Warden sleeps
+/// in its keep until somebody comes in, and the Ridgeback's hunter waits for
+/// its creature to come to it, so on their own the two would wait at either
+/// end of the opening forever. A person walks over: while it sleeps, this
+/// walks the hunter along the way in (`sim::arena::warden::WAY`), and hands
+/// over to the Ridgeback's plan the moment it wakes.
+struct WardenWay {
+    who: usize,
+    inner: Ridgeback,
+    walking: bool,
+}
+
+impl crate::Plan for WardenWay {
+    fn watch(&mut self, w: &World) {
+        self.inner.watch(w);
+    }
+
+    fn act(&mut self, w: &World) -> Input {
+        let asleep = w
+            .monsters
+            .iter()
+            .flatten()
+            .any(|m| m.species == sim::species::SpeciesId::WARDEN && m.own[0] == 0);
+        self.walking = asleep;
+        if !asleep {
+            return self.inner.act(w);
+        }
+        // The next point of the way it has not yet passed: the way goes
+        // round the curtain wall and through the chapel, so the keep itself
+        // is the last point, not the first.
+        let p = w.players[self.who].pos;
+        let (kx, kz) = sim::arena::warden::WAY
+            .iter()
+            .copied()
+            .find(|&(x, _)| Fx::ratio(x, 100).raw() > p.x.add(Fx::ONE).raw())
+            .unwrap_or(sim::arena::warden::KEEP);
+        let dx = Fx::ratio(kx, 100).sub(p.x);
+        let dz = Fx::ratio(kz, 100).sub(p.z);
+        let aim = (sim::math::atan2_turns(dz, dx).raw() & 0xFFFF) as u16;
+        // Looking where it is going, a little under the horizon, as a person
+        // walking does -- not down at its feet.
+        Input::looking_at(Input::W, aim, 0)
+    }
+
+    fn intent(&self) -> crate::Intent {
+        if self.walking {
+            crate::Intent("Walk to the keep")
+        } else {
+            self.inner.intent()
+        }
+    }
+
+    fn hands(&mut self) -> Option<&mut crate::class::Hands> {
+        self.inner.hands()
+    }
+
+    fn hands_ref(&self) -> Option<&crate::class::Hands> {
+        self.inner.hands_ref()
+    }
+}

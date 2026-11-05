@@ -4,14 +4,15 @@
 //! pushes away -- along it or let go as much as into it (2026-10-20) --
 //! at well under half a fall's speed but never stopping, and a fast fall is
 //! grabbed down to the slide over a few frames; it stays on the wall for as
-//! far as the wall goes, keeps the run it brought along it, and steering away
-//! leaves it; a slide to the floor costs no fall damage where the same fall
+//! far as the wall goes, bleeds the run it brought along it toward nothing
+//! (2026-11-04), turns round along it gradually, never gains speed going
+//! round a column, and steering away leaves it; a slide to the floor costs no fall damage where the same fall
 //! in the open does; space on a wall jumps up and away from it without giving
 //! back the airdodge, and the way the stick points along the wall; a press
 //! just before the wall is kept for it; off the same wall again, anywhere
 //! along it, only once the body is `wall_jump_drop` below where it last
-//! jumped off it; each wall jump in an airtime rises less than the one
-//! before; and landing forgets it all.
+//! jumped off it; every wall jump in an airtime rises as high as the first
+//! (2026-11-04), and two facing walls are climbed; and landing forgets it all.
 //!
 //! The walls are the range's tower: its north face (z = 6, x 17 to 23, a
 //! clean 12 m from the floor) and the south face of its 9 m ledge (z = -6).
@@ -127,24 +128,167 @@ fn along_the_wall_or_let_go_starts_a_slide_and_away_does_not() {
     }
 }
 
-/// **A slide keeps the run** (2026-10-20): a body carried along the wall onto
-/// it is still going most of that speed a third of a second later, where
-/// until then the slide bled it to a crawl in a few frames.
+/// **A slide bleeds the run** (2026-11-04, the owner: "wall slides need to
+/// naturally and pretty quickly reduce lateral momentum towards 0"). A body
+/// carried along the wall onto it, the stick into the wall or let go, has
+/// lost most of that speed half a second later; the stick along the wall
+/// holds it near the steer instead.
 #[test]
-fn a_slide_keeps_the_run_along_the_wall() {
-    for (what, bits, aim) in [("into", Input::W, SOUTH), ("along", Input::W, EAST)] {
+fn a_slide_bleeds_the_run_along_the_wall() {
+    for (what, bits, aim) in [("into", Input::W, SOUTH), ("let go", 0, SOUTH)] {
         let mut w = against_the_north_face(9, Fx::from_int(17));
         w.players[0].vel.x = Fx::from_int(7);
-        for _ in 0..20 {
+        for _ in 0..30 {
             w.advance([Input::aimed(bits, aim), Input::default()]);
         }
         assert!(w.players[0].sliding, "the stick {what}: not on the slide");
         let along = w.players[0].vel.x;
         assert!(
-            along.raw() > Fx::from_int(5).raw(),
-            "the stick {what}: the run along the wall is down to {along:?}"
+            along.raw() < Fx::from_int(2).raw() && along.raw() >= 0,
+            "the stick {what}: the run along the wall is still {along:?}"
         );
     }
+    let mut w = against_the_north_face(9, Fx::from_int(17));
+    w.players[0].vel.x = Fx::from_int(7);
+    for _ in 0..30 {
+        w.advance([Input::aimed(Input::W, EAST), Input::default()]);
+    }
+    let along = w.players[0].vel.x;
+    let steer = t::wall_slide_steer();
+    assert!(
+        along.sub(steer).abs().raw() < Fx::ratio(3, 2).raw(),
+        "the stick along: {along:?}, the steer {steer:?}"
+    );
+}
+
+/// **Turning round on a wall is a turn, not a flip** (2026-11-04, the owner:
+/// "changing direction during a wall slide just flips the sign of your
+/// lateral momentum"). A run along the wall, the stick pushed the other
+/// way: a few frames on it is still going the first way, slower; three
+/// quarters of a second on it is going the new way.
+#[test]
+fn turning_round_on_a_wall_is_gradual() {
+    let mut w = against_the_north_face(9, Fx::from_int(19));
+    lean_in(&mut w, 4);
+    for _ in 0..30 {
+        w.advance([Input::aimed(Input::W, EAST), Input::default()]);
+    }
+    let before = w.players[0].vel.x;
+    assert!(
+        before.raw() > Fx::from_int(3).raw(),
+        "never ran: {before:?}"
+    );
+    // The other way along it.
+    const WEST: u16 = 32768;
+    for _ in 0..5 {
+        w.advance([Input::aimed(Input::W, WEST), Input::default()]);
+    }
+    assert!(w.players[0].sliding);
+    let soon = w.players[0].vel.x;
+    assert!(
+        soon.raw() > 0 && soon.raw() < before.raw(),
+        "five frames into the turn: {before:?} to {soon:?}"
+    );
+    for _ in 0..40 {
+        w.advance([Input::aimed(Input::W, WEST), Input::default()]);
+    }
+    let p = &w.players[0];
+    assert!(p.sliding, "off the slide at {:?}, {:?}", p.pos, p.vel);
+    assert!(
+        w.players[0].vel.x.raw() < Fx::from_int(-2).raw(),
+        "three quarters of a second on, still {:?}",
+        w.players[0].vel.x
+    );
+}
+
+/// **Round a column, a slide never speeds up** (2026-11-04, from play). The
+/// push into the wall that holds a body on it is, on a curved face, a little
+/// along the next frame's face; read back as the run, every frame round a
+/// column added to it. The Spire's shaft, below its stair.
+#[test]
+fn a_slide_round_a_column_never_speeds_up() {
+    use sim::arena::spire::{AT, SHAFT};
+    let j = sim::valley::Journey {
+        beaten: u32::MAX,
+        ..sim::valley::Journey::default()
+    };
+    let mut w = World::arrive(
+        [Class::Champion, Class::Bulwark],
+        j,
+        ArenaId::SPIRE,
+        Some(0),
+        1,
+    );
+    let o = w.map_origin();
+    let cm = sim::arena::cm;
+    let axis = V3::new(cm(AT.0), Fx::ZERO, cm(AT.1)).sub(o);
+    let axis = V3::new(axis.x, Fx::ZERO, axis.z);
+    // On the shaft's north side, just off its skin, moving round it east.
+    let r = cm(SHAFT.0).add(t::body_radius()).add(Fx::ratio(1, 50));
+    // The plaza at the shaft, in the world's frame: the shaft's top less
+    // its height.
+    let atlas = sim::atlas::valley();
+    let (mx, mz) = (cm(AT.0), cm(AT.1));
+    let reach = Fx::from_int(20);
+    let base = atlas
+        .near(
+            (mx.sub(reach), mz.sub(reach)),
+            (mx.add(reach), mz.add(reach)),
+        )
+        .map(|i| atlas.solids[i as usize])
+        .filter(
+            |s| matches!(s.shape, sim::arena::Shape::Round { hollow, .. } if hollow == Fx::ZERO),
+        )
+        .map(|s| s.max.y)
+        .filter(|y| y.to_int() > 200)
+        .min()
+        .expect("the shaft")
+        .sub(cm(SHAFT.2))
+        .sub(o.y);
+    let mut start = axis.add(V3::new(Fx::ZERO, Fx::ZERO, r));
+    start.y = base.add(Fx::from_int(9));
+    let speed = Fx::from_int(6);
+    {
+        let p = &mut w.players[0];
+        p.pos = start;
+        p.vel = V3::new(speed, Fx::ZERO, Fx::from_int(-1));
+        p.grounded = false;
+        w.players[1].pos = axis.add(V3::new(Fx::from_int(60), Fx::ZERO, Fx::ZERO));
+    }
+    let mut slid = 0;
+    let mut fastest = Fx::ZERO;
+    for f in 0..45 {
+        w.advance([Input::aimed(0, SOUTH), Input::default()]);
+        let p = &w.players[0];
+        assert!(!p.grounded, "landed on frame {f}");
+        if !p.sliding {
+            continue;
+        }
+        slid += 1;
+        // Round the axis: the flat speed across the line to it.
+        let rel = V3::new(p.pos.x.sub(axis.x), Fx::ZERO, p.pos.z.sub(axis.z));
+        let d = rel.flat_len();
+        let round = p.vel.x.mul(rel.z).sub(p.vel.z.mul(rel.x)).div(d).abs();
+        fastest = fastest.max(round);
+        assert!(
+            round.raw() <= speed.raw(),
+            "frame {f}: going round at {round:?}, arrived at {speed:?}"
+        );
+    }
+    assert!(slid > 30, "slid {slid} frames of 45");
+    let p = &w.players[0];
+    let rel = V3::new(p.pos.x.sub(axis.x), Fx::ZERO, p.pos.z.sub(axis.z));
+    let round = p
+        .vel
+        .x
+        .mul(rel.z)
+        .sub(p.vel.z.mul(rel.x))
+        .div(rel.flat_len())
+        .abs();
+    assert!(
+        round.raw() < Fx::from_int(2).raw(),
+        "still going round at {round:?} (fastest {fastest:?})"
+    );
 }
 
 /// **The wall jump goes where the stick points** (2026-10-20): along the
@@ -312,7 +456,9 @@ fn a_wall_jump_is_still_there_a_few_frames_after_leaving() {
 
 #[test]
 fn the_same_wall_again_only_from_lower_down() {
-    let mut w = against_the_north_face(8, mid_face());
+    // Five metres up: since 2026-11-04 a kick rises far enough that from
+    // eight the hands met the tower's top and the body hung there.
+    let mut w = against_the_north_face(5, mid_face());
     lean_in(&mut w, 10);
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
     assert_eq!(w.players[0].wall_jumps, 1);
@@ -345,7 +491,10 @@ fn the_same_wall_again_only_from_lower_down() {
     );
     // Slid the drop's worth below where it jumped: offered again.
     // Still rising, so the wall is not holding it yet: kept against it.
-    while w.players[0].pos.y.raw() > jumped_at.sub(t::wall_jump_drop()).raw() {
+    for _ in 0..300 {
+        if w.players[0].pos.y.raw() <= jumped_at.sub(t::wall_jump_drop()).raw() {
+            break;
+        }
         w.players[0].vel.z = w.players[0].vel.z.min(Fx::from_int(-1));
         idle(&mut w, 1);
         assert!(!w.players[0].grounded, "came down before the drop");
@@ -357,8 +506,10 @@ fn the_same_wall_again_only_from_lower_down() {
     assert!(p.vel.y.raw() > 0 && p.vel.z.raw() > 0, "{:?}", p.vel);
 }
 
+/// **Every kick as high as the first** (2026-11-04): until then each one in
+/// an airtime was worth `0.7` of the one before.
 #[test]
-fn each_wall_jump_in_an_airtime_rises_less() {
+fn every_wall_jump_in_an_airtime_rises_as_high_as_the_first() {
     let mut w = against_the_north_face(8, mid_face());
     lean_in(&mut w, 10);
     w.advance([Input::aimed(Input::SPACE, SOUTH), Input::default()]);
@@ -378,15 +529,65 @@ fn each_wall_jump_in_an_airtime_rises_less() {
     assert_eq!(p.wall_jumps, 2, "the second wall refused: {:?}", p.pos);
     assert!(p.vel.z.raw() < 0, "pushed the wrong way: {:?}", p.vel);
     // Both read a frame after the press, so both have had a frame of gravity.
-    let rise = t::jump_speed()
-        .mul(Class::Champion.mobility().jump)
-        .mul(t::wall_jump_rise());
-    let want = rise.mul(t::wall_jump_falloff()).add(first.sub(rise));
+    // No falloff (2026-11-04, the owner: "get rid of the decay per jump").
+    let want = first;
     assert!(
         p.vel.y.sub(want).abs().raw() <= Fx::ratio(1, 100).raw(),
         "second rise {:?}, wanted {want:?}",
         p.vel.y
     );
+}
+
+/// **Two facing walls are climbed** (2026-11-04, the owner: "I want people
+/// to be able to climb up wall jump sections"). The bench's first gully
+/// lane (`arena::bench`): walls three metres apart, from 50 m to 72 m. Kicked
+/// off one with the stick toward the other, and again the moment that one
+/// is under the hand: every mover is six metres up within six kicks, never
+/// having come down. (Until 2026-11-04 the falloff stopped a flue like this
+/// at about a jump's height.)
+#[test]
+fn two_facing_walls_are_climbed() {
+    for class in sim::class::MOVERS {
+        let mut w = World::versus_in([class, Class::Champion], ArenaId::BENCH);
+        // Between the walls of the lane at z = 160, against the south one.
+        let start = V3::new(Fx::from_int(4), Fx::from_int(55), Fx::ratio(1590, 10));
+        {
+            let p = &mut w.players[0];
+            p.pos = start;
+            p.vel = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(-2));
+            p.grounded = false;
+            w.players[1].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(-400));
+        }
+        // Toward the wall it is against: south (-z) first.
+        let mut toward = SOUTH;
+        let mut kicks = 0;
+        let goal = start.y.add(Fx::from_int(6));
+        for _ in 0..600 {
+            let p = &w.players[0];
+            let press = p.wall_since == 0 && p.vel.y.raw() <= 0;
+            let input = if press {
+                toward = if toward == SOUTH { NORTH } else { SOUTH };
+                Input::aimed(Input::W | Input::SPACE, toward)
+            } else {
+                Input::aimed(Input::W, toward)
+            };
+            let before = w.players[0].wall_jumps;
+            w.advance([input, Input::default()]);
+            if w.players[0].wall_jumps > before {
+                kicks += 1;
+            }
+            assert!(!w.players[0].grounded, "{class:?}: came down");
+            if w.players[0].pos.y.raw() >= goal.raw() || kicks > 6 {
+                break;
+            }
+        }
+        assert!(
+            w.players[0].pos.y.raw() >= goal.raw() && kicks <= 6,
+            "{class:?}: {kicks} kicks, at {:?} from {:?}",
+            w.players[0].pos.y,
+            start.y
+        );
+    }
 }
 
 #[test]
