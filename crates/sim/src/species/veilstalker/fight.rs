@@ -2463,7 +2463,14 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
             w.lore.set_word(word::FIRE_AT, word_of(c));
             w.lore.set_word(word::FIRE_NEAR, 1);
         }
-        None => w.lore.set_word(word::FIRE_NEAR, 0),
+        // **No fire near is no fire point** (2026-11-05): a point left
+        // behind in `FIRE_AT` is moved by nothing (`shift` moves it only
+        // while there is a fire), so it read differently wherever the world
+        // was framed (`tests/valley.rs`). An empty word stays empty.
+        None => {
+            w.lore.set_word(word::FIRE_AT, 0);
+            w.lore.set_word(word::FIRE_NEAR, 0);
+        }
     }
     // Decloaks by where they were on the screen, counted as each begins.
     if let Doing::Startup { kind, left } = m.doing {

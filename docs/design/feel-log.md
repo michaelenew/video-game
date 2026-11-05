@@ -259,13 +259,17 @@ Storm bolts 1,548 (65 storms), lance 1,185 (75 lances, ~16 each: half missed), d
 (61), the chain ride 419, the Abyss 193, Judgement 178, light strikes 109 (25), annihilation 45
 (7). Her lower bar averaged 24 of 100 (power ×0.79 of a possible ×1.4); 160 s at 4-9 m from the
 creature, 29 s inside 4 m.
-**Not fixed, found on the way** `tests/valley.rs` (`a_change_of_frame_changes_nothing_in_a_hunt`)
-fails since her first rebuild today, and not on anything of hers: in the Last Valley the Abyss's
-floor aim (`aim::Kind::Grounded`, which the script presses on `Q`) comes out 1.5 m apart from the
-same place and look depending on which place's coordinates the world is in, and in the Ashwood a
-word of the Veilstalker's lore keeps a point the shift does not move. Both were there before; her
-new kit changes how the scripted Champion-and-Dual-mage hunt plays, and the trajectory now walks
-into them. Every position she added (`storm_at`, `strike_at`) is in `shift`.
+**Found on the way, fixed the next day (2026-11-05)** `tests/valley.rs`
+(`a_change_of_frame_changes_nothing_in_a_hunt`) failed since her first rebuild, on nothing of
+hers. Three things, each a frame the world was framed in leaking into the fight: **the hunt's
+objectives** were placed at the sites of whichever arena the world was framed in, so framed
+elsewhere the Last Valley's wall vanished from the terrain and the crosshair's ray went through
+it (`objective::standing` and `objective::step` read the hunt's `Den` now, and move its sites by
+its offset); **the Veilstalker's `FIRE_AT`** kept the last fire's point after there was none,
+and nothing moved it (cleared with `FIRE_NEAR`); and **the test framed a fight 337 m from the
+other place's origin**, past a centimetre's sixteen bits, which no frame in play is -- it now
+frames the place nearest the fight, holds rounds where nothing could, and asserts most rounds
+are framed elsewhere. Every position she added (`storm_at`, `strike_at`) is in `shift`.
 **Verdict** open -- the lance-or-strikes question is the owner's, next.
 
 ### 2026-11-04 — the Dual mage's magic is aimed at her
