@@ -1141,7 +1141,7 @@ fn cart_to(w: &mut World, along: Fx) {
 }
 
 fn cart(w: &World) -> sim::objective::Standing {
-    sim::objective::standing(&w.lore, w.arena())
+    sim::objective::standing(&w.lore, &w.den())
         .next()
         .expect("a cart")
 }
@@ -1230,7 +1230,7 @@ fn a_wave_runs_into_the_cart_rather_than_round_it() {
         w.advance(idle());
     }
     let (lane, ..) = h::rules::wave_lane(&w).unwrap();
-    let start = sim::objective::standing(&w.lore, w.arena())
+    let start = sim::objective::standing(&w.lore, &w.den())
         .next()
         .unwrap()
         .site

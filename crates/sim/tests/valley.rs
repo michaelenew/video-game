@@ -636,6 +636,7 @@ fn a_change_of_frame_changes_nothing_in_a_hunt() {
     dens.sort_by_key(|a| a.0);
     dens.dedup();
     let mut failed = Vec::new();
+    let (mut framed, mut held) = (0u32, 0u32);
     for den in dens {
         let Some(home) = atlas.placed(den).copied() else {
             continue;
@@ -675,9 +676,39 @@ fn a_change_of_frame_changes_nothing_in_a_hunt() {
         let mut moved = w.clone();
         let mut ok = true;
         for round in 0..24u32 {
-            if moved.hunting() {
+            // **Framed in the other place nearest the fight**, not the den's
+            // origin (2026-11-05): a fight that has drifted a hundred metres
+            // the other way from the nearest place to the den is well past a
+            // centimetre's sixteen bits from that place's origin, which is
+            // further than the world is ever framed from a fight in play --
+            // it frames the place the fighters are in.
+            let fight = moved.players[0].pos.add(home.at);
+            let other = atlas
+                .places
+                .iter()
+                .filter(|p| p.arena != den && p.at != V3::ZERO)
+                .min_by_key(|p| sim::math::wide_len(p.at.sub(fight)).raw())
+                .copied()
+                .unwrap_or(other);
+            // And only where everything in the fight stays in those sixteen
+            // bits of the other place's origin (a little short of 327 m):
+            // further, no place could frame it, and the round is played
+            // without moving.
+            let o = other.at.sub(home.at);
+            let within = |p: V3| sim::math::wide_len(p.sub(o)).raw() < Fx::from_int(300).raw();
+            let reachable = moved.players.iter().take(2).all(|p| within(p.pos))
+                && moved.monsters.iter().flatten().all(|m| within(m.pos))
+                && moved
+                    .critters
+                    .iter()
+                    .filter(|c| c.alive())
+                    .all(|c| within(c.pos));
+            if moved.hunting() && reachable {
                 moved.shift(home.at.sub(other.at));
                 moved.arena = other.arena;
+                framed += 1;
+            } else if moved.hunting() {
+                held += 1;
             }
             for f in 0..10 {
                 let f = 240 + round * 10 + f;
@@ -702,6 +733,11 @@ fn a_change_of_frame_changes_nothing_in_a_hunt() {
         failed.is_empty(),
         "a hunt moved and back came out different:\n{}",
         failed.join("\n")
+    );
+    // Not a test of nothing: most rounds are framed somewhere else.
+    assert!(
+        framed > 4 * held && framed > 50,
+        "only {framed} rounds were framed elsewhere ({held} held at home)"
     );
 }
 

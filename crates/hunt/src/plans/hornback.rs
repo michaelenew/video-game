@@ -1148,7 +1148,7 @@ impl crate::report::Tally for Lines {
         }
         // The crossing: what struck the cart this frame, and the waves.
         let taken = |w: &World| {
-            sim::objective::standing(&w.lore, w.arena())
+            sim::objective::standing(&w.lore, &w.den())
                 .next()
                 .map(|o| (o.state.taken, o.state.along))
         };

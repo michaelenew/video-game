@@ -47,7 +47,7 @@ fn step(w: &mut World, frames: u32) {
 }
 
 fn cart(w: &World) -> objective::Standing {
-    objective::standing(&w.lore, w.arena())
+    objective::standing(&w.lore, &w.den())
         .find(|o| o.index == sentinel::CART)
         .expect("the cart stands in the range")
 }
@@ -55,7 +55,7 @@ fn cart(w: &World) -> objective::Standing {
 #[test]
 fn they_stand_where_the_arena_says_and_whole() {
     let w = in_the_range();
-    let standing: Vec<_> = objective::standing(&w.lore, w.arena()).collect();
+    let standing: Vec<_> = objective::standing(&w.lore, &w.den()).collect();
     assert_eq!(standing.len(), 2);
     for o in &standing {
         assert_eq!(o.state.health, o.full);
@@ -71,7 +71,7 @@ fn they_stand_where_the_arena_says_and_whole() {
     }
     // Where the arena has no site for them, there are none.
     let home = World::hunt_of([Class::Champion; 2], SpeciesId::SENTINEL);
-    assert_eq!(objective::standing(&home.lore, home.arena()).count(), 0);
+    assert_eq!(objective::standing(&home.lore, &home.den()).count(), 0);
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn they_are_solids_bodies_stop_at() {
     let w = in_the_range();
     let ground = w.terrain();
     assert_eq!(ground.raised().len(), 2);
-    let gate = objective::standing(&w.lore, w.arena())
+    let gate = objective::standing(&w.lore, &w.den())
         .find(|o| o.index == sentinel::GATE)
         .unwrap();
     let face = gate.at.x.sub(gate.site.extent().x);
@@ -146,7 +146,7 @@ fn they_are_solids_bodies_stop_at() {
 #[test]
 fn a_creature_s_blow_lands_on_it_once_a_move() {
     let mut w = in_the_range();
-    let gate = objective::standing(&w.lore, w.arena())
+    let gate = objective::standing(&w.lore, &w.den())
         .find(|o| o.index == sentinel::GATE)
         .unwrap();
     let full = gate.state.health;

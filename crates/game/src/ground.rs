@@ -308,7 +308,7 @@ pub fn place(
     let ground = w.terrain();
     let hazards: Vec<Placed> = ground.floor.iter().copied().collect();
     let (raised, raised_n) = ground.floor.solids::<MAX_RAISED>();
-    let standing: Vec<objective::Standing> = objective::standing(&w.lore, w.arena()).collect();
+    let standing: Vec<objective::Standing> = objective::standing(&w.lore, &w.den()).collect();
     let marks = w.marks();
     let arena = w.arena();
     for (piece, mut transform, mut visible, mut mesh, mut material) in pieces.iter_mut() {

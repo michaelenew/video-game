@@ -2385,7 +2385,7 @@ impl World {
         for s in &raised[..n] {
             ground.raise(*s);
         }
-        for o in objective::standing(&self.lore, self.arena.get()) {
+        for o in objective::standing(&self.lore, &ground.den) {
             if o.decl.solid && !o.state.broken {
                 ground.raise(o.solid());
             }
@@ -21698,7 +21698,8 @@ impl World {
                 count += 1;
             }
         }
-        objective::step(&mut self.lore, self.arena.get(), &near[..count]);
+        let den = self.den();
+        objective::step(&mut self.lore, &den, &near[..count]);
     }
 
     /// **A creature's blow on the defended things** (P7): its move's volume,
@@ -21709,7 +21710,7 @@ impl World {
         let mut hits = [(0usize, 0i32); objective::MAX_STANDING];
         let mut n = 0;
         let lore = self.lore;
-        for o in objective::standing(&lore, self.arena.get()) {
+        for o in objective::standing(&lore, &self.den()) {
             let mut state = o.state;
             let Doing::Active { kind, .. } = beast.doing else {
                 if state.struck & bit != 0 {
@@ -21741,7 +21742,7 @@ impl World {
         let Some(pack) = self.pack else { return };
         let sp = pack.sp();
         let lore = self.lore;
-        for o in objective::standing(&lore, self.arena.get()) {
+        for o in objective::standing(&lore, &self.den()) {
             if o.state.broken {
                 continue;
             }

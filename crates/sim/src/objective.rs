@@ -28,7 +28,7 @@
 //! and the fight report counts what it took. `World::advance` ends the hunt on
 //! [`lost`] and [`won`].
 
-use crate::arena::{Arena, Material, Solid};
+use crate::arena::{Arena, Den, Material, Solid};
 use crate::fixed::Fx;
 use crate::lore::{Cell, Lore};
 use crate::math::{self, V3};
@@ -326,8 +326,14 @@ impl Standing {
     }
 }
 
-/// Every defended thing in the fight, as it stands.
-pub fn standing<'a>(lore: &'a Lore, arena: &'static Arena) -> impl Iterator<Item = Standing> + 'a {
+/// Every defended thing in the fight, as it stands, **in the world's
+/// coordinates**: read off the hunt's own arena (`den`, `World::den`) and
+/// moved by how far its origin is from the world's. In the valley the world
+/// can be framed in another place while the hunt goes on, and read off the
+/// arena the world is framed in, the den's wall vanished from the terrain
+/// and came back as the frame did (2026-11-05, `tests/valley.rs`).
+pub fn standing<'a>(lore: &'a Lore, den: &Den) -> impl Iterator<Item = Standing> + 'a {
+    let (arena, off) = (den.arena, den.off);
     let sp = lore.owner.map(|s| s.get());
     let decls: &'static [ObjectiveDecl] = sp.map_or(&[], |s| s.fight.objectives);
     decls.iter().enumerate().filter_map(move |(i, decl)| {
@@ -337,6 +343,7 @@ pub fn standing<'a>(lore: &'a Lore, arena: &'static Arena) -> impl Iterator<Item
             return None;
         }
         let (at, dir) = site.at(state.along());
+        let at = at.add(off);
         let full = sp.map_or(1, |s| stat(s, i, ObjectiveField::Health));
         Some(Standing {
             index: i,
@@ -373,7 +380,10 @@ pub fn set_up(lore: &mut Lore, arena: &Arena) {
 }
 
 /// One frame: an escorted thing rolls on while a hunter is near it.
-pub fn step(lore: &mut Lore, arena: &'static Arena, hunters: &[V3]) {
+/// `hunters` are in the world's coordinates; the den's sites are moved into
+/// them by `den.off`, as [`standing`] moves them.
+pub fn step(lore: &mut Lore, den: &Den, hunters: &[V3]) {
+    let arena = den.arena;
     let Some(sp) = lore.owner.map(|s| s.get()) else {
         return;
     };
@@ -386,6 +396,7 @@ pub fn step(lore: &mut Lore, arena: &'static Arena, hunters: &[V3]) {
             continue;
         };
         let (at, _) = site.at(o.along());
+        let at = at.add(den.off);
         let near = stat_fx(sp, i, ObjectiveField::Escort);
         if !hunters
             .iter()

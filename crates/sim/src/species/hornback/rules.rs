@@ -661,7 +661,7 @@ fn lane_reach(w: &World, ground: &Terrain, at: V3, dir: V3) -> Fx {
 /// The defended thing standing in this fight, if it has one: the crossing's
 /// cart, still whole and still on its road.
 pub fn the_cart(w: &World) -> Option<objective::Standing> {
-    objective::standing(&w.lore, w.arena.get()).find(|o| !o.state.broken && !o.state.arrived)
+    objective::standing(&w.lore, &w.den()).find(|o| !o.state.broken && !o.state.arrived)
 }
 
 /// Bits of the high half of [`word::WAVE_AT`].
