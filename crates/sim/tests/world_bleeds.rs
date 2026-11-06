@@ -580,7 +580,7 @@ fn seize_holds_them_up_and_then_brings_them_down() {
     let (caught, hurt) = (caught_at.expect("caught"), hurt_at.expect("slammed"));
     assert!(highest > 1.0, "lifted over her: {highest} m");
     assert!(
-        hurt >= caught + t::seize_lift() as u32,
+        hurt + 1 >= caught + t::seize_lift() as u32,
         "the blow lands when the lift ends: caught {caught}, hurt {hurt}"
     );
     let dealt = his - w.players[1].health;

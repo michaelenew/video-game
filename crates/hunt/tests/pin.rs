@@ -185,7 +185,10 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-11-04, deliberately: the world bleeds (exploration 0038)
     // -- the class layer casts the scythe's head from range and zips in on
     // it, rends and sweeps up close, and raises a pool only where one is.
-    (Class::BloodMage, 83, 0x495c065d2da152d2),
+    // Moved again 2026-11-06, deliberately: her kit rebuilt from play -- the
+    // free scythe and hand, the spike anywhere, the queued zip, Seize's lift
+    // (feel-log.md, 2026-11-06).
+    (Class::BloodMage, 83, 0xfb5cbd4df151b200),
 ];
 
 #[test]

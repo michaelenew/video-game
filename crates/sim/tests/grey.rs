@@ -92,12 +92,13 @@ fn red_plus_grey_plus_gone_is_the_bar_and_gone_only_grows_by_the_fade() {
 
 #[test]
 fn a_cast_at_full_health_opens_grey_by_its_cost() {
-    // Every press she makes is paid in red, in the air and on the floor
-    // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md).
+    // Every press of hers that grows something is paid in red, in the air and
+    // on the floor (0016; since 2026-11-06 only what she grows -- the spike's
+    // plant, and `Q` and `E` until they are redesigned -- costs: the scythe and
+    // the Red Hand are free).
     for (slot, button, airborne) in [
-        (b::REND, keys::HAND, true),
-        (b::REND, keys::HAND, false),
-        (b::SWEEP, keys::SCYTHE, false),
+        (b::BLACK_SPIKE, keys::SPIKES, true),
+        (b::BLACK_SPIKE, keys::SPIKES, false),
         (b::COAGULATE, keys::GATHER, false),
         (b::HEART, keys::PLANT, false),
     ] {
@@ -172,19 +173,20 @@ fn grey_fades_and_nothing_but_the_fade_takes_it() {
 #[test]
 fn a_committed_casts_worth_of_grey_survives_one_exchange() {
     // The starting fade rate, from the design: the grey a committed cast
-    // opens -- the Cast, since 2026-11-04 the scythe held, its tap's cost and
-    // its own -- should still be more than half there after one whole
-    // exchange: its own startup, active and recovery, and a dodge on the end
-    // of it. Faster and the blade never gets long enough to matter.
-    let cast = sim::moves::get(Class::BloodMage, b::CAST);
+    // opens -- the spike, since 2026-11-06 the one press that costs -- should
+    // still be more than half there after one whole exchange: its own
+    // startup, active and recovery, and a dodge on the end of it. Faster and
+    // the blade never gets long enough to matter. (Its plant holds it as
+    // long as it stands, which is longer.)
+    let cast = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     let exchange = cast.whiff_cost() as u32 + t::dodge_frames() as u32;
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    run(&mut w, t::hold_from() as u32 + 2, keys::SCYTHE, 0);
+    run(&mut w, 2, keys::SPIKES, 0);
     let opened = w.players[0].grey;
     assert!(
         opened >= w.players[0].cost_of(cast.cost),
-        "the Cast cost her"
+        "the spike cost her"
     );
     run(&mut w, exchange, 0, 0);
     assert!(
@@ -240,19 +242,19 @@ fn a_cast_costs_a_share_of_what_she_has_so_the_wounded_pay_less() {
     // cast opens a big wound, which is how she gets reach quickly, and at low
     // health it opens a small one, so getting back into the fight never costs
     // the fight. And never the last point.
-    let spike = sim::moves::get(Class::BloodMage, b::SWEEP);
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     let at = |health: i32| {
         let mut w = mage();
         w.players[0].health = health;
         w.players[0].grey = 0;
-        run(&mut w, 2, keys::SCYTHE, 0);
+        run(&mut w, 2, keys::SPIKES, 0);
         health - w.players[0].health
     };
     let full = at(t::max_health());
     let low = at(t::max_health() / 5);
     assert!(
         full > low * 3,
-        "a Sweep at full health cost {full} and at a fifth {low}"
+        "a spike at full health cost {full} and at a fifth {low}"
     );
     assert_eq!(full, t::max_health() * spike.cost / 100);
     assert_eq!(at(1), 0, "a cast at one health took the last point");

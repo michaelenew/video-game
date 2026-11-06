@@ -852,8 +852,12 @@ impl World {
         let reach = stone.radius().add(t::plant_lash_reach());
         for v in 0..MAX_PLAYERS {
             let q = self.players[v];
+            // Not one her own hand is holding: the plant would knock them out
+            // of her Seize before she brought them down on it.
+            let held_by_her = matches!(q.action, Action::Held { .. }) && q.held_by == owner as u8;
             if !self.effects_reach(v, owner as u8)
                 || q.untouchable()
+                || held_by_her
                 || flat_apart(q.pos, stone.at).raw() > reach.add(t::body_radius()).raw()
                 || q.pos.y.raw() > stone.top().add(t::body_height()).raw()
                 || q.pos.y.add(t::body_height()).raw() < stone.at.y.raw()

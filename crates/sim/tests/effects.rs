@@ -599,13 +599,14 @@ fn casting_costs_the_blood_mage_health() {
     // two-frame press is a tap, which costs only its row.
     use sim::moves::blood as b;
     use sim::moves::blood::keys;
-    // The spike is the one exception (2026-11-04): on bare ground it raises
-    // nothing and costs nothing -- `tests/world_bleeds.rs`.
+    // **Since 2026-11-06 only what she grows costs**: the spike, whose plant
+    // holds the price, and `Q` and `E` until they are redesigned. The scythe
+    // and the Red Hand are free (`tests/feel.rs`,
+    // `the_blood_mage_pays_to_grow_and_nobody_else_pays_for_anything`).
     for (slot, button, airborne) in [
-        (b::REND, keys::HAND, false),
-        (b::REND, keys::HAND, true),
+        (b::BLACK_SPIKE, keys::SPIKES, false),
+        (b::BLACK_SPIKE, keys::SPIKES, true),
         (b::HEART, keys::PLANT, false),
-        (b::SWEEP, keys::SCYTHE, false),
         (b::COAGULATE, keys::GATHER, false),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
@@ -738,6 +739,11 @@ fn a_slowed_fighter_covers_less_ground() {
     spiked(&mut w);
     run(&mut w, 2, 0, 0);
     assert!(w.players[1].slowed > 0, "fixture did not slow anyone");
+    // The spike's plant cut down: it stands fifteen seconds now (2026-11-06),
+    // under his feet, and pushing a body out of it is not walking.
+    if let sim::class::Mechanic::Blood(g) = &mut w.players[0].mechanic {
+        g.plants = [None; sim::class::MAX_STRUCTURES];
+    }
     // Launched by the spike; measure the walk once the feet are back.
     for _ in 0..60 {
         if w.players[1].grounded && !w.players[1].action.stunned() {
