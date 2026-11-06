@@ -403,11 +403,11 @@ pub fn emit_volume_swings(sim: Res<Sim>, mut emits: ResMut<Emits>) {
             let along = (to - hub).normalize_or(Vec3::X);
             let across = along.cross(Vec3::Y).normalize_or(Vec3::Z);
             let up = across.cross(along).normalize_or(Vec3::Y);
-            for (part, off) in [-0.16f32, 0.0, 0.16].into_iter().enumerate() {
+            for (part, off) in [-0.22f32, 0.0, 0.22].into_iter().enumerate() {
                 let lift = up * off;
                 emits.add(Emit {
                     key: key(source::VOLUME, owner, part as u8),
-                    inner: hub.lerp(to, 0.35) + lift,
+                    inner: hub.lerp(to, 0.78) + lift,
                     outer: to + lift + along * 0.25,
                     glow: (glow * 1.6).min(1.0),
                     tint: linear(Color::srgb(0.95, 0.10, 0.12)),
