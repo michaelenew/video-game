@@ -703,7 +703,7 @@ const NAMES: [&[&str]; 6] = [
         "Light auto",
         "Annihilation",
         "Descent",
-        "Phase",
+        "Yank",
         "Veil",
         "Sanctuary",
         "Equinox",
@@ -1139,8 +1139,9 @@ pub mod dual {
     /// No button since the autos took the air: down onto the ground as a
     /// smite, and a sigil.
     pub const DESCENT: u8 = 6;
-    /// Middle click in the air: a short blink along the crosshair.
-    pub const PHASE: u8 = 7;
+    /// Middle click tapped again while the chain is still out on somebody
+    /// (2026-11-06): **the yank**, dragging them to her. Was Phase's row.
+    pub const YANK: u8 = 7;
     /// Space and left click: she rises as shadow, untouchable.
     pub const VEIL: u8 = 8;
     /// Space and right click: a sigil at her feet, a pulse, and a hop.
@@ -1211,7 +1212,7 @@ pub mod dual {
 
     /// Is this a twilight move -- the middle column, both forces at once?
     pub const fn twilight(kind: u8) -> bool {
-        matches!(kind, CHAIN | PHASE | EQUINOX | FLURRY_DASH | ANNIHILATION)
+        matches!(kind, CHAIN | YANK | EQUINOX | FLURRY_DASH | ANNIHILATION)
     }
 
     /// Is this one of the three long holds? They fill `meter, a long hold
@@ -2437,12 +2438,13 @@ pub fn orb_line(facing: V3, aim_dir: V3, grounded: bool, stoop: Fx) -> (V3, Fx) 
 /// over the point on the ground the crosshair picked (`end`, a grounded aim,
 /// so a wall or the range brings it down to the floor there). The blows
 /// cascade along it and she dashes to the disk at its end.
+///
+/// **A skillshot since 2026-11-06** (the owner: "it forces me to the ground
+/// when I want to use it to go upwards or laterally in the air"): the path is
+/// already from her chest to the point the crosshair is on -- a body's middle
+/// over the floor, or a point in the air -- so the line is the path itself.
 pub fn flurry_line(start: V3, end: V3) -> (V3, V3) {
-    let half = crate::tuning::body_height().mul(Fx::ratio(1, 2));
-    (
-        crate::aim::origin(start),
-        V3::new(end.x, end.y.add(half), end.z),
-    )
+    (start, end)
 }
 
 /// How many blows a Flurry dash throws, and which one is out `left` frames

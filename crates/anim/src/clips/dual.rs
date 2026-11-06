@@ -115,11 +115,11 @@ const PULL_AWAY: Ease = Ease::new(0.45, -0.22, 0.3, 1.0);
 
 pub fn clips() -> Vec<Recipe> {
     vec![
-        punch(Clip::DualDark, Arm::Dark),
+        goad(Clip::DualDark, Arm::Dark),
         light_lance(),
         judgement(),
         sweep(),
-        punch(Clip::DualLight, Arm::Light),
+        goad(Clip::DualLight, Arm::Light),
         dark_lance(),
         float(),
         drift(),
@@ -313,186 +313,98 @@ impl Arm {
 }
 
 // ---------------------------------------------------------------------------
-// The autos -- one punch, either arm
+// The strikes -- goaded, and danced out of (2026-11-06)
 // ---------------------------------------------------------------------------
+//
+// From the owner: "she doesn't 'throw a punch' as her animation any more, she
+// goads an entity into striking at her then dances away." The strike leaves
+// from behind her shoulder and passes where she was standing; her body is
+// the goad and the sidestep, never the source.
 
-/// Two frames in, and the lead foot is already off the floor.
-///
-/// The cock is deliberately shallow. Five frames is not enough time to draw a
-/// hand back and then put it somewhere else, and a deep cock buys a silhouette
-/// the opponent cannot act on anyway -- so the arm folds instead of swinging
-/// back, and the lifted lead knee carries the tell.
-fn load() -> Pose {
+/// The goad: a look back over the strike's shoulder at the being, and that
+/// hand turned back and open toward it -- *come on, then*.
+fn beckon() -> Pose {
     stance()
-        .hips(-0.012, -0.085, -0.045)
-        .root(0.0, -3.0, -13.0)
-        .spine(10.0, 1.0, 0.0)
-        .chest(3.0, 0.0, -8.0)
-        .head(-2.0, 0.0, 16.0)
-        .shoulder_l(16.0, 16.0, 0.0)
-        .elbow_l(78.0)
-        .wrist_l(-14.0, 0.0, 0.0)
-        .shoulder_r(12.0, 18.0, 0.0)
-        .elbow_r(58.0)
-        .plant_l([L, GROUND + 0.06, 0.235])
-        .plant_r([R, GROUND, -0.15])
-        .toe_l(-10.0)
-        .toe_r(10.0)
+        .hips(0.0, -0.06, -0.02)
+        .root(-2.0, 0.0, 12.0)
+        .spine(-3.0, 0.0, 10.0)
+        .chest(-2.0, 0.0, 16.0)
+        .head(-4.0, 0.0, 34.0)
+        .shoulder_l(-34.0, 34.0, 0.0)
+        .elbow_l(22.0)
+        .wrist_l(24.0, 0.0, 0.0)
+        .shoulder_r(28.0, 22.0, 0.0)
+        .elbow_r(44.0)
+        .plant_l([L, GROUND, 0.04])
+        .plant_r([R, GROUND, -0.04])
 }
 
-/// The last startup frame: the lead foot is down and the arm is on its way.
-///
-/// A step strike lands its foot one frame *before* the hand, which is what
-/// makes the step read as part of the strike rather than as a hop next to it.
-/// Keying it here rather than trusting the gap to the contact frame is also
-/// what gets the foot on the floor on time: the legs run a frame behind the
-/// keys, so a foot first asked for on the contact frame arrives after it.
-fn plant() -> Pose {
+/// The pass: it comes through where she was, and she has swayed off its line
+/// to the other side -- weight onto the far foot, the body bent away, the
+/// near hand swept forward and open as if seeing it on its way, eyes on it.
+fn sway() -> Pose {
     stance()
-        .hips(-0.004, -0.098, 0.02)
-        .root(4.0, 0.0, -12.0)
-        .spine(13.0, 0.0, 4.0)
-        .chest(5.0, 0.0, 6.0)
-        .head(-1.0, 0.0, 4.0)
-        .shoulder_l(56.0, 14.0, 0.0)
-        .elbow_l(48.0)
-        .wrist_l(-10.0, 0.0, 0.0)
-        .shoulder_r(-6.0, 22.0, 0.0)
-        .elbow_r(66.0)
-        .plant_l([L - 0.01, GROUND + 0.005, 0.36])
-        .plant_r([R, GROUND + 0.02, -0.15])
-        .toe_l(-12.0)
-        .toe_r(14.0)
-}
-
-/// The contact frame: the lead foot is down and the fist arrives on it.
-///
-/// The arm is nearly straight here and stays out through most of the active
-/// frames, which matters more on this move than on any other in the file. The
-/// hit volume is a ball thrown off that shoulder and out to full reach
-/// (`moves::Shape::Orb`) -- so the fist has to still be out there while it
-/// flies, or the two halves of the move are pointing at different places.
-fn strike() -> Pose {
-    stance()
-        .hips(0.0, -0.10, 0.075)
-        .root(6.0, 2.0, -8.0)
-        .spine(16.0, 0.0, 12.0)
-        .chest(6.0, 0.0, 18.0)
-        .head(0.0, 0.0, -16.0)
-        // Twenty-eight degrees of that is the torso's own forward pitch, which
-        // the shoulder has to pay back before the arm points anywhere: the
-        // world angle of a limb is its swing minus however far the chest above
-        // it has leaned. Ninety-four here is an arm level with the target, not
-        // an arm above it.
-        .shoulder_l(94.0, 12.0, 0.0)
+        .hips(0.075, -0.09, -0.03)
+        .root(-3.0, 9.0, -8.0)
+        .spine(-6.0, 11.0, -6.0)
+        .chest(-3.0, 6.0, -10.0)
+        .head(3.0, -6.0, -8.0)
+        .shoulder_l(68.0, 42.0, 0.0)
         .elbow_l(10.0)
-        .wrist_l(-4.0, 0.0, 0.0)
-        // The light hand is thrown back as hard as the dark hand goes out.
-        // The class is two forces held apart, and this is the cheapest way to
-        // say so inside a five-frame move.
-        .shoulder_r(-36.0, 26.0, 0.0)
-        .elbow_r(72.0)
-        .plant_l([L - 0.01, GROUND, 0.395])
-        .plant_r([R, GROUND + 0.05, -0.15])
-        .toe_l(-6.0)
-        .toe_floor_r()
-}
-
-/// First recovery frame: the hand is still out, but the body has caught up
-/// with it and the rear foot has come off the floor.
-fn follow() -> Pose {
-    stance()
-        .hips(0.0, -0.085, 0.06)
-        .root(4.0, 1.0, -10.0)
-        .spine(12.0, 0.0, 8.0)
-        .chest(4.0, 0.0, 12.0)
-        .head(0.0, 0.0, -10.0)
-        .shoulder_l(84.0, 14.0, 0.0)
-        .elbow_l(26.0)
-        .wrist_l(-8.0, 0.0, 0.0)
-        .shoulder_r(-22.0, 24.0, 0.0)
-        .elbow_r(80.0)
-        .plant_l([L - 0.01, GROUND, 0.375])
-        .plant_r([R, GROUND + 0.04, -0.105])
-        .toe_l(-2.0)
+        .wrist_l(-22.0, 0.0, 0.0)
+        .shoulder_r(8.0, 52.0, 0.0)
+        .elbow_r(24.0)
+        .plant_l([L - 0.02, GROUND + 0.04, 0.10])
+        .plant_r([R + 0.09, GROUND, -0.06])
+        .toe_l(-14.0)
         .toe_r(6.0)
 }
 
-/// The rear foot has come up under the body and the guard is rebuilding.
-fn regather() -> Pose {
+/// The way back from the sway: lighter, the arms coming in.
+fn glide() -> Pose {
     stance()
-        .hips(0.0, -0.07, 0.02)
-        .root(3.0, 0.0, -12.0)
-        .spine(8.0, 0.0, 6.0)
-        .chest(3.0, 0.0, 8.0)
-        .head(-2.0, 0.0, -4.0)
-        .shoulder_l(30.0, 14.0, 0.0)
-        .elbow_l(48.0)
-        .wrist_l(-8.0, 0.0, 0.0)
-        .shoulder_r(-2.0, 18.0, 0.0)
-        .elbow_r(58.0)
-        .plant_l([L, GROUND + 0.03, 0.26])
-        .plant_r([R, GROUND, -0.12])
-        .toe_l(-8.0)
-        .toe_r(8.0)
+        .hips(0.035, -0.07, 0.0)
+        .root(-1.0, 4.0, -3.0)
+        .spine(-2.0, 5.0, -2.0)
+        .head(1.0, -2.0, -3.0)
+        .shoulder_l(30.0, 26.0, 0.0)
+        .elbow_l(30.0)
+        .shoulder_r(10.0, 30.0, 0.0)
+        .elbow_r(34.0)
 }
 
-/// One punch, thrown with whichever arm is asked for.
-///
-/// **The two autos are this function twice.** They have to be indistinguishable
-/// apart from the side, because that is the entire information the player is
-/// reading off them -- dark landed, or light did -- and two hand-authored clips
-/// drift the moment either is touched.
-///
-/// The bookend keys are the idle's own stance, *unmirrored*, on both. Every
-/// clip in this file starts and ends there (see the module header), and a
-/// mirrored stance is a different stance: put one on frame zero and the
-/// character's feet swap sides on the first frame of every right-hand punch and
-/// swap back on the last.
-fn punch(clip: Clip, arm: Arm) -> Recipe {
+/// **A strike, goaded and danced out of.** Beckon through the wind-up, sway
+/// off the line on the contact frame -- as the strike passes where she stood,
+/// which is the frame the hop starts (`auto, she hops as it passes her`) --
+/// and settle. Mirrored for the light hand, as the punch was.
+fn goad(clip: Clip, arm: Arm) -> Recipe {
     let (windup, contact, recovery) = phases(clip);
     let last = clip.length() - 1;
     let side = |p: Pose| arm.side(p);
 
     let mut track = Track::new(clip);
     track.key(0, stance(), Ease::OUT);
-    // Two frames in, whatever the Oven says the startup is. That is where the
-    // opponent is looking, and a fraction of a five-frame startup would put
-    // the tell on frame one, where it is a pop rather than a telegraph.
-    track.key(windup.saturating_sub(2).max(1), side(load()), Ease::IN);
-    track.key(windup, side(plant()), Ease::STRIKE);
-    track.contact(contact, side(strike()), Ease::OUT);
-    track.key(recovery, side(follow()), Ease::OUT);
-    track.key(frac(recovery, last, 0.45), side(regather()), Ease::SMOOTH);
+    track.key(
+        windup.saturating_sub(1).max(1),
+        side(beckon()),
+        Ease::SMOOTH,
+    );
+    track.contact(contact, side(sway()), Ease::OUT);
+    track.key(recovery, side(glide()), Ease::SMOOTH);
     track.key(last, stance(), Ease::SMOOTH);
 
     let which = match arm {
-        Arm::Dark => {
-            "The dark auto, thrown with the left arm; the light one is \
-                      this clip mirrored above the hips."
-        }
-        Arm::Light => {
-            "The light auto: the dark punch through `Pose::other_arm`, \
-                       so the two differ in the arm and in nothing else."
-        }
+        Arm::Dark => "The dark strike, goaded over her left shoulder;",
+        Arm::Light => "The light strike: the dark one through `Pose::other_arm`;",
     };
     Recipe {
         clip,
         looseness: Looseness::CRISP,
         notes: format!(
-            "{which} A step into the strike rather than a step and then a \
-             strike: the lead foot unweights two frames in and lands on the \
-             contact frame, so the footwork and the hand are one motion. It \
-             reads as a punch and nothing more -- the wing is the ability and \
-             not the body: it sweeps in from behind her, on this arm's side, \
-             and arrives in front of the fist rather than being swung by it. \
-             The cock is shallow on purpose -- five frames is not enough to \
-             draw a hand back and put it somewhere else -- and the read lives \
-             in the lifted lead knee and the other hand thrown back behind. \
-             Crisp, because anything that rings here arrives late and this is \
-             the move thrown constantly. The rear foot comes up during recovery \
-             and the body settles onto the idle's own stance, which is what the \
-             frame after this clip cuts to."
+            "{which} she looks back at the being and beckons it with that \
+             hand open through the wind-up, then sways off the strike's line \
+             as it passes where she stood, the hand swept on after it, and \
+             settles. Not a punch: the strike is the being's (2026-11-06)."
         ),
         keys: track.done(),
     }

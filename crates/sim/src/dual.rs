@@ -174,11 +174,17 @@ pub fn step(p: &mut Player) -> bool {
     if let Mechanic::Meter {
         veil: v,
         primed: pr,
+        chained,
+        chain_out,
         ..
     } = &mut p.mechanic
     {
         *v = veil.saturating_sub(1);
         *pr = primed.saturating_sub(1);
+        *chain_out = chain_out.saturating_sub(1);
+        if *chain_out == 0 {
+            *chained = 0;
+        }
     }
 
     if ascending > 0 {
@@ -198,6 +204,26 @@ pub fn step(p: &mut Player) -> bool {
             end_ascension(p);
         }
         return false;
+    }
+
+    // **The burn is back, 2026-11-06** (the owner: "we keep the health burn
+    // if she's ever more than 1/3 out of balance"): past `band` apart she
+    // burns, faster the further -- and nothing else moves: no drift, no calm.
+    if let Some((dark, light)) = bars(p) {
+        let excess = dark.sub(light).abs().sub(Fx::from_int(t::meter_band()));
+        if excess.raw() > 0 {
+            let Mechanic::Meter { singe, .. } = p.mechanic else {
+                return false;
+            };
+            let singe = singe.add(t::burn_gain().mul(excess).min(t::burn_cap()).mul(DT));
+            let owed = singe.to_int();
+            if owed > 0 && p.health > 1 {
+                p.health = (p.health - owed).max(1);
+            }
+            if let Mechanic::Meter { singe: s, .. } = &mut p.mechanic {
+                *s = singe.sub(Fx::from_int(owed.max(0)));
+            }
+        }
     }
 
     // **Nothing moves the bars on its own since 2026-11-04** (the owner,
@@ -351,6 +377,25 @@ pub fn take_prime(p: &mut Player) -> bool {
     }
 }
 
+/// **Can she pay for it?** (2026-11-06, from the owner): the storm and the
+/// lance need `a big hold spends of its bar` of their own -- a third -- and
+/// a major needs its bar at `a major needs its bar at` (full). Everything
+/// else is free. True for anybody else.
+pub fn affords(p: &Player, kind: u8) -> bool {
+    use crate::moves::dual as d;
+    let Some((dark, light)) = bars(p) else {
+        return true;
+    };
+    let has = |bar: Fx, need: i32| bar.raw() >= Fx::from_int(need).raw();
+    match kind {
+        d::STORM => has(dark, t::lance_spends()),
+        d::LANCE => has(light, t::lance_spends()),
+        d::ABYSS => has(dark, t::major_needs()),
+        d::JUDGEMENT => has(light, t::major_needs()),
+        _ => true,
+    }
+}
+
 /// Is she brimming -- both bars at the top together, so the next
 /// annihilation is the grand one?
 pub fn brimming(p: &Player) -> bool {
@@ -400,18 +445,11 @@ pub fn depth_at(p: &Player, kind: Option<u8>) -> Fx {
     // **Only the majors read a bar since 2026-11-04**: everything else hits
     // the same at any bar -- the bars are what she builds toward her
     // finishers, not a tax on everything between them.
-    let _ = colour;
-    let bar = match kind {
-        Some(kind) if crate::moves::dual::is_the_finisher(kind) => {
-            match crate::moves::dual::force(kind) {
-                Some(Force::Dark) => dark,
-                _ => light,
-            }
-        }
-        _ => return Fx::ONE,
-    };
-    let out = bar.div(top()).clamp(Fx::ZERO, Fx::ONE);
-    crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
+    // **And since 2026-11-06 not even the majors** (the owner: "the bars
+    // don't add a damage multiplier, just how much energy she has to
+    // vent"): a major needs a full bar and is always the same major.
+    let _ = (colour, dark, light, kind);
+    Fx::ONE
 }
 
 // ---------------------------------------------------------------------------

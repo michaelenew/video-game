@@ -837,7 +837,9 @@ fn a_move_never_snaps_you_to_its_speed() {
             // Read *after* the advance: the countdown runs before the movement
             // does, so the action standing at the end of a frame is the one that
             // chose that frame's velocity.
-            let driving = stepping(&w, &m);
+            // A haul drives the body too: the Dual mage's hop, which since
+            // 2026-11-06 she takes as her strike passes her, inside it.
+            let driving = stepping(&w, &m) || w.players[0].haul > 0;
             let next = flat_speed(&w);
             if !driving {
                 assert!(
@@ -1057,6 +1059,12 @@ fn one_press_can_never_lock_more_than_one_move() {
         // The Blood mage's heart is earned, not locked: earned here, so the
         // count is about the lockout alone.
         p.heart_meter = sim::tuning::heart_meter_full() as u16;
+        // The Dual mage's majors vent a full bar (2026-11-06): full here,
+        // for the same reason.
+        if let sim::class::Mechanic::Meter { dark, light, .. } = &mut p.mechanic {
+            *dark = sim::Fx::from_int(100);
+            *light = sim::Fx::from_int(100);
+        }
         p.repeat_lock[SLOT_POKE as usize] = 240;
         let available = (0..moves::table(class).len())
             .filter(|slot| p.can_throw(*slot as u8, &out))

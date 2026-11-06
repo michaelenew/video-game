@@ -213,6 +213,32 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-11-06 — the Dual mage's second play: the storm leaps, the chain yanks, the bars are energy
+
+**Changed** Everything in [kits/dual-mage.md](kits/dual-mage.md) §"The second play": the storm
+leaps in (an arc on the floor, straight toward the crosshair in the air, 14 m/s) and carries
+through rather than dashing back; the chain ride aims at the crosshair, not the floor; the chain
+lasts 10 active frames and stays out 60 on whoever it bound, a second tap the yank; the strikes
+start 2 m behind her and she hops as they pass, her clip a goad and a sway; the bars are energy
+(nothing reads them, 20 a hit, the big holds a third, a major a full bar), the burn back past a
+third apart; `Q` and `E` at her feet with a lunge out, weaker and longer.
+**Why** The owner, after playing: the lightning "over-tuned on the mobility ... a jump and maybe a
+flip in, then back out, and it needs to be slower"; "in the air it go a fixed distance toward
+where the cursor is pointing"; "carry through by default, not dash back"; middle click "forces me
+to the ground when I want to use it to go upwards or laterally in the air"; "tap then tap again
+while the chain is still out should yank"; the autos "still read like the 'kalista' version";
+the bars "hard to build up ... it feels bad to cash in"; "maybe 5 autos to max bars"; `Q`/`E`
+"dash-moves ... she has to get close"; "lightning and lance should each consume a full third of
+the bar"; "we keep the health burn if she's ever more than 1/3 out of balance".
+**On the way** A reach of nought on the floor aim ran to the first terrain however far (55 m in
+a test): `aim::grounded_path` now reads it as her own feet. Six knobs went in mid-list at first
+and shifted every knob after them by six, the Blood mage's included; moved to the end, and the
+Blood mage's values checked against main. A held click she could not pay for first threw
+nothing at all; the hold now opens whatever her bar, and asks when it is full -- so the chord
+still works. A feel rule (`a_move_never_snaps_you_to_its_speed`) now excuses a haul as driving
+the body, since the hop is inside the strike. The flip in the storm's leap is not drawn yet.
+**Verdict** open -- unplayed.
+
 ### 2026-11-04 — the Dual mage's bars build to her finishers; strikes prime the holds
 
 **Changed** A bar fills on a landed hit (6), never on a press; the lance spends 20 of her light;

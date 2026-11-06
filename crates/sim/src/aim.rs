@@ -715,6 +715,15 @@ fn grounded(who: usize, look: Input, reach: Fx, scene: &Scene, keep: bool) -> Pa
         ..*scene
     };
     let caster = &scene.players[who];
+    // **A reach of nought is her own feet** (2026-11-06): the Dual mage's
+    // majors come down where she stands. With no sphere to stop it the ray
+    // would otherwise run on to the first terrain it met, however far.
+    if reach.raw() <= 0 {
+        return Path {
+            from: caster.pos,
+            to: caster.pos,
+        };
+    }
     let seen = sight(who, look, reach, scene);
     let to = match seen.met {
         // Out at the edge of the ability's range: max range on the ground, in

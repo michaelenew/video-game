@@ -314,35 +314,35 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Dual mage",
         in_browser: true,
-        blurb: "Two beings, one dark and one light, that are trying to kill her. Everything they throw comes from behind her, through where she stands, at what she is looking at -- and she gets out of the way, so it lands on whoever is in front of her. So she never stops moving, and she fights at the edge of close range. Every hit she lands fills a bar; her two majors each spend one, and both full makes her next annihilation the grand one. Nothing about how she moves depends on the bars. Rebuilt 2026-11-04 and lightly played; docs/design/exploration/0037_dual_mage_the_razor_edge.md is the design.",
+        blurb: "Two beings, one dark and one light, that are trying to kill her. Everything they throw comes from behind her, through where she stands, at what she is looking at -- and she gets out of the way, so it lands on whoever is in front of her. So she never stops moving, and she fights at the edge of close range. Every hit she lands fills a bar: the bars are the energy her big spells cost. Nothing about how she moves depends on them. Rebuilt 2026-11-04 and reworked 2026-11-06 from play; docs/design/exploration/0037_dual_mage_the_razor_edge.md is the design.",
         entries: &[
             e(
                 "Left and right click",
-                "Tapped, a strike of dark (left) or light (right): a ball from just behind your shoulder that finishes straight in front of you six metres out -- landing it right at the end, on the sweet spot, hits half again as hard. Holding a direction, you hop three metres that way as it arrives: you are stepping off its line, and a run of strikes is a run of hops. The first hop of each jump in the air rises like a second jump. A strike that lands fills its own bar, and primes your next hold.",
+                "Tapped, a strike of dark (left) or light (right): a ball from behind your shoulder that passes where you stood and finishes straight in front of you six metres out -- landing it right at the end, on the sweet spot, hits half again as hard. You goad it and sway out of its way; holding a direction, you hop three metres that way as it passes you. The first hop of each jump in the air rises like a second jump. A strike that lands fills a fifth of its own bar, and primes your next hold.",
             ),
             e(
                 "Holding a click",
-                "A click is a tap or a hold, never both: while you hold it nothing has started, let go and it is the tap, keep it held a sixth of a second and it is that hand's big spell -- and then you are committed, and holding longer does not make it stronger. Thrown just after a strike of yours lands, a hold skips most of its wind-up: strike, then hold. Left held is the storm: you dash to the spot under your crosshair, the lightning aimed at you comes down there as you arrive and leaps to whoever is near, and you dash out -- back where you came from, or the way you hold. Right held is the lance: a great beam from over your right shoulder, through where you stood, to your crosshair, while you lunge clear -- back, or the way you hold. Each spends a fifth of its own bar (the storm dark, the lance light) and fills nothing.",
+                "A click is a tap or a hold, never both: while you hold it nothing has started, let go and it is the tap, keep it held a sixth of a second and it is that hand's big spell -- if you have a third of its bar to pay for it; without, it is the tap. Thrown just after a strike of yours lands, a hold skips most of its wind-up: strike, then hold. Left held is the storm: on the floor you leap to the spot under your crosshair, in the air you go straight toward it, up as well; the lightning aimed at you comes down where you arrive and leaps to whoever is near, and you carry on through -- the way you came, or the way you hold. Right held is the lance: a great beam from over your right shoulder, through where you stood, to your crosshair, while you lunge clear -- back, or the way you hold.",
             ),
             e(
                 "Middle click",
-                "Both forces, linked. Tapped, the chain: flung at you from behind, you let it go by and it flies on down your crosshair's line, binding the first body it meets. Held, you catch its tail and ride it: your blows cascade out to the spot your crosshair is on, and you run them, untouchable, through whoever is on the way -- jump just as you arrive and you keep the run's speed. Aimed at the floor below, it is your dive. A hit with either fills both bars.",
+                "Both forces, linked. Tapped, the chain: flung at you from behind, you let it go by and it flies on down your crosshair's line, binding the first body it meets -- and while it is still on them, a second tap yanks them to you. Held, you catch its tail and ride it toward your crosshair -- up, along or down, wherever it points -- through whoever is on the way; jump just as you arrive and you keep the run's speed. A hit with either fills both bars.",
             ),
             e(
                 "Left and right together",
-                "Annihilation. Both beings lunge at you at once; you spring clear -- straight up, or the way you hold -- and they meet where you were standing. The blast hurts everyone in it but you. It is your way up in the air: each spring in one jump goes less high than the last, every hit you land gives one back, and landing gives them all back -- so you stay up as long as you keep hitting. Pressing the second click while the first is still deciding counts too.",
+                "Annihilation. Both beings lunge at you at once; you spring clear -- straight up, or the way you hold -- and they meet where you were standing. The blast hurts everyone in it but you. It is your way up in the air: each spring in one jump goes less high than the last, every hit you land gives one back, and landing gives them all back. Pressing the second click while the first is still deciding counts too. With both bars full, it is the grand annihilation: twice as wide, far stronger, and it spends both bars.",
             ),
             e(
                 "Q",
-                "The Abyss, the dark major: a black sun where the crosshair meets the floor, bigger and stronger the fuller your dark bar. Everything under it is pinned and hurt on the tick, and it collapses in one more blow. It spends your whole dark bar.",
+                "The Abyss, the dark major. It needs a full dark bar, and spends it: a black sun comes down where you stand -- everything under it is pinned and hurt on the tick and cursed -- and you dash out of it, back or the way you hold. So you have to get in close first.",
             ),
             e(
                 "E",
-                "Judgement, the light major: columns of light out of the sky where the crosshair is -- one from an empty light bar, up to five from a full one -- and a field left burning that makes you fast. Bigger and stronger the fuller your light bar; the Abyss and then Judgement through it is a spectacle. It spends your whole light bar.",
+                "Judgement, the light major. It needs a full light bar, and spends it: columns of light come down where you stand, with a field left burning, and you dash out. Thrown where the black sun was, it sets off every curse the sun laid -- the big explosion, and it takes going in twice.",
             ),
             e(
                 "The bars",
-                "Dark on the left, light on the right, filled only by hits that land -- pressing at nothing builds nothing. They never move on their own and never cost you anything; only your majors read them. Fill both to the top and your next annihilation is the grand one: twice as wide, worth three and a half times as much, and it spends both bars.",
+                "Dark on the left, light on the right, filled only by hits that land -- five strikes fill one. They are energy to spend, not power: nothing you throw is stronger for a fuller bar. A big hold costs a third of its bar, a major the whole of a full one, and both full makes your next annihilation the grand one. They never move on their own -- but let them drift more than a third apart and you burn, faster the further.",
             ),
             e(
                 "On your back",

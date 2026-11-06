@@ -31,6 +31,42 @@ meaningless without it.
 > is the design and the answer to "what is missing from the controls". §"Her hands" below is
 > what was built; where it differs from §"Her spellbook", it wins.
 
+## The second play, 2026-11-06
+
+From the owner after playing the 2026-11-04 kit. Where this differs from the section below, this
+wins.
+
+- **The storm leaps in and carries through.** On the floor she leaps to the crosshair's spot in an
+  arc that lands there (7 m at most); in the air she goes `storm, in the air she goes this far`
+  (7 m) straight toward the crosshair's point (`aim::skillshot_path`), up as well as along. Both
+  at `storm, she dashes in and out at` (14 m/s, the lance's lunge, from 45), untouchable on the
+  way. The lightning comes down where she arrives, and she carries on through: a jump the way
+  she held, or the way she came, at `storm, carries through at` (14) and rising no faster than
+  `storm, carries through rising at most` (8). She no longer dashes back.
+- **The chain ride is a skillshot** (`aim::Kind::Skillshot`): toward the crosshair's point, up or
+  sideways in the air, not down to the floor. `moves::flurry_line` is the path itself.
+- **The chain stays out.** Its flight is 10 active frames (from 4), and on whoever it bound it
+  stays out for `chain, stays out for` (60 frames, `Meter::chained`, `chain_out`): **a second
+  tap of middle click is the yank** (`moves::dual::YANK`, Phase's row), which drags them to
+  `chain, the yank drags them this far in front of her` (1.2 m) at `chain, a second tap yanks
+  them at` (24 m/s). Drawn as rings turned a quarter each, dark and light, with a turning seal
+  at its head; while it is out, from her hand to them.
+- **The strikes start behind her and she hops as they pass.** The ball starts `orb, starts behind
+  her` 2 m back (from 0.45), and the hop is on active frame `auto, she hops as it passes her`
+  (1), inside the strike, not after it. Her clip is a goad and a sway (`anim::clips::dual::goad`),
+  not a punch.
+- **The bars are energy, not power.** Nothing reads a bar (`dual::depth_at` is one). A landed hit
+  fills 20 (`meter, an auto moves`): five strikes fill a bar. **The storm and the lance cost a
+  third of their own bar** (`a big hold spends of its bar`, 33) -- held without it, the click is
+  the strike; **a major needs its bar full** (`a major needs its bar at`, 100) and spends it.
+  Both full is still the grand annihilation. **The burn is back** past a third apart
+  (`band`, 33): health only, never past one; no drift, no calm. Ascension stays dormant.
+- **`Q` and `E` come down on her and she dashes out.** Their reach is nought, which the floor aim
+  now reads as her own feet (`aim::grounded_path`), and on their first active frame she lunges
+  clear as the lance does -- so she has to go in close, and the Abyss-then-Judgement explosion
+  takes going in twice. Toned down and longer: the Abyss 5 a tick and 30 to collapse, lasting
+  150 frames (from 90); Judgement 100 (from 132), its field 180 (from 100).
+
 ## Her hands, 2026-11-04 — her magic is aimed at her
 
 **Built 2026-11-04, unplayed.** The design and the reasoning are

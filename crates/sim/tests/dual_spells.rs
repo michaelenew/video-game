@@ -176,6 +176,8 @@ fn set_bars(w: &mut World, dark: i32, light: i32) {
         veil: 0,
         warded: false,
         primed: 0,
+        chained: 0,
+        chain_out: 0,
     };
 }
 
@@ -207,6 +209,7 @@ fn on_the_floor_the_clicks_are_the_autos_and_the_chain() {
         (keys::LIGHT_MAJOR, d::JUDGEMENT),
     ] {
         let mut w = alone();
+        set_bars(&mut w, 100, 100);
         tap(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} on the floor");
     }
@@ -222,6 +225,7 @@ fn in_the_air_the_clicks_are_the_same() {
         (keys::LIGHT_MAJOR, d::JUDGEMENT),
     ] {
         let mut w = alone();
+        set_bars(&mut w, 100, 100);
         aloft(&mut w, 4.0);
         tap(&mut w, button);
         assert_eq!(doing(&w), Some(wanted), "button {button:#x} in the air");
@@ -501,6 +505,12 @@ fn descent_dives_where_she_points_and_writes_a_sigil() {
 // ---------------------------------------------------------------------------
 
 fn abyss_on_them(w: &mut World) {
+    // At her own feet since 2026-11-06, and a full bar to vent: so beside them.
+    let (dark, light) = bars(w);
+    set_bars(w, 100, light.max(dark.min(100)));
+    w.players[0].pos = w.players[1]
+        .pos
+        .sub(V3::new(metres(1.0), Fx::ZERO, Fx::ZERO));
     let feet = onto_their_feet(w);
     step_looking(w, keys::DARK_MAJOR, feet);
     assert_eq!(doing(w), Some(d::ABYSS));
@@ -527,52 +537,6 @@ fn the_abyss_pins_and_curses_everything_under_it() {
     );
 }
 
-fn abyss_size(dark: i32) -> Fx {
-    let mut w = facing(5.0);
-    set_bars(&mut w, dark, dark);
-    abyss_on_them(&mut w);
-    let m = sim::moves::get(Class::DualMage, d::ABYSS);
-    run(&mut w, (m.startup + 2) as u32, 0);
-    effects(&w, EffectKind::Abyss)[0].field_radius()
-}
-
-#[test]
-fn the_majors_grow_from_small_to_the_biggest_thing_on_the_screen() {
-    let small = abyss_size(0);
-    let big = abyss_size(100);
-    let ratio = as_f(big) / as_f(small);
-    let want = as_f(t::major_size_full()) / as_f(t::major_size_empty());
-    assert!(
-        (ratio - want).abs() < 0.05,
-        "the black sun grows {ratio:.2}x from empty to full, the curve says {want:.2}x"
-    );
-    assert!(ratio > 3.0, "and that is a lot");
-}
-
-fn judgement_columns(light: i32) -> usize {
-    let mut w = facing(5.0);
-    set_bars(&mut w, light, light);
-    let feet = onto_their_feet(&w);
-    step_looking(&mut w, keys::LIGHT_MAJOR, feet);
-    let m = sim::moves::get(Class::DualMage, d::JUDGEMENT);
-    run_looking(&mut w, (m.startup + 1) as u32, feet);
-    1 + effects(&w, EffectKind::Burst)
-        .iter()
-        .filter(|e| e.slot == d::JUDGEMENT)
-        .map(|e| e.banked as usize)
-        .sum::<usize>()
-}
-
-#[test]
-fn judgement_brings_down_more_columns_the_fuller_her_light() {
-    assert_eq!(judgement_columns(0), 1, "one from empty");
-    assert_eq!(
-        judgement_columns(100),
-        t::judgement_columns() as usize,
-        "all of them from full"
-    );
-}
-
 #[test]
 fn the_black_sun_then_the_columns() {
     let mut w = facing(5.0);
@@ -583,6 +547,12 @@ fn the_black_sun_then_the_columns() {
     let built = stacks(&w);
     assert!(built >= 2, "fixture: the black sun cursed them, {built}");
     until_free(&mut w, 60);
+    // Back in beside them with a full light bar: Judgement comes down where
+    // she stands (2026-11-06) -- the explosion takes going in twice.
+    set_bars(&mut w, 0, 100);
+    w.players[0].pos = w.players[1]
+        .pos
+        .sub(V3::new(metres(1.0), Fx::ZERO, Fx::ZERO));
     let before = w.players[1].health;
     let feet = onto_their_feet(&w);
     step_looking(&mut w, keys::LIGHT_MAJOR, feet);
@@ -640,6 +610,10 @@ fn a_creature_is_cursed_and_purged_like_a_fighter() {
     // stood inside raised the column's foot.)
     let knee = beast.rig().bone[sim::species::ridgeback::bones::FOREARM_L].at;
     let ground = V3::new(knee.x, w.terrain().ground_under(knee), knee.z);
+    // Judgement comes down where she stands (2026-11-06): beside the
+    // foreleg, with a full light bar to vent.
+    w.players[0].pos = ground.sub(dir.scale(Fx::ONE));
+    set_bars(&mut w, 0, 100);
     let at = ground.sub(w.players[0].pos);
     let aim = (sim::math::atan2_turns(at.z, at.x).raw() as u32 & 0xffff) as u16;
     let down = sim::aim::look_onto_closely(
@@ -693,6 +667,12 @@ fn a_creatures_curse_ticks() {
 /// hold -- in its startup or past it -- or `most` frames go by. True if it
 /// came.
 fn hold_into(w: &mut World, button: u16, pitch: i16, wanted: u8, most: u32) -> bool {
+    // A big hold costs a third of its bar (2026-11-06): topped up here if it
+    // could not pay, so a test about the spell is not a test of the bar.
+    if !sim::dual::affords(&w.players[0], wanted) {
+        let (dark, light) = bars(w);
+        set_bars(w, dark.max(100), light.max(100));
+    }
     for _ in 0..most {
         step_looking(w, button, pitch);
         let out = matches!(
@@ -1239,7 +1219,7 @@ fn a_full_hold_is_a_commitment_and_not_a_charge() {
                     w.players[0].action,
                     Action::Active { kind, .. } if kind == spell
                 ) || (spell == d::STORM
-                    && w.players[0].haul > 0
+                    && matches!(w.players[0].mechanic, Mechanic::Meter { storm, .. } if storm > 0)
                     && matches!(w.players[0].action, Action::Recovery { kind, .. } if kind == spell));
             }
             (came_out, worth)
@@ -1279,21 +1259,26 @@ fn storm(gap: f32, held: u16, frames: u32) -> (Fx, V3, i32) {
 }
 
 #[test]
-fn the_storm_dashes_her_to_the_crosshair_strikes_there_and_takes_her_back() {
-    // From play (2026-11-04): she dashes to the spot, the lightning aimed at
-    // her comes down on it, and she dashes out -- back where she was,
-    // holding nothing.
-    let (furthest, end, dealt) = storm(7.0, 0, 70);
+fn the_storm_leaps_her_to_the_crosshair_strikes_there_and_carries_her_through() {
+    // From play (2026-11-04, 2026-11-06): she leaps to the spot, the
+    // lightning aimed at her comes down on whoever is near it, and holding
+    // nothing she carries on through, the way she came.
+    let (furthest, _, dealt) = storm(7.0, 0, 70);
     assert!(
         furthest.raw() > metres(-6.0 + 4.5).raw(),
         "she only got to {} m",
         as_f(furthest)
     );
-    assert!(dealt > 0, "the lightning missed the body she dashed to");
+    assert!(dealt > 0, "the lightning missed the body she leapt to");
+    let mut w = alone();
+    set_bars(&mut w, 100, 100);
+    let spot = onto(&w, at(-1.0, 0.0, 8.0));
+    assert!(hold_into(&mut w, keys::DARK, spot, d::STORM, 60));
+    run_looking(&mut w, 70, spot);
     assert!(
-        end.x.raw() < metres(-6.0 + 1.5).raw(),
-        "holding nothing she ended at {} m, not back where she started",
-        as_f(end.x)
+        w.players[0].pos.x.raw() > metres(0.0).raw(),
+        "holding nothing she ended at {} m, short of where she struck",
+        as_f(w.players[0].pos.x)
     );
 }
 
@@ -1356,6 +1341,7 @@ fn both_bars_full_make_the_annihilation_grand_and_it_spends_them() {
 fn a_hold_thrown_just_after_a_strike_lands_skips_most_of_its_windup() {
     let wound_up = |primed: bool| -> u16 {
         let mut w = facing(4.0);
+        set_bars(&mut w, 100, 100);
         if primed {
             sim::dual::prime(&mut w.players[0]);
         }
@@ -1402,4 +1388,85 @@ fn the_storm_spends_her_dark() {
     assert!(hold_into(&mut w, keys::DARK, pitch, d::STORM, 60));
     let (dark, light) = bars(&w);
     assert_eq!((dark, light), (50 - t::lance_spends(), 50));
+}
+
+// ---------------------------------------------------------------------------
+// The second round of play (2026-11-06)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_second_tap_while_the_chain_is_out_yanks_them_to_her() {
+    let mut w = facing(7.0);
+    let pitch = onto_them(&w);
+    step_looking(&mut w, keys::TWILIGHT, pitch);
+    step_looking(&mut w, 0, pitch);
+    assert_eq!(doing(&w), Some(d::CHAIN));
+    for _ in 0..40 {
+        step_looking(&mut w, 0, pitch);
+        if w.players[0].action.actionable() {
+            break;
+        }
+    }
+    assert!(
+        matches!(w.players[0].mechanic, Mechanic::Meter { chained, .. } if chained != 0),
+        "the chain bound nobody"
+    );
+    let far = w.players[1].pos.sub(w.players[0].pos).len();
+    step_looking(&mut w, keys::TWILIGHT, pitch);
+    step_looking(&mut w, 0, pitch);
+    assert_eq!(doing(&w), Some(d::YANK), "the second tap was not the yank");
+    run_looking(&mut w, 30, pitch);
+    let near = w.players[1].pos.sub(w.players[0].pos).len();
+    assert!(
+        near.raw() < metres(2.5).raw() && near.raw() < far.raw(),
+        "yanked from {} m to {} m",
+        as_f(far),
+        as_f(near)
+    );
+}
+
+#[test]
+fn with_the_chain_not_out_a_second_tap_is_another_chain() {
+    let mut w = alone();
+    tap(&mut w, keys::TWILIGHT);
+    until_free(&mut w, 60);
+    tap(&mut w, keys::TWILIGHT);
+    assert_eq!(doing(&w), Some(d::CHAIN));
+}
+
+#[test]
+fn in_the_air_the_storm_goes_toward_the_crosshair_upward_too() {
+    let mut w = alone();
+    set_bars(&mut w, 100, 100);
+    aloft(&mut w, 4.0);
+    w.players[0].vel = V3::ZERO;
+    let up = onto(&w, at(-2.0, 12.0, 8.0));
+    let from = w.players[0].pos;
+    assert!(hold_into(&mut w, keys::DARK, up, d::STORM, 60));
+    let mut top = from.y;
+    for _ in 0..30 {
+        step_looking(&mut w, 0, up);
+        top = top.max(w.players[0].pos.y);
+    }
+    assert!(
+        top.raw() > from.y.add(metres(2.0)).raw(),
+        "aimed up from {} m she rose to {} m",
+        as_f(from.y),
+        as_f(top)
+    );
+}
+
+#[test]
+fn she_hops_as_her_strike_passes_her_not_after_it_lands() {
+    let mut w = alone();
+    step(&mut w, keys::DARK | Input::D);
+    step(&mut w, Input::D);
+    let mut hopped_while_active = false;
+    for _ in 0..20 {
+        step(&mut w, Input::D);
+        if matches!(w.players[0].action, Action::Active { .. }) && w.players[0].haul > 0 {
+            hopped_while_active = true;
+        }
+    }
+    assert!(hopped_while_active, "the hop came after the strike");
 }
