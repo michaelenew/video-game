@@ -923,6 +923,9 @@ pub struct Garden {
     pub seized: u8,
     /// Frames before she brings them down.
     pub seize_left: u16,
+    /// The next blow of a Sweep or Rend string, pressed while this one was
+    /// still out -- kept for its recovery rather than dropped (2026-11-06).
+    pub strung_early: bool,
 }
 
 impl Garden {
@@ -936,6 +939,7 @@ impl Garden {
         zip_to_body: false,
         seized: 0,
         seize_left: 0,
+        strung_early: false,
     };
 }
 

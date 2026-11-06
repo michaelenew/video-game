@@ -7481,7 +7481,23 @@ fn step_player(
 
     // **The Blood mage under her ground, and her Sweep strung** (2026-10-18).
     swim_or_surface(p, input);
+    let was_banked = matches!(p.mechanic, Mechanic::Blood(g) if g.strung_early);
+    let was_recovering = p.action.attack_kind();
     let pressed_scythe = string_the_sweep(p, input, pressed_earth);
+    // A blow of a string kept from early (`Garden::strung_early`) is thrown
+    // as if its button were down this frame.
+    let input = match was_recovering {
+        Some(kind) if was_banked && p.action == Action::Free => Input {
+            bits: input.bits
+                | if kind == moves::blood::REND {
+                    moves::blood::keys::HAND
+                } else {
+                    moves::blood::keys::SCYTHE
+                },
+            ..input
+        },
+        _ => input,
+    };
 
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -12182,13 +12198,39 @@ fn string_the_sweep(p: &mut Player, input: Input, pressed_hand: bool) -> bool {
     let pressed = input.has(click) && !p.right_held;
     p.right_held = input.has(click);
     let place = p.string & !STRINGING;
+    // A press for the next blow while this one is still out -- through its
+    // hit freeze, usually -- is kept for the recovery (2026-11-06: from play,
+    // the second claw of a string was eaten).
+    let early = match p.action {
+        Action::Active { kind, .. } | Action::Startup { kind, .. } => {
+            (kind == moves::blood::SWEEP && pressed) || (kind == moves::blood::REND && pressed_hand)
+        }
+        _ => false,
+    };
+    let mut banked = false;
+    if let Mechanic::Blood(g) = &mut p.mechanic {
+        if early {
+            g.strung_early = true;
+        }
+        banked = g.strung_early;
+    }
     if let Action::Recovery { kind, .. } = p.action
-        && ((kind == moves::blood::SWEEP && pressed)
-            || (kind == moves::blood::REND && pressed_hand))
+        && ((kind == moves::blood::SWEEP && (pressed || banked))
+            || (kind == moves::blood::REND && (pressed_hand || banked)))
         && place < 2
     {
         p.string = (place + 1) | STRINGING;
         p.action = Action::Free;
+        if let Mechanic::Blood(g) = &mut p.mechanic {
+            g.strung_early = false;
+        }
+        // The kept press throws the blow now, as a fresh press would.
+        return pressed || banked;
+    }
+    if !matches!(p.action, Action::Active { .. } | Action::Startup { .. }) {
+        if let Mechanic::Blood(g) = &mut p.mechanic {
+            g.strung_early = false;
+        }
     }
     pressed
 }
