@@ -29,6 +29,11 @@ use crate::effects::Head;
 /// What a Seize does with the body it caught.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Seized {
+    /// Caught: held up in the red hand for `tuning::seize_lift` frames, and
+    /// then brought down (`World::carry_the_seized`) -- 2026-11-06, from
+    /// play: a grab whose whole story happened on one frame read as a light
+    /// tap.
+    Caught,
     /// Thrown on to the plant in this slot of her garden.
     Impaled(usize),
     /// Slammed into the floor.
@@ -111,20 +116,23 @@ pub(super) fn rise_of(volume: i32) -> u16 {
     frames.to_int().clamp(1, u16::MAX as i32) as u16
 }
 
-/// **Does this press raise anything?** The Black spike and the Rising spike
-/// raise a pool of hers -- under the crosshair, or at her own feet -- and on
-/// bare ground nothing comes out: the press does nothing and costs nothing.
+/// **What a spike press raises** (2026-11-06): the pool of hers under the
+/// crosshair -- or at her own feet, for the Rising spike -- and, on bare
+/// ground, **her own blood**: the price is the row's cost, and a pool pays
+/// what it holds toward it, so she pays only what the pool lacks (0038 §"The
+/// heal stays a refund"). The press always raises something.
 ///
-/// `None` is "nothing comes out"; `Some(None)` is a move that is not a spike;
-/// `Some(Some(frames))` is a spike, and how long its pool takes to rise --
-/// its startup, in place of its row's.
+/// `Some(None)` is a move that is not a spike; `Some(Some((frames,
+/// volume)))` is a spike: how long it takes to rise -- its startup, in
+/// place of its row's -- and how much blood the pool already holds toward
+/// the price. Bare ground rises as a fighter's pool does.
 pub(super) fn spike_rise(
     p: &Player,
     who: usize,
     kind: u8,
     input: Input,
     scene: &Scene,
-) -> Option<Option<u16>> {
+) -> Option<Option<(u16, i32)>> {
     if p.class != Class::BloodMage || !moves::blood::raises_a_pool(kind) {
         return Some(None);
     }
@@ -135,34 +143,76 @@ pub(super) fn spike_rise(
         let mut aimed = *p;
         lock_aim(&mut aimed, who, kind, input, scene);
         pool_touching_in(scene.effects, who as u8, aimed.aim_at(), m.radius)
-    }?;
-    let volume = scene.effects[slot].map_or(0, |e| e.pool_volume());
-    Some(Some(rise_of(volume)))
+    };
+    Some(Some(match slot {
+        Some(slot) => {
+            let volume = scene.effects[slot].map_or(0, |e| e.pool_volume());
+            (rise_of(volume), volume)
+        }
+        None => (t::spike_rise_body().max(1), 0),
+    }))
+}
+
+/// **A pool pays toward the spike**: what she paid on the press, less what
+/// the pool already held, is given back -- she pays only what it lacks.
+pub(super) fn the_pool_pays(p: &mut Player, volume: i32) {
+    let back = volume.min(p.paid as i32).max(0);
+    if back == 0 {
+        return;
+    }
+    p.health += back;
+    p.grey = (p.grey - back).max(0);
+    p.paid -= back as u16;
 }
 
 /// **The zip** (2026-11-04): right click pressed again while her scythe's
-/// head holds something hauls her to it -- to a fighter, a creature, a wall
-/// or the floor, in the air as on the ground -- and never the other way. The
-/// haul is `begin_haul`'s, at `tuning::zip_speed`; for its length she is in
-/// the Cast's recovery, and arriving frees her (`World::tend_the_zips`).
-/// Returns whether it began, so the press throws nothing else.
+/// head is out hauls her to it -- to a fighter, a creature, a wall or the
+/// floor, in the air as on the ground -- and never the other way. A press
+/// while the head is still flying is kept (`Garden::zip_queued`,
+/// `tuning::zip_queue`) and the zip starts the frame it bites
+/// (`World::tend_the_zips`): from play, 2026-11-06, a press a beat early was
+/// dropped and the next one threw a fresh Sweep. Returns whether the press
+/// was the zip's, so it throws nothing else.
 pub(super) fn zip_to_the_head(p: &mut Player, who: usize, pressed: bool, scene: &Scene) -> bool {
     if p.class != Class::BloodMage || !pressed || p.health <= 0 {
         return false;
     }
-    let free = p.action.actionable()
-        || matches!(p.action, Action::Recovery { kind, .. } if kind == moves::blood::CAST);
-    if !free || garden_of(p).is_some_and(|g| g.zipping) {
+    if garden_of(p).is_some_and(|g| g.zipping) || !free_to_zip(p) {
         return false;
     }
     let Some(head) = scene
         .effects
         .iter()
         .flatten()
-        .find(|e| e.owner == who as u8 && e.is_a_head_holding())
+        .find(|e| e.owner == who as u8 && e.kind == EffectKind::ScytheHead)
     else {
+        // Pressed before the head has even left her hand: kept, the same.
+        if p.action.attack_kind() == Some(moves::blood::CAST) && t::zip_queue() {
+            tend(p, |g| g.zip_queued = true);
+            return true;
+        }
         return false;
     };
+    if head.is_a_head_holding() {
+        start_the_zip(p, head);
+        return true;
+    }
+    if head.head_state() == Head::Flying && t::zip_queue() {
+        tend(p, |g| g.zip_queued = true);
+        return true;
+    }
+    false
+}
+
+/// Can she start a zip now: free, or anywhere in the Cast itself -- the
+/// press that queues it usually lands while the head is still leaving.
+fn free_to_zip(p: &Player) -> bool {
+    p.action.actionable() || p.action.attack_kind() == Some(moves::blood::CAST)
+}
+
+/// **The zip begins**: hauled at `tuning::zip_speed` to the head, in the
+/// Cast's recovery for as long as the haul runs.
+pub(super) fn start_the_zip(p: &mut Player, head: &Effect) {
     let to = zip_target(p.pos, head.home, head.head_state());
     let far = to.sub(p.pos).len();
     let speed = t::zip_speed().max(Fx::ONE);
@@ -174,11 +224,13 @@ pub(super) fn zip_to_the_head(p: &mut Player, who: usize, pressed: bool, scene: 
         kind: moves::blood::CAST,
         left: frames.saturating_add(2),
     };
+    let body = matches!(head.head_state(), Head::Fighter(_) | Head::Creature(_));
     tend(p, |g| {
         g.zipping = true;
         g.zip_jump = false;
+        g.zip_queued = false;
+        g.zip_to_body = body;
     });
-    true
 }
 
 /// Where the zip puts her: the head, short of it by a body when it is in a
@@ -328,7 +380,7 @@ impl World {
             }
             Head::World | Head::Creature(_) => {
                 effect.hold_the_head();
-                if effect.head_for() >= t::cast_holds() {
+                if effect.head_for() >= t::cast_holds_world() {
                     effect.set_head(Head::Home);
                 }
             }
@@ -407,7 +459,7 @@ impl World {
     /// floor under the bite.
     fn bite_the_world(&mut self, effect: &mut Effect, at: V3, floor: Fx) {
         let owner = effect.owner as usize;
-        let near_the_floor = at.y.sub(floor).raw() <= t::body_height().raw();
+        let near_the_floor = at.y.sub(floor).raw() <= effect.field_radius().raw();
         let bite = if near_the_floor {
             V3::new(at.x, floor, at.z)
         } else {
@@ -443,31 +495,31 @@ impl World {
         effect.set_head(Head::Home);
     }
 
-    /// **The head drags home** along the floor under the chain, at
-    /// `tuning::cast_drag`, **reaping everything on its line**: every stain of
-    /// hers it crosses is drunk (the refund, never past her grey), and every
-    /// plant of hers it crosses bursts into thorns the way it was going. Gone
-    /// when it reaches her.
+    /// **The head comes home** along the chain, straight back to her hand at
+    /// `tuning::cast_drag` -- in the air as on the floor, from wherever it
+    /// was (2026-11-06: it used to drop to the floor first and drag along it,
+    /// which read as a teleport) -- **reaping everything on its line**: every
+    /// stain of hers it passes over is drunk (the refund, never past her
+    /// grey), and every plant of hers it passes through bursts into thorns
+    /// the way it was going. Gone when it reaches her.
     fn drag_home(&mut self, effect: &mut Effect) {
         let owner = effect.owner as usize;
-        let her = self.players[owner].pos;
+        let her = self.players[owner];
+        let hand = moves::get(her.class, effect.slot).hand;
+        let home = aim::hand_origin(her.pos, her.facing, hand);
         let was = effect.home;
-        let gap = flat_apart(her, was);
+        let gap = home.sub(was).len();
         let step = t::cast_drag().mul(DT);
-        let terrain = self.terrain();
         let next = if gap.raw() <= step.raw() {
-            her
+            home
         } else {
-            let ahead = flat_toward(was, her).scale(step);
-            let moved = was.add(ahead);
-            let lift = V3::new(moved.x, moved.y.add(t::body_height()), moved.z);
-            V3::new(moved.x, terrain.ground_under(lift), moved.z)
+            was.add(home.sub(was).scale(step.div(gap)))
         };
         effect.home = next;
         let along = flat_toward(was, next);
         let m = moves::get(Class::BloodMage, moves::blood::CAST);
         let reach = effect.field_radius().add(t::body_radius());
-        // Her stains on the line.
+        // Her stains under the line: within a body's height of it.
         for slot in 0..MAX_EFFECTS {
             let crossed = self.effects[slot].is_some_and(|e| {
                 e.is_a_pool()
@@ -475,6 +527,7 @@ impl World {
                     && e.owner == owner as u8
                     && e.age > t::stain_settles()
                     && e.life == UNLIT
+                    && was.y.min(next.y).sub(e.pos.y).raw() <= t::body_height().raw()
                     && crate::math::segment_gap(
                         V3::new(was.x, e.pos.y, was.z),
                         V3::new(next.x, e.pos.y, next.z),
@@ -488,22 +541,18 @@ impl World {
                 self.drink_from(slot, owner, &m);
             }
         }
-        // Her plants on the line.
+        // Her plants the line passes through.
         if let Some(g) = garden_of(&self.players[owner]) {
             for (slot, plant) in g.plants.iter().enumerate() {
                 let Some(plant) = plant else { continue };
-                let gap = crate::math::segment_gap(
-                    V3::new(was.x, plant.at.y, was.z),
-                    V3::new(next.x, plant.at.y, next.z),
-                    plant.at,
-                    plant.at,
-                );
+                let top = V3::new(plant.at.x, plant.top(), plant.at.z);
+                let gap = crate::math::segment_gap(was, next, plant.at, top);
                 if gap.raw() <= reach.add(plant.radius()).raw() {
                     self.reap_the_plant(owner, slot, along);
                 }
             }
         }
-        if flat_apart(her, next).raw() <= t::body_radius().add(t::body_radius()).raw() {
+        if home.sub(next).len().raw() <= t::body_radius().raw() {
             effect.life = effect.age;
         }
     }
@@ -559,6 +608,41 @@ impl World {
     /// `tuning::zip_keeps` of the speed, and the jump banked near the end
     /// (`bank_the_zip_jump`) thrown. A zip a hit broke sends its head home.
     pub(super) fn tend_the_zips(&mut self, seen: &[Player; MAX_PLAYERS]) {
+        // A zip pressed while the head flew starts the frame it bites, and is
+        // forgotten when it comes home without biting.
+        for i in 0..MAX_PLAYERS {
+            if !garden_of(&self.players[i]).is_some_and(|g| g.zip_queued && !g.zipping) {
+                continue;
+            }
+            let head = self
+                .effects
+                .iter()
+                .flatten()
+                .find(|e| e.kind == EffectKind::ScytheHead && e.owner == i as u8)
+                .copied();
+            match head {
+                Some(head) if head.is_a_head_holding() => {
+                    if free_to_zip(&self.players[i]) {
+                        start_the_zip(&mut self.players[i], &head);
+                    }
+                }
+                Some(head) if head.head_state() == Head::Flying => {}
+                None if matches!(self.players[i].action, Action::Startup { kind, .. } | Action::Active { kind, .. } if kind == moves::blood::CAST) =>
+                    {}
+                _ => tend(&mut self.players[i], |g| g.zip_queued = false),
+            }
+        }
+        let seen = &{
+            let mut now = *seen;
+            for (i, p) in now.iter_mut().enumerate() {
+                if garden_of(&self.players[i]).is_some_and(|g| g.zipping)
+                    && !garden_of(p).is_some_and(|g| g.zipping)
+                {
+                    *p = self.players[i];
+                }
+            }
+            now
+        };
         for (i, was) in seen.iter().enumerate() {
             let Some(g) = garden_of(&self.players[i]) else {
                 continue;
@@ -610,7 +694,13 @@ impl World {
             if arrived {
                 let run = was.haul_to.sub(was.pos).normalized();
                 let q = &mut self.players[i];
-                q.vel = run.scale(was.haul_speed.mul(t::zip_keeps()));
+                // Onto a body she stops beside it, to fight; onto the world she
+                // keeps the speed, to carry on.
+                q.vel = if g.zip_to_body {
+                    V3::ZERO
+                } else {
+                    run.scale(was.haul_speed.mul(t::zip_keeps()))
+                };
                 if g.zip_jump || garden_of(was).is_some_and(|g| g.zip_jump) {
                     let jump = t::jump_speed().mul(q.class.mobility().jump);
                     q.vel.y = q.vel.y.max(Fx::ZERO).add(jump);
@@ -680,13 +770,24 @@ impl World {
     /// blow -- **her too**, at `tuning::spike_launches_her`: her way up. With
     /// no pool there (it drained while it rose), nothing.
     pub(super) fn raise_from_the_pool(&mut self, i: usize, kind: u8, at: V3, reach: Fx) {
+        // **Bare ground: her own blood** (2026-11-06). What she paid lands as
+        // a pool on the floor there, and that pool rises.
+        if self.pool_touching(i as u8, at, reach).is_none() {
+            let paid = self.players[i].paid as i32;
+            let lift = V3::new(at.x, at.y.add(t::body_height()), at.z);
+            let floor = self.terrain().ground_under(lift);
+            if paid > 0 && at.y.sub(floor).raw() <= t::body_height().raw() {
+                let class = self.players[i].class;
+                self.pool_blood(i as u8, class, kind, V3::new(at.x, floor, at.z), paid);
+            }
+        }
         let Some(slot) = self.pool_touching(i as u8, at, reach) else {
             return;
         };
         let Some(pool) = self.effects[slot] else {
             return;
         };
-        self.erupt_from(i, kind, slot);
+        self.erupt_from(i, kind, slot, false);
         let paid = self.players[i].paid;
         self.players[i].paid = 0;
         let stone = Structure::planted(pool.pos);
@@ -699,7 +800,11 @@ impl World {
                 .add(t::body_radius())
                 .raw()
             && p.pos.y.sub(pool.pos.y).abs().raw() <= t::body_height().raw();
-        plant(&mut self.players[i], stone, paid, paid);
+        let worth = pool
+            .pool_volume()
+            .max(paid as i32)
+            .clamp(0, u16::MAX as i32) as u16;
+        plant(&mut self.players[i], stone, worth, paid);
         if over {
             let q = &mut self.players[i];
             q.pos.y = q.pos.y.max(stone.top());
@@ -933,12 +1038,11 @@ impl World {
 
     // -- Seize -------------------------------------------------------------
 
-    /// **What her Seize does with who it caught** (2026-11-04): thrown on to
-    /// the nearest plant of hers within `tuning::seize_plant_reach` of them,
-    /// or slammed into the floor. `None` for every other blow. Sets the blow
-    /// to the ending's row: the impaling worth its row and the blood the
-    /// plant holds, and a launch; the slam worth its row, driven down from
-    /// the air (`tuning::seize_drive`).
+    /// **What her Seize does on the frame it catches** (2026-11-04,
+    /// 2026-11-06): nothing yet but hold. The blow is the catch -- no damage,
+    /// no shove -- and they are held for the lift (`hit.grabs`); the slam or
+    /// the impaling comes at its end (`carry_the_seized`). `None` for every
+    /// other blow.
     pub(super) fn seize_how(
         &self,
         attacker: usize,
@@ -950,11 +1054,30 @@ impl World {
             || p.action.attack_kind() != Some(moves::blood::SEIZE)
             || hit.blocked
             || hit.parried
+            || defender >= MAX_PLAYERS
         {
             return None;
         }
+        hit.damage = 0;
+        hit.knockback = Fx::ZERO;
+        hit.launch = Fx::ZERO;
+        hit.hitstun = 0;
+        hit.grabs = t::seize_lift().saturating_add(2);
+        hit.interrupts = true;
+        Some(Seized::Caught)
+    }
+
+    /// **The red hand brings them down**: thrown on to the nearest plant of
+    /// hers within `tuning::seize_plant_reach` of them, or slammed into the
+    /// floor in front of her -- driven down from the air
+    /// (`tuning::seize_drive`) -- for the ending's row; the impaling worth its
+    /// row and the blood the plant holds.
+    fn bring_them_down(&mut self, attacker: usize, defender: usize) {
+        let p = self.players[attacker];
         let q = self.players[defender];
-        let g = garden_of(&p)?;
+        let Some(g) = garden_of(&p) else {
+            return;
+        };
         let near = g
             .plants
             .iter()
@@ -967,22 +1090,94 @@ impl World {
             None => (Seized::Slammed, moves::blood::SLAM),
         };
         let m = moves::get(p.class, row);
-        hit.damage = m.damage;
-        hit.hitstun = m.hitstun;
-        hit.knockback = m.knockback;
-        hit.launch = m.launch;
-        hit.grabs = 0;
-        hit.interrupts = true;
-        match how {
-            Seized::Impaled(slot) => {
-                hit.damage += g.blood[slot] as i32;
-            }
-            Seized::Slammed if !q.grounded => {
-                hit.launch = Fx::ZERO.sub(t::seize_drive());
-            }
-            Seized::Slammed => {}
+        let mut damage = m.damage;
+        if let Seized::Impaled(slot) = how {
+            damage += g.blood[slot] as i32;
         }
-        Some(how)
+        let launch = if !p.grounded && how == Seized::Slammed {
+            Fx::ZERO.sub(t::seize_drive())
+        } else {
+            m.launch
+        };
+        if how == Seized::Slammed {
+            // Down on to the floor in front of her, where the hand comes down.
+            let terrain = self.terrain();
+            let lift = V3::new(q.pos.x, q.pos.y.add(t::body_height()), q.pos.z);
+            let floor = terrain.ground_under(lift);
+            if p.grounded {
+                self.players[defender].pos.y = floor;
+            }
+        }
+        let worth = worth_of(&p, Some(row));
+        let damage = Fx::from_int(damage).mul(worth).to_int();
+        let dealt = damage.min(q.health).max(0);
+        apply_hit(
+            &mut self.players[defender],
+            Hit {
+                damage,
+                hitstun: m.hitstun,
+                blockstun: m.blockstun,
+                knockback: m.knockback,
+                launch,
+                grabs: 0,
+                by: attacker as u8,
+                dir: flat_toward(p.pos, q.pos),
+                blocked: false,
+                parried: false,
+                interrupts: true,
+            },
+        );
+        self.players[defender].held_by = NOBODY;
+        let hold = impact_freeze(m.hitstop, false);
+        freeze(&mut self.players[attacker], hold);
+        freeze(&mut self.players[defender], hold);
+        self.seize_lands(attacker, defender, how, dealt);
+    }
+
+    /// **Seize, while it holds them up** (2026-11-06): each frame, what her
+    /// red hand caught is carried up over her, in front, `tuning::seize_lift`
+    /// frames to `seize_lift_height` -- and then brought down
+    /// (`bring_them_down`). A hit on her, or them slipping the hold, lets go.
+    pub(super) fn carry_the_seized(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let Some(g) = garden_of(&self.players[i]) else {
+                continue;
+            };
+            if g.seized == 0 {
+                continue;
+            }
+            let v = g.seized as usize - 1;
+            let her = self.players[i];
+            let held = v < MAX_PLAYERS
+                && matches!(self.players[v].action, Action::Held { .. })
+                && self.players[v].held_by == i as u8;
+            if !held || her.health <= 0 || her.action.stunned() {
+                tend(&mut self.players[i], |g| {
+                    g.seized = 0;
+                    g.seize_left = 0;
+                });
+                continue;
+            }
+            let left = g.seize_left.saturating_sub(1);
+            tend(&mut self.players[i], |g| g.seize_left = left);
+            let lift = t::seize_lift().max(1);
+            let up = Fx::ratio((lift - left.min(lift)) as i32, lift as i32);
+            // Eased: quick off the floor, slowing to the top.
+            let up = Fx::ONE.sub(Fx::ONE.sub(up).mul(Fx::ONE.sub(up)));
+            let ahead = V3::new(her.facing.x, Fx::ZERO, her.facing.z).normalized();
+            let arm = t::body_radius().add(t::body_radius());
+            let q = &mut self.players[v];
+            q.pos = V3::new(
+                her.pos.x.add(ahead.x.mul(arm)),
+                her.pos.y.add(t::seize_lift_height().mul(up)),
+                her.pos.z.add(ahead.z.mul(arm)),
+            );
+            q.vel = V3::ZERO;
+            if left == 0 {
+                tend(&mut self.players[i], |g| g.seized = 0);
+                self.bring_them_down(i, v);
+            }
+        }
     }
 
     /// **The Seize lands**: impaled, they are put on the plant's top and it
@@ -996,6 +1191,12 @@ impl World {
         dealt: i32,
     ) {
         match how {
+            Seized::Caught => {
+                tend(&mut self.players[attacker], |g| {
+                    g.seized = defender as u8 + 1;
+                    g.seize_left = t::seize_lift();
+                });
+            }
             Seized::Impaled(slot) => {
                 let Some(g) = garden_of(&self.players[attacker]) else {
                     return;

@@ -1312,8 +1312,9 @@ pub mod blood {
     /// into the floor. Was the Bramble.
     pub const SEIZE: u8 = 2;
     /// Middle click: **the Black spike**, raised out of a pool of hers under
-    /// the crosshair -- and nothing on bare ground. It launches what is over
-    /// it, her too, and stands as a plant.
+    /// the crosshair -- on bare ground, out of her own blood, which costs her
+    /// what a pool would have paid. It launches what is over it, her too, and
+    /// stands as a plant.
     pub const BLACK_SPIKE: u8 = 3;
     /// Right click, tapped: **the Sweep**. The scythe across her front; tapped
     /// again inside its recovery, a string of up to three, the second coming
@@ -1327,7 +1328,7 @@ pub mod blood {
     /// Thornfall.
     pub const RISING_REND: u8 = 6;
     /// Space and middle click: **the Rising spike**, raised out of a pool at
-    /// her own feet, launching her. Nothing without one. Was the Upheaval.
+    /// her own feet -- or her own blood -- launching her. Was the Upheaval.
     pub const RISING_SPIKE: u8 = 7;
     /// **The thorns of a reaped plant**: no button. The scythe through a
     /// plant breaks it into a cone of thorns along the blade; this row is
@@ -1414,8 +1415,8 @@ pub mod blood {
         !matches!(kind, THORNS | LASH | SLAM | IMPALE)
     }
 
-    /// Is this a spike, which needs a pool to raise -- and with none comes
-    /// out as nothing at all?
+    /// Is this a spike, which raises a pool -- and on bare ground, her own
+    /// blood, paid for in full (2026-11-06)?
     pub const fn raises_a_pool(kind: u8) -> bool {
         matches!(kind, BLACK_SPIKE | RISING_SPIKE)
     }

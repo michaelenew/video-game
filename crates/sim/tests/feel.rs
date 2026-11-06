@@ -56,7 +56,18 @@ fn committed_moves_are_more_punishable_than_pokes() {
     for class in ALL_CLASSES {
         let table = moves::table(class);
         let poke = &table[0];
-        let committed = table.iter().max_by_key(|m| m.damage).unwrap();
+        // A button's moves: the Blood mage's rows that no button throws --
+        // a plant's lash, the reaped thorns, Seize's slam and impaling -- are
+        // what a thing she made, or a grab she already landed, does.
+        let committed = table
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| {
+                class != sim::class::Class::BloodMage || moves::blood::thrown(*k as u8)
+            })
+            .map(|(_, m)| m)
+            .max_by_key(|m| m.damage)
+            .unwrap();
         assert!(
             committed.on_block() < poke.on_block(),
             "{}: {} ({:+} on block) is not more punishable than the poke {} ({:+})",
@@ -448,7 +459,7 @@ fn best_case(m: &Move) -> i32 {
 }
 
 #[test]
-fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
+fn the_blood_mage_pays_to_grow_and_nobody_else_pays_for_anything() {
     // The class is its economy: health out on the press, health back on the
     // hit. Both halves on every one of her abilities, and on nobody else's --
     // a second class quietly acquiring a health cost would mean the mechanic
@@ -468,9 +479,22 @@ fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
             if blood && !moves::blood::thrown(kind as u8) {
                 continue;
             }
+            // **What she pays for is what she grows** (2026-11-06, from
+            // play: "everything still costs health even though we said it
+            // shouldn't"): the spike's plant holds what it cost, and `Q` and
+            // `E` keep theirs until they are redesigned. The scythe and the
+            // Red Hand are free.
+            let pays = blood
+                && matches!(
+                    kind as u8,
+                    moves::blood::BLACK_SPIKE
+                        | moves::blood::RISING_SPIKE
+                        | moves::blood::COAGULATE
+                        | moves::blood::HEART
+                );
             assert_eq!(
                 m.cost > 0,
-                blood,
+                pays,
                 "{} {}: health cost {} does not match the class mechanic",
                 class.name(),
                 m.name,

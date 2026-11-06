@@ -422,6 +422,7 @@ fn main() {
                 // simulation says its things are.
                 (
                     place_structures,
+                    place_plant_thorns,
                     place_beams,
                     place_bolts,
                     place_debris,
@@ -2219,6 +2220,11 @@ const EFFECT_PARTS: usize = {
         most
     };
     let most = if VINE_PARTS > most { VINE_PARTS } else { most };
+    let most = if 2 + CHAIN_LINKS > most {
+        2 + CHAIN_LINKS
+    } else {
+        most
+    };
     let most = if HEART_PARTS > most {
         HEART_PARTS
     } else {
@@ -2250,6 +2256,20 @@ struct StructureMesh {
     owner: usize,
     index: usize,
 }
+
+/// **A thorn on one of the Blood mage's plants** (2026-11-06): her plants
+/// stand in the stones' field and are drawn as its column, and these grow
+/// out of it -- a crown spike off the top and a spiral of thorns out of its
+/// sides -- so a plant reads as a thorned stalk rather than a red cylinder.
+#[derive(Component)]
+struct PlantThorn {
+    owner: usize,
+    index: usize,
+    part: usize,
+}
+
+/// How many thorns a plant is drawn with: one crown and the rest round it.
+const PLANT_THORNS: usize = 11;
 
 /// The Elementalist's auto, drawn as the thing it is: a thin cylinder from her
 /// chest along the line she is aiming, ending where the shot stopped.
@@ -3159,6 +3179,15 @@ fn setup(
                 Visibility::Hidden,
                 StructureMesh { owner, index },
             ));
+            for part in 0..PLANT_THORNS {
+                commands.spawn((
+                    Mesh3d(meshes.add(fx::thorn())),
+                    MeshMaterial3d(look.plant.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    PlantThorn { owner, index, part },
+                ));
+            }
         }
     }
 
@@ -3749,6 +3778,64 @@ fn place_structures(
             raised.at.z.to_f32_for_render(),
         );
         tf.scale = Vec3::new(radius * 2.0, height, radius * 2.0);
+    }
+}
+
+/// Put a plant's thorns on it (`PlantThorn`): hidden for every slot that is
+/// not one of a Blood mage's plants. They rise with the column.
+fn place_plant_thorns(
+    sim: Res<Sim>,
+    mut thorns: Query<(&PlantThorn, &mut Transform, &mut Visibility)>,
+) {
+    let field = sim::stones::gather(&sim.cur.players);
+    for (tag, mut tf, mut vis) in thorns.iter_mut() {
+        let index = tag.owner * sim::class::MAX_STRUCTURES + tag.index;
+        let Some(raised) =
+            field[index].filter(|_| sim::stones::is_a_plant(&sim.cur.players, index))
+        else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let radius = raised.radius().to_f32_for_render();
+        let height = raised.height().to_f32_for_render();
+        let rise = raised.risen().to_f32_for_render();
+        let foot = Vec3::new(
+            raised.at.x.to_f32_for_render(),
+            raised.at.y.to_f32_for_render(),
+            raised.at.z.to_f32_for_render(),
+        );
+        let top = foot.y + height * rise;
+        let (base, dir, long, wide) = if tag.part == 0 {
+            // The crown: a spike off the top, as tall again as half the stalk.
+            (
+                Vec3::new(foot.x, top - 0.1, foot.z),
+                Vec3::Y,
+                height * 0.55,
+                radius * 1.1,
+            )
+        } else {
+            // The sides: a spiral up the stalk, each thorn angled out and up.
+            let k = (tag.part - 1) as f32;
+            let n = (PLANT_THORNS - 1) as f32;
+            let turn = k * 2.39996 + (index as f32) * 0.7;
+            let out = Vec3::new(turn.cos(), 0.0, turn.sin());
+            let up = 0.18 + 0.72 * (k + 0.5) / n;
+            let y = foot.y + height * up - height * (1.0 - rise);
+            if y < foot.y {
+                *vis = Visibility::Hidden;
+                continue;
+            }
+            (
+                Vec3::new(foot.x, y, foot.z) + out * radius * 0.8,
+                (out + Vec3::Y * 0.55).normalize(),
+                radius * (1.1 - 0.4 * up),
+                radius * 0.38,
+            )
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = base + dir * long * 0.5;
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, dir);
+        tf.scale = Vec3::new(wide, long, wide);
     }
 }
 
@@ -6210,18 +6297,12 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             }
             (part == 0).then(|| floating_in(Skin::Light, at, r * (0.4 + 0.6 * left)))
         }
-        // **The Cast** (2026-11-04): the scythe's head where it is, and its
-        // chain back to her hand, a row of links.
-        EffectKind::ScytheHead if part == 0 => Some(floating_in(
-            Skin::Blood,
-            fx3(effect.home),
-            effect.field_radius().to_f32_for_render() * 1.5,
-        )),
-        EffectKind::ScytheHead if part < sim::effects::TETHER_BEADS => Some(floating_in(
-            Skin::Dark,
-            fx3(effect.tether_bead(part)),
-            sim::tuning::body_radius().to_f32_for_render() * TETHER_BEAD * 0.6,
-        )),
+        // **The Cast** (2026-11-04, redrawn from play 2026-11-06): the
+        // scythe's head -- a crescent blade, glowing, hooked back the way it
+        // flew -- and its chain back to her hand, unbroken: links end to
+        // end. It was a ball and ten beads over sixteen metres, which read as
+        // nothing at all.
+        EffectKind::ScytheHead => scythe_head_piece(effect, part),
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),
@@ -6816,6 +6897,54 @@ const GREMLIN_PARTS: usize = 24;
 
 /// A piece of a thrall, `size` across (width, along `up`, depth), its own up
 /// along `up` and its front toward `ahead`.
+/// How many links the Cast's chain is drawn in, hand to head.
+const CHAIN_LINKS: usize = 26;
+
+/// One piece of the Cast (`EffectKind::ScytheHead`): part 0 the blade, 1 the
+/// blood round where it bit, and the rest the chain's links from her hand
+/// (`pos`) to the head (`home`). The chain sags a little while it flies and
+/// comes home, and pulls straight while it holds something.
+fn scythe_head_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    let hand = fx3(effect.pos);
+    let head = fx3(effect.home);
+    let along = head - hand;
+    let far = along.length();
+    let dir = along.normalize_or(Vec3::X);
+    let holding = effect.is_a_head_holding();
+    match part {
+        0 => {
+            // The blade: a crescent a little over a metre across, its edge
+            // facing out along the line it was thrown on.
+            let side = dir.cross(Vec3::Y).normalize_or(Vec3::Z);
+            let mut blade = framed(Shape::Crescent, head, dir, side, Vec3::new(1.1, 0.9, 1.0));
+            blade.skin = Skin::Heart;
+            Some(blade)
+        }
+        1 => Some(floating_in(
+            Skin::Blood,
+            head,
+            if holding { 0.45 } else { 0.25 },
+        )),
+        _ if part < 2 + CHAIN_LINKS && far > 0.05 => {
+            let k = (part - 2) as f32;
+            let n = CHAIN_LINKS as f32;
+            let sag = if holding { 0.0 } else { (far * 0.04).min(0.6) };
+            let at = |t: f32| hand + along * t - Vec3::Y * sag * 4.0 * t * (1.0 - t);
+            let (a, b) = (at(k / n), at((k + 1.0) / n));
+            // Alternate links turned a quarter, the way a chain lies.
+            let ahead = if part % 2 == 0 {
+                Vec3::Y
+            } else {
+                dir.cross(Vec3::Y).normalize_or(Vec3::Z)
+            };
+            let mut link = limb(Shape::Limb, a, b, 0.07, ahead);
+            link.skin = Skin::Heart;
+            Some(link)
+        }
+        _ => None,
+    }
+}
+
 fn framed(shape: Shape, centre: Vec3, up: Vec3, ahead: Vec3, size: Vec3) -> Piece {
     let y = up.normalize_or(Vec3::Y);
     let z = (ahead - y * ahead.dot(y)).normalize_or(Vec3::Z);

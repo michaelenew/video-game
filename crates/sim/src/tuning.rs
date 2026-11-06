@@ -5477,3 +5477,26 @@ pub fn sweep_bleeds() -> i32 {
 pub fn rising_reap_bleeds() -> i32 {
     oven::scalar(Scalar::RisingReapBleeds).max(0)
 }
+
+/// How long the head holds the world -- a wall, the floor, a stone -- or a
+/// creature before it comes home: long enough to choose the zip.
+pub fn cast_holds_world() -> u16 {
+    oven::scalar(Scalar::CastHoldsWorld).clamp(0, u16::MAX as i32) as u16
+}
+
+/// Does a second press while the head is still flying wait for it to bite,
+/// and zip then? The alternative drops the press.
+pub fn zip_queue() -> bool {
+    oven::scalar(Scalar::ZipQueue) != 0
+}
+
+/// How long Seize holds what it caught up in the red hand before it brings
+/// them down: the beat that says "caught".
+pub fn seize_lift() -> u16 {
+    oven::scalar(Scalar::SeizeLift).clamp(1, u16::MAX as i32) as u16
+}
+
+/// How high over her middle Seize lifts what it caught.
+pub fn seize_lift_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SeizeLiftHeight).max(0))
+}
