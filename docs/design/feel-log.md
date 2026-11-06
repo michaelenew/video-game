@@ -10336,6 +10336,19 @@ with thorns drawn; Rend 42/63/119 at 2.6 m with a new clip and claw streaks; Sei
 over three claws on her ground (48, 72, 158) -- the ground's ×1.5 stacked on it; ×1.5 at 42 is
 224. Her own spike's launch at 24 m/s threw her 9 m; 21 is 7.5.
 
+**The movement search, re-run for her** (her fixture lines replaced). Widest gap off the
+runway, shared blocks / whole kit, in metres, by rise, against 11-04's:
+
+| rise | -8 | -4 | -2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 30 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 11-04 | 23.9/25.3 | 21.7/21.8 | 19.7/21.8 | 17.5/17.5 | 15.2/30.5 | 17.6/17.9 | 15.6/17.4 | 13.2/49.7 | 11.2/39.3 | 9.1/10.1 | -/36.3 | -/- | -/- | -/11.1 | -/19.0 | -/- |
+| 11-06 | 32.1/34.7 | 28.4/33.1 | 27.0/29.9 | 25.7/33.8 | 24.8/28.0 | 26.3/62.1 | 22.6/50.0 | 21.9/56.1 | 15.0/43.3 | 14.8/14.8 | 18.1/45.3 | 14.7/40.7 | 12.5/33.9 | -/58.2 | -/- | -/18.0 |
+
+The lane numbers in the fixture are these rises in order. The shared blocks gained a third
+everywhere -- the Rising rend and Rising reap are real takeoffs now -- and the whole kit reaches
++10 and +12 for the first time. +20 lost its line (19.0 m) and +30 gained one (18.0 m): a search
+is a lower bound, and this one did not find the old route again.
+
 **Process**: slice 1 was handed over on green tests the builder wrote from its own code -- the
 zip test let go of the button, waited, and pressed again, which nobody playing does -- and with
 the play check (D3) set aside on the builder's own call. `cargo run --release -p sim --example
