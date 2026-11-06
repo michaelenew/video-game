@@ -1998,7 +1998,7 @@ fn rend() -> Recipe {
     let clip = Clip::BloodCommitted;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
     let end = clip.length() - 1;
-    let coil = (contact * 3 / 5).max(2);
+    let coil = (contact * 2 / 5).max(2);
     let through = recover.saturating_sub(1).max(contact + 1);
     let home = end.saturating_sub(2);
 
@@ -2033,7 +2033,7 @@ fn claw_drawn() -> Pose {
             .spine(-4.0, 0.0, 16.0)
             .chest(-6.0, 0.0, 20.0)
             .head(-6.0, 0.0, -34.0)
-            .reach_l([-0.50, 1.90, -0.12])
+            .reach_l([-0.48, 1.80, -0.14])
             .wrist_l(30.0, 0.0, 0.0)
             .reach_r([0.30, 0.84, 0.10]),
         l,
