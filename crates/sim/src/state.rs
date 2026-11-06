@@ -3820,7 +3820,7 @@ impl World {
         // its frames counted down, the lightning comes down where she is and
         // she carries on through. A blow that takes her out of the move
         // calls it off.
-        for i in 0..MAX_PLAYERS {
+        for (i, &input) in inputs.iter().enumerate().take(MAX_PLAYERS) {
             let p = self.players[i];
             let Mechanic::Meter { storm, .. } = p.mechanic else {
                 continue;
@@ -3840,7 +3840,7 @@ impl World {
                 *storm = left;
             }
             if leaping && left == 0 {
-                self.storm_strikes(i, inputs[i]);
+                self.storm_strikes(i, input);
             }
         }
         // **The Flurry dash's disk breaks** (2026-10-13) the frame her run

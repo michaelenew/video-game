@@ -17,7 +17,6 @@
 use sim::aim::Hand;
 use sim::class::{Class, Force, Mechanic};
 use sim::dual::Tier;
-use sim::effects::EffectKind;
 use sim::moves::dual;
 use sim::moves::dual::keys;
 use sim::state::Action;
