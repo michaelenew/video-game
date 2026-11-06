@@ -6916,14 +6916,14 @@ fn scythe_head_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece
             // The blade: a crescent a little over a metre across, its edge
             // facing out along the line it was thrown on.
             let side = dir.cross(Vec3::Y).normalize_or(Vec3::Z);
-            let mut blade = framed(Shape::Crescent, head, dir, side, Vec3::new(1.1, 0.9, 1.0));
+            let mut blade = framed(Shape::Crescent, head, dir, side, Vec3::new(1.6, 1.3, 1.4));
             blade.skin = Skin::Heart;
             Some(blade)
         }
         1 => Some(floating_in(
             Skin::Blood,
             head,
-            if holding { 0.45 } else { 0.25 },
+            if holding { 0.35 } else { 0.14 },
         )),
         _ if part < 2 + CHAIN_LINKS && far > 0.05 => {
             let k = (part - 2) as f32;
@@ -6937,7 +6937,7 @@ fn scythe_head_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece
             } else {
                 dir.cross(Vec3::Y).normalize_or(Vec3::Z)
             };
-            let mut link = limb(Shape::Limb, a, b, 0.07, ahead);
+            let mut link = limb(Shape::Limb, a, b, 0.11, ahead);
             link.skin = Skin::Heart;
             Some(link)
         }
