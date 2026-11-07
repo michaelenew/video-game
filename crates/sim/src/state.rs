@@ -9008,6 +9008,22 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
 fn blood_move(p: &Player, input: Input) -> Option<u8> {
     use moves::blood as b;
     use moves::blood::keys;
+    // **The chain has her left hand, and right click asked for it home**
+    // (2026-11-07): those buttons are not her moves while it does
+    // (`bleeds::chain_in_hand`).
+    let input = match p.mechanic {
+        Mechanic::Blood(g) => {
+            let mut bits = input.bits;
+            if g.chain_held > 0 {
+                bits &= !keys::HAND;
+            }
+            if g.recall {
+                bits &= !keys::SCYTHE;
+            }
+            Input { bits, ..input }
+        }
+        _ => input,
+    };
     // Left before middle before right, the tie-break every class makes.
     let click = if input.has(keys::HAND) {
         keys::HAND

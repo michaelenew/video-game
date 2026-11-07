@@ -10358,3 +10358,23 @@ kitcheck` now plays her against every promise and prints the table; D7 in
 **Verdict** open -- to be played. To feel for: whether the queued zip ever takes her somewhere
 she did not mean to go; whether a free scythe and a free hand make the plant's price the only
 decision, as meant; whether Rend's string is too much from a class with a heal.
+
+## 2026-11-07 — Blood mage: round three, the owner's tweaks
+
+"This is better. A few tweaks." The asks, the owner's answers to three questions (the grab onto
+the chain; the claw feeds plants; the charge-jump), and what was built are in
+[kits/blood-mage.md](kits/blood-mage.md) §"Round three". The promises were written first, as a
+card in exploration 0038 and as lines of `kitcheck`, and every one was measured before
+handing over.
+
+**Tried and changed the same day.** The charge-jump at ×1.6 lift went 7.6 m up and over a
+fighter in its path -- "go further" was the ask, not higher; ×1.1 lift and 22 m/s along is
+18 m on and 3.6 m up, and it hits what it meets. The chain first claimed the whole frame while
+left was held, which froze the Cast on its first active frame and threw the head again every
+frame: it claims the buttons now and never the frame. Found by filming it, not by the tests.
+The throw and claw clips first broke the motion ceiling (a hand 0.39 and 0.42 m in a frame):
+a smaller turn and a linear ease.
+
+**Verdict** open -- to be played. To feel for: whether the arc makes grabbing a moving fighter
+harder than the line did; whether the zip's pull feels mechanical; whether the shrike's 5 m/s
+is too easy to trigger off any knockback; the Red claw's 54-frame charge.

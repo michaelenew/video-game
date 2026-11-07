@@ -199,12 +199,12 @@ pub(super) fn chain_in_hand(
             g.chain_held = 0;
             g.zip_queued = false;
         });
-        return true;
+        return false;
     }
     let in_a_fighter = head.is_some_and(|h| matches!(h.head_state(), Head::Fighter(_)));
     if input.has(moves::blood::keys::HAND) {
         if g.chain_held == u16::MAX {
-            return true;
+            return false;
         }
         let held = g.chain_held.saturating_add(1);
         tend(p, |g| g.chain_held = held);
@@ -212,10 +212,10 @@ pub(super) fn chain_in_hand(
             tend(p, |g| g.chain_held = u16::MAX);
             match head.map(|h| h.head_state()) {
                 Some(Head::Fighter(v)) => tend(p, |g| g.reeling = v as u8 + 1),
-                _ => zip_now_or_later(p, head),
+                _ => return zip_now_or_later(p, head),
             }
         }
-        return true;
+        return false;
     }
     if g.chain_held == 0 {
         return false;
@@ -223,23 +223,30 @@ pub(super) fn chain_in_hand(
     let held = g.chain_held;
     tend(p, |g| g.chain_held = 0);
     if held == u16::MAX {
-        return true;
+        return false;
     }
     if held >= t::hold_from() && in_a_fighter {
         tend(p, |g| g.rip = true);
+        false
     } else {
-        zip_now_or_later(p, head);
+        zip_now_or_later(p, head)
     }
-    true
 }
 
 /// The zip, now if the head holds something, or kept for the frame it bites.
-fn zip_now_or_later(p: &mut Player, head: Option<Effect>) {
+/// Whether it started now.
+fn zip_now_or_later(p: &mut Player, head: Option<Effect>) -> bool {
     match head {
-        Some(h) if h.is_a_head_holding() && free_to_zip(p) => start_the_zip(p, &h),
-        Some(h) if h.head_state() != Head::Flying && !h.is_a_head_holding() => {}
-        _ if t::zip_queue() => tend(p, |g| g.zip_queued = true),
-        _ => {}
+        Some(h) if h.is_a_head_holding() && free_to_zip(p) => {
+            start_the_zip(p, &h);
+            true
+        }
+        Some(h) if h.head_state() != Head::Flying && !h.is_a_head_holding() => false,
+        _ if t::zip_queue() => {
+            tend(p, |g| g.zip_queued = true);
+            false
+        }
+        _ => false,
     }
 }
 
