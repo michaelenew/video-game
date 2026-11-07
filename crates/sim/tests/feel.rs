@@ -452,7 +452,11 @@ fn best_case(m: &Move) -> i32 {
             // The Reaping, 2026-10-19: the picture of a full tally cashed,
             // placed by the world on the blow that cashed it. It hits
             // nobody; the blow is the move's own.
-            | EffectKind::Reaping,
+            | EffectKind::Reaping
+            // The Red claw's marks, 2026-11-07: the claw struck once as it
+            // landed, for its row (`World::claw_lands`); the marks hit
+            // nobody.
+            | EffectKind::Claw,
         )
         | None => m.damage * swings,
     }
@@ -1463,7 +1467,9 @@ fn every_class_has_a_move_that_carries_the_body() {
                 }
                 let mut w = bitten.expect("the head bit the floor eight metres out");
                 let start = w.players[0].pos;
-                step(&mut w, scythe, 0);
+                // The zip is a tap of left since 2026-11-07, thrown as it
+                // comes up.
+                step(&mut w, sim::moves::blood::keys::HAND, 0);
                 for _ in 0..t::dodge_frames() as u32 {
                     step(&mut w, 0, 0);
                 }

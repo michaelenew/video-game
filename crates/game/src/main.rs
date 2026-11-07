@@ -1037,6 +1037,21 @@ fn shot_blood(w: &mut World) {
     // `SHOT_BLOOD=trail`: the trail a bleeding body leaves -- five stains a
     // stride apart across her view -- and the other fighter at its end, for
     // a capture of a spike setting the chain off.
+    // `SHOT_BLOOD=plant` (2026-11-07): one plant of hers four metres ahead,
+    // on the line to whoever stands in front of her -- for a capture of the
+    // shrike, someone reeled in on the chain into its thorns.
+    if platform::env("SHOT_BLOOD").as_deref() == Some("plant") {
+        let four = sim::Fx::from_int(4);
+        let at = sim::V3::new(
+            p.pos.x.add(p.facing.x.mul(four)),
+            p.pos.y,
+            p.pos.z.add(p.facing.z.mul(four)),
+        );
+        if let sim::class::Mechanic::Blood(garden) = &mut w.players[0].mechanic {
+            garden.plants[0] = Some(sim::class::Structure::planted(at));
+        }
+        return;
+    }
     if platform::env("SHOT_BLOOD").as_deref() == Some("trail") {
         // Across her view, six metres out, so the whole of it is on screen.
         let f = p.facing;
