@@ -207,7 +207,7 @@ line of `cargo run --release -p sim --example kitcheck`.
 | The charged claw slows what it hits | slowed after the hit |
 | Its claw marks are longer and more solid than the tap's | drawn: filmed |
 | Raking one of her plants feeds it: bigger, and its lash longer and harder, for a while | the plant's size and lash reach rise |
-| Space and left held is a charge-jump: the longer the hold, the further and higher she leaps, with the claw riding in front of her the whole way | the leap's distance and height rise with the hold; a fighter in her path is hit mid-leap |
+| Space and left held is a charge-jump: the longer the hold, the further she leaps, low, with the claw riding in front of her the whole way (built: "higher" went over the heads of what was in her path, and the owner's ask was "further") | the leap's distance rises with the hold; a fighter in her path is hit mid-leap |
 
 **Plants**
 

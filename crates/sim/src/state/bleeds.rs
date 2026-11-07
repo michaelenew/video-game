@@ -270,7 +270,7 @@ pub(super) fn start_the_zip(p: &mut Player, head: &Effect) {
     p.swim = SWIM_NONE;
     p.action = Action::Recovery {
         kind: moves::blood::CAST,
-        left: ZIP_LIMIT,
+        left: t::zip_limit(),
     };
     let body = matches!(head.head_state(), Head::Fighter(_) | Head::Creature(_));
     tend(p, |g| {
@@ -355,7 +355,9 @@ impl World {
         let speed = t::cast_speed().max(Fx::ONE);
         // Time to the crosshair at the throw's speed, and the lift that
         // gravity takes back over that time.
-        let time = far.div(speed).max(DT.mul(Fx::from_int(4)));
+        let time = far
+            .div(speed)
+            .max(DT.mul(Fx::from_int(t::cast_quickest() as i32)));
         let half = Fx::ratio(1, 2);
         let lift = t::cast_gravity().mul(time).mul(half);
         born.dir = line
@@ -423,7 +425,7 @@ impl World {
     /// chain goes taut and holds it there, so it swings round her rather than
     /// flying on; and it bites the first thing it meets on its way -- a body,
     /// a creature, a critter, the world (`aim::first_along`), or the floor it
-    /// comes down on. A head that has flown `HEAD_FLIGHT` frames without
+    /// comes down on. A head that has flown `t::head_flight()` frames without
     /// biting anything comes home.
     fn fly_the_head(&mut self, effect: &mut Effect) {
         let owner = effect.owner as usize;
@@ -524,7 +526,7 @@ impl World {
             return;
         }
         effect.home = at;
-        if effect.head_for() >= HEAD_FLIGHT {
+        if effect.head_for() >= t::head_flight() {
             effect.dir = V3::ZERO;
             effect.set_head(Head::Home);
         }
@@ -779,7 +781,7 @@ impl World {
             let pulled =
                 matches!(p.action, Action::Recovery { kind, .. } if kind == moves::blood::CAST);
             let arrived = far.raw() <= t::body_radius().add(speed.mul(DT)).raw();
-            let spent = g.zip_for >= ZIP_LIMIT;
+            let spent = g.zip_for >= t::zip_limit();
             if arrived || spent || !pulled {
                 tend(&mut self.players[i], |g| {
                     g.zipping = false;
@@ -792,7 +794,7 @@ impl World {
                     if g.zip_to_body {
                         q.vel = V3::new(
                             Fx::ZERO,
-                            q.vel.y.max(Fx::ZERO).min(Fx::from_int(3)),
+                            q.vel.y.max(Fx::ZERO).min(t::zip_body_rise()),
                             Fx::ZERO,
                         );
                     } else {
@@ -827,7 +829,7 @@ impl World {
             q.grounded = false;
             q.action = Action::Recovery {
                 kind: moves::blood::CAST,
-                left: ZIP_LIMIT,
+                left: t::zip_limit(),
             };
             tend(q, |g| g.zip_for = g.zip_for.saturating_add(1));
             self.effects[head] = Some(e);
@@ -876,8 +878,7 @@ impl World {
                 let v = g.reeling as usize - 1;
                 let holds = head.is_some_and(|e| e.head_state() == Head::Fighter(v));
                 let q = self.players[v];
-                let near = flat_apart(q.pos, self.players[i].pos).raw()
-                    <= t::body_radius().mul(Fx::from_int(4)).raw();
+                let near = flat_apart(q.pos, self.players[i].pos).raw() <= t::reel_near().raw();
                 if !holds || q.health <= 0 || near {
                     tend(&mut self.players[i], |g| g.reeling = 0);
                     if holds
@@ -901,11 +902,13 @@ impl World {
                 // Hand over hand: held on her chain, and dragged in to her
                 // arm at `tuning::chain_reel` (`drag_the_held`).
                 if !q.untouchable() && !matches!(q.action, Action::Held { .. }) {
-                    self.players[v].seized(i as u8, ZIP_LIMIT, 0);
+                    self.players[v].seized(i as u8, t::zip_limit(), 0);
                 }
                 if matches!(self.players[v].action, Action::Held { .. }) {
                     let q = &mut self.players[v];
-                    q.action = Action::Held { left: ZIP_LIMIT };
+                    q.action = Action::Held {
+                        left: t::zip_limit(),
+                    };
                 }
             }
         }
@@ -1028,7 +1031,10 @@ impl World {
             freeze(&mut self.players[v], hold);
         }
         self.gore_each(&mut born, 0, mid, radius, hard);
-        self.gore_critters(&mut born, mid, radius, hard);
+        // A critter is knee-high: the claw rakes down to the floor, so it is
+        // met low, not at a fighter's middle.
+        let low = V3::new(at.x, at.y.add(t::body_radius()), at.z);
+        self.gore_critters(&mut born, low, radius, hard);
         born.forget_hits();
         // Her plants inside it are fed.
         if let Some(g) = garden_of(&self.players[i]) {
@@ -1212,11 +1218,7 @@ impl World {
                         continue;
                     }
                     let touching = flat_apart(q.pos, plant.at).raw()
-                        <= plant
-                            .radius()
-                            .add(t::body_radius())
-                            .add(Fx::ratio(1, 5))
-                            .raw()
+                        <= plant.radius().add(t::body_radius()).raw()
                         && q.pos.y.raw() <= plant.top().raw()
                         && q.pos.y.add(t::body_height()).raw() >= plant.at.y.raw();
                     let reeled = matches!(q.action, Action::Held { .. }) && q.held_by == i as u8;
@@ -1555,10 +1557,3 @@ impl World {
         }
     }
 }
-
-/// How long the head flies without biting anything before it is reeled
-/// home: a second and a half, by when a throw at nothing is on the floor.
-const HEAD_FLIGHT: u16 = 90;
-
-/// How long a zip may pull before it gives up: two seconds.
-const ZIP_LIMIT: u16 = 120;

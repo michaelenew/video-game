@@ -5598,3 +5598,34 @@ pub fn rend_third_launch() -> Fx {
 pub fn thorns_for() -> u16 {
     oven::scalar(Scalar::ThornsFor).clamp(1, u16::MAX as i32) as u16
 }
+
+/// How many frames more the charge-jump's claw stays out, held to its end:
+/// it rides the leap with her. A tap is the row's own.
+pub fn leap_rides() -> u16 {
+    oven::scalar(Scalar::LeapRides).clamp(0, u16::MAX as i32) as u16
+}
+
+/// How long a head that bites nothing flies before it is reeled home.
+pub fn head_flight() -> u16 {
+    oven::scalar(Scalar::HeadFlight).clamp(1, u16::MAX as i32) as u16
+}
+
+/// How long a zip may pull before it gives up.
+pub fn zip_limit() -> u16 {
+    oven::scalar(Scalar::ZipLimit).clamp(1, u16::MAX as i32) as u16
+}
+
+/// The shortest a throw at something close takes to get there.
+pub fn cast_quickest() -> u16 {
+    oven::scalar(Scalar::CastQuickest).clamp(1, u16::MAX as i32) as u16
+}
+
+/// What a zip that ends beside a body keeps of her upward speed, at most.
+pub fn zip_body_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipBodyRise).max(0))
+}
+
+/// How near her a fighter reeled in on the chain is let go, staggered.
+pub fn reel_near() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReelNear).max(0))
+}

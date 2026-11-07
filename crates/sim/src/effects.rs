@@ -1011,8 +1011,10 @@ impl EffectKind {
             EffectKind::Thrall | EffectKind::Heart | EffectKind::Reaping => 0,
             // The bite is the move's own number.
             EffectKind::ScytheHead => m.damage,
-            // A picture: the claw struck as it came out.
-            EffectKind::Claw => 0,
+            // The claw's row: what `World::claw_lands` cuts a creature or a
+            // critter for, through this effect, the frame it lands. Its marks
+            // are a picture after that and strike nothing.
+            EffectKind::Claw => m.damage,
         }
     }
 }

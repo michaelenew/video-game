@@ -574,9 +574,9 @@ fn main() {
         let (tap_far, tap_high) = leap(0);
         let (full_far, full_high) = leap(t::leap_hold() as u32 + 4);
         card.line(
-            "space and left held leaps further and higher than tapped",
+            "space and left held leaps much further than tapped, and low",
             format!("tapped {tap_far:.1} m on, {tap_high:.1} m up; held {full_far:.1} m on, {full_high:.1} m up"),
-            full_far > tap_far + 2.0 && full_high > tap_high,
+            full_far > tap_far + 2.0 && full_high < tap_high + 1.0,
         );
         let mut w = with_foe(5.0);
         let his = w.players[1].health;

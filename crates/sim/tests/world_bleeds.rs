@@ -214,9 +214,11 @@ fn the_zip_goes_to_the_head_and_a_banked_jump_fires_on_arrival() {
         let mut arrived = None;
         let mut held = 0;
         for _ in 0..90 {
-            let near = w.players[0].haul > 0
+            // Near the end of the pull, at the speed she is going (a pull
+            // since 2026-11-07, not a haul).
+            let near = garden(&w).zipping
                 && flat_apart(w.players[0].pos, w.players[0].haul_to)
-                    < as_f(t::zip_speed()) / 60.0 * 3.0;
+                    < as_f(w.players[0].vel.len()) / 60.0 * 3.0;
             let space = if jump && near { Input::SPACE } else { 0 };
             step2(&mut w, held | space, 0, 0);
             held = 0;

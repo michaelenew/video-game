@@ -1419,7 +1419,7 @@ scalars! {
     ClawSlow, "Blood mage", "Red claw, slows what it hits to (x)", Fixed, 0, fx(1,1);
     ClawGrows, "Blood mage", "Red claw, at full reach it is this much bigger (x)", Fixed, fx(1,1), fx(5,1);
     LeapFurther, "Blood mage", "Rising rend, held to its end leaps on at (m/s)", Fixed, 0, fx(40,1);
-    LeapHigher, "Blood mage", "Rising rend, held to its end lifts this much more (x)", Fixed, fx(1,1), fx(3,1);
+    LeapHigher, "Blood mage", "Rising rend, held to its end lifts this much more (x)", Fixed, fx(1,4), fx(3,1);
     LeapHold, "Blood mage", "Rising rend, the longest hold", Frames, 1, 120;
     FeedGrows, "Blood mage", "A plant fed by her claw grows by (x a stone)", Fixed, 0, fx(1,1);
     FeedMost, "Blood mage", "A plant is fed to at most (x a stone)", Fixed, fx(1,1), fx(4,1);
@@ -1427,6 +1427,12 @@ scalars! {
     RendThirdReach, "Blood mage", "Rend, the third of a string reaches (x)", Fixed, fx(1,1), fx(3,1);
     RendThirdLaunch, "Blood mage", "Rend, the third of a string launches (m/s)", Fixed, 0, fx(30,1);
     ThornsFor, "Blood mage", "Reaped thorns, the plant breaking and its thorns fly for", Frames, 1, 120;
+    LeapRides, "Blood mage", "Rising rend, held to its end the claw rides on for", Frames, 0, 60;
+    HeadFlight, "Blood mage", "Cast, a head that bites nothing flies at most", Frames, 1, 600;
+    ZipLimit, "Blood mage", "Zip, gives up after", Frames, 1, 600;
+    CastQuickest, "Blood mage", "Cast, the throw takes at least", Frames, 1, 30;
+    ZipBodyRise, "Blood mage", "Zip, onto a body she keeps at most this rise (m/s)", Fixed, 0, fx(20,1);
+    ReelNear, "Blood mage", "Chain, a fighter reeled in this near is let go (m)", Fixed, fx(1,2), fx(6,1);
 }
 
 // ---------------------------------------------------------------------------

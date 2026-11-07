@@ -3878,30 +3878,19 @@ impl World {
             if left != m.active {
                 continue;
             }
-            if m.self_lift.raw() > 0 {
+            // **The charge-jump** (2026-11-07) leapt on its release
+            // (`step_channel`): its lift is not the row's.
+            let leapt = p.class == Class::BloodMage
+                && kind == moves::blood::RISING_REND
+                && matches!(p.mechanic, Mechanic::Blood(g) if g.leap_held == u16::MAX);
+            if leapt {
+                if let Mechanic::Blood(g) = &mut self.players[i].mechanic {
+                    g.leap_held = 0;
+                }
+            }
+            if m.self_lift.raw() > 0 && !leapt {
                 self.players[i].vel.y = m.self_lift;
                 self.players[i].grounded = false;
-                // **The charge-jump's leap** (2026-11-07): the hold buys lift
-                // and a drive along her facing, and the claw goes with her.
-                if p.class == Class::BloodMage && kind == moves::blood::RISING_REND {
-                    let held = match p.mechanic {
-                        Mechanic::Blood(g) => g.leap_held,
-                        _ => 0,
-                    };
-                    let share = Fx::ratio(
-                        held.min(t::leap_hold()) as i32,
-                        t::leap_hold().max(1) as i32,
-                    );
-                    let q = &mut self.players[i];
-                    q.vel.y = m
-                        .self_lift
-                        .mul(Fx::ONE.add(t::leap_higher().sub(Fx::ONE).mul(share)));
-                    let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
-                    q.vel = q.vel.add(ahead.scale(t::leap_further().mul(share)));
-                    if let Mechanic::Blood(g) = &mut q.mechanic {
-                        g.leap_held = 0;
-                    }
-                }
                 // The spear's takeoff spends the plant on a direction as well
                 // as on height. On the same frame as the lift, because they are
                 // one motion: the butt of the spear hits the floor and both
@@ -11179,12 +11168,30 @@ fn step_channel(
     if p.class == Class::BloodMage && kind == moves::blood::RISING_REND {
         let done = !input.has(moves::blood::click_of(kind)) || held >= t::leap_hold();
         if done {
+            // **The leap, on the release**: the hold buys lift and a drive
+            // along her facing, and the claw rides it for as much longer as
+            // the hold bought. Marked done (`u16::MAX`) so the row's own lift
+            // on its first active frame does not come again mid-leap.
+            let share = Fx::ratio(
+                held.min(t::leap_hold()) as i32,
+                t::leap_hold().max(1) as i32,
+            );
+            let rides = Fx::from_int(t::leap_rides() as i32)
+                .mul(share)
+                .to_int()
+                .max(0) as u16;
+            p.vel.y = m
+                .self_lift
+                .mul(Fx::ONE.add(t::leap_higher().sub(Fx::ONE).mul(share)));
+            let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
+            p.vel = p.vel.add(ahead.scale(t::leap_further().mul(share)));
+            p.grounded = false;
             if let Mechanic::Blood(g) = &mut p.mechanic {
-                g.leap_held = held;
+                g.leap_held = u16::MAX;
             }
             return Action::Active {
                 kind,
-                left: m.active,
+                left: m.active.saturating_add(rides),
             };
         }
         return Action::Channel {

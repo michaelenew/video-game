@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 835] = [
+pub const SCALARS: [i32; 841] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -835,7 +835,7 @@ pub const SCALARS: [i32; 835] = [
            32768, // blood_mage.red_claw,_slows_what_it_hits_to_(x) = 0.5
           144179, // blood_mage.red_claw,_at_full_reach_it_is_this_much_bigger_(x) = 2.2
          1441792, // blood_mage.rising_rend,_held_to_its_end_leaps_on_at_(m/s) = 22
-           72090, // blood_mage.rising_rend,_held_to_its_end_lifts_this_much_more_(x) = 1.1
+           52429, // blood_mage.rising_rend,_held_to_its_end_lifts_this_much_more_(x) = 0.8
               30, // blood_mage.rising_rend,_the_longest_hold = 30
            16384, // blood_mage.a_plant_fed_by_her_claw_grows_by_(x_a_stone) = 0.25
           144179, // blood_mage.a_plant_is_fed_to_at_most_(x_a_stone) = 2.2
@@ -843,6 +843,12 @@ pub const SCALARS: [i32; 835] = [
            88473, // blood_mage.rend,_the_third_of_a_string_reaches_(x) = 1.35
           589824, // blood_mage.rend,_the_third_of_a_string_launches_(m/s) = 9
               30, // blood_mage.reaped_thorns,_the_plant_breaking_and_its_thorns_fly_for = 30
+              16, // blood_mage.rising_rend,_held_to_its_end_the_claw_rides_on_for = 16
+              90, // blood_mage.cast,_a_head_that_bites_nothing_flies_at_most = 90
+             120, // blood_mage.zip,_gives_up_after = 120
+               4, // blood_mage.cast,_the_throw_takes_at_least = 4
+          196608, // blood_mage.zip,_onto_a_body_she_keeps_at_most_this_rise_(m/s) = 3
+           91750, // blood_mage.chain,_a_fighter_reeled_in_this_near_is_let_go_(m) = 1.4
 ];
 
 #[rustfmt::skip]
@@ -2826,12 +2832,12 @@ pub const MOVES: [i32; 2730] = [
                0, // move.blood_mage.heart.drinks_of_a_pool_(%) = 0
                0, // move.blood_mage.heart.impact_freeze = 0
                5, // move.blood_mage.rising_rend.startup = 5
-              20, // move.blood_mage.rising_rend.active = 20
+               4, // move.blood_mage.rising_rend.active = 4
               12, // move.blood_mage.rising_rend.recovery = 12
               45, // move.blood_mage.rising_rend.damage = 45
           170394, // move.blood_mage.rising_rend.reach = 2.6
            58982, // move.blood_mage.rising_rend.radius = 0.9
-              34, // move.blood_mage.rising_rend.hitstun = 34
+              18, // move.blood_mage.rising_rend.hitstun = 18
                8, // move.blood_mage.rising_rend.blockstun = 8
           131072, // move.blood_mage.rising_rend.knockback = 2
              100, // move.blood_mage.rising_rend.mobility_(%) = 100
