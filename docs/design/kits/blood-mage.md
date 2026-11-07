@@ -108,6 +108,11 @@ measured by `cargo run --release -p sim --example kitcheck` and held by `tests/w
 - **Plants are drawn grown** (`game::plant_piece`): a leaning, twisting stem, four branches,
   twelve thorns, a blood blossom a branch, three roots; the column is the collision and is not
   drawn.
+- **A reaped plant breaks** (`game::thorn_spray`, from the owner: "the red bubble cone isn't
+  capturing the move"): its stem and branches, drawn as they stood, burst outward along the
+  blade's way, tumbling and falling; its blossoms pop; eighteen of its thorns fly point first
+  out along the cone and stick where they land, fading, over `Reaped thorns, the plant breaking
+  and its thorns fly for` (30 f). Drawing only: the blow is unchanged.
 - **Fixed**: the Rising reap or a Sweep thrown standing on a plant no longer reaps it.
 
 ## From play, 2026-11-06 — what changed, and it wins over slice 1 below

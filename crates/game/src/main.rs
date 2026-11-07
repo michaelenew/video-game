@@ -7189,16 +7189,18 @@ fn thorn_spray(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         return Some(wood);
     }
     let k = k - SPRAY_WOOD;
-    if t > 0.35 {
+    // A quick pop, not a swelling: the blossom breaks at once and is gone --
+    // swollen, it was the red bubbles again.
+    if t > 0.15 {
         return None;
     }
     let blossom = STEM + 2 * BRANCHES + THORNS + k;
     let (_, at, size) = plant_piece(foot, radius, tall, seed, blossom)?;
-    let burst = t / 0.35;
+    let burst = t / 0.15;
     Some(floating_in(
         Skin::Heart,
         at,
-        (size * (1.0 + 3.0 * burst) * (1.0 - burst)).max(0.0),
+        (size * (1.0 + 0.4 * burst) * (1.0 - burst)).max(0.0),
     ))
 }
 
