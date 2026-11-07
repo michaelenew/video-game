@@ -170,6 +170,52 @@ the plant.
 2. **The garden's stages** and the hearts folded into the heart-tree.
 3. **`Q` and `E`** (the owner: later), Bloom, polish and animation.
 
+## Round three: the owner's tweaks, 2026-11-07 -- the promise card
+
+The owner, after playing the rebuild: "This is better. A few tweaks." Every line below is a
+promise with the number it must meet, written before the code (delivery.md D7), and each is a
+line of `cargo run --release -p sim --example kitcheck`.
+
+**The scythe head is a physical thing** ("it feels like a magic skillshot")
+
+| Promise | Measured by |
+| --- | --- |
+| The head leaves her hand as the blade itself: the scythe she holds has no blade while it is out | drawn: filmed |
+| It flies under gravity: thrown at the crosshair, it arcs, and a throw at nothing comes down short of where a straight line would go | the head's height drops over its flight; a level throw at nothing lands on the floor |
+| Aimed at something within reach, it still meets the crosshair: the throw's speed is solved for the arc, so grabbing people stays easy | a Bulwark 10 m off, crosshair on his middle: bitten |
+| The chain goes slack when the head falls without being pulled in, and taut when it holds or is pulled | drawn: filmed (sag from the chain's length against the gap) |
+| Called home, it is reeled: it starts slow and speeds up, not a constant glide | the head's speed rises over the reel |
+| The zip is a pull, not a glide: she is accelerated along the chain, keeps her momentum and falls under gravity as she goes | her speed rises over the pull; a zip up to a high bite arcs |
+
+**Left click while the head is out: the chain in her other hand** (the owner's answers, 2026-11-07)
+
+| Promise | Measured by |
+| --- | --- |
+| A tap of left pulls her to what the head bit | she ends beside the bitten fighter |
+| Left held to its end reels them in to her | a fighter 10 m off ends within 2 m of her |
+| Left let go early while the head is in them rips it out: a hit, a bleed and a stagger | damage dealt, stagger, the head comes home |
+| Right pressed while the head is out calls it home | the head starts back on the press |
+| **The shrike**: a body reeled or knocked into one of her plants is impaled on it -- held on its thorns a moment, bleeding, and the plant drinks | the reeled fighter held at the plant |
+
+**The Red Hand**
+
+| Promise | Measured by |
+| --- | --- |
+| Three taps are three different blows: a quick swipe, a cross-body backhand, and a heavy two-handed rake that knocks them down | three different rows, each bigger than the last |
+| Held, the claw charges: the longer the hold, the further out the swipe lands and the bigger it is | the swipe's distance and size rise with the hold |
+| Over-holding is punished: the swipe lands at the held distance, so held too long it lands past them | a fighter 3 m off is missed by a full hold |
+| The charged claw slows what it hits | slowed after the hit |
+| Its claw marks are longer and more solid than the tap's | drawn: filmed |
+| Raking one of her plants feeds it: bigger, and its lash longer and harder, for a while | the plant's size and lash reach rise |
+| Space and left held is a charge-jump: the longer the hold, the further and higher she leaps, with the claw riding in front of her the whole way | the leap's distance and height rise with the hold; a fighter in her path is hit mid-leap |
+
+**Plants**
+
+| Promise | Measured by |
+| --- | --- |
+| Jumping off a plant does not burst it; only the scythe through it does | a jump off a plant's top leaves it standing |
+| Plants look grown, not turned: a gnarled stem, branches and thorns, no cylinder | drawn: filmed |
+
 ## Open
 
 - Does a refund capped at grey, with enemy blood growing plants but never healing her, keep

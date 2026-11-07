@@ -586,3 +586,34 @@ fn seize_holds_them_up_and_then_brings_them_down() {
     let dealt = his - w.players[1].health;
     assert!(dealt >= 100, "and it is a big blow: {dealt}");
 }
+
+#[test]
+fn taking_off_from_a_plant_never_reaps_it() {
+    // From play, 2026-11-07: "jumping off a tree that spawned from a blood pool
+    // causes it to explode into thorns" -- a Rising reap or a Sweep thrown
+    // standing on a plant cut down through the plant under her feet.
+    for bits in [Input::SPACE, Input::SPACE | keys::SCYTHE, keys::SCYTHE] {
+        let mut w = mage_and(30.0);
+        let mut f = 0;
+        loop {
+            step2(
+                &mut w,
+                if f < 3 {
+                    Input::SPACE | keys::SPIKES
+                } else {
+                    0
+                },
+                0,
+                0,
+            );
+            f += 1;
+            if (f > 20 && w.players[0].grounded) || f > 400 {
+                break;
+            }
+        }
+        assert_eq!(plants(&w), 1, "fixture: she is standing on her plant");
+        run(&mut w, 3, bits, 0);
+        run(&mut w, 40, 0, 0);
+        assert_eq!(plants(&w), 1, "{bits:#x} off its top reaped it");
+    }
+}

@@ -1032,6 +1032,16 @@ impl World {
         };
         for (slot, plant) in g.plants.iter().enumerate() {
             let Some(plant) = plant else { continue };
+            // **Not the one under her feet** (2026-11-06, from play: "jumping
+            // off a tree ... causes it to explode"): a Rising reap or a Sweep
+            // thrown standing on a plant cuts down through it, and that is a
+            // foothold, not a harvest.
+            let on_it = flat_apart(p.pos, plant.at).raw()
+                <= plant.radius().add(t::body_radius()).raw()
+                && p.pos.y.sub(plant.top()).abs().raw() <= t::body_radius().raw();
+            if on_it {
+                continue;
+            }
             let top = V3::new(plant.at.x, plant.top(), plant.at.z);
             let gap = crate::math::segment_gap(hb.from, hb.to, plant.at, top);
             if gap.raw() <= hb.radius.add(plant.radius()).raw() {
