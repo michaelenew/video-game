@@ -655,7 +655,8 @@ fn the_meter_fills_with_the_damage_she_deals() {
 #[test]
 fn her_own_costs_fill_nothing() {
     let mut w = mage();
-    step_looking(&mut w, keys::HAND, -2500);
+    // The spike: since 2026-11-06 the one press of hers that costs.
+    step_looking(&mut w, keys::SPIKES, -2500);
     run(&mut w, 60, 0);
     assert!(w.players[0].grey > 0, "fixture: it cost her");
     assert_eq!(w.players[0].heart_meter, 0, "a miss deals nothing");
@@ -771,11 +772,15 @@ fn an_eruption_is_worth_the_blood_in_its_stain() {
         run_looking(&mut w, 30, -3500);
         full - w.players[1].health
     };
+    // Since 2026-11-06 a spike raising a plant is worth at least its row,
+    // however little blood it rose out of: a footprint still grows a plant.
+    let row = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).damage;
     for volume in [50, 200] {
+        let worth = volume.max(row);
         let got = dealt(volume);
         assert!(
-            got <= volume && got >= volume - 2 * t::pool_drain(),
-            "a stain of {volume} erupted for {got}"
+            got <= worth && got >= worth - 2 * t::pool_drain(),
+            "a stain of {volume} erupted for {got}, worth {worth}"
         );
     }
 }

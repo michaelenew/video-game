@@ -1395,6 +1395,14 @@ scalars! {
     ThornsCone, "Blood mage", "Reaped thorns, cone half-width (cos)", Fixed, 0, fx(1,1);
     SweepBleeds, "Blood mage", "Sweep, cuts the floor for", Int, 0, 500;
     RisingReapBleeds, "Blood mage", "Rising reap, cuts the floor for", Int, 0, 500;
+    // **The world bleeds, from play** (2026-11-06): the head holds the world
+    // long enough to choose the zip, and a spike on bare ground rises like a
+    // fighter's pool. Appended: `tuned::SCALARS` is read by this enum's own
+    // discriminant.
+    CastHoldsWorld, "Blood mage", "Cast, holds the world or a creature for", Frames, 1, 600;
+    ZipQueue, "Blood mage", "Zip, a press while the head flies waits for its bite", Flag, 0, 1;
+    SeizeLift, "Blood mage", "Seize, holds them up for", Frames, 1, 60;
+    SeizeLiftHeight, "Blood mage", "Seize, lifts them this high (m)", Fixed, 0, fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

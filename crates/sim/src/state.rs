@@ -4186,7 +4186,7 @@ impl World {
                             // not land a second one. And the eruption chains
                             // -- see `erupt_from`.
                             self.players[i].hit_used = true;
-                            self.erupt_from(i, kind, slot);
+                            self.erupt_from(i, kind, slot, true);
                             place = false;
                         }
                         None => born.reach = m.radius,
@@ -4661,6 +4661,9 @@ impl World {
         let present = self.present();
         separate_bodies(&mut self.players, present);
         drag_the_held(&mut self.players);
+        // The Blood mage's Seize holds what it caught up over her, and then
+        // brings it down (2026-11-06).
+        self.carry_the_seized();
 
         // The hunt's lore, a frame on: fire on the floor, hazards aging, a
         // cart rolling.
@@ -5679,7 +5682,15 @@ fn fade_grey(p: &mut Player, frame: u32) {
     let hz = crate::TICK_HZ as i32;
     let k = (frame % crate::TICK_HZ) as i32;
     let faded = rate * (k + 1) / hz - rate * k / hz;
-    p.grey = (p.grey - faded).max(0);
+    // **What her plants hold does not fade** (2026-11-06): her blood in the
+    // garden is grey until it is reaped back or the plant withers, so her bar
+    // is short for as long as it stands -- 0038's "until it is retrieved,
+    // her bar is short".
+    let held = match p.mechanic {
+        Mechanic::Blood(g) => g.paid.iter().map(|&v| v as i32).sum::<i32>(),
+        _ => 0,
+    };
+    p.grey = (p.grey - faded).max(held.min(p.grey)).max(0);
 }
 
 /// What a held Strike is worth over the pillar's own hit: the share of the
@@ -7470,7 +7481,23 @@ fn step_player(
 
     // **The Blood mage under her ground, and her Sweep strung** (2026-10-18).
     swim_or_surface(p, input);
+    let was_banked = matches!(p.mechanic, Mechanic::Blood(g) if g.strung_early);
+    let was_recovering = p.action.attack_kind();
     let pressed_scythe = string_the_sweep(p, input, pressed_earth);
+    // A blow of a string kept from early (`Garden::strung_early`) is thrown
+    // as if its button were down this frame.
+    let input = match was_recovering {
+        Some(kind) if was_banked && p.action == Action::Free => Input {
+            bits: input.bits
+                | if kind == moves::blood::REND {
+                    moves::blood::keys::HAND
+                } else {
+                    moves::blood::keys::SCYTHE
+                },
+            ..input
+        },
+        _ => input,
+    };
 
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -7622,9 +7649,10 @@ fn step_player(
                 // Which move a click asks for. After the mechanic, so that Rush
                 // can be started while a click is held down, and before the dodge,
                 // because a click is what disambiguates shift.
-                // **A Blood mage's spike needs a pool** (2026-11-04): on bare
-                // ground the press raises nothing and costs nothing, and the
-                // pool's size is how long it takes to rise -- the startup.
+                // **A Blood mage's spike raises a pool** (2026-11-04,
+                // 2026-11-06): its size is how long it takes to rise -- the
+                // startup -- and it pays toward the price; on bare ground she
+                // pays it all, in her own blood.
                 else if let Some((kind, rise)) = clicked_move(p, input)
                     .filter(|k| p.can_throw(*k, &out))
                     .and_then(|k| bleeds::spike_rise(p, who, k, input, scene).map(|r| (k, r)))
@@ -7636,7 +7664,8 @@ fn step_player(
                     spend_the_rise(p, kind);
                     begin_champion(p, kind);
                     match (begin_move(p, who, kind, input, scene, true), rise) {
-                        (Action::Startup { kind, .. }, Some(left)) => {
+                        (Action::Startup { kind, .. }, Some((left, volume))) => {
+                            bleeds::the_pool_pays(p, volume);
                             Action::Startup { kind, left }
                         }
                         (begun, _) => begun,
@@ -12169,13 +12198,39 @@ fn string_the_sweep(p: &mut Player, input: Input, pressed_hand: bool) -> bool {
     let pressed = input.has(click) && !p.right_held;
     p.right_held = input.has(click);
     let place = p.string & !STRINGING;
+    // A press for the next blow while this one is still out -- through its
+    // hit freeze, usually -- is kept for the recovery (2026-11-06: from play,
+    // the second claw of a string was eaten).
+    let early = match p.action {
+        Action::Active { kind, .. } | Action::Startup { kind, .. } => {
+            (kind == moves::blood::SWEEP && pressed) || (kind == moves::blood::REND && pressed_hand)
+        }
+        _ => false,
+    };
+    let mut banked = false;
+    if let Mechanic::Blood(g) = &mut p.mechanic {
+        if early {
+            g.strung_early = true;
+        }
+        banked = g.strung_early;
+    }
     if let Action::Recovery { kind, .. } = p.action
-        && ((kind == moves::blood::SWEEP && pressed)
-            || (kind == moves::blood::REND && pressed_hand))
+        && ((kind == moves::blood::SWEEP && (pressed || banked))
+            || (kind == moves::blood::REND && (pressed_hand || banked)))
         && place < 2
     {
         p.string = (place + 1) | STRINGING;
         p.action = Action::Free;
+        if let Mechanic::Blood(g) = &mut p.mechanic {
+            g.strung_early = false;
+        }
+        // The kept press throws the blow now, as a fresh press would.
+        return pressed || banked;
+    }
+    if !matches!(p.action, Action::Active { .. } | Action::Startup { .. }) {
+        if let Mechanic::Blood(g) = &mut p.mechanic {
+            g.strung_early = false;
+        }
     }
     pressed
 }
@@ -18535,7 +18590,12 @@ impl World {
     /// a spike on a pool standing among others is the floor coming up across
     /// the whole fight, running outward link by link. Each eruption drinks its
     /// own pool, so the chain cannot run twice over the same blood.
-    fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
+    ///
+    /// `drinks` is false for a spike raising a plant (2026-11-06): the pool's
+    /// blood goes into the plant, which gives back what she paid when it is
+    /// reaped, rather than straight back into her -- and such an eruption is
+    /// worth at least its row, however little blood it rose from.
+    pub(super) fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize, drinks: bool) {
         let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
             return;
         };
@@ -18544,7 +18604,9 @@ impl World {
         let radius = t::erupt_radius()
             .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
             .max(m.radius);
-        self.drink_from(slot, owner, &m);
+        if drinks {
+            self.drink_from(slot, owner, &m);
+        }
         self.effects[slot] = None;
         let mut born = Effect::cast(
             EffectKind::BlackSpike,
@@ -18565,6 +18627,11 @@ impl World {
         // carried on the power, which every hit an effect lands is scaled by.
         let row = Fx::from_int(m.damage.max(1)).mul(t::erupt_damage());
         let worth = Fx::from_int(pool.pool_volume().max(0)).mul(t::stain_erupts());
+        let worth = if drinks {
+            worth
+        } else {
+            worth.max(Fx::from_int(m.damage))
+        };
         born.power = born.power.mul(worth.div(row.max(Fx::ONE)));
         spawn_effect(&mut self.effects, born);
     }
@@ -18622,7 +18689,7 @@ impl World {
             }
             let owner = e.owner as usize;
             if owner < MAX_PLAYERS {
-                self.erupt_from(owner, moves::blood::BLACK_SPIKE, slot);
+                self.erupt_from(owner, moves::blood::BLACK_SPIKE, slot, true);
             } else {
                 self.effects[slot] = None;
             }

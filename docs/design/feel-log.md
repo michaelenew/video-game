@@ -10310,3 +10310,51 @@ startup reads as committed or as slow; whether the leash is felt, since it holds
 other's last position and only stops the one walking away; whether the zip's carry and banked
 jump make her a mover worth a course; whether Seize's unblockable grab is the brawler's answer
 or a panic button; whether a plant's lash at 2 m is cover or clutter.
+
+## 2026-11-06 — Blood mage: the world bleeds, rebuilt from play
+
+**The owner played slice 1**: "Very little of what you built is anything like what we talked
+about." The tether erratic and barely drawn, the zip "a few inches", the jump scythe low,
+everything still costing health when 0038 said only growing would, the spike dead off a pool,
+plants small and gone in two seconds, the claw invisible and the grab a light tap. Every one of
+those was measured in the simulation before it was fixed, by playing her the way a player does --
+the second press early, the button held -- and the measurements are in
+[kits/blood-mage.md](kits/blood-mage.md) §"From play, 2026-11-06". The short of it: the zip
+dropped a press made before the head bit, and the Sweep's step under the hold was the "few
+inches"; the head came home along the floor; the Rising reap's lift of 11 m/s peaked at 1.4 m;
+every row still had a cost; the eruption that raised a plant drank its own pool, so a bare-ground
+spike would have refunded itself; and the Red Hand had no trail because the renderer skipped every
+swing of hers to leave the scythe's alone.
+
+**Changed**: the scythe and the Red Hand free, the spike paying what its pool lacks and its plant
+holding that as grey that does not fade; the spike anywhere; a queued zip, stopping beside a body
+and carrying on past the world; the head home along its chain; the Rising reap at 23 m/s (6.2 m),
+the Rising rend at 16 (3.0 m), the spike under her at 21 (7.5 m); plants ×1.3 a stone for 15 s
+with thorns drawn; Rend 42/63/119 at 2.6 m with a new clip and claw streaks; Seize lifting them
+1.6 m for 18 frames and then bringing them down for 110 (140 onto a plant) with a new clip.
+**Tried and changed the same day**: the string's third claw at ×1.8 with Rend at 48 came to 278
+over three claws on her ground (48, 72, 158) -- the ground's ×1.5 stacked on it; ×1.5 at 42 is
+224. Her own spike's launch at 24 m/s threw her 9 m; 21 is 7.5.
+
+**The movement search, re-run for her** (her fixture lines replaced). Widest gap off the
+runway, shared blocks / whole kit, in metres, by rise, against 11-04's:
+
+| rise | -8 | -4 | -2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 30 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 11-04 | 23.9/25.3 | 21.7/21.8 | 19.7/21.8 | 17.5/17.5 | 15.2/30.5 | 17.6/17.9 | 15.6/17.4 | 13.2/49.7 | 11.2/39.3 | 9.1/10.1 | -/36.3 | -/- | -/- | -/11.1 | -/19.0 | -/- |
+| 11-06 | 32.1/34.7 | 28.4/33.1 | 27.0/29.9 | 25.7/33.8 | 24.8/28.0 | 26.3/62.1 | 22.6/50.0 | 21.9/56.1 | 15.0/43.3 | 14.8/14.8 | 18.1/45.3 | 14.7/40.7 | 12.5/33.9 | -/58.2 | -/- | -/18.0 |
+
+The lane numbers in the fixture are these rises in order. The shared blocks gained a third
+everywhere -- the Rising rend and Rising reap are real takeoffs now -- and the whole kit reaches
++10 and +12 for the first time. +20 lost its line (19.0 m) and +30 gained one (18.0 m): a search
+is a lower bound, and this one did not find the old route again.
+
+**Process**: slice 1 was handed over on green tests the builder wrote from its own code -- the
+zip test let go of the button, waited, and pressed again, which nobody playing does -- and with
+the play check (D3) set aside on the builder's own call. `cargo run --release -p sim --example
+kitcheck` now plays her against every promise and prints the table; D7 in
+[delivery.md](delivery.md) is the rule that came out of it.
+
+**Verdict** open -- to be played. To feel for: whether the queued zip ever takes her somewhere
+she did not mean to go; whether a free scythe and a free hand make the plant's price the only
+decision, as meant; whether Rend's string is too much from a class with a heal.

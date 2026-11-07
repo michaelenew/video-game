@@ -912,6 +912,20 @@ pub struct Garden {
     pub zipping: bool,
     /// A jump pressed near the zip's end, thrown on arrival.
     pub zip_jump: bool,
+    /// Right click pressed again while the head was still flying: the zip
+    /// starts the frame it bites (2026-11-06).
+    pub zip_queued: bool,
+    /// The zip is onto a body -- a fighter or a creature -- and stops her
+    /// beside it, rather than carrying its speed on past (2026-11-06).
+    pub zip_to_body: bool,
+    /// Who her Seize is holding up, one more than their index; nought for
+    /// nobody (2026-11-06).
+    pub seized: u8,
+    /// Frames before she brings them down.
+    pub seize_left: u16,
+    /// The next blow of a Sweep or Rend string, pressed while this one was
+    /// still out -- kept for its recovery rather than dropped (2026-11-06).
+    pub strung_early: bool,
 }
 
 impl Garden {
@@ -921,6 +935,11 @@ impl Garden {
         paid: [0; MAX_STRUCTURES],
         zipping: false,
         zip_jump: false,
+        zip_queued: false,
+        zip_to_body: false,
+        seized: 0,
+        seize_left: 0,
+        strung_early: false,
     };
 }
 

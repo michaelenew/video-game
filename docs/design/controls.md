@@ -1239,20 +1239,21 @@ actually lives.
 
 ### Blood mage
 
-> **The world bleeds, 2026-11-04 -- slice 1, built, unplayed.** The Red Hand, the spike and the
-> scythe, the same on the floor and in the air. The design is
+> **The world bleeds, 2026-11-04 -- slice 1, rebuilt from play 2026-11-06.** The Red Hand, the
+> spike and the scythe, the same on the floor and in the air. **The scythe and the Red Hand are
+> free; only the spike costs, and its plant holds what it cost.** The design is
 > [exploration/0038](exploration/0038_blood_mage_the_world_bleeds.md); the knobs are
 > [kits/blood-mage.md](kits/blood-mage.md) §"The world bleeds".
 >
 > | Input | Floor | Air |
 > | --- | --- | --- |
-> | `L` tapped | **Rend** -- the Red Hand's claws, 1.6 m, strung to three by pressing again in its recovery | the same |
-> | `L` held past the window | **Seize** -- a grab, unblockable: onto a plant of hers near them, or slammed into the floor (a ring of blood) | the same; slammed, driven down |
-> | `M` | **Black spike** -- raises a pool of hers under the crosshair; **on bare ground nothing, and free**. Small pools rise fast, big slow; it launches what is over it, her too, and stands as a plant | the same |
+> | `L` tapped | **Rend** -- the Red Hand's raking claw, 2.6 m and a step in, strung to three by pressing again while it is out or recovering | the same |
+> | `L` held past the window | **Seize** -- a grab, unblockable: lifted over her head, then brought down onto a plant of hers near them, or slammed into the floor (a ring of blood) | the same; slammed, driven down |
+> | `M` | **Black spike** -- raises the blood under the crosshair; a pool pays toward its price, **on bare ground she pays it all**. Small pools rise fast, big slow; it launches what is over it, her too, and stands 15 s as a thorned plant | the same |
 > | `R` tapped | **Sweep**, strung to three; on the floor it cuts the floor, which bleeds | **Sweep** |
 > | `R` held past the window | **Cast** -- the scythe's head on its chain along the crosshair; it bites a fighter (bleed, slow, leash), a creature or the world (a pool). Left alone it wrenches free and drags home, drinking her stains and reaping her plants | the same |
-> | `R` again while the head holds | **Zip** -- she is hauled to the head, keeps 75% of the speed; a jump in its last 6 frames fires on arrival | the same |
-> | space + `L` / `M` / `R` | **Rising rend** / **Rising spike** (a pool at her feet raised under her: her way up; nothing without one) / **Rising reap** (cuts the floor she leaves) | once a jump |
+> | `R` again, any time after the head leaves | **Zip** -- she is hauled to the head the moment it bites. Onto a body she stops beside it; onto the world she keeps 75% of the speed, and a jump in its last 6 frames fires on arrival | the same |
+> | space + `L` / `M` / `R` | **Rising rend** (about a jump) / **Rising spike** (the blood at her feet raised under her, ~7.5 m) / **Rising reap** (~6 m; cuts the floor she leaves) | once a jump |
 > | `Q` / `E` | **Coagulate** / **a Heart** | |
 > | `shift` | on her ground, **the swim**; otherwise an ordinary dodge. The teleport to a stain is cut | |
 >

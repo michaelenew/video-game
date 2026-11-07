@@ -362,12 +362,19 @@ pub fn emit_volume_swings(sim: Res<Sim>, mut emits: ResMut<Emits>) {
     let same_frame = sim.prev.map_origin() == sim.cur.map_origin();
     for owner in 0..sim::state::MAX_PLAYERS {
         let p = &sim.cur.players[owner];
-        if matches!(p.class, sim::Class::Champion | sim::Class::BloodMage) {
+        if p.class == sim::Class::Champion {
             continue;
         }
         let Some((kind, glow)) = view::trail::strike(p, alpha) else {
             continue;
         };
+        // The Blood mage's scythe is drawn off the blade (`emit_scythes`);
+        // her Red Hand is not a weapon anybody holds, so it is drawn off
+        // its volume, below, as a claw.
+        let claw = p.class == sim::Class::BloodMage;
+        if claw && sim::moves::blood::scythe(kind) {
+            continue;
+        }
         if !matches!(
             sim::moves::get(p.class, kind).shape,
             sim::moves::Shape::Swing(_)
@@ -389,6 +396,27 @@ pub fn emit_volume_swings(sim: Res<Sim>, mut emits: ResMut<Emits>) {
             )),
             None => to,
         };
+        if claw {
+            // **The Red Hand's claw** (2026-11-06): three raking streaks of
+            // her blood, a hand's breadth apart, bright and wide -- from play,
+            // the tap read as nothing at all with no trail drawn.
+            let along = (to - hub).normalize_or(Vec3::X);
+            let across = along.cross(Vec3::Y).normalize_or(Vec3::Z);
+            let up = across.cross(along).normalize_or(Vec3::Y);
+            for (part, off) in [-0.22f32, 0.0, 0.22].into_iter().enumerate() {
+                let lift = up * off;
+                emits.add(Emit {
+                    key: key(source::VOLUME, owner, part as u8),
+                    inner: hub.lerp(to, 0.78) + lift,
+                    outer: to + lift + along * 0.25,
+                    glow: (glow * 1.6).min(1.0),
+                    tint: linear(Color::srgb(0.95, 0.10, 0.12)),
+                    window: SWING_WINDOW * 1.3,
+                    style: Style::Blade,
+                });
+            }
+            continue;
+        }
         emits.add(Emit {
             key: key(source::VOLUME, owner, 0),
             inner: hub.lerp(to, 0.4),
