@@ -221,7 +221,7 @@ fn nobody_else_goes_grey() {
 fn a_tap_is_the_quick_thing_and_a_hold_is_the_field() {
     // The buttons, and what each one throws -- on the map of 0038
     // (docs/design/exploration/0038_blood_mage_the_world_bleeds.md): the
-    // left click tapped is Rend, held Seize; the right click tapped is the
+    // left click tapped is Rend, held the Red claw; the right click tapped is the
     // Sweep, held the Cast. `tests/blood_mage.rs` holds the whole map.
     let mut w = mage();
     w.players[0].pos.y = Fx::from_int(3);

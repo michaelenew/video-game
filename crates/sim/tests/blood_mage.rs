@@ -3,7 +3,7 @@
 //!
 //! `docs/design/exploration/0038_blood_mage_the_world_bleeds.md` is the
 //! direction since 2026-11-04: the left click is the Red Hand (Rend tapped
-//! and strung, Seize held), the middle the spike (out of a pool only), the
+//! and strung, the Red claw held), the middle the spike (out of a pool only), the
 //! right the scythe (the Sweep tapped and strung, the Cast held); the air is
 //! the floor; `E` plants a heart; grey holds two seconds, then goes fast. The
 //! Cast, the zip, the plants and the reap are `tests/world_bleeds.rs`; her
@@ -155,7 +155,7 @@ fn on_the_floor_a_tap_is_the_quick_thing_and_q_and_e_gather_and_plant() {
 }
 
 #[test]
-fn held_the_left_click_is_seize_and_the_right_the_cast() {
+fn held_the_left_click_is_the_red_claw_and_the_right_the_cast() {
     for (button, tap, wanted) in [
         (keys::HAND, b::REND, b::CLAW),
         (keys::SCYTHE, b::SWEEP, b::CAST),

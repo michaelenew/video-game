@@ -57,7 +57,7 @@ fn committed_moves_are_more_punishable_than_pokes() {
         let table = moves::table(class);
         let poke = &table[0];
         // A button's moves: the Blood mage's rows that no button throws --
-        // a plant's lash, the reaped thorns, Seize's slam and impaling -- are
+        // a plant's lash, the reaped thorns, the rip and the impaling -- are
         // what a thing she made, or a grab she already landed, does.
         let committed = table
             .iter()
@@ -471,7 +471,7 @@ fn the_blood_mage_pays_to_grow_and_nobody_else_pays_for_anything() {
     // looks like a balance choice rather than a bug.
     //
     // **What she throws** (2026-11-04): the four rows no button throws --
-    // her plants' lash and reaped thorns, Seize's two endings -- are what a
+    // her plants' lash and reaped thorns, the rip and the impaling -- are what a
     // thing she made does, never pressed and never paid for.
     for class in ALL_CLASSES {
         let blood = class == sim::class::Class::BloodMage;

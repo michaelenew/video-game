@@ -2101,7 +2101,7 @@ fn claw() -> Recipe {
             .into(),
         keys: vec![
             Key::eased(0, claw_coiled(), Ease::OUT),
-            Key::eased(contact, claw_flung(), Ease::STRIKE),
+            Key::eased(contact, claw_flung(), Ease::LINEAR),
             Key::eased(through, claw_spent(), Ease::OUT),
             Key::eased(home, ready(), Ease::SMOOTH),
         ],
@@ -2112,9 +2112,9 @@ fn claw_coiled() -> Pose {
     footing(
         ready()
             .hips(0.010, -0.170, -0.060)
-            .root(8.0, 0.0, 26.0)
-            .spine(14.0, 0.0, 18.0)
-            .chest(8.0, 0.0, 20.0)
+            .root(8.0, 0.0, 16.0)
+            .spine(14.0, 0.0, 12.0)
+            .chest(8.0, 0.0, 12.0)
             .head(-8.0, 0.0, -36.0)
             .reach_l([-0.46, 0.80, -0.40])
             .wrist_l(30.0, 0.0, 0.0)
@@ -2129,7 +2129,7 @@ fn claw_flung() -> Pose {
     stand(
         ready()
             .hips(0.000, -0.180, 0.170)
-            .root(22.0, 0.0, -10.0)
+            .root(22.0, 0.0, -4.0)
             .spine(18.0, 0.0, -12.0)
             .chest(12.0, 0.0, -18.0)
             .head(-14.0, 0.0, 16.0)
@@ -2179,7 +2179,7 @@ fn throw() -> Recipe {
             .into(),
         keys: vec![
             Key::eased(0, cast_wound(), Ease::OUT),
-            Key::eased(contact, cast_loosed(), Ease::STRIKE),
+            Key::eased(contact, cast_loosed(), Ease::LINEAR),
             Key::eased(follow, cast_followed(), Ease::OUT),
             Key::eased(home, ready(), Ease::SMOOTH),
         ],
@@ -2191,12 +2191,12 @@ fn cast_wound() -> Pose {
         gripping(
             ready()
                 .hips(0.010, -0.090, -0.060)
-                .root(-6.0, 0.0, -22.0)
-                .spine(-6.0, 0.0, -18.0)
-                .chest(-4.0, 0.0, -18.0)
+                .root(-6.0, 0.0, -14.0)
+                .spine(-6.0, 0.0, -12.0)
+                .chest(-4.0, 0.0, -12.0)
                 .head(-6.0, 0.0, 30.0),
-            [0.30, 1.50, -0.30],
-            [0.08, 1.22, -0.12],
+            [0.26, 1.48, -0.16],
+            [0.06, 1.20, -0.04],
             -20.0,
         ),
         0.0,

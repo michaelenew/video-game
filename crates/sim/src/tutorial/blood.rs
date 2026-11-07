@@ -19,8 +19,9 @@ pub static TUTORIAL: Tutorial = Tutorial {
             pool into a thorned plant that launches and lashes -- a pool pays toward it, and on \
             bare ground she pays it all. The scythe reaps: through a plant it throws the thorns \
             and gives back what you paid.",
-    wins: "She wins by fighting inside her patch: cast the head, raise the pool its bite left, \
-           zip in, rend or seize, and reap the plants, so every drop spilled feeds what grows.",
+    wins: "She wins by fighting inside her patch: cast the head, zip in or reel them in, rend \
+           them into her plants' thorns, and reap the plants, so every drop spilled feeds what \
+           grows.",
     rooms: &ROOMS,
 };
 
@@ -45,7 +46,7 @@ fn rend(s: &Seen) -> bool {
 fn third_rend(s: &Seen) -> bool {
     s.out(REND) && s.now().string & 0x7F == 2
 }
-fn seize(s: &Seen) -> bool {
+fn claw(s: &Seen) -> bool {
     s.began(CLAW)
 }
 fn air_rend(s: &Seen) -> bool {
@@ -152,9 +153,10 @@ pub const ROOMS: [Room; 11] = [
         advanced: false,
         intro: "Her other hand, gloved in her own blood. Tapped, left click rends -- a raking \
                 claw at arm's length -- and tapped again strings up to three, the third the \
-                heaviest. Held, it seizes: a grab nobody can block, that lifts them over her head \
-                and brings them down onto a plant of hers near them, or into the floor, which \
-                bleeds in a ring round them.",
+                heaviest, knocking them up. Held, it charges the Red claw: the longer you hold, \
+                the further out along the floor it lands and the bigger it is -- hold too long \
+                and it lands past them -- and it slows what it rakes. Raking one of your plants \
+                feeds it.",
         tasks: &[
             Task {
                 what: "Rend",
@@ -163,9 +165,9 @@ pub const ROOMS: [Room; 11] = [
                 lands: true,
             },
             Task {
-                what: "Hold: Seize",
+                what: "Hold: the Red claw",
                 keys: "Hold left click, close to the dummy",
-                check: seize,
+                check: claw,
                 lands: false,
             },
             Task {
@@ -226,9 +228,11 @@ pub const ROOMS: [Room; 11] = [
         advanced: false,
         intro: "Tapped, right click sweeps the scythe -- longer and harder the more grey you \
                 carry -- and tapped again strings up to three; on the floor it cuts the floor, \
-                which bleeds. Held, it casts the head out on its chain: it bites what it meets, \
-                and a fighter it bites is leashed to you. Press right click again -- any time \
-                after it leaves your hand -- to zip to it.",
+                which bleeds. Held, it throws the head out on its chain: it arcs and falls, \
+                and bites what it meets; a fighter it bites is leashed to you. Then left click \
+                is the chain: tap it to be pulled to the head, hold it to reel them in -- into \
+                a plant of yours and they are impaled -- or let go part way to rip it out of \
+                them. Right click calls it home.",
         tasks: &[
             Task {
                 what: "Sweep",
@@ -250,7 +254,7 @@ pub const ROOMS: [Room; 11] = [
             },
             Task {
                 what: "Zip",
-                keys: "While the head holds, right click again",
+                keys: "While the head is out, tap left click",
                 check: zip,
                 lands: false,
             },

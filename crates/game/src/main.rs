@@ -3845,7 +3845,8 @@ fn place_plant_thorns(
     let field = sim::stones::gather(&sim.cur.players);
     for (tag, mut tf, mut vis) in pieces.iter_mut() {
         let index = tag.owner * sim::class::MAX_STRUCTURES + tag.index;
-        let Some(raised) = field[index].filter(|_| sim::stones::is_a_plant(&sim.cur.players, index))
+        let Some(raised) =
+            field[index].filter(|_| sim::stones::is_a_plant(&sim.cur.players, index))
         else {
             *vis = Visibility::Hidden;
             continue;
@@ -3897,7 +3898,13 @@ fn place_plant_thorns(
 /// half way. Thorns stand off the stem in a spiral and off each branch,
 /// angled up and out. A blossom of blood sits at each branch's end, and three
 /// roots spread off its foot into the floor.
-fn plant_piece(foot: Vec3, radius: f32, tall: f32, seed: f32, part: usize) -> Option<(Vec3, Vec3, f32)> {
+fn plant_piece(
+    foot: Vec3,
+    radius: f32,
+    tall: f32,
+    seed: f32,
+    part: usize,
+) -> Option<(Vec3, Vec3, f32)> {
     if tall < 0.05 {
         return None;
     }
@@ -3931,7 +3938,11 @@ fn plant_piece(foot: Vec3, radius: f32, tall: f32, seed: f32, part: usize) -> Op
     k -= STEM;
     if k < 2 * BRANCHES {
         let (p0, p1, p2, w) = branch(k / 2);
-        return Some(if k % 2 == 0 { (p0, p1, w) } else { (p1, p2, w * 0.7) });
+        return Some(if k % 2 == 0 {
+            (p0, p1, w)
+        } else {
+            (p1, p2, w * 0.7)
+        });
     }
     k -= 2 * BRANCHES;
     if k < THORNS {
@@ -7063,7 +7074,13 @@ fn claw_marks(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
     let lift = 0.9 + k * 0.22;
     let centre = at + Vec3::Y * lift + along * (k * 0.12);
     let half = across * width * (1.0 + 0.1 * k.abs()) + Vec3::Y * width * 0.35;
-    let mut rake = limb(Shape::Limb, centre - half, centre + half, 0.07 + 0.08 * left, along);
+    let mut rake = limb(
+        Shape::Limb,
+        centre - half,
+        centre + half,
+        0.07 + 0.08 * left,
+        along,
+    );
     rake.skin = Skin::Heart;
     Some(rake)
 }

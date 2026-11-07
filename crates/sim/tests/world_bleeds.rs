@@ -4,7 +4,8 @@
 //! head reaps her stains on its way home; the zip goes to the head and a jump
 //! banked near its end fires on arrival; the spike does nothing on bare
 //! ground; her own spike launches her; a plant stands, is solid and lashes;
-//! the Sweep through a plant reaps it into a cone; Seize throws onto a plant
+//! the Sweep through a plant reaps it into a cone; the chain and the Red
+//! Hand of round three (2026-11-07) below that; Seize, cut that day, threw onto a plant
 //! or slams; and the Sweep bleeds the floor.
 
 use sim::class::{Class, Garden, Mechanic, Structure};
@@ -205,12 +206,13 @@ fn the_zip_goes_to_the_head_and_a_banked_jump_fires_on_arrival() {
     assert!(flat_apart(from, to) > 3.0, "the head is out in the world");
     let zip = |jump: bool| {
         let mut w = bit.clone();
-        // Let go of the scythe, then press it again.
+        // Let go of the scythe, then tap left: the zip (2026-11-07).
         run(&mut w, 2, 0, 0);
-        step2(&mut w, keys::SCYTHE, 0, 0);
-        assert!(garden(&w).zipping, "the second press is the zip");
+        step2(&mut w, keys::HAND, 0, 0);
+        step2(&mut w, 0, 0, 0);
+        assert!(garden(&w).zipping, "a tap of left is the zip");
         let mut arrived = None;
-        let mut held = keys::SCYTHE;
+        let mut held = 0;
         for _ in 0..90 {
             let near = w.players[0].haul > 0
                 && flat_apart(w.players[0].pos, w.players[0].haul_to)
@@ -403,44 +405,6 @@ fn the_sweep_through_a_plant_reaps_it_into_a_cone() {
 }
 
 #[test]
-fn seize_slams_with_no_plant_near_and_throws_onto_one() {
-    let seize = |w: &mut World| {
-        for _ in 0..40 {
-            step2(w, keys::HAND, 0, 0);
-        }
-        run(w, 30, 0, 0);
-    };
-    // No plant: slammed, and the floor bleeds in a ring round him.
-    let mut w = mage_and(1.4);
-    let foe = w.players[1].health;
-    seize(&mut w);
-    let slam = sim::moves::get(Class::BloodMage, b::RIP);
-    assert!(
-        foe - w.players[1].health >= slam.damage,
-        "slammed: {}",
-        foe - w.players[1].health
-    );
-    let ring = pools(&w)
-        .iter()
-        .filter(|p| flat_apart(p.pos, w.players[1].pos) > 0.5)
-        .count();
-    assert!(ring >= 2, "a ring of blood round him: {ring}");
-
-    // A plant beside him: thrown onto it, worth what it holds, and it drinks.
-    let mut w = mage_and(1.4);
-    plant_at(&mut w, at(-3.0, 0.0, 10.0), 30, 0);
-    let foe = w.players[1].health;
-    seize(&mut w);
-    let impale = sim::moves::get(Class::BloodMage, b::IMPALE);
-    assert!(
-        foe - w.players[1].health >= impale.damage + 30,
-        "impaled: {}",
-        foe - w.players[1].health
-    );
-    assert!(garden(&w).blood[0] > 30, "and the plant drank");
-}
-
-#[test]
 fn the_sweep_bleeds_the_floor_and_the_spike_raises_it() {
     let mut w = mage_and(30.0);
     step2(&mut w, keys::SCYTHE, 0, 0);
@@ -489,7 +453,7 @@ fn a_press_while_the_head_flies_is_kept_and_zips_when_it_bites() {
     let from = w.players[0].pos;
     // Pressed again at once -- before the head has bitten anything.
     step2(&mut w, 0, -3000, 0);
-    step2(&mut w, keys::SCYTHE, -3000, 0);
+    step2(&mut w, keys::HAND, -3000, 0);
     let mut bit = None;
     for _ in 0..90 {
         step2(&mut w, 0, -3000, 0);
@@ -513,33 +477,13 @@ fn a_zip_onto_a_fighter_stops_her_beside_him() {
     let hold = t::hold_from() as u32 + 2;
     run(&mut w, hold, keys::SCYTHE, 0);
     step2(&mut w, 0, 0, 0);
-    step2(&mut w, keys::SCYTHE, 0, 0);
+    step2(&mut w, keys::HAND, 0, 0);
     run(&mut w, 60, 0, 0);
     let gap = flat_apart(w.players[0].pos, w.players[1].pos);
     let reach = as_f(sim::moves::get(Class::BloodMage, b::REND).reach);
     assert!(
         gap < reach,
         "she arrived inside the Red Hand's reach of him and stayed: {gap} m"
-    );
-}
-
-#[test]
-fn a_head_that_bit_nothing_comes_home_along_its_chain() {
-    // "straight line in the air, then teleport to ground, then drag back":
-    // a head thrown up into the open comes home through the air.
-    let mut w = mage_and(60.0);
-    cast(&mut w, 3000);
-    let mut lowest_home = f32::MAX;
-    for _ in 0..120 {
-        step2(&mut w, 0, 3000, 0);
-        if let Some(h) = head(&w).filter(|h| h.head_state() == Head::Home) {
-            lowest_home = lowest_home.min(as_f(h.home.y));
-        }
-    }
-    assert!(lowest_home < f32::MAX, "it came home");
-    assert!(
-        lowest_home > 0.8,
-        "never dropped to the floor on the way: lowest {lowest_home} m"
     );
 }
 
@@ -559,32 +503,6 @@ fn the_rising_reap_takes_her_far_higher_than_a_jump() {
         reap > jump * 2.0,
         "the Rising reap {reap} m against a jump {jump} m"
     );
-}
-
-#[test]
-fn seize_holds_them_up_and_then_brings_them_down() {
-    let mut w = mage_and(1.8);
-    let his = w.players[1].health;
-    let hold = t::hold_from() as u32 + 4;
-    let (mut highest, mut caught_at, mut hurt_at) = (0.0f32, None, None);
-    for f in 0..80u32 {
-        step2(&mut w, if f < hold { keys::HAND } else { 0 }, 0, 0);
-        highest = highest.max(as_f(w.players[1].pos.y));
-        if matches!(w.players[1].action, Action::Held { .. }) {
-            caught_at.get_or_insert(f);
-        }
-        if w.players[1].health < his {
-            hurt_at.get_or_insert(f);
-        }
-    }
-    let (caught, hurt) = (caught_at.expect("caught"), hurt_at.expect("slammed"));
-    assert!(highest > 1.0, "lifted over her: {highest} m");
-    assert!(
-        hurt + 1 >= caught + t::seize_lift() as u32,
-        "the blow lands when the lift ends: caught {caught}, hurt {hurt}"
-    );
-    let dealt = his - w.players[1].health;
-    assert!(dealt >= 100, "and it is a big blow: {dealt}");
 }
 
 #[test]
@@ -616,4 +534,215 @@ fn taking_off_from_a_plant_never_reaps_it() {
         run(&mut w, 40, 0, 0);
         assert_eq!(plants(&w), 1, "{bits:#x} off its top reaped it");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Round three, 2026-11-07: the owner's tweaks (exploration 0038, the promise
+// card). `cargo run --release -p sim --example kitcheck` measures the same.
+// ---------------------------------------------------------------------------
+
+/// The head in a fighter 10 m off.
+fn hooked() -> World {
+    for pitch in (-1500..1500).step_by(150) {
+        let mut w = mage_and(10.0);
+        run(
+            &mut w,
+            t::hold_from() as u32 + 2,
+            keys::SCYTHE,
+            pitch as i16,
+        );
+        for _ in 0..40 {
+            step2(&mut w, 0, pitch as i16, 0);
+            if head(&w).is_some_and(|h| matches!(h.head_state(), Head::Fighter(_))) {
+                return w;
+            }
+        }
+    }
+    panic!("no throw bit the fighter");
+}
+
+#[test]
+fn the_head_is_a_weight_thrown_on_a_chain() {
+    // Thrown level at nothing, it rises, falls, and lands on the floor.
+    let mut w = mage_and(60.0);
+    run(&mut w, t::hold_from() as u32 + 2, keys::SCYTHE, 0);
+    let (mut fell, mut was, mut landed) = (false, 0.0f32, None);
+    for _ in 0..120 {
+        step2(&mut w, 0, 0, 0);
+        if let Some(h) = head(&w) {
+            let y = as_f(h.home.y);
+            fell |= h.head_state() == Head::Flying && y < was;
+            was = y;
+            if h.head_state() == Head::World {
+                landed.get_or_insert(y);
+            }
+        }
+    }
+    assert!(fell, "it fell");
+    assert!(
+        landed.is_some_and(|y| y < 0.3),
+        "and landed on the floor: {landed:?}"
+    );
+    // And aimed at a fighter, it still meets him.
+    let _ = hooked();
+}
+
+#[test]
+fn left_on_the_chain_pulls_her_reels_him_or_rips_it_out_and_right_calls_it_home() {
+    let mut w = hooked();
+    step2(&mut w, keys::HAND, 0, 0);
+    run(&mut w, 40, 0, 0);
+    assert!(
+        flat_apart(w.players[0].pos, w.players[1].pos) < 2.6,
+        "a tap pulled her to him"
+    );
+
+    let mut w = hooked();
+    run(&mut w, t::reel_full() as u32 + 2, keys::HAND, 0);
+    run(&mut w, 90, 0, 0);
+    assert!(
+        flat_apart(w.players[0].pos, w.players[1].pos) < 2.5,
+        "held, she reeled him in"
+    );
+
+    let mut w = hooked();
+    let his = w.players[1].health;
+    run(&mut w, t::hold_from() as u32 + 4, keys::HAND, 0);
+    step2(&mut w, 0, 0, 0);
+    assert!(
+        w.players[1].health < his,
+        "let go early, it ripped out of him"
+    );
+    assert!(w.players[1].bleeding > 0);
+
+    let mut w = hooked();
+    step2(&mut w, keys::SCYTHE, 0, 0);
+    step2(&mut w, 0, 0, 0);
+    assert!(
+        head(&w).is_some_and(|h| h.head_state() == Head::Home),
+        "right called it home"
+    );
+}
+
+#[test]
+fn the_shrike_impales_a_body_reeled_into_her_plant() {
+    let mut w = hooked();
+    plant_at(&mut w, at(-1.0, 0.0, 8.0), 0, 0);
+    let mut pinned = false;
+    for f in 0..120u32 {
+        step2(
+            &mut w,
+            if f < t::reel_full() as u32 + 2 {
+                keys::HAND
+            } else {
+                0
+            },
+            0,
+            0,
+        );
+        pinned |= matches!(w.players[1].action, Action::Held { .. })
+            && w.players[1].held_by == sim::state::NAILED;
+    }
+    assert!(pinned, "he was impaled on the plant between them");
+}
+
+#[test]
+fn the_red_claw_lands_further_and_bigger_for_the_hold_and_slows() {
+    let claw_at = |held: u32| {
+        let mut w = mage_and(40.0);
+        let from = w.players[0].pos;
+        run(&mut w, held, keys::HAND, -2000);
+        for _ in 0..30 {
+            step2(&mut w, 0, -2000, 0);
+            if let Some(c) = w
+                .effects
+                .iter()
+                .flatten()
+                .find(|e| e.kind == EffectKind::Claw)
+            {
+                return (flat_apart(from, c.pos), as_f(c.reach));
+            }
+        }
+        panic!("no claw came out");
+    };
+    let (near, small) = claw_at(t::hold_from() as u32 + 8);
+    let (far, big) = claw_at(t::hold_from() as u32 + 45);
+    assert!(
+        far > near + 3.0 && big > small,
+        "{near} {small} -> {far} {big}"
+    );
+    // Held too long, it lands past a fighter 3 m off.
+    let mut w = mage_and(3.0);
+    let his = w.players[1].health;
+    run(&mut w, t::hold_from() as u32 + 70, keys::HAND, -2000);
+    run(&mut w, 30, 0, -2000);
+    assert_eq!(w.players[1].health, his, "over-held, it missed him");
+}
+
+#[test]
+fn rend_strung_is_three_blows_each_bigger_and_the_hand_feeds_a_plant() {
+    let mut w = mage_and(2.2);
+    let (mut last, mut hits) = (w.players[1].health, Vec::new());
+    for f in 0..80u32 {
+        step2(
+            &mut w,
+            if matches!(f, 0 | 16 | 32) {
+                keys::HAND
+            } else {
+                0
+            },
+            0,
+            0,
+        );
+        if w.players[1].health != last {
+            hits.push(last - w.players[1].health);
+            last = w.players[1].health;
+        }
+    }
+    assert!(
+        hits.len() == 3 && hits[0] < hits[1] && hits[1] < hits[2],
+        "{hits:?}"
+    );
+    let mut w = mage_and(40.0);
+    plant_at(&mut w, at(-4.4, 0.0, 8.0), 0, 0);
+    let before = garden(&w).plants[0].unwrap().scale;
+    step2(&mut w, keys::HAND, 0, 0);
+    run(&mut w, 20, 0, 0);
+    assert!(
+        garden(&w).plants[0].unwrap().scale.raw() > before.raw(),
+        "fed"
+    );
+}
+
+#[test]
+fn the_charge_jump_leaps_further_for_the_hold_and_the_claw_rides_it() {
+    let leap = |held: u32| {
+        let mut w = mage_and(40.0);
+        let from = w.players[0].pos;
+        for f in 0..120u32 {
+            let bits = if f < 2 {
+                Input::SPACE | keys::HAND
+            } else if f < 2 + held {
+                keys::HAND
+            } else {
+                0
+            };
+            step2(&mut w, bits, 0, 0);
+        }
+        flat_apart(from, w.players[0].pos)
+    };
+    assert!(leap(t::leap_hold() as u32 + 4) > leap(0) + 2.0);
+    let mut w = mage_and(5.0);
+    let his = w.players[1].health;
+    for f in 0..80u32 {
+        let bits = if f < 2 {
+            Input::SPACE | keys::HAND
+        } else if f < 2 + t::leap_hold() as u32 {
+            keys::HAND
+        } else {
+            0
+        };
+        step2(&mut w, bits, 0, 0);
+    }
+    assert!(w.players[1].health < his, "it hit him on the way");
 }
