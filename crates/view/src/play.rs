@@ -758,7 +758,9 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         // Her territory (2026-10-18): the Sweep, the Reap and the Harvest
         // are the scythe swung, the haft clip drawn for the Rising reap; a
         // heart is planted with the summoning lift.
-        (Class::BloodMage, 0) => Clip::BloodSweep,
+        // The Cast is thrown (2026-11-07): the head is the blade, cast off
+        // the haft's end like a line off a rod.
+        (Class::BloodMage, 0) => Clip::BloodThrow,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,
         (Class::BloodMage, 3) => Clip::BloodMechanic,

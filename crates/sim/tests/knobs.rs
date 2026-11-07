@@ -329,7 +329,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "pub const HAND: u16 = Input::LEFT",
-        "A binding, not a magnitude: which button is the Blood mage's Red Hand click (Rend and Seize).",
+        "A binding, not a magnitude: which button is the Blood mage's Red Hand click (Rend and the Red claw).",
     ),
     (
         "pub const SPIKES: u16 = Input::MIDDLE",

@@ -57,7 +57,7 @@ fn committed_moves_are_more_punishable_than_pokes() {
         let table = moves::table(class);
         let poke = &table[0];
         // A button's moves: the Blood mage's rows that no button throws --
-        // a plant's lash, the reaped thorns, Seize's slam and impaling -- are
+        // a plant's lash, the reaped thorns, the rip and the impaling -- are
         // what a thing she made, or a grab she already landed, does.
         let committed = table
             .iter()
@@ -452,7 +452,11 @@ fn best_case(m: &Move) -> i32 {
             // The Reaping, 2026-10-19: the picture of a full tally cashed,
             // placed by the world on the blow that cashed it. It hits
             // nobody; the blow is the move's own.
-            | EffectKind::Reaping,
+            | EffectKind::Reaping
+            // The Red claw's marks, 2026-11-07: the claw struck once as it
+            // landed, for its row (`World::claw_lands`); the marks hit
+            // nobody.
+            | EffectKind::Claw,
         )
         | None => m.damage * swings,
     }
@@ -471,7 +475,7 @@ fn the_blood_mage_pays_to_grow_and_nobody_else_pays_for_anything() {
     // looks like a balance choice rather than a bug.
     //
     // **What she throws** (2026-11-04): the four rows no button throws --
-    // her plants' lash and reaped thorns, Seize's two endings -- are what a
+    // her plants' lash and reaped thorns, the rip and the impaling -- are what a
     // thing she made does, never pressed and never paid for.
     for class in ALL_CLASSES {
         let blood = class == sim::class::Class::BloodMage;
@@ -1463,7 +1467,9 @@ fn every_class_has_a_move_that_carries_the_body() {
                 }
                 let mut w = bitten.expect("the head bit the floor eight metres out");
                 let start = w.players[0].pos;
-                step(&mut w, scythe, 0);
+                // The zip is a tap of left since 2026-11-07, thrown as it
+                // comes up.
+                step(&mut w, sim::moves::blood::keys::HAND, 0);
                 for _ in 0..t::dodge_frames() as u32 {
                     step(&mut w, 0, 0);
                 }

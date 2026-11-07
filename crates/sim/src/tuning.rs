@@ -5500,3 +5500,132 @@ pub fn seize_lift() -> u16 {
 pub fn seize_lift_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SeizeLiftHeight).max(0))
 }
+
+/// How fast the scythe's head falls once thrown: it is a weight on a chain.
+pub fn cast_gravity() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastGravity).max(0))
+}
+
+/// How fast the head picks up speed reeled home, up to `cast_drag`.
+pub fn reel_accel() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReelAccel).max(1))
+}
+
+/// How hard the chain pulls her along it in a zip, up to `zip_speed`.
+pub fn zip_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipPull).max(1))
+}
+
+/// The tug that starts a zip: the speed she has along the chain at once.
+pub fn zip_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipStart).max(0))
+}
+
+// Left click on the chain, the shrike, and the Red Hand (2026-11-07).
+
+/// See the Oven's `ReelFull`.
+pub fn reel_full() -> u16 {
+    oven::scalar(Scalar::ReelFull).clamp(1, u16::MAX as i32) as u16
+}
+
+/// See the Oven's `ChainReel`.
+pub fn chain_reel() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainReel).max(0))
+}
+
+/// See the Oven's `ImpaleFor`.
+pub fn impale_for() -> u16 {
+    oven::scalar(Scalar::ImpaleFor).clamp(1, u16::MAX as i32) as u16
+}
+
+/// See the Oven's `ShrikeSpeed`.
+pub fn shrike_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShrikeSpeed).max(0))
+}
+
+/// See the Oven's `ClawSlow`.
+pub fn claw_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ClawSlow).max(0))
+}
+
+/// See the Oven's `ClawGrows`.
+pub fn claw_grows() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ClawGrows).max(0))
+}
+
+/// See the Oven's `LeapFurther`.
+pub fn leap_further() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapFurther).max(0))
+}
+
+/// See the Oven's `LeapHigher`.
+pub fn leap_higher() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapHigher).max(0))
+}
+
+/// See the Oven's `LeapHold`.
+pub fn leap_hold() -> u16 {
+    oven::scalar(Scalar::LeapHold).clamp(1, u16::MAX as i32) as u16
+}
+
+/// See the Oven's `FeedGrows`.
+pub fn feed_grows() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FeedGrows).max(0))
+}
+
+/// See the Oven's `FeedMost`.
+pub fn feed_most() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FeedMost).max(0))
+}
+
+/// See the Oven's `RendSecond`.
+pub fn rend_second() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RendSecond).max(0))
+}
+
+/// See the Oven's `RendThirdReach`.
+pub fn rend_third_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RendThirdReach).max(0))
+}
+
+/// See the Oven's `RendThirdLaunch`.
+pub fn rend_third_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RendThirdLaunch).max(0))
+}
+
+/// How long a reaped plant's breaking and its thorns' flight are drawn: the
+/// blow was struck the frame it was reaped (`World::reap_the_plant`).
+pub fn thorns_for() -> u16 {
+    oven::scalar(Scalar::ThornsFor).clamp(1, u16::MAX as i32) as u16
+}
+
+/// How many frames more the charge-jump's claw stays out, held to its end:
+/// it rides the leap with her. A tap is the row's own.
+pub fn leap_rides() -> u16 {
+    oven::scalar(Scalar::LeapRides).clamp(0, u16::MAX as i32) as u16
+}
+
+/// How long a head that bites nothing flies before it is reeled home.
+pub fn head_flight() -> u16 {
+    oven::scalar(Scalar::HeadFlight).clamp(1, u16::MAX as i32) as u16
+}
+
+/// How long a zip may pull before it gives up.
+pub fn zip_limit() -> u16 {
+    oven::scalar(Scalar::ZipLimit).clamp(1, u16::MAX as i32) as u16
+}
+
+/// The shortest a throw at something close takes to get there.
+pub fn cast_quickest() -> u16 {
+    oven::scalar(Scalar::CastQuickest).clamp(1, u16::MAX as i32) as u16
+}
+
+/// What a zip that ends beside a body keeps of her upward speed, at most.
+pub fn zip_body_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipBodyRise).max(0))
+}
+
+/// How near her a fighter reeled in on the chain is let go, staggered.
+pub fn reel_near() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReelNear).max(0))
+}

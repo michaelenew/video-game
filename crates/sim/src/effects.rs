@@ -384,6 +384,11 @@ pub enum EffectKind {
     /// hand. Embedded, `reach` is the leash. Which of its lives it is in, and
     /// for how long, is [`Effect::head_state`]. See `state::World::step_the_head`.
     ScytheHead,
+    /// **The Red claw's marks** (2026-11-07): where her charged claw landed,
+    /// a picture and nothing else -- the blow was struck by the world the
+    /// frame it came out (`state::World::claw_lands`). `dir` is the way the
+    /// claw raked, `reach` how wide it was.
+    Claw,
 }
 
 /// What the scythe's head is doing (`EffectKind::ScytheHead`), kept in its
@@ -570,6 +575,7 @@ impl EffectKind {
             EffectKind::Surge => "surge",
             EffectKind::Reaping => "reaping",
             EffectKind::ScytheHead => "scythe's head",
+            EffectKind::Claw => "red claw",
         }
     }
 
@@ -658,6 +664,8 @@ impl EffectKind {
             EffectKind::Reaping => true,
             // Thrown along the crosshair's line.
             EffectKind::ScytheHead => false,
+            // Raked where the hold put it.
+            EffectKind::Claw => true,
         }
     }
 
@@ -814,6 +822,8 @@ impl EffectKind {
             37 => Some(EffectKind::Cascade),
             // The Cast's head, 2026-11-04: thrown from her hand along the aim.
             38 => Some(EffectKind::ScytheHead),
+            // The Red claw's marks, 2026-11-07: raked where her hold put it.
+            39 => Some(EffectKind::Claw),
             _ => None,
         }
     }
@@ -915,6 +925,7 @@ impl EffectKind {
             // No clock: it is gone when it is home, or when she arrives at
             // it -- see `state::World::step_the_head`.
             EffectKind::ScytheHead => u16::MAX,
+            EffectKind::Claw => t::reaping_life(),
         }
     }
 
@@ -1000,6 +1011,10 @@ impl EffectKind {
             EffectKind::Thrall | EffectKind::Heart | EffectKind::Reaping => 0,
             // The bite is the move's own number.
             EffectKind::ScytheHead => m.damage,
+            // The claw's row: what `World::claw_lands` cuts a creature or a
+            // critter for, through this effect, the frame it lands. Its marks
+            // are a picture after that and strike nothing.
+            EffectKind::Claw => m.damage,
         }
     }
 }
@@ -1431,6 +1446,7 @@ impl Effect {
             EffectKind::Reaping => self.reach,
             // The head is as thick as the row says.
             EffectKind::ScytheHead => self.source().radius,
+            EffectKind::Claw => self.reach,
         }
     }
 

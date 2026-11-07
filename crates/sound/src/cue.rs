@@ -595,6 +595,14 @@ pub fn cues(before: &World, after: &World, out: &mut Cues) {
                 rising: true,
                 weight: 1.0,
             }),
+            // **The Red claw** (2026-11-07): a charged rake landing at
+            // range -- a short, heavy, falling whoosh, bigger for the hold.
+            EffectKind::Claw => Patch::Whoosh(Whoosh {
+                frames: 10,
+                size: FIGHTER,
+                rising: false,
+                weight: 0.9,
+            }),
             // Anything a later build adds speaks until it is given a voice.
             #[allow(unreachable_patterns)]
             _ => Patch::Gust(Gust {

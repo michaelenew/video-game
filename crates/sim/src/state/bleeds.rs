@@ -26,20 +26,6 @@ use super::*;
 use crate::class::{Garden, MAX_STRUCTURES, Structure};
 use crate::effects::Head;
 
-/// What a Seize does with the body it caught.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum Seized {
-    /// Caught: held up in the red hand for `tuning::seize_lift` frames, and
-    /// then brought down (`World::carry_the_seized`) -- 2026-11-06, from
-    /// play: a grab whose whole story happened on one frame read as a light
-    /// tap.
-    Caught,
-    /// Thrown on to the plant in this slot of her garden.
-    Impaled(usize),
-    /// Slammed into the floor.
-    Slammed,
-}
-
 /// Her garden, if she has one.
 pub(super) fn garden_of(p: &Player) -> Option<Garden> {
     match p.mechanic {
@@ -165,43 +151,103 @@ pub(super) fn the_pool_pays(p: &mut Player, volume: i32) {
     p.paid -= back as u16;
 }
 
-/// **The zip** (2026-11-04): right click pressed again while her scythe's
-/// head is out hauls her to it -- to a fighter, a creature, a wall or the
-/// floor, in the air as on the ground -- and never the other way. A press
-/// while the head is still flying is kept (`Garden::zip_queued`,
-/// `tuning::zip_queue`) and the zip starts the frame it bites
-/// (`World::tend_the_zips`): from play, 2026-11-06, a press a beat early was
-/// dropped and the next one threw a fresh Sweep. Returns whether the press
-/// was the zip's, so it throws nothing else.
-pub(super) fn zip_to_the_head(p: &mut Player, who: usize, pressed: bool, scene: &Scene) -> bool {
-    if p.class != Class::BloodMage || !pressed || p.health <= 0 {
+/// **The chain in her hand** (2026-11-07, the owner's answers): while her
+/// scythe's head is out -- or on its way out of her hand -- **left click is
+/// the chain** and right click calls it home.
+///
+/// - **Left tapped** (let go inside `tuning::hold_from`): the zip, to whatever
+///   the head bit -- kept and started the frame it bites if it is still
+///   flying (`Garden::zip_queued`).
+/// - **Left held to `tuning::reel_full`**: with the head in a fighter, she
+///   reels them in (`World::tend_the_zips`); with it in the world, the zip.
+/// - **Left let go in between, with the head in a fighter**: it rips out of
+///   them -- a hit, a bleed, a stagger -- and comes home.
+/// - **Right pressed**: the head is called home now.
+///
+/// Returns whether the press was the chain's, so it throws nothing else.
+pub(super) fn chain_in_hand(
+    p: &mut Player,
+    who: usize,
+    pressed_right: bool,
+    input: Input,
+    scene: &Scene,
+) -> bool {
+    if p.class != Class::BloodMage || p.health <= 0 {
         return false;
     }
-    if garden_of(p).is_some_and(|g| g.zipping) || !free_to_zip(p) {
-        return false;
-    }
-    let Some(head) = scene
+    let head = scene
         .effects
         .iter()
         .flatten()
         .find(|e| e.owner == who as u8 && e.kind == EffectKind::ScytheHead)
-    else {
-        // Pressed before the head has even left her hand: kept, the same.
-        if p.action.attack_kind() == Some(moves::blood::CAST) && t::zip_queue() {
-            tend(p, |g| g.zip_queued = true);
-            return true;
-        }
+        .copied();
+    let leaving = p.action.attack_kind() == Some(moves::blood::CAST)
+        && !matches!(p.action, Action::Recovery { .. });
+    let out = head.is_some_and(|h| h.head_state() != Head::Home) || (head.is_none() && leaving);
+    let Some(g) = garden_of(p) else {
         return false;
     };
-    if head.is_a_head_holding() {
-        start_the_zip(p, head);
-        return true;
+    if !out || g.zipping {
+        if g.chain_held != 0 && !input.has(moves::blood::keys::HAND) {
+            tend(p, |g| g.chain_held = 0);
+        }
+        return false;
     }
-    if head.head_state() == Head::Flying && t::zip_queue() {
-        tend(p, |g| g.zip_queued = true);
-        return true;
+    if pressed_right {
+        tend(p, |g| {
+            g.recall = true;
+            g.chain_held = 0;
+            g.zip_queued = false;
+        });
+        return false;
     }
-    false
+    let in_a_fighter = head.is_some_and(|h| matches!(h.head_state(), Head::Fighter(_)));
+    if input.has(moves::blood::keys::HAND) {
+        if g.chain_held == u16::MAX {
+            return false;
+        }
+        let held = g.chain_held.saturating_add(1);
+        tend(p, |g| g.chain_held = held);
+        if held >= t::reel_full() {
+            tend(p, |g| g.chain_held = u16::MAX);
+            match head.map(|h| h.head_state()) {
+                Some(Head::Fighter(v)) => tend(p, |g| g.reeling = v as u8 + 1),
+                _ => return zip_now_or_later(p, head),
+            }
+        }
+        return false;
+    }
+    if g.chain_held == 0 {
+        return false;
+    }
+    let held = g.chain_held;
+    tend(p, |g| g.chain_held = 0);
+    if held == u16::MAX {
+        return false;
+    }
+    if held >= t::hold_from() && in_a_fighter {
+        tend(p, |g| g.rip = true);
+        false
+    } else {
+        zip_now_or_later(p, head)
+    }
+}
+
+/// The zip, now if the head holds something, or kept for the frame it bites.
+/// Whether it started now.
+fn zip_now_or_later(p: &mut Player, head: Option<Effect>) -> bool {
+    match head {
+        Some(h) if h.is_a_head_holding() && free_to_zip(p) => {
+            start_the_zip(p, &h);
+            true
+        }
+        Some(h) if h.head_state() != Head::Flying && !h.is_a_head_holding() => false,
+        _ if t::zip_queue() => {
+            tend(p, |g| g.zip_queued = true);
+            false
+        }
+        _ => false,
+    }
 }
 
 /// Can she start a zip now: free, or anywhere in the Cast itself -- the
@@ -210,19 +256,21 @@ fn free_to_zip(p: &Player) -> bool {
     p.action.actionable() || p.action.attack_kind() == Some(moves::blood::CAST)
 }
 
-/// **The zip begins**: hauled at `tuning::zip_speed` to the head, in the
-/// Cast's recovery for as long as the haul runs.
+/// **The zip begins** (2026-11-07: a pull, not a glide): the chain gives
+/// her a tug toward the head (`tuning::zip_start`) and from then on pulls her
+/// along it every frame (`World::tend_the_zips`), her own momentum and her
+/// weight going with her, in the Cast's recovery while it does.
 pub(super) fn start_the_zip(p: &mut Player, head: &Effect) {
     let to = zip_target(p.pos, head.home, head.head_state());
-    let far = to.sub(p.pos).len();
-    let speed = t::zip_speed().max(Fx::ONE);
-    let frames = far.div(speed).div(DT).to_int().clamp(0, 600) as u16;
-    begin_haul(p, to, speed, frames.saturating_add(2));
+    let along = to.sub(p.pos).normalized();
+    p.haul = 0;
+    p.haul_to = to;
+    p.vel = p.vel.add(along.scale(t::zip_start()));
     p.grounded = false;
     p.swim = SWIM_NONE;
     p.action = Action::Recovery {
         kind: moves::blood::CAST,
-        left: frames.saturating_add(2),
+        left: t::zip_limit(),
     };
     let body = matches!(head.head_state(), Head::Fighter(_) | Head::Creature(_));
     tend(p, |g| {
@@ -230,6 +278,7 @@ pub(super) fn start_the_zip(p: &mut Player, head: &Effect) {
         g.zip_jump = false;
         g.zip_queued = false;
         g.zip_to_body = body;
+        g.zip_for = 0;
     });
 }
 
@@ -250,15 +299,16 @@ fn zip_target(from: V3, head: V3, state: Head) -> V3 {
 }
 
 /// A jump pressed while the zip is still running: kept for the arrival if she
-/// is within `tuning::zip_jump_buffer` frames of the head, and thrown the
-/// frame she gets there -- the Reaver's dash jump. Earlier than that it is
-/// dropped.
+/// is within `tuning::zip_jump_buffer` frames of the head at the speed she is
+/// going, and thrown the frame she gets there -- the Reaver's dash jump.
+/// Earlier than that it is dropped.
 pub(super) fn bank_the_zip_jump(p: &mut Player) {
-    if p.haul == 0 || !garden_of(p).is_some_and(|g| g.zipping) {
+    if !garden_of(p).is_some_and(|g| g.zipping) {
         return;
     }
     let reach = p
-        .haul_speed
+        .vel
+        .len()
         .mul(DT)
         .mul(Fx::from_int(t::zip_jump_buffer() as i32));
     if p.haul_to.sub(p.pos).len().raw() <= reach.raw() {
@@ -288,62 +338,35 @@ fn plant(p: &mut Player, stone: Structure, blood: u16, paid: u16) {
 impl World {
     // -- The Cast ----------------------------------------------------------
 
-    /// **The Cast comes out** (2026-11-04): the head leaves her hand along
-    /// the line `aim::skillshot_path` solved, for the point the crosshair is
-    /// on. When that point is the floor's -- raised to a body's middle, as a
-    /// skillshot's floor is -- the head goes down into the floor there, which
-    /// is where the player pointed. Otherwise it flies on, out to the row's
-    /// reach, headed for the first solid thing on the line
-    /// (`aim::first_along`: the world and its stones) -- or for nothing, past
-    /// which it comes home. Bodies are met on the way, each frame
-    /// (`step_the_head`). One head at a time.
+    /// **The Cast comes out** (2026-11-04; a weight on a chain since
+    /// 2026-11-07): the head leaves her hand **thrown**, at the speed that
+    /// carries it through the point the crosshair is on (`aim::skillshot_path`
+    /// solved it) under `tuning::cast_gravity` -- an arc that meets what she
+    /// aimed at, so grabbing someone stays a matter of putting the crosshair on
+    /// them -- and from there it is a falling thing: it carries on past and
+    /// comes down. Its velocity is kept in `dir`; its chain's length, the row's
+    /// reach, in `reach`. One head at a time.
     pub(super) fn throw_the_head(&mut self, i: usize, mut born: Effect) {
         let p = self.players[i];
         let m = moves::get(p.class, moves::blood::CAST);
-        let stones = stones::gather(&self.players);
-        let seen = self.players;
-        let effects = self.effects;
-        let terrain = self.terrain();
-        let scene = aim::Scene {
-            stones: &stones,
-            players: &seen,
-            effects: &effects,
-            quarry: &self.monsters,
-            critters: &self.critters,
-            arena: &terrain,
-        };
         let aimed = p.aim_path.to;
-        let floor = terrain.ground_under(aimed);
-        let short = p.aim_path.length().raw() < m.reach.sub(t::body_radius()).raw();
-        let on_the_floor = short && aimed.y.sub(floor).raw() <= t::body_height().raw();
-        let (dir, reach, solid) = if on_the_floor {
-            let to = V3::new(aimed.x, floor, aimed.z);
-            let line = to.sub(born.pos);
-            (line.normalized(), line.len(), true)
-        } else {
-            let path = aim::Path {
-                from: born.pos,
-                to: born.pos.add(born.dir.scale(m.reach)),
-            };
-            let hit = aim::first_along(
-                path,
-                m.radius,
-                i as u8,
-                &scene,
-                Targets::none().terrain().stones(),
-            );
-            (born.dir, hit.map_or(m.reach, |c| c.dist()), hit.is_some())
-        };
-        born.dir = dir;
-        born.reach = reach;
+        let line = aimed.sub(born.pos);
+        let far = line.len();
+        let speed = t::cast_speed().max(Fx::ONE);
+        // Time to the crosshair at the throw's speed, and the lift that
+        // gravity takes back over that time.
+        let time = far
+            .div(speed)
+            .max(DT.mul(Fx::from_int(t::cast_quickest() as i32)));
+        let half = Fx::ratio(1, 2);
+        let lift = t::cast_gravity().mul(time).mul(half);
+        born.dir = line
+            .scale(Fx::ONE.div(time))
+            .add(V3::new(Fx::ZERO, lift, Fx::ZERO));
+        born.reach = m.reach;
         born.home = born.pos;
         born.life = u16::MAX;
         born.set_head(Head::Flying);
-        // Flying at something solid: the low bit of the frame count, which a
-        // flying head does not otherwise use.
-        if solid {
-            born.hold_the_head();
-        }
         for slot in self.effects.iter_mut() {
             if slot.is_some_and(|e| e.kind == EffectKind::ScytheHead && e.owner == i as u8) {
                 *slot = None;
@@ -372,9 +395,11 @@ impl World {
                 effect.hold_the_head();
                 let victim = self.players[v];
                 effect.home = aim::origin(victim.pos);
+                let reeling =
+                    garden_of(&self.players[owner]).is_some_and(|g| g.reeling == v as u8 + 1);
                 if victim.health <= 0 {
                     effect.set_head(Head::Home);
-                } else if effect.head_for() >= t::cast_holds() {
+                } else if !reeling && effect.head_for() >= t::cast_holds() {
                     self.wrench_free(effect, v);
                 }
             }
@@ -395,19 +420,33 @@ impl World {
         }
     }
 
-    /// The head in flight: out along its line at `tuning::cast_speed`, and
-    /// bitten into the first body it reaches, or the world at the end. Its
-    /// `reach` is how much of the flight is left.
+    /// **The head in flight** (2026-11-07): a weight thrown on a chain. It
+    /// falls at `tuning::cast_gravity`; at the chain's length (`reach`) the
+    /// chain goes taut and holds it there, so it swings round her rather than
+    /// flying on; and it bites the first thing it meets on its way -- a body,
+    /// a creature, a critter, the world (`aim::first_along`), or the floor it
+    /// comes down on. A head that has flown `t::head_flight()` frames without
+    /// biting anything comes home.
     fn fly_the_head(&mut self, effect: &mut Effect) {
         let owner = effect.owner as usize;
-        let solid = effect.head_for() > 0;
-        let step = t::cast_speed().mul(DT).min(effect.reach);
-        effect.reach = effect.reach.sub(step);
-        let at = effect.home.add(effect.dir.scale(step));
-        effect.home = at;
-        let spent = effect.reach.raw() <= 0;
+        effect.hold_the_head();
+        let hand = effect.pos;
+        let was = effect.home;
+        effect.dir.y = effect.dir.y.sub(t::cast_gravity().mul(DT));
+        let mut at = was.add(effect.dir.scale(DT));
+        // The chain: never longer than it is.
+        let off = at.sub(hand);
+        let far = off.len();
+        if far.raw() > effect.reach.raw() && far.raw() > 0 {
+            let out = off.scale(Fx::ONE.div(far));
+            at = hand.add(out.scale(effect.reach));
+            let away = effect.dir.dot(out);
+            if away.raw() > 0 {
+                effect.dir = effect.dir.sub(out.scale(away));
+            }
+        }
         let radius = effect.field_radius();
-        // A fighter on the line.
+        // A fighter on the way.
         for v in 0..MAX_PLAYERS {
             if !self.effects_reach(v, effect.owner)
                 || effect.already_hit(0, v)
@@ -422,9 +461,12 @@ impl World {
                 let apart = flat_apart(self.players[owner].pos, self.players[v].pos);
                 effect.reach = apart.max(t::cast_least_leash());
                 effect.home = aim::origin(self.players[v].pos);
+                effect.dir = V3::ZERO;
                 effect.set_head(Head::Fighter(v));
             } else {
                 // Guarded: it glances off, and comes home.
+                effect.home = at;
+                effect.dir = V3::ZERO;
                 effect.set_head(Head::Home);
             }
             return;
@@ -436,19 +478,56 @@ impl World {
                 beast.bleeding = beast.bleeding.max(t::bleed_lasts());
                 beast.bled_by = effect.owner;
             }
+            effect.home = at;
+            effect.dir = V3::ZERO;
             effect.reach = flat_apart(self.players[owner].pos, at).max(t::cast_least_leash());
             effect.set_head(Head::Creature(slot));
             return;
         }
-        // A critter, or the floor under the head: the world, here.
-        let floor = self.terrain().ground_under(at);
-        let into_the_floor = at.y.raw() <= floor.raw();
-        if self.gore_critters(effect, at, radius, Fx::ONE) > 0 || into_the_floor || (solid && spent)
-        {
+        // The world on the way: a wall, a stone, a critter, the floor -- but
+        // not her own plants (2026-11-07): her chain passes through her
+        // garden, so a fighter on the far side of one can be reeled into it.
+        let mut stones = stones::gather(&self.players);
+        for slot in 0..MAX_STRUCTURES {
+            stones[owner * MAX_STRUCTURES + slot] = None;
+        }
+        let seen = self.players;
+        let effects = self.effects;
+        let terrain = self.terrain();
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &seen,
+            effects: &effects,
+            quarry: &self.monsters,
+            critters: &self.critters,
+            arena: &terrain,
+        };
+        let path = aim::Path { from: was, to: at };
+        let wall = if path.length().raw() > 0 {
+            aim::first_along(
+                path,
+                radius,
+                owner as u8,
+                &scene,
+                Targets::none().terrain().stones(),
+            )
+            .map(|c| was.add(path.dir().scale(c.dist())))
+        } else {
+            None
+        };
+        let floor = terrain.ground_under(V3::new(at.x, at.y.add(radius), at.z));
+        if let Some(hit) = wall {
+            let floor = terrain.ground_under(V3::new(hit.x, hit.y.add(radius), hit.z));
+            self.bite_the_world(effect, hit, floor);
+            return;
+        }
+        if self.gore_critters(effect, at, radius, Fx::ONE) > 0 || at.y.raw() <= floor.raw() {
             self.bite_the_world(effect, at, floor);
             return;
         }
-        if spent {
+        effect.home = at;
+        if effect.head_for() >= t::head_flight() {
+            effect.dir = V3::ZERO;
             effect.set_head(Head::Home);
         }
     }
@@ -466,6 +545,7 @@ impl World {
             at
         };
         effect.home = bite;
+        effect.dir = V3::ZERO;
         effect.reach = flat_apart(self.players[owner].pos, bite).max(t::cast_least_leash());
         effect.set_head(Head::World);
         self.bleed_the_world(
@@ -509,12 +589,20 @@ impl World {
         let home = aim::hand_origin(her.pos, her.facing, hand);
         let was = effect.home;
         let gap = home.sub(was).len();
-        let step = t::cast_drag().mul(DT);
+        // **Reeled**, not glided (2026-11-07): it starts from rest and picks up
+        // speed, to `tuning::cast_drag`. Its speed is kept in `dir`.
+        let speed = effect
+            .dir
+            .len()
+            .add(t::reel_accel().mul(DT))
+            .min(t::cast_drag());
+        let step = speed.mul(DT);
         let next = if gap.raw() <= step.raw() {
             home
         } else {
             was.add(home.sub(was).scale(step.div(gap)))
         };
+        effect.dir = home.sub(was).normalized().scale(speed);
         effect.home = next;
         let along = flat_toward(was, next);
         let m = moves::get(Class::BloodMage, moves::blood::CAST);
@@ -608,6 +696,7 @@ impl World {
     /// `tuning::zip_keeps` of the speed, and the jump banked near the end
     /// (`bank_the_zip_jump`) thrown. A zip a hit broke sends its head home.
     pub(super) fn tend_the_zips(&mut self, seen: &[Player; MAX_PLAYERS]) {
+        self.tend_the_chains();
         // A zip pressed while the head flew starts the frame it bites, and is
         // forgotten when it comes home without biting.
         for i in 0..MAX_PLAYERS {
@@ -643,7 +732,8 @@ impl World {
             }
             now
         };
-        for (i, was) in seen.iter().enumerate() {
+        let _ = seen;
+        for i in 0..MAX_PLAYERS {
             let Some(g) = garden_of(&self.players[i]) else {
                 continue;
             };
@@ -663,7 +753,7 @@ impl World {
             let state = e.head_state();
             if state.holds() {
                 e.set_head(Head::Zipping);
-                // Which body it is in, for the haul to follow: kept in the
+                // Which body it is in, for the pull to follow: kept in the
                 // hold count, which a zipping head does not use.
                 let follow = match state {
                     Head::Fighter(v) => v as i32 + 1,
@@ -671,51 +761,309 @@ impl World {
                 };
                 e.banked |= follow << 8;
             }
+            let follow = e.head_for() as usize;
+            if follow > 0 && follow <= MAX_PLAYERS {
+                e.home = aim::origin(self.players[follow - 1].pos);
+            }
             let p = self.players[i];
-            if p.haul > 0 {
-                // Follow a fighter it is in.
-                let follow = e.head_for() as usize;
-                if follow > 0 && follow <= MAX_PLAYERS {
-                    let body = self.players[follow - 1].pos;
-                    e.home = aim::origin(body);
-                    let to = zip_target(p.pos, e.home, Head::Fighter(follow - 1));
-                    self.players[i].haul_to = to;
+            let to = zip_target(
+                p.pos,
+                e.home,
+                if g.zip_to_body {
+                    Head::Fighter(0)
+                } else {
+                    Head::World
+                },
+            );
+            let gap = to.sub(p.pos);
+            let far = gap.len();
+            let speed = p.vel.len();
+            let pulled =
+                matches!(p.action, Action::Recovery { kind, .. } if kind == moves::blood::CAST);
+            let arrived = far.raw() <= t::body_radius().add(speed.mul(DT)).raw();
+            let spent = g.zip_for >= t::zip_limit();
+            if arrived || spent || !pulled {
+                tend(&mut self.players[i], |g| {
+                    g.zipping = false;
+                    g.zip_jump = false;
+                });
+                if pulled {
+                    let q = &mut self.players[i];
+                    // Onto a body she stops beside it, to fight; onto the
+                    // world she carries on with what the pull gave her.
+                    if g.zip_to_body {
+                        q.vel = V3::new(
+                            Fx::ZERO,
+                            q.vel.y.max(Fx::ZERO).min(t::zip_body_rise()),
+                            Fx::ZERO,
+                        );
+                    } else {
+                        q.vel = q.vel.scale(t::zip_keeps());
+                    }
+                    if g.zip_jump {
+                        let jump = t::jump_speed().mul(q.class.mobility().jump);
+                        q.vel.y = q.vel.y.max(Fx::ZERO).add(jump);
+                        q.jump_hold = t::jump_hold_frames();
+                    }
+                    q.grounded = false;
+                    q.action = Action::Free;
+                    self.effects[head] = None;
+                } else {
+                    // A hit broke it: the head comes home.
+                    e.dir = V3::ZERO;
+                    e.set_head(Head::Home);
+                    self.effects[head] = Some(e);
                 }
-                self.effects[head] = Some(e);
                 continue;
             }
-            // The haul is over: arrived, or broken.
-            let arrived =
-                was.haul > 0 && p.pos.sub(was.haul_to).len().raw() <= t::body_radius().raw();
-            tend(&mut self.players[i], |g| {
-                g.zipping = false;
-                g.zip_jump = false;
+            // **The pull**: the chain hauls her toward the head, her weight
+            // and her momentum still hers -- so a pull up to a high bite arcs.
+            let along = gap.scale(Fx::ONE.div(far));
+            let q = &mut self.players[i];
+            q.vel = q.vel.add(along.scale(t::zip_pull().mul(DT)));
+            let now = q.vel.len();
+            if now.raw() > t::zip_speed().raw() {
+                q.vel = q.vel.scale(t::zip_speed().div(now));
+            }
+            q.haul_to = to;
+            q.grounded = false;
+            q.action = Action::Recovery {
+                kind: moves::blood::CAST,
+                left: t::zip_limit(),
+            };
+            tend(q, |g| g.zip_for = g.zip_for.saturating_add(1));
+            self.effects[head] = Some(e);
+        }
+    }
+
+    /// **What her left hand and right click asked of the chain**, this
+    /// frame (`chain_in_hand`): the head called home, ripped out of who it
+    /// holds, or them reeled in to her.
+    fn tend_the_chains(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let Some(g) = garden_of(&self.players[i]) else {
+                continue;
+            };
+            let slot = self.effects.iter().position(|e| {
+                e.is_some_and(|e| e.kind == EffectKind::ScytheHead && e.owner == i as u8)
             });
-            if arrived {
-                let run = was.haul_to.sub(was.pos).normalized();
-                let q = &mut self.players[i];
-                // Onto a body she stops beside it, to fight; onto the world she
-                // keeps the speed, to carry on.
-                q.vel = if g.zip_to_body {
-                    V3::ZERO
-                } else {
-                    run.scale(was.haul_speed.mul(t::zip_keeps()))
-                };
-                if g.zip_jump || garden_of(was).is_some_and(|g| g.zip_jump) {
-                    let jump = t::jump_speed().mul(q.class.mobility().jump);
-                    q.vel.y = q.vel.y.max(Fx::ZERO).add(jump);
-                    q.jump_hold = t::jump_hold_frames();
+            let head = slot.and_then(|s| self.effects[s]);
+            if g.recall {
+                tend(&mut self.players[i], |g| {
+                    g.recall = false;
+                    g.reeling = 0;
+                });
+                if let (Some(s), Some(mut e)) = (slot, head)
+                    && e.head_state() != Head::Home
+                {
+                    e.dir = V3::ZERO;
+                    e.set_head(Head::Home);
+                    self.effects[s] = Some(e);
                 }
-                q.grounded = false;
-                if matches!(q.action, Action::Recovery { kind, .. } if kind == moves::blood::CAST) {
-                    q.action = Action::Free;
+                continue;
+            }
+            if g.rip {
+                tend(&mut self.players[i], |g| g.rip = false);
+                if let (Some(s), Some(mut e)) = (slot, head)
+                    && let Head::Fighter(v) = e.head_state()
+                {
+                    self.rip_it_out(i, v);
+                    e.dir = V3::ZERO;
+                    e.set_head(Head::Home);
+                    self.effects[s] = Some(e);
                 }
-                self.effects[head] = None;
-            } else {
-                e.set_head(Head::Home);
-                self.effects[head] = Some(e);
+                continue;
+            }
+            if g.reeling > 0 {
+                let v = g.reeling as usize - 1;
+                let holds = head.is_some_and(|e| e.head_state() == Head::Fighter(v));
+                let q = self.players[v];
+                let near = flat_apart(q.pos, self.players[i].pos).raw() <= t::reel_near().raw();
+                if !holds || q.health <= 0 || near {
+                    tend(&mut self.players[i], |g| g.reeling = 0);
+                    if holds
+                        && near
+                        && matches!(q.action, Action::Held { .. })
+                        && q.held_by == i as u8
+                    {
+                        // Reeled in: staggered at her feet, for the hand.
+                        let q = &mut self.players[v];
+                        q.action = Action::Stagger {
+                            left: t::cast_stagger(),
+                        };
+                        q.stun_total = t::cast_stagger();
+                        q.held_by = NOBODY;
+                    }
+                    if holds && let Some(s) = slot {
+                        self.effects[s] = None;
+                    }
+                    continue;
+                }
+                // Hand over hand: held on her chain, and dragged in to her
+                // arm at `tuning::chain_reel` (`drag_the_held`).
+                if !q.untouchable() && !matches!(q.action, Action::Held { .. }) {
+                    self.players[v].seized(i as u8, t::zip_limit(), 0);
+                }
+                if matches!(self.players[v].action, Action::Held { .. }) {
+                    let q = &mut self.players[v];
+                    q.action = Action::Held {
+                        left: t::zip_limit(),
+                    };
+                }
             }
         }
+    }
+
+    /// **Ripped out** (2026-11-07): left let go part-way through its hold,
+    /// with the head in a fighter. The rip row's blow, a fresh bleed, and a
+    /// stagger.
+    fn rip_it_out(&mut self, owner: usize, v: usize) {
+        let her = self.players[owner];
+        let q = self.players[v];
+        if q.untouchable() || q.health <= 0 {
+            return;
+        }
+        let m = moves::get(Class::BloodMage, moves::blood::RIP);
+        let damage = Fx::from_int(m.damage)
+            .mul(worth_of(&her, Some(moves::blood::RIP)))
+            .to_int();
+        let dealt = damage.min(q.health).max(0);
+        apply_hit(
+            &mut self.players[v],
+            Hit {
+                damage,
+                hitstun: m.hitstun,
+                blockstun: m.blockstun,
+                knockback: m.knockback,
+                launch: m.launch,
+                grabs: 0,
+                by: owner as u8,
+                dir: flat_toward(q.pos, her.pos),
+                blocked: false,
+                parried: false,
+                interrupts: true,
+            },
+        );
+        {
+            let q = &mut self.players[v];
+            q.bleed(owner as u8, t::bleed_lasts());
+            q.action = Action::Stagger {
+                left: t::cast_stagger(),
+            };
+            q.stun_total = t::cast_stagger();
+        }
+        if dealt > 0 {
+            let q = self.players[v];
+            self.credit(owner as u8, dealt);
+            self.spill_under(owner as u8, Class::BloodMage, moves::blood::RIP, &q, dealt);
+        }
+        let hold = impact_freeze(m.hitstop, false);
+        freeze(&mut self.players[owner], hold);
+        freeze(&mut self.players[v], hold);
+    }
+
+    /// **The Red claw lands** (2026-11-07): where her hold put it -- along
+    /// the floor toward the crosshair, `reach_after` the frames she held --
+    /// it rakes everything inside it at a body's middle, slowing what it hits
+    /// to `tuning::claw_slow`, and it is bigger and harder the further out it
+    /// went: at the row's whole reach `tuning::claw_grows` times as wide and
+    /// half again as hard. Held too long, it lands past them. A plant of hers
+    /// inside it is fed. Its marks stay a moment (`EffectKind::Claw`).
+    pub(super) fn claw_lands(&mut self, i: usize, mut born: Effect) {
+        let p = self.players[i];
+        let m = moves::get(p.class, moves::blood::CLAW);
+        let at = born.pos;
+        let near = m.channel_from.min(m.reach);
+        let far = flat_apart(p.pos, at);
+        let share = if m.reach.raw() > near.raw() {
+            Fx::ratio(far.sub(near).raw().max(0), m.reach.sub(near).raw()).min(Fx::ONE)
+        } else {
+            Fx::ONE
+        };
+        let size = Fx::ONE.add(t::claw_grows().sub(Fx::ONE).mul(share));
+        let radius = m.radius.mul(size);
+        let half = Fx::ratio(1, 2);
+        let mid = V3::new(at.x, at.y.add(t::body_height().mul(half)), at.z);
+        let hard = Fx::ONE.add(share.mul(half));
+        let damage = Fx::from_int(m.damage)
+            .mul(worth_of(&p, Some(moves::blood::CLAW)))
+            .mul(hard)
+            .to_int();
+        let along = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
+        for v in 0..MAX_PLAYERS {
+            let q = self.players[v];
+            if v == i
+                || !self.effects_reach(v, i as u8)
+                || q.untouchable()
+                || !self.inside(v, mid, radius)
+            {
+                continue;
+            }
+            let (guarding, parried) = guard_against(&q, p.pos, m.unblockable);
+            let dealt = if guarding || parried {
+                0
+            } else {
+                damage.min(q.health)
+            };
+            apply_hit(
+                &mut self.players[v],
+                Hit {
+                    damage,
+                    hitstun: m.hitstun,
+                    blockstun: m.blockstun,
+                    knockback: m.knockback,
+                    launch: m.launch,
+                    grabs: 0,
+                    by: i as u8,
+                    dir: along,
+                    blocked: guarding,
+                    parried,
+                    interrupts: true,
+                },
+            );
+            if dealt > 0 {
+                self.players[v].slow(t::slow_frames(), t::claw_slow());
+                self.credit(i as u8, dealt);
+                self.spill_under(i as u8, Class::BloodMage, moves::blood::CLAW, &q, dealt);
+            }
+            let hold = impact_freeze(m.hitstop, guarding && !parried);
+            freeze(&mut self.players[i], hold);
+            freeze(&mut self.players[v], hold);
+        }
+        self.gore_each(&mut born, 0, mid, radius, hard);
+        // A critter is knee-high: the claw rakes down to the floor, so it is
+        // met low, not at a fighter's middle.
+        let low = V3::new(at.x, at.y.add(t::body_radius()), at.z);
+        self.gore_critters(&mut born, low, radius, hard);
+        born.forget_hits();
+        // Her plants inside it are fed.
+        if let Some(g) = garden_of(&self.players[i]) {
+            for (slot, plant) in g.plants.iter().enumerate() {
+                if plant.is_some_and(|s| flat_apart(s.at, at).raw() <= radius.add(s.radius()).raw())
+                {
+                    self.feed_the_plant(i, slot);
+                }
+            }
+        }
+        born.dir = along;
+        born.reach = radius;
+        born.home = at;
+        born.life = t::reaping_life();
+        born.power = size;
+        spawn_effect(&mut self.effects, born);
+    }
+
+    /// **A plant fed by her claw** (2026-11-07, the owner's answer): it
+    /// grows by `tuning::feed_grows` of a stone, to at most `feed_most` --
+    /// and its lash and its thorns grow with it -- and it starts its life
+    /// over, so a tended plant stands.
+    pub(super) fn feed_the_plant(&mut self, owner: usize, slot: usize) {
+        tend(&mut self.players[owner], |g| {
+            if let Some(stone) = g.plants[slot].as_mut() {
+                stone.scale = stone.scale.add(t::feed_grows()).min(t::feed_most());
+                stone.age = 1;
+            }
+        });
     }
 
     // -- The world bleeds ---------------------------------------------------
@@ -843,13 +1191,139 @@ impl World {
             }
             tend(&mut self.players[i], |g| *g = kept);
         }
+        self.the_shrike();
+    }
+
+    /// **The shrike** (2026-11-07): a body reeled in on her chain, or
+    /// knocked into one of her plants at `tuning::shrike_speed` or more, is
+    /// impaled on it -- pinned on its thorns for `tuning::impale_for`,
+    /// bleeding, for the impaling's row and a share of what the plant holds --
+    /// and the plant drinks what it dealt. One at a time: her plants rest
+    /// a moment after.
+    fn the_shrike(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let Some(g) = garden_of(&self.players[i]) else {
+                continue;
+            };
+            if g.shrike_rest > 0 {
+                tend(&mut self.players[i], |g| g.shrike_rest -= 1);
+                continue;
+            }
+            'plants: for (slot, plant) in g.plants.iter().enumerate() {
+                let Some(plant) = plant else { continue };
+                for v in 0..MAX_PLAYERS {
+                    let q = self.players[v];
+                    if v == i || !self.effects_reach(v, i as u8) || q.untouchable() || q.health <= 0
+                    {
+                        continue;
+                    }
+                    let touching = flat_apart(q.pos, plant.at).raw()
+                        <= plant.radius().add(t::body_radius()).raw()
+                        && q.pos.y.raw() <= plant.top().raw()
+                        && q.pos.y.add(t::body_height()).raw() >= plant.at.y.raw();
+                    let reeled = matches!(q.action, Action::Held { .. }) && q.held_by == i as u8;
+                    let flung = matches!(q.action, Action::HitStun { .. } | Action::Stagger { .. })
+                        && V3::new(q.vel.x, Fx::ZERO, q.vel.z).flat_len().raw()
+                            >= t::shrike_speed().raw();
+                    if touching && (reeled || flung) {
+                        self.impale(i, slot, v);
+                        break 'plants;
+                    }
+                }
+            }
+        }
+    }
+
+    /// One body impaled on one of her plants (`the_shrike`).
+    fn impale(&mut self, owner: usize, slot: usize, v: usize) {
+        let Some(g) = garden_of(&self.players[owner]) else {
+            return;
+        };
+        let Some(plant) = g.plants[slot] else {
+            return;
+        };
+        let m = moves::get(Class::BloodMage, moves::blood::IMPALE);
+        let q = self.players[v];
+        let damage = m.damage + g.blood[slot] as i32 / 4;
+        let dealt = damage.min(q.health).max(0);
+        apply_hit(
+            &mut self.players[v],
+            Hit {
+                damage,
+                hitstun: m.hitstun,
+                blockstun: m.blockstun,
+                knockback: Fx::ZERO,
+                launch: Fx::ZERO,
+                grabs: 0,
+                by: owner as u8,
+                dir: flat_toward(plant.at, q.pos),
+                blocked: false,
+                parried: false,
+                interrupts: true,
+            },
+        );
+        // Pinned on its thorns, at its side, half way up.
+        let out = flat_toward(plant.at, q.pos);
+        let half = Fx::ratio(1, 2);
+        let at = V3::new(
+            plant
+                .at
+                .x
+                .add(out.x.mul(plant.radius().add(t::body_radius()))),
+            plant
+                .at
+                .y
+                .add(plant.height().mul(half))
+                .sub(t::body_height().mul(half)),
+            plant
+                .at
+                .z
+                .add(out.z.mul(plant.radius().add(t::body_radius()))),
+        );
+        let pin = t::impale_for();
+        {
+            let q = &mut self.players[v];
+            q.pos = at;
+            q.vel = V3::ZERO;
+            q.seized(NAILED, pin, pin);
+            q.bleed(owner as u8, t::bleed_lasts());
+        }
+        let drank = dealt.clamp(0, u16::MAX as i32) as u16;
+        tend(&mut self.players[owner], |g| {
+            g.blood[slot] = g.blood[slot].saturating_add(drank);
+            g.shrike_rest = pin.saturating_add(20);
+            if g.reeling == v as u8 + 1 {
+                g.reeling = 0;
+            }
+        });
+        // The chain lets go of them, and the head is back on her haft -- not
+        // reeled home through the plant they hang on, which would reap it out
+        // from under them.
+        for slot in self.effects.iter_mut() {
+            if slot.is_some_and(|e| {
+                e.kind == EffectKind::ScytheHead
+                    && e.owner == owner as u8
+                    && e.head_state() == Head::Fighter(v)
+            }) {
+                *slot = None;
+            }
+        }
+        if dealt > 0 {
+            self.credit(owner as u8, dealt);
+        }
+        let hold = impact_freeze(m.hitstop, false);
+        freeze(&mut self.players[owner], hold);
+        freeze(&mut self.players[v], hold);
     }
 
     /// One plant's lash: every enemy body within `tuning::plant_lash_reach`
     /// of its edge, at its height.
     fn lash(&mut self, owner: usize, stone: Structure) {
         let m = moves::get(Class::BloodMage, moves::blood::LASH);
-        let reach = stone.radius().add(t::plant_lash_reach());
+        // A fed plant (`feed_the_plant`) lashes further and harder, by how
+        // much bigger than a fresh one it has grown.
+        let grown = stone.scale.div(t::plant_scale().max(Fx::ratio(1, 10)));
+        let reach = stone.radius().add(t::plant_lash_reach().mul(grown));
         for v in 0..MAX_PLAYERS {
             let q = self.players[v];
             // Not one her own hand is holding: the plant would knock them out
@@ -865,15 +1339,16 @@ impl World {
                 continue;
             }
             let (guarding, parried) = guard_against(&q, stone.at, m.unblockable);
+            let damage = Fx::from_int(m.damage).mul(grown).to_int();
             let dealt = if guarding || parried {
                 0
             } else {
-                m.damage.min(q.health)
+                damage.min(q.health)
             };
             apply_hit(
                 &mut self.players[v],
                 Hit {
-                    damage: m.damage,
+                    damage,
                     hitstun: m.hitstun,
                     blockstun: m.blockstun,
                     knockback: m.knockback,
@@ -993,7 +1468,9 @@ impl World {
             dir,
             reach,
         );
-        thorns.life = t::spell_flash();
+        // Drawn as the plant breaking and its thorns flying (`game::thorn_spray`),
+        // which needs its size: `power` is the plant's scale.
+        thorns.life = t::thorns_for();
         let share = Fx::ratio(damage, m.damage.max(1));
         let half = Fx::ratio(1, 2);
         let mid = stone.at.add(dir.scale(reach.mul(half))).add(V3::new(
@@ -1004,9 +1481,39 @@ impl World {
         self.gore_each(&mut thorns, 0, mid, reach.mul(half), share);
         self.gore_critters(&mut thorns, mid, reach.mul(half), share);
         thorns.forget_hits();
+        thorns.power = stone.scale;
+        // Which plant it was, so the drawing breaks the plant that stood.
+        thorns.banked = (owner * MAX_STRUCTURES + slot) as i32;
         spawn_effect(&mut self.effects, thorns);
         if paid > 0 {
             self.players[owner].absorb(paid);
+        }
+    }
+
+    /// **The Red Hand through a plant feeds it** (2026-11-07): Rend or the
+    /// Rising rend whose volume passes through one of her plants on its first
+    /// active frame (`feed_the_plant`).
+    pub(super) fn feed_with_the_hand(&mut self, who: usize) {
+        let p = self.players[who];
+        let Action::Active { kind, left } = p.action else {
+            return;
+        };
+        if p.class != Class::BloodMage
+            || !matches!(kind, moves::blood::REND | moves::blood::RISING_REND)
+            || left != moves::get(p.class, kind).active
+        {
+            return;
+        }
+        let (Some(hb), Some(g)) = (hitbox(&p), garden_of(&p)) else {
+            return;
+        };
+        for (slot, plant) in g.plants.iter().enumerate() {
+            let Some(plant) = plant else { continue };
+            let top = V3::new(plant.at.x, plant.top(), plant.at.z);
+            let gap = crate::math::segment_gap(hb.from, hb.to, plant.at, top);
+            if gap.raw() <= hb.radius.add(plant.radius()).raw() {
+                self.feed_the_plant(who, slot);
+            }
         }
     }
 
@@ -1032,6 +1539,16 @@ impl World {
         };
         for (slot, plant) in g.plants.iter().enumerate() {
             let Some(plant) = plant else { continue };
+            // **Not the one under her feet** (2026-11-06, from play: "jumping
+            // off a tree ... causes it to explode"): a Rising reap or a Sweep
+            // thrown standing on a plant cuts down through it, and that is a
+            // foothold, not a harvest.
+            let on_it = flat_apart(p.pos, plant.at).raw()
+                <= plant.radius().add(t::body_radius()).raw()
+                && p.pos.y.sub(plant.top()).abs().raw() <= t::body_radius().raw();
+            if on_it {
+                continue;
+            }
             let top = V3::new(plant.at.x, plant.top(), plant.at.z);
             let gap = crate::math::segment_gap(hb.from, hb.to, plant.at, top);
             if gap.raw() <= hb.radius.add(plant.radius()).raw() {
@@ -1039,215 +1556,4 @@ impl World {
             }
         }
     }
-
-    // -- Seize -------------------------------------------------------------
-
-    /// **What her Seize does on the frame it catches** (2026-11-04,
-    /// 2026-11-06): nothing yet but hold. The blow is the catch -- no damage,
-    /// no shove -- and they are held for the lift (`hit.grabs`); the slam or
-    /// the impaling comes at its end (`carry_the_seized`). `None` for every
-    /// other blow.
-    pub(super) fn seize_how(
-        &self,
-        attacker: usize,
-        defender: usize,
-        hit: &mut Hit,
-    ) -> Option<Seized> {
-        let p = self.players[attacker];
-        if p.class != Class::BloodMage
-            || p.action.attack_kind() != Some(moves::blood::SEIZE)
-            || hit.blocked
-            || hit.parried
-            || defender >= MAX_PLAYERS
-        {
-            return None;
-        }
-        hit.damage = 0;
-        hit.knockback = Fx::ZERO;
-        hit.launch = Fx::ZERO;
-        hit.hitstun = 0;
-        hit.grabs = t::seize_lift().saturating_add(2);
-        hit.interrupts = true;
-        Some(Seized::Caught)
-    }
-
-    /// **The red hand brings them down**: thrown on to the nearest plant of
-    /// hers within `tuning::seize_plant_reach` of them, or slammed into the
-    /// floor in front of her -- driven down from the air
-    /// (`tuning::seize_drive`) -- for the ending's row; the impaling worth its
-    /// row and the blood the plant holds.
-    fn bring_them_down(&mut self, attacker: usize, defender: usize) {
-        let p = self.players[attacker];
-        let q = self.players[defender];
-        let Some(g) = garden_of(&p) else {
-            return;
-        };
-        let near = g
-            .plants
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, s)| s.map(|s| (slot, flat_apart(s.at, q.pos))))
-            .filter(|(_, far)| far.raw() <= t::seize_plant_reach().raw())
-            .min_by_key(|(_, far)| far.raw());
-        let (how, row) = match near {
-            Some((slot, _)) => (Seized::Impaled(slot), moves::blood::IMPALE),
-            None => (Seized::Slammed, moves::blood::SLAM),
-        };
-        let m = moves::get(p.class, row);
-        let mut damage = m.damage;
-        if let Seized::Impaled(slot) = how {
-            damage += g.blood[slot] as i32;
-        }
-        let launch = if !p.grounded && how == Seized::Slammed {
-            Fx::ZERO.sub(t::seize_drive())
-        } else {
-            m.launch
-        };
-        if how == Seized::Slammed {
-            // Down on to the floor in front of her, where the hand comes down.
-            let terrain = self.terrain();
-            let lift = V3::new(q.pos.x, q.pos.y.add(t::body_height()), q.pos.z);
-            let floor = terrain.ground_under(lift);
-            if p.grounded {
-                self.players[defender].pos.y = floor;
-            }
-        }
-        let worth = worth_of(&p, Some(row));
-        let damage = Fx::from_int(damage).mul(worth).to_int();
-        let dealt = damage.min(q.health).max(0);
-        apply_hit(
-            &mut self.players[defender],
-            Hit {
-                damage,
-                hitstun: m.hitstun,
-                blockstun: m.blockstun,
-                knockback: m.knockback,
-                launch,
-                grabs: 0,
-                by: attacker as u8,
-                dir: flat_toward(p.pos, q.pos),
-                blocked: false,
-                parried: false,
-                interrupts: true,
-            },
-        );
-        self.players[defender].held_by = NOBODY;
-        let hold = impact_freeze(m.hitstop, false);
-        freeze(&mut self.players[attacker], hold);
-        freeze(&mut self.players[defender], hold);
-        self.seize_lands(attacker, defender, how, dealt);
-    }
-
-    /// **Seize, while it holds them up** (2026-11-06): each frame, what her
-    /// red hand caught is carried up over her, in front, `tuning::seize_lift`
-    /// frames to `seize_lift_height` -- and then brought down
-    /// (`bring_them_down`). A hit on her, or them slipping the hold, lets go.
-    pub(super) fn carry_the_seized(&mut self) {
-        for i in 0..MAX_PLAYERS {
-            let Some(g) = garden_of(&self.players[i]) else {
-                continue;
-            };
-            if g.seized == 0 {
-                continue;
-            }
-            let v = g.seized as usize - 1;
-            let her = self.players[i];
-            let held = v < MAX_PLAYERS
-                && matches!(self.players[v].action, Action::Held { .. })
-                && self.players[v].held_by == i as u8;
-            if !held || her.health <= 0 || her.action.stunned() {
-                tend(&mut self.players[i], |g| {
-                    g.seized = 0;
-                    g.seize_left = 0;
-                });
-                continue;
-            }
-            let left = g.seize_left.saturating_sub(1);
-            tend(&mut self.players[i], |g| g.seize_left = left);
-            let lift = t::seize_lift().max(1);
-            let up = Fx::ratio((lift - left.min(lift)) as i32, lift as i32);
-            // Eased: quick off the floor, slowing to the top.
-            let up = Fx::ONE.sub(Fx::ONE.sub(up).mul(Fx::ONE.sub(up)));
-            let ahead = V3::new(her.facing.x, Fx::ZERO, her.facing.z).normalized();
-            let arm = t::body_radius().add(t::body_radius());
-            let q = &mut self.players[v];
-            q.pos = V3::new(
-                her.pos.x.add(ahead.x.mul(arm)),
-                her.pos.y.add(t::seize_lift_height().mul(up)),
-                her.pos.z.add(ahead.z.mul(arm)),
-            );
-            q.vel = V3::ZERO;
-            if left == 0 {
-                tend(&mut self.players[i], |g| g.seized = 0);
-                self.bring_them_down(i, v);
-            }
-        }
-    }
-
-    /// **The Seize lands**: impaled, they are put on the plant's top and it
-    /// drinks what the blow dealt; slammed, their blood lands in a ring round
-    /// them rather than under them.
-    pub(super) fn seize_lands(
-        &mut self,
-        attacker: usize,
-        defender: usize,
-        how: Seized,
-        dealt: i32,
-    ) {
-        match how {
-            Seized::Caught => {
-                tend(&mut self.players[attacker], |g| {
-                    g.seized = defender as u8 + 1;
-                    g.seize_left = t::seize_lift();
-                });
-            }
-            Seized::Impaled(slot) => {
-                let Some(g) = garden_of(&self.players[attacker]) else {
-                    return;
-                };
-                let Some(stone) = g.plants[slot] else {
-                    return;
-                };
-                let q = &mut self.players[defender];
-                q.pos = V3::new(stone.at.x, stone.top(), stone.at.z);
-                let drank = dealt.clamp(0, u16::MAX as i32) as u16;
-                tend(&mut self.players[attacker], |g| {
-                    g.blood[slot] = g.blood[slot].saturating_add(drank);
-                });
-                self.credit(attacker as u8, dealt);
-            }
-            Seized::Slammed => {
-                if dealt <= 0 {
-                    return;
-                }
-                self.credit(attacker as u8, dealt);
-                let q = self.players[defender];
-                let terrain = self.terrain();
-                let floor = terrain.ground_under(q.pos);
-                let ring = t::seize_ring();
-                let each = (dealt / RING_POOLS as i32).max(1);
-                for k in 0..RING_POOLS {
-                    let turn = Fx::ratio(k as i32, RING_POOLS as i32);
-                    let round = V3::from_turns(crate::math::wrap_turns(turn));
-                    let at = V3::new(
-                        q.pos.x.add(round.x.mul(ring)),
-                        floor,
-                        q.pos.z.add(round.z.mul(ring)),
-                    );
-                    let lift = V3::new(at.x, at.y.add(t::body_height()), at.z);
-                    let at = V3::new(at.x, terrain.ground_under(lift), at.z);
-                    self.pool_blood(
-                        attacker as u8,
-                        Class::BloodMage,
-                        moves::blood::SLAM,
-                        at,
-                        each,
-                    );
-                }
-            }
-        }
-    }
 }
-
-/// How many pools a slam's ring of blood is.
-const RING_POOLS: usize = 4;

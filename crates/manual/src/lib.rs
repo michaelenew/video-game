@@ -451,7 +451,7 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e(
                 "Left click: the Red Hand",
-                "Her other hand, gloved in her own blood clotted hard -- what she fights with inside the scythe's reach. Tapped, Rend: a raking claw at arm's length and a step in; tap again while it is still out or recovering and it strings, up to three, the third the heaviest. Every hit spills a pool. Held, Seize: a grab nobody can block. She lifts them over her head in the red hand, then brings them down -- onto one of your plants near them, impaled, and the plant drinks what it dealt; with none near, into the floor, which bleeds a ring of pools round them. In the air it drives them down onto what is below.",
+                "Her other hand, gloved in her own blood clotted hard -- what she fights with inside the scythe's reach. Tapped, Rend: three blows if you keep tapping, each bigger than the last -- a quick rake, a backhand the other way, and a heavy two-handed rake that knocks them up. Held, the Red claw: crouched and coiled while you hold, the longer the hold the further out along the floor toward the crosshair it lands and the bigger it is -- hold too long and it lands past them -- and it slows what it rakes. Raking one of your plants with the hand feeds it: it grows, lashes harder and further, and starts its life over.",
             ),
             e(
                 "Middle click: the spike",
@@ -459,7 +459,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Right click: the scythe",
-                "Tapped, the Sweep: the scythe across your front, strung to three; on the floor it cuts the floor too, leaving a pool to raise. Held, the Cast: the head flies on its chain down the crosshair and bites the first thing it meets. A fighter bleeds, is slowed and is leashed -- neither of you can get further apart than the chain, and neither is dragged. A wall, the floor or a creature bleeds a pool where it bit. Left alone, it wrenches free -- a short stagger and a shove toward you -- and comes home along its chain, drinking your stains and reaping your plants on its way. Press right again any time after it leaves your hand: the zip. You are hauled to the head the moment it bites; onto a fighter or a creature you stop beside them, onto the world you keep most of the speed, and a jump pressed as you arrive is thrown there. The same in the air.",
+                "Tapped, the Sweep: the scythe across your front, strung to three; on the floor it cuts the floor too, leaving a pool to raise. Held, the Cast: you throw the scythe's head itself on its chain -- the haft is all you hold while it is out. It flies on an arc that meets the crosshair and then falls; it tumbles, the chain swinging slack behind it, and bites the first thing it meets or lands on the floor. A fighter it bites bleeds, is slowed and leashed. While the head is out, left click is the chain: tap it and the chain hauls you to the head, picking up speed, carrying your momentum and falling as you go -- stopping beside a fighter or a creature, carrying on past a wall or the floor; hold it to the end and you reel the fighter in hand over hand; let go part way and you rip the head out of them, cutting and staggering them. Right click calls the head home: it is reeled in, slow and then fast, reaping your stains and plants on its line.",
+            ),
+            e(
+                "The shrike",
+                "Anyone you reel in on the chain into one of your plants, or knock into one hard, is impaled on its thorns -- pinned there a moment, bleeding -- and the plant drinks what it dealt. Your plants rest a moment after each one.",
             ),
             e(
                 "Reaping a plant",
@@ -467,7 +471,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Space + a click",
-                "The takeoffs, from the floor and once in the air. Space and left is the Rising rend: the claw, jumping, about as high as a jump, and it lifts whoever it catches. Space and middle is the Rising spike: a spike out of the blood at your own feet -- a pool if you stand on one, your own blood if not -- throwing you up more than twice as high as a jump. Space and right is the Rising reap: the scythe cut up out of the floor, carrying you more than twice as high as a jump, cutting the floor you leave and reaping any plant in its arc.",
+                "The takeoffs, from the floor and once in the air. Space and left is the Rising rend, a charge-jump: tapped, a hop and a swipe; held, she crouches, and the longer the hold the further she leaps -- nearly flat, eighteen metres at the most -- with the claw out in front of her the whole way. Space and middle is the Rising spike: a spike out of the blood at your own feet -- a pool if you stand on one, your own blood if not -- throwing you up more than twice as high as a jump. Space and right is the Rising reap: the scythe cut up out of the floor, carrying you more than twice as high as a jump, cutting the floor you leave and reaping any plant in its arc -- but never the one you stand on.",
             ),
             e(
                 "E: a heart",

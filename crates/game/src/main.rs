@@ -1037,6 +1037,21 @@ fn shot_blood(w: &mut World) {
     // `SHOT_BLOOD=trail`: the trail a bleeding body leaves -- five stains a
     // stride apart across her view -- and the other fighter at its end, for
     // a capture of a spike setting the chain off.
+    // `SHOT_BLOOD=plant` (2026-11-07): one plant of hers four metres ahead,
+    // on the line to whoever stands in front of her -- for a capture of the
+    // shrike, someone reeled in on the chain into its thorns.
+    if platform::env("SHOT_BLOOD").as_deref() == Some("plant") {
+        let four = sim::Fx::from_int(4);
+        let at = sim::V3::new(
+            p.pos.x.add(p.facing.x.mul(four)),
+            p.pos.y,
+            p.pos.z.add(p.facing.z.mul(four)),
+        );
+        if let sim::class::Mechanic::Blood(garden) = &mut w.players[0].mechanic {
+            garden.plants[0] = Some(sim::class::Structure::planted(at));
+        }
+        return;
+    }
     if platform::env("SHOT_BLOOD").as_deref() == Some("trail") {
         // Across her view, six metres out, so the whole of it is on screen.
         let f = p.facing;
@@ -2220,6 +2235,11 @@ const EFFECT_PARTS: usize = {
         most
     };
     let most = if VINE_PARTS > most { VINE_PARTS } else { most };
+    let most = if SPRAY_PARTS > most {
+        SPRAY_PARTS
+    } else {
+        most
+    };
     let most = if 2 + CHAIN_LINKS > most {
         2 + CHAIN_LINKS
     } else {
@@ -2257,10 +2277,14 @@ struct StructureMesh {
     index: usize,
 }
 
-/// **A thorn on one of the Blood mage's plants** (2026-11-06): her plants
-/// stand in the stones' field and are drawn as its column, and these grow
-/// out of it -- a crown spike off the top and a spiral of thorns out of its
-/// sides -- so a plant reads as a thorned stalk rather than a red cylinder.
+/// **A piece of one of the Blood mage's plants** (2026-11-07, from play: the
+/// plants "look like cylinders with some spikes on them, they need to look
+/// more organic"). Her plants stand in the stones' field -- the column is
+/// what she stands on and what stops a body -- but the column is not drawn:
+/// these are. A leaning, twisting stem thinning as it climbs, branches
+/// curling up and out of it, thorns along both, a blood blossom at each
+/// branch's tip, and roots spreading into the floor -- each placed by
+/// `plant_piece` from the plant's own size and how far it has risen.
 #[derive(Component)]
 struct PlantThorn {
     owner: usize,
@@ -2268,8 +2292,39 @@ struct PlantThorn {
     part: usize,
 }
 
-/// How many thorns a plant is drawn with: one crown and the rest round it.
-const PLANT_THORNS: usize = 11;
+/// The stem's segments.
+const STEM: usize = 5;
+/// Branches, each in two segments.
+const BRANCHES: usize = 4;
+/// Thorns along the stem and branches.
+const THORNS: usize = 12;
+/// Roots.
+const ROOTS: usize = 3;
+/// How many pieces a plant is drawn in: the stem, the branches, the thorns,
+/// a blossom a branch, the roots.
+const PLANT_THORNS: usize = STEM + 2 * BRANCHES + THORNS + BRANCHES + ROOTS;
+
+/// What a plant's piece is, for its mesh and its material.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PlantPart {
+    Wood,
+    Thorn,
+    Blossom,
+}
+
+/// Which kind of piece `part` is.
+fn plant_part(part: usize) -> PlantPart {
+    let thorns = STEM + 2 * BRANCHES;
+    if part < thorns {
+        PlantPart::Wood
+    } else if part < thorns + THORNS {
+        PlantPart::Thorn
+    } else if part < thorns + THORNS + BRANCHES {
+        PlantPart::Blossom
+    } else {
+        PlantPart::Wood
+    }
+}
 
 /// The Elementalist's auto, drawn as the thing it is: a thin cylinder from her
 /// chest along the line she is aiming, ending where the shot stopped.
@@ -2525,6 +2580,8 @@ struct EffectLook {
     /// A Blood mage's plant (2026-11-04): a dark, thorned stalk of her
     /// blood set hard, where a spike rose out of a pool.
     plant: Handle<StandardMaterial>,
+    /// The blood blossoms at the tips of a plant's branches (2026-11-07).
+    blossom: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
     /// frames, so it has to read instantly or not at all.
@@ -3001,11 +3058,19 @@ fn setup(
             perceptual_roughness: 0.9,
             ..default()
         }),
+        // Bark, not stone (2026-11-07, from play: "they need to look more
+        // organic"): a dark, wet crimson-black, glowing a little from inside.
         plant: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.22, 0.03, 0.05),
-            base_color_texture: Some(stone_tex.clone()),
-            emissive: LinearRgba::rgb(0.35, 0.02, 0.04),
-            perceptual_roughness: 0.55,
+            base_color: Color::srgb(0.16, 0.025, 0.035),
+            base_color_texture: Some(images.add(fx::vine_texture())),
+            emissive: LinearRgba::rgb(0.22, 0.01, 0.025),
+            perceptual_roughness: 0.62,
+            ..default()
+        }),
+        blossom: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.75, 0.04, 0.10),
+            emissive: LinearRgba::rgb(1.6, 0.05, 0.16),
+            perceptual_roughness: 0.35,
             ..default()
         }),
         beam: materials.add(StandardMaterial {
@@ -3180,9 +3245,14 @@ fn setup(
                 StructureMesh { owner, index },
             ));
             for part in 0..PLANT_THORNS {
+                let (mesh, material) = match plant_part(part) {
+                    PlantPart::Wood => (meshes.add(fx::vine()), look.plant.clone()),
+                    PlantPart::Thorn => (meshes.add(fx::thorn()), look.plant.clone()),
+                    PlantPart::Blossom => (meshes.add(Sphere::new(0.5)), look.blossom.clone()),
+                };
                 commands.spawn((
-                    Mesh3d(meshes.add(fx::thorn())),
-                    MeshMaterial3d(look.plant.clone()),
+                    Mesh3d(mesh),
+                    MeshMaterial3d(material),
                     Transform::default(),
                     Visibility::Hidden,
                     PlantThorn { owner, index, part },
@@ -3743,9 +3813,13 @@ fn place_structures(
         // Lit, it glows: what a stone is worth to stand on or hide behind
         // is a thing the other player has to be able to read.
         let index = tag.owner * sim::class::MAX_STRUCTURES + tag.index;
-        let want = if sim::stones::is_a_plant(&sim.cur.players, index) {
-            &look.plant
-        } else if raised.lit > 0 {
+        // A plant is drawn by its own pieces (`place_plant_thorns`), not as
+        // the column it stands in.
+        if sim::stones::is_a_plant(&sim.cur.players, index) {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        let want = if raised.lit > 0 {
             &look.stone_lit
         } else {
             &look.stone
@@ -3781,14 +3855,15 @@ fn place_structures(
     }
 }
 
-/// Put a plant's thorns on it (`PlantThorn`): hidden for every slot that is
-/// not one of a Blood mage's plants. They rise with the column.
+/// Put each plant's pieces where `plant_piece` says (`PlantThorn`): hidden
+/// for every slot that is not one of a Blood mage's plants. They grow with it
+/// as it rises.
 fn place_plant_thorns(
     sim: Res<Sim>,
-    mut thorns: Query<(&PlantThorn, &mut Transform, &mut Visibility)>,
+    mut pieces: Query<(&PlantThorn, &mut Transform, &mut Visibility)>,
 ) {
     let field = sim::stones::gather(&sim.cur.players);
-    for (tag, mut tf, mut vis) in thorns.iter_mut() {
+    for (tag, mut tf, mut vis) in pieces.iter_mut() {
         let index = tag.owner * sim::class::MAX_STRUCTURES + tag.index;
         let Some(raised) =
             field[index].filter(|_| sim::stones::is_a_plant(&sim.cur.players, index))
@@ -3796,47 +3871,130 @@ fn place_plant_thorns(
             *vis = Visibility::Hidden;
             continue;
         };
-        let radius = raised.radius().to_f32_for_render();
-        let height = raised.height().to_f32_for_render();
-        let rise = raised.risen().to_f32_for_render();
         let foot = Vec3::new(
             raised.at.x.to_f32_for_render(),
             raised.at.y.to_f32_for_render(),
             raised.at.z.to_f32_for_render(),
         );
-        let top = foot.y + height * rise;
-        let (base, dir, long, wide) = if tag.part == 0 {
-            // The crown: a spike off the top, as tall again as half the stalk.
-            (
-                Vec3::new(foot.x, top - 0.1, foot.z),
-                Vec3::Y,
-                height * 0.55,
-                radius * 1.1,
-            )
-        } else {
-            // The sides: a spiral up the stalk, each thorn angled out and up.
-            let k = (tag.part - 1) as f32;
-            let n = (PLANT_THORNS - 1) as f32;
-            let turn = k * 2.39996 + (index as f32) * 0.7;
-            let out = Vec3::new(turn.cos(), 0.0, turn.sin());
-            let up = 0.18 + 0.72 * (k + 0.5) / n;
-            let y = foot.y + height * up - height * (1.0 - rise);
-            if y < foot.y {
-                *vis = Visibility::Hidden;
-                continue;
-            }
-            (
-                Vec3::new(foot.x, y, foot.z) + out * radius * 0.8,
-                (out + Vec3::Y * 0.55).normalize(),
-                radius * (1.1 - 0.4 * up),
-                radius * 0.38,
-            )
+        let Some((from, to, thick)) = plant_piece(
+            foot,
+            raised.radius().to_f32_for_render(),
+            raised.height().to_f32_for_render() * raised.risen().to_f32_for_render(),
+            index as f32,
+            tag.part,
+        ) else {
+            *vis = Visibility::Hidden;
+            continue;
         };
+        let along = to - from;
+        let long = along.length();
+        if long < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
         *vis = Visibility::Inherited;
-        tf.translation = base + dir * long * 0.5;
-        tf.rotation = Quat::from_rotation_arc(Vec3::Y, dir);
-        tf.scale = Vec3::new(wide, long, wide);
+        match plant_part(tag.part) {
+            PlantPart::Blossom => {
+                tf.translation = to;
+                tf.rotation = Quat::IDENTITY;
+                tf.scale = Vec3::splat(thick * 2.0);
+            }
+            _ => {
+                tf.translation = from + along * 0.5;
+                tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / long);
+                tf.scale = Vec3::new(thick * 2.0, long, thick * 2.0);
+            }
+        }
     }
+}
+
+/// **One piece of a plant**: from where to where it runs and how thick it
+/// is, from the plant's foot, its radius, how tall it stands now, a seed (its
+/// slot) and which piece. `None` for a piece not grown yet.
+///
+/// The stem leans one way, as something grown toward the light does, and
+/// wobbles; it thins from the root to the crown. Four branches leave its
+/// upper half round it at a golden turn, out and up, and curl up again
+/// half way. Thorns stand off the stem in a spiral and off each branch,
+/// angled up and out. A blossom of blood sits at each branch's end, and three
+/// roots spread off its foot into the floor.
+fn plant_piece(
+    foot: Vec3,
+    radius: f32,
+    tall: f32,
+    seed: f32,
+    part: usize,
+) -> Option<(Vec3, Vec3, f32)> {
+    if tall < 0.05 {
+        return None;
+    }
+    let lean_turn = seed * 2.1 + 0.7;
+    let lean = Vec3::new(lean_turn.cos(), 0.0, lean_turn.sin());
+    let side = lean.cross(Vec3::Y);
+    let base = (radius * 0.42).max(0.12);
+    // The stem's line, nought at the foot to one at the crown.
+    let spine = |t: f32| {
+        foot + Vec3::Y * tall * t
+            + lean * tall * 0.18 * t * t
+            + side * radius * 0.18 * (t * 5.0 + seed).sin() * t
+    };
+    let thick = |t: f32| base * (1.0 - 0.72 * t);
+    let golden = 2.399_963;
+    let branch = |b: usize| {
+        let t = 0.42 + 0.14 * b as f32;
+        let turn = seed * 1.3 + b as f32 * golden;
+        let out = Vec3::new(turn.cos(), 0.0, turn.sin());
+        let long = tall * (0.42 - 0.06 * b as f32);
+        let p0 = spine(t);
+        let p1 = p0 + (out * 1.0 + Vec3::Y * 0.75).normalize() * long * 0.55;
+        let p2 = p1 + (out * 0.55 + Vec3::Y * 1.0).normalize() * long * 0.5;
+        (p0, p1, p2, thick(t) * 0.55)
+    };
+    let mut k = part;
+    if k < STEM {
+        let (t0, t1) = (k as f32 / STEM as f32, (k + 1) as f32 / STEM as f32);
+        return Some((spine(t0), spine(t1), thick(t0)));
+    }
+    k -= STEM;
+    if k < 2 * BRANCHES {
+        let (p0, p1, p2, w) = branch(k / 2);
+        return Some(if k % 2 == 0 {
+            (p0, p1, w)
+        } else {
+            (p1, p2, w * 0.7)
+        });
+    }
+    k -= 2 * BRANCHES;
+    if k < THORNS {
+        // The first eight up the stem, the rest on the branches.
+        let (at, out, size) = if k < 8 {
+            let t = 0.12 + 0.1 * k as f32;
+            let turn = seed + k as f32 * golden;
+            let out = Vec3::new(turn.cos(), 0.0, turn.sin());
+            (spine(t) + out * thick(t), out, thick(t) * 1.6 + 0.08)
+        } else {
+            let (p0, p1, _, w) = branch(k - 8);
+            let mid = (p0 + p1) * 0.5;
+            let out = (p1 - p0).cross(Vec3::Y).normalize_or(Vec3::X);
+            (mid + out * w, out, w * 2.2 + 0.06)
+        };
+        let dir = (out + Vec3::Y * 0.6).normalize();
+        return Some((at, at + dir * size, size * 0.28));
+    }
+    k -= THORNS;
+    if k < BRANCHES {
+        let (_, p1, p2, w) = branch(k);
+        return Some((p1, p2, (w * 1.9).max(0.09)));
+    }
+    k -= BRANCHES;
+    if k < ROOTS {
+        let turn = seed * 0.9 + k as f32 * 2.094;
+        let out = Vec3::new(turn.cos(), 0.0, turn.sin());
+        let from = foot + Vec3::Y * base * 0.8;
+        let to = foot + out * radius * 1.1 - Vec3::Y * 0.06;
+        return Some((from, to, base * 0.45));
+    }
+    None
 }
 
 /// Draw whatever line-shaped volume a fighter has out this frame.
@@ -4201,6 +4359,17 @@ fn place_scythes(
         // the blade from the neck to the tip, bowed the way the hit test's
         // blade is. A third is not drawn.
         if tag.piece >= 2 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        // **The blade is the head she threw** (2026-11-07, from play: "it
+        // needs to throw the actual scythe head"): while her scythe's head is
+        // out on its chain, the haft is all she holds.
+        if tag.piece == 1
+            && sim.cur.effects.iter().flatten().any(|e| {
+                e.kind == sim::effects::EffectKind::ScytheHead && e.owner as usize == tag.owner
+            })
+        {
             *vis = Visibility::Hidden;
             continue;
         }
@@ -6348,20 +6517,11 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // floor from the middle to the front, barbs standing off them, over
         // a faint dark wash -- see `vine_piece`.
         EffectKind::Vines if part < VINE_PARTS => Some(vine_piece(effect, at, part)),
-        // A reaped plant's thorns (2026-11-04): balls of blood flung out
-        // along the cone, the far ones the widest.
-        EffectKind::Cascade if part < sim::effects::TETHER_BEADS => {
-            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
-            let life = effect.life.max(1) as f32;
-            let out = (effect.age as f32 / life * 2.0).min(1.0);
-            let reach = effect.reach.to_f32_for_render();
-            let dir = fx3(effect.dir).normalize_or_zero();
-            Some(floating_in(
-                Skin::Blood,
-                at + dir * reach * t * out + Vec3::Y * 1.0,
-                0.2 + reach * 0.12 * t,
-            ))
-        }
+        // **A reaped plant** (2026-11-04; drawn as what it is, 2026-11-07,
+        // from play: "the red bubble cone isn't capturing the move"): the
+        // plant breaking apart and its thorns flung out along the cone --
+        // `thorn_spray`.
+        EffectKind::Cascade => thorn_spray(effect, part),
         EffectKind::JudgementField if part == 0 => Some(standing(
             Shape::Column,
             Skin::Light,
@@ -6500,6 +6660,7 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             )
         }
         EffectKind::Reaping => reaping_cut(effect, part),
+        EffectKind::Claw => claw_marks(effect, part),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(
             shuriken(
                 fx3(effect.lotus_at(part, effect.pos)),
@@ -6897,6 +7058,152 @@ const GREMLIN_PARTS: usize = 24;
 
 /// A piece of a thrall, `size` across (width, along `up`, depth), its own up
 /// along `up` and its front toward `ahead`.
+/// How many rakes the Red claw's marks are.
+const CLAW_RAKES: usize = 5;
+
+/// **The Red claw's marks** (2026-11-07): five long crimson rakes torn
+/// across where her charged claw landed, square to the way she raked and
+/// slanting down through it, as wide as it was (`reach`), bright as it lands
+/// and thinning as they go. Bigger and longer than a tap's streaks, because
+/// the hold made it so.
+fn claw_marks(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    if part >= CLAW_RAKES {
+        return None;
+    }
+    let total = sim::tuning::reaping_life().max(1) as f32;
+    let left = (1.0 - effect.age as f32 / total).clamp(0.0, 1.0);
+    if left <= 0.0 {
+        return None;
+    }
+    let at = fx3(effect.pos);
+    let width = effect.reach.to_f32_for_render().max(0.5);
+    let along = fx3(effect.dir).normalize_or(Vec3::X);
+    let across = along.cross(Vec3::Y).normalize_or(Vec3::Z);
+    let k = part as f32 - (CLAW_RAKES as f32 - 1.0) / 2.0;
+    // Fanned a little, stacked up a body's height, each raked from high on
+    // one side to low on the other.
+    let lift = 0.9 + k * 0.22;
+    let centre = at + Vec3::Y * lift + along * (k * 0.12);
+    let half = across * width * (1.0 + 0.1 * k.abs()) + Vec3::Y * width * 0.35;
+    let mut rake = limb(
+        Shape::Limb,
+        centre - half,
+        centre + half,
+        0.07 + 0.08 * left,
+        along,
+    );
+    rake.skin = Skin::Heart;
+    Some(rake)
+}
+
+/// The thorns a reaped plant flings.
+const SPRAY_THORNS: usize = 18;
+/// Its stem and branches, breaking: `plant_piece`'s wood.
+const SPRAY_WOOD: usize = STEM + 2 * BRANCHES;
+/// Everything a reaped plant is drawn in: the thorns, the wood, a burst a
+/// blossom.
+const SPRAY_PARTS: usize = SPRAY_THORNS + SPRAY_WOOD + BRANCHES;
+
+/// A fixed scatter for piece `k` of something: nought to one.
+fn scatter(k: usize, salt: f32) -> f32 {
+    ((k as f32 * 12.9898 + salt * 78.233).sin() * 43_758.547)
+        .fract()
+        .abs()
+}
+
+/// **A reaped plant, breaking** (`EffectKind::Cascade`, 2026-11-07). `pos` is
+/// its foot, `dir` the way the blade was going, `reach` how far its thorns
+/// fly, `power` its scale and `banked` which plant it was (the seed its
+/// shape was grown from, `plant_piece`). Over `tuning::thorns_for`:
+///
+/// - **the thorns** -- the plant's own, torn off its stem -- flung point first
+///   out along the cone the blow struck, each its own way inside it, arriving
+///   at its reach in the first half and stuck there for the rest, fading;
+/// - **the stem and branches** as they stood, burst outward along the blade's
+///   way, tumbling and falling;
+/// - **the blossoms** bursting, a puff of blood each, gone in a third of it.
+fn thorn_spray(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    if part >= SPRAY_PARTS {
+        return None;
+    }
+    let total = sim::tuning::thorns_for().max(1) as f32;
+    let t = (effect.age as f32 / total).clamp(0.0, 1.0);
+    let foot = fx3(effect.pos);
+    let scale = effect.power.to_f32_for_render().max(0.2);
+    let radius = sim::tuning::structure_radius().to_f32_for_render() * scale;
+    let tall = sim::tuning::structure_height().to_f32_for_render() * scale;
+    let seed = effect.banked as f32;
+    let along = {
+        let d = fx3(effect.dir);
+        Vec3::new(d.x, 0.0, d.z).normalize_or(Vec3::X)
+    };
+    let across = along.cross(Vec3::Y);
+    let seconds = effect.age as f32 / 60.0;
+    if part < SPRAY_THORNS {
+        let k = part;
+        // Its own way inside the cone, a little up.
+        let spread = (scatter(k, 1.0) - 0.5) * 1.5;
+        let rise = 0.08 + 0.25 * scatter(k, 2.0);
+        let way = (along + across * spread + Vec3::Y * rise).normalize();
+        let from = foot + Vec3::Y * tall * (0.2 + 0.7 * scatter(k, 3.0));
+        let reach = effect.reach.to_f32_for_render() * (0.55 + 0.45 * scatter(k, 4.0));
+        let flown = (t / 0.45).min(1.0);
+        let flown = 1.0 - (1.0 - flown) * (1.0 - flown);
+        let tip =
+            from + way * reach * flown - Vec3::Y * (2.0 * seconds * seconds).min(from.y - foot.y);
+        let fade = if t > 0.7 { 1.0 - (t - 0.7) / 0.3 } else { 1.0 };
+        let long = (0.5 + 0.25 * scatter(k, 5.0)) * scale.sqrt() * fade;
+        if long < 0.02 {
+            return None;
+        }
+        let mut thorn = limb(Shape::Spike, tip - way * long, tip, long * 0.22, Vec3::Y);
+        thorn.skin = Skin::Blood;
+        return Some(thorn);
+    }
+    let k = part - SPRAY_THORNS;
+    if k < SPRAY_WOOD {
+        if t > 0.75 {
+            return None;
+        }
+        let (from, to, thick) = plant_piece(foot, radius, tall, seed, k)?;
+        let mid = (from + to) * 0.5;
+        let out = Vec3::new(mid.x - foot.x, 0.0, mid.z - foot.z).normalize_or(along);
+        let throw = (out * 0.6 + along * 0.8) * (3.0 + 3.0 * scatter(k, 6.0))
+            + Vec3::Y * (2.5 + 2.5 * scatter(k, 7.0));
+        let fall = Vec3::Y * 9.0 * seconds * seconds;
+        let moved = (mid + throw * seconds - fall).max(Vec3::new(f32::MIN, foot.y, f32::MIN));
+        let spin = Quat::from_axis_angle(
+            out.cross(Vec3::Y).normalize_or(Vec3::X),
+            seconds * (6.0 + 6.0 * scatter(k, 8.0)),
+        );
+        let half = spin * ((to - from) * 0.5);
+        let shrink = if t > 0.5 { 1.0 - (t - 0.5) / 0.25 } else { 1.0 };
+        let mut wood = limb(
+            Shape::Limb,
+            moved - half * shrink,
+            moved + half * shrink,
+            thick * shrink.max(0.05),
+            along,
+        );
+        wood.skin = Skin::Vines;
+        return Some(wood);
+    }
+    let k = k - SPRAY_WOOD;
+    // A quick pop, not a swelling: the blossom breaks at once and is gone --
+    // swollen, it was the red bubbles again.
+    if t > 0.15 {
+        return None;
+    }
+    let blossom = STEM + 2 * BRANCHES + THORNS + k;
+    let (_, at, size) = plant_piece(foot, radius, tall, seed, blossom)?;
+    let burst = t / 0.15;
+    Some(floating_in(
+        Skin::Heart,
+        at,
+        (size * (1.0 + 0.4 * burst) * (1.0 - burst)).max(0.0),
+    ))
+}
+
 /// How many links the Cast's chain is drawn in, hand to head.
 const CHAIN_LINKS: usize = 26;
 
@@ -6916,8 +7223,17 @@ fn scythe_head_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece
             // The blade: a crescent a little over a metre across, its edge
             // facing out along the line it was thrown on.
             let side = dir.cross(Vec3::Y).normalize_or(Vec3::Z);
-            let mut blade = framed(Shape::Crescent, head, dir, side, Vec3::new(1.6, 1.3, 1.4));
-            blade.skin = Skin::Heart;
+            // It tumbles end over end while it flies (2026-11-07: a thrown
+            // weight, not a bolt), and sits still once it has bitten.
+            let flying = effect.head_state() == sim::effects::Head::Flying;
+            let up = if flying {
+                Quat::from_axis_angle(side, effect.age as f32 * 0.55) * dir
+            } else {
+                dir
+            };
+            let mut blade = framed(Shape::Crescent, head, up, side, Vec3::new(1.5, 1.2, 1.3));
+            // The scythe's own iron, as it was on her haft.
+            blade.skin = Skin::Shade;
             Some(blade)
         }
         1 => Some(floating_in(
@@ -6928,8 +7244,28 @@ fn scythe_head_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece
         _ if part < 2 + CHAIN_LINKS && far > 0.05 => {
             let k = (part - 2) as f32;
             let n = CHAIN_LINKS as f32;
-            let sag = if holding { 0.0 } else { (far * 0.04).min(0.6) };
-            let at = |t: f32| hand + along * t - Vec3::Y * sag * 4.0 * t * (1.0 - t);
+            // **Slack** (2026-11-07): the chain is `reach` long -- its whole
+            // length thrown, the leash once it bites -- and what is not
+            // spanned between hand and head hangs. A shallow hanging rope's
+            // dip for a length L over a span D is about sqrt(3 D (L - D) / 8).
+            // Taut while it holds something and is pulled, or reeled.
+            let chain = effect.reach.to_f32_for_render();
+            let reeled = effect.head_state() == sim::effects::Head::Home;
+            let slack = (chain - far).max(0.0);
+            let sag = if reeled {
+                0.0
+            } else {
+                (3.0 * far * slack / 8.0).sqrt().min(far * 0.6).min(2.5)
+                    + if holding { 0.0 } else { (far * 0.02).min(0.3) }
+            };
+            // Never through the floor: a slack chain lies on it. Her feet are
+            // about a forearm under her hand, and the head on the floor is on
+            // it, so the floor is the lower of the two.
+            let floor = head.y.min(hand.y - 1.1) + 0.04;
+            let at = |t: f32| {
+                let p = hand + along * t - Vec3::Y * sag * 4.0 * t * (1.0 - t);
+                Vec3::new(p.x, p.y.max(floor), p.z)
+            };
             let (a, b) = (at(k / n), at((k + 1.0) / n));
             // Alternate links turned a quarter, the way a chain lies.
             let ahead = if part % 2 == 0 {

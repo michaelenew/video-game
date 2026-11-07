@@ -655,15 +655,15 @@ fn palette(class: Class, kit: Kit, rng: &mut Rng) -> Act {
             _ => Act::Press(3),
         },
         // The world bleeds (2026-11-04): the Cast -- right click held past
-        // the tap's window, at a point -- and the zip, right click pressed
-        // again while its head holds.
+        // the tap's window, at a point -- and the zip, a tap of left click
+        // while its head is out (2026-11-07; right click calls it home).
         Class::BloodMage => match rng.range(0, 2) {
             0 | 1 => {
                 let base = if rng.chance(2) { Base::Mid } else { Base::Lip };
                 let hold = crate::tuning::hold_from() as i32 + 2;
                 Act::At(1, aim(rng, base), rng.range(hold, hold + 16) as u8)
             }
-            _ => Act::Press(1),
+            _ => Act::Press(0),
         },
         Class::Champion => match rng.range(0, 2) {
             0 => Act::Press(6),
@@ -865,7 +865,7 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
             }
         }
         Class::BloodMage => {
-            // The Cast held, and the zip pressed once its head is out.
+            // The Cast held, and the zip -- a tap of left -- once its head is out.
             let cast = crate::tuning::hold_from().saturating_add(2) as u8;
             let zip = 24u16;
             for back in [300u16, 800] {
@@ -878,7 +878,7 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                     events: vec![
                         (e.saturating_sub(1), Act::Jump(18)),
                         (e + 2, Act::At(1, lip(100, 0), cast)),
-                        (e + 2 + cast as u16 + zip, Act::Press(1)),
+                        (e + 2 + cast as u16 + zip, Act::Press(0)),
                     ],
                 });
                 out.push(Program {
@@ -889,7 +889,7 @@ pub fn seeds(class: Class, kit: Kit) -> Vec<Program> {
                     events: vec![
                         (e.saturating_sub(1), Act::Jump(18)),
                         (e + 6, Act::At(1, lip(50, 50), cast)),
-                        (e + 6 + cast as u16 + zip, Act::Press(1)),
+                        (e + 6 + cast as u16 + zip, Act::Press(0)),
                         (e + 70, Act::Dodge),
                     ],
                 });
@@ -1030,7 +1030,7 @@ pub fn finishers(class: Class, at: u16) -> Vec<Vec<(u16, Act)>> {
                 .map(|(f, u, z)| {
                     vec![
                         (at, Act::At(1, lip(*f, *u), cast)),
-                        (at + cast as u16 + z, Act::Press(1)),
+                        (at + cast as u16 + z, Act::Press(0)),
                     ]
                 })
                 .collect()
