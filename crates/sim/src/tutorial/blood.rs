@@ -46,7 +46,7 @@ fn third_rend(s: &Seen) -> bool {
     s.out(REND) && s.now().string & 0x7F == 2
 }
 fn seize(s: &Seen) -> bool {
-    s.began(SEIZE)
+    s.began(CLAW)
 }
 fn air_rend(s: &Seen) -> bool {
     s.out(REND) && !s.now().grounded

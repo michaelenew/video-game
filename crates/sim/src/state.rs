@@ -3881,6 +3881,27 @@ impl World {
             if m.self_lift.raw() > 0 {
                 self.players[i].vel.y = m.self_lift;
                 self.players[i].grounded = false;
+                // **The charge-jump's leap** (2026-11-07): the hold buys lift
+                // and a drive along her facing, and the claw goes with her.
+                if p.class == Class::BloodMage && kind == moves::blood::RISING_REND {
+                    let held = match p.mechanic {
+                        Mechanic::Blood(g) => g.leap_held,
+                        _ => 0,
+                    };
+                    let share = Fx::ratio(
+                        held.min(t::leap_hold()) as i32,
+                        t::leap_hold().max(1) as i32,
+                    );
+                    let q = &mut self.players[i];
+                    q.vel.y = m
+                        .self_lift
+                        .mul(Fx::ONE.add(t::leap_higher().sub(Fx::ONE).mul(share)));
+                    let ahead = V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized();
+                    q.vel = q.vel.add(ahead.scale(t::leap_further().mul(share)));
+                    if let Mechanic::Blood(g) = &mut q.mechanic {
+                        g.leap_held = 0;
+                    }
+                }
                 // The spear's takeoff spends the plant on a direction as well
                 // as on height. On the same frame as the lift, because they are
                 // one motion: the butt of the spear hits the floor and both
@@ -4179,6 +4200,12 @@ impl World {
                     // **The Cast**: the head leaves her hand.
                     self.throw_the_head(i, born);
                     place = false;
+                } else if leaves == EffectKind::Claw {
+                    // **The Red claw** (2026-11-07): it rakes where the hold
+                    // put it, and leaves its marks.
+                    self.players[i].hit_used = true;
+                    self.claw_lands(i, born);
+                    place = false;
                 } else if leaves == EffectKind::BlackSpike {
                     match self.pool_covering(i as u8, born.pos) {
                         Some(slot) => {
@@ -4294,9 +4321,6 @@ impl World {
                 if let Some(mut hit) =
                     resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
                 {
-                    // The Blood mage's Seize (2026-11-04): fed to a plant, or
-                    // slammed into the floor -- the blow is its ending's.
-                    let seized = self.seize_how(attacker, defender, &mut hit);
                     // The Reaver's cash-in: any blow of hers spends the marks on
                     // whoever it lands on. A no-op for every other blow in the
                     // game, and for anybody carrying no marks.
@@ -4310,9 +4334,6 @@ impl World {
                         hit.damage.min(snapshot[defender].health)
                     };
                     apply_hit(&mut self.players[defender], hit);
-                    if let Some(how) = seized {
-                        self.seize_lands(attacker, defender, how, dealt);
-                    }
                     // A full shield's Slam staggers what its shake catches
                     // unguarded: the area stagger weight buys. Blocked, it is an
                     // ordinary blocked Slam -- its frames do not change with weight.
@@ -4358,7 +4379,7 @@ impl World {
                             self.players[defender].slow(t::slow_frames(), t::spike_slow());
                         }
                         // A Seize's blood went where its ending put it.
-                        if dealt > 0 && seized.is_none() {
+                        if dealt > 0 {
                             // Through a stain, the blow is harder for it, and the
                             // blood it spills is the whole of what it dealt.
                             let mut spilt = dealt;
@@ -4462,6 +4483,7 @@ impl World {
             self.collect_with_the_scythe(i);
             // And reaps her plants (2026-11-04).
             self.reap_with_the_scythe(i);
+            self.feed_with_the_hand(i);
         }
         // And so do her feet: a stain she walks into is drunk.
         self.drink_underfoot();
@@ -4661,9 +4683,6 @@ impl World {
         let present = self.present();
         separate_bodies(&mut self.players, present);
         drag_the_held(&mut self.players);
-        // The Blood mage's Seize holds what it caught up over her, and then
-        // brings it down (2026-11-06).
-        self.carry_the_seized();
 
         // The hunt's lore, a frame on: fire on the floor, hazards aging, a
         // cart rolling.
@@ -5621,7 +5640,7 @@ pub fn beam_of(p: &Player) -> Path {
 /// function.
 pub fn live_reach(p: &Player, m: &moves::Move) -> Fx {
     if !m.rides_the_grey() {
-        return m.reach;
+        return m.reach.mul(rend_grows(p));
     }
     m.reach
         .mul(crate::math::lerp(Fx::ONE, t::grey_reach(), p.grey_share()))
@@ -5633,10 +5652,29 @@ pub fn live_reach(p: &Player, m: &moves::Move) -> Fx {
 /// and the volume is drawn as essence around it -- see `view::scythe`.
 pub fn live_radius(p: &Player, m: &moves::Move) -> Fx {
     if !m.rides_the_grey() {
-        return m.radius;
+        return m.radius.mul(rend_grows(p));
     }
     m.radius
         .mul(crate::math::lerp(Fx::ONE, t::grey_width(), p.grey_share()))
+}
+
+/// **Each blow of a Rend string is bigger than the last** (2026-11-07, the
+/// owner: "the move cast multiple times in rapid succession should do
+/// slightly different and bigger things"): the second reaches
+/// `tuning::rend_second` of the row, the third `rend_third_reach` -- wider by
+/// the same -- and comes back the other way, as the Sweep's does. One for
+/// anything that is not a Rend in a string.
+fn rend_grows(p: &Player) -> Fx {
+    match p.action.attack_kind() {
+        Some(kind) if p.class == Class::BloodMage && kind == moves::blood::REND => {
+            match string_place(p, kind) {
+                Some(1) => t::rend_second(),
+                Some(2) => t::rend_third_reach(),
+                _ => Fx::ONE,
+            }
+        }
+        _ => Fx::ONE,
+    }
 }
 
 /// What a move's damage is multiplied by for the grey on the caster's bar.
@@ -5855,6 +5893,16 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     // being paid for here, on the frame it lands.
     let launch = if going_up_with_them(attacker, kind) {
         launch.mul(t::hammer_leap_launch())
+    } else {
+        launch
+    };
+    // **The third claw of a Rend string knocks them up** (2026-11-07): the
+    // heavy two-handed rake that ends it.
+    let launch = if attacker.class == Class::BloodMage
+        && kind == moves::blood::REND
+        && string_place(attacker, kind) == Some(2)
+    {
+        launch.max(t::rend_third_launch())
     } else {
         launch
     };
@@ -7582,7 +7630,7 @@ fn step_player(
     // on a number running down: held, it winds on and re-aims; released, it
     // throws the move it was winding. Falling through to the input below would
     // read the same press again and buy the same ability twice.
-    if bleeds::zip_to_the_head(p, who, pressed_scythe, scene) {
+    if bleeds::chain_in_hand(p, who, pressed_scythe, input, scene) {
         // **The Blood mage's zip** (2026-11-04): the press that hauls her to
         // her scythe's head throws nothing else.
     } else if let Some((kind, held)) = p.action.channelling() {
@@ -11108,6 +11156,26 @@ fn step_channel(
     let charge = moves::charge(p.class, kind);
     // **The Blood mage's tap, waiting to be told**: let go inside the
     // Champion's window and it is the tap; held to its end, the field.
+    // **The charge-jump** (2026-11-07): the Rising rend crouches at the top
+    // of its wind-up while left is held, to `tuning::leap_hold`, and leaps
+    // on the release -- further and higher for the hold (`World::advance`,
+    // where the lift is applied).
+    if p.class == Class::BloodMage && kind == moves::blood::RISING_REND {
+        let done = !input.has(moves::blood::click_of(kind)) || held >= t::leap_hold();
+        if done {
+            if let Mechanic::Blood(g) = &mut p.mechanic {
+                g.leap_held = held;
+            }
+            return Action::Active {
+                kind,
+                left: m.active,
+            };
+        }
+        return Action::Channel {
+            kind,
+            held: held + 1,
+        };
+    }
     if p.class == Class::BloodMage && moves::blood::held_into(kind).is_some() {
         if !input.has(moves::blood::click_of(kind)) {
             return Action::Active {
@@ -12246,14 +12314,13 @@ fn string_place(p: &Player, kind: u8) -> Option<u8> {
 /// its finisher's blow -- the row and `finisher_per_grey` for every point of
 /// grey it spent (`Player::fuel`). One for everything else.
 fn blood_blow(p: &Player, kind: u8) -> Fx {
-    if string_place(p, kind) == Some(2) {
-        return if kind == moves::blood::REND {
-            t::rend_third()
-        } else {
-            t::sweep_third()
-        };
+    match string_place(p, kind) {
+        Some(2) if kind == moves::blood::REND => t::rend_third(),
+        Some(2) => t::sweep_third(),
+        // The backhand is between the two (2026-11-07).
+        Some(1) if kind == moves::blood::REND => t::rend_second(),
+        _ => Fx::ONE,
     }
-    Fx::ONE
 }
 
 /// What a swing that dealt `dealt` heals its thrower: the row's leech for
@@ -14558,6 +14625,9 @@ impl World {
             // The Reaping is only to look at: the blow that cashed the tally
             // already did everything it does.
             EffectKind::Reaping => {}
+            // The Red claw's marks are only to look at: the claw struck as it
+            // came out (`claw_lands`).
+            EffectKind::Claw => {}
 
             // The blade. One pass out, one back, and it cuts each victim once
             // per pass. What it takes is banked rather than paid, and arrives

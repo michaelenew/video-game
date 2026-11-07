@@ -157,7 +157,7 @@ fn on_the_floor_a_tap_is_the_quick_thing_and_q_and_e_gather_and_plant() {
 #[test]
 fn held_the_left_click_is_seize_and_the_right_the_cast() {
     for (button, tap, wanted) in [
-        (keys::HAND, b::REND, b::SEIZE),
+        (keys::HAND, b::REND, b::CLAW),
         (keys::SCYTHE, b::SWEEP, b::CAST),
     ] {
         let mut w = mage();

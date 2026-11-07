@@ -101,7 +101,7 @@ fn main() {
         ("Sweep", keys::SCYTHE, 3u32),
         ("Cast", keys::SCYTHE, hold() + 4),
         ("Rend", keys::HAND, 3),
-        ("Seize", keys::HAND, hold() + 4),
+        ("Red claw", keys::HAND, hold() + 4),
         ("Rising reap", Input::SPACE | keys::SCYTHE, 3),
         ("Rising rend", Input::SPACE | keys::HAND, 3),
     ] {
@@ -209,7 +209,8 @@ fn main() {
         run(&mut w, hold(), keys::SCYTHE, -3000);
         step(&mut w, 0, -3000);
         run(&mut w, pressed, 0, -3000);
-        step(&mut w, keys::SCYTHE, -3000);
+        // The zip is a tap of left since 2026-11-07.
+        step(&mut w, keys::HAND, -3000);
         let mut bit = None;
         for _ in 0..90 {
             step(&mut w, 0, -3000);
@@ -220,7 +221,7 @@ fn main() {
         let out = bit.map_or(0.0, |b| flat(from, b));
         let gone = flat(from, w.players[0].pos);
         card.line(
-            &format!("the second press {when} zips her all the way"),
+            &format!("a tap of left {when} zips her all the way"),
             format!("{gone:.1} m of {out:.1} m"),
             out > 3.0 && gone >= out - 2.0,
         );
@@ -229,7 +230,7 @@ fn main() {
         let mut w = with_foe(8.0);
         run(&mut w, hold(), keys::SCYTHE, 0);
         step(&mut w, 0, 0);
-        step(&mut w, keys::SCYTHE, 0);
+        step(&mut w, keys::HAND, 0);
         run(&mut w, 60, 0, 0);
         let gap = flat(w.players[0].pos, w.players[1].pos);
         let reach = f(sim::moves::get(Class::BloodMage, b::REND).reach);
@@ -239,20 +240,97 @@ fn main() {
             gap < reach,
         );
     }
+    // -- The head is a weight on a chain (round three, 2026-11-07) ---------
     {
+        // Thrown level at nothing: it arcs and comes down on the floor.
         let mut w = with_foe(60.0);
-        run(&mut w, hold(), keys::SCYTHE, 3000);
-        let mut lowest = f32::MAX;
-        for _ in 0..150 {
-            step(&mut w, 0, 3000);
-            if let Some(h) = head(&w).filter(|h| h.head_state() == Head::Home) {
-                lowest = lowest.min(f(h.home.y));
+        run(&mut w, hold(), keys::SCYTHE, 0);
+        let (mut top, mut landed, mut was_y, mut fell) = (0.0f32, None, 0.0f32, false);
+        for _ in 0..120 {
+            step(&mut w, 0, 0);
+            if let Some(h) = head(&w) {
+                let y = f(h.home.y);
+                top = top.max(y);
+                if h.head_state() == Head::Flying && y < was_y {
+                    fell = true;
+                }
+                was_y = y;
+                if h.head_state() == Head::World {
+                    landed.get_or_insert(y);
+                }
             }
         }
         card.line(
-            "a head that bit nothing in the air comes home through the air",
-            format!("lowest {lowest:.1} m on the way home"),
-            lowest > 0.8 && lowest < f32::MAX,
+            "thrown at nothing, the head arcs, falls and lands on the floor",
+            format!(
+                "top {top:.1} m, fell {fell}, landed at {:.1} m",
+                landed.unwrap_or(-1.0)
+            ),
+            fell && landed.is_some_and(|y| y < 0.3),
+        );
+    }
+    {
+        // Aimed at a fighter 10 m off: the arc still meets the crosshair.
+        let mut bit = false;
+        for pitch in (-1500..1500).step_by(150) {
+            let mut w = with_foe(10.0);
+            run(&mut w, hold(), keys::SCYTHE, pitch as i16);
+            for _ in 0..60 {
+                step(&mut w, 0, pitch as i16);
+                bit |= head(&w).is_some_and(|h| matches!(h.head_state(), Head::Fighter(_)));
+            }
+            if bit {
+                break;
+            }
+        }
+        card.line(
+            "aimed at a fighter 10 m off, the throw still bites him",
+            format!("bitten {bit}"),
+            bit,
+        );
+    }
+    {
+        // Called home: it starts slow and speeds up.
+        let mut w = with_foe(60.0);
+        run(&mut w, hold(), keys::SCYTHE, -2000);
+        let mut speeds = Vec::new();
+        for _ in 0..400 {
+            step(&mut w, 0, -2000);
+            if let Some(h) = head(&w).filter(|h| h.head_state() == Head::Home) {
+                speeds.push(f(h.dir.len()));
+            }
+        }
+        let (first, most) = (
+            speeds.first().copied().unwrap_or(0.0),
+            speeds.iter().copied().fold(0.0, f32::max),
+        );
+        card.line(
+            "reeled home, the head starts slow and speeds up",
+            format!("{first:.1} m/s rising to {most:.1} m/s"),
+            !speeds.is_empty() && most > first * 2.0,
+        );
+    }
+    {
+        // The zip is a pull: her speed rises along it.
+        let mut w = with_foe(30.0);
+        run(&mut w, hold(), keys::SCYTHE, -2500);
+        step(&mut w, 0, -2500);
+        step(&mut w, keys::HAND, -2500);
+        let mut speeds = Vec::new();
+        for _ in 0..90 {
+            step(&mut w, 0, -2500);
+            if matches!(w.players[0].mechanic, Mechanic::Blood(g) if g.zipping) {
+                speeds.push(f(w.players[0].vel.len()));
+            }
+        }
+        let (first, most) = (
+            speeds.first().copied().unwrap_or(0.0),
+            speeds.iter().copied().fold(0.0, f32::max),
+        );
+        card.line(
+            "the zip is a pull: she speeds up along the chain",
+            format!("{first:.1} m/s rising to {most:.1} m/s"),
+            !speeds.is_empty() && most > first * 1.5,
         );
     }
 
@@ -272,23 +350,250 @@ fn main() {
             dealt >= 150,
         );
     }
+    // -- The chain in her left hand (round three) ------------------------------
+    // The head in a fighter 10 m off, thrown level.
+    let hooked = || {
+        for pitch in (-1500..1500).step_by(150) {
+            let mut w = with_foe(10.0);
+            run(&mut w, hold(), keys::SCYTHE, pitch as i16);
+            for _ in 0..40 {
+                step(&mut w, 0, pitch as i16);
+                if head(&w).is_some_and(|h| matches!(h.head_state(), Head::Fighter(_))) {
+                    return w;
+                }
+            }
+        }
+        panic!("no throw bit the fighter");
+    };
     {
-        let mut w = with_foe(1.8);
+        let mut w = hooked();
+        step(&mut w, keys::HAND, 0);
+        step(&mut w, 0, 0);
+        run(&mut w, 40, 0, 0);
+        let gap = flat(w.players[0].pos, w.players[1].pos);
+        card.line(
+            "a tap of left pulls her to what the head bit",
+            format!("{gap:.1} m from him after"),
+            gap < 2.6,
+        );
+    }
+    {
+        let mut w = hooked();
+        run(&mut w, t::reel_full() as u32 + 2, keys::HAND, 0);
+        run(&mut w, 90, 0, 0);
+        let gap = flat(w.players[0].pos, w.players[1].pos);
+        card.line(
+            "left held to its end reels him in to her",
+            format!("{gap:.1} m from her after, from 10 m"),
+            gap < 2.5,
+        );
+    }
+    {
+        let mut w = hooked();
         let his = w.players[1].health;
-        let mut highest = 0.0f32;
+        run(&mut w, t::hold_from() as u32 + 4, keys::HAND, 0);
+        step(&mut w, 0, 0);
+        let staggered = matches!(
+            w.players[1].action,
+            Action::Stagger { .. } | Action::HitStun { .. }
+        );
+        run(&mut w, 3, 0, 0);
+        let home = head(&w).is_none_or(|h| h.head_state() == Head::Home);
+        let dealt = his - w.players[1].health;
+        card.line(
+            "left let go early, the head rips out: hit, bleed, stagger",
+            format!(
+                "{dealt} dealt, staggered {staggered}, bleeding {}, head home {home}",
+                w.players[1].bleeding > 0
+            ),
+            dealt > 0 && staggered && w.players[1].bleeding > 0 && home,
+        );
+    }
+    {
+        let mut w = hooked();
+        step(&mut w, keys::SCYTHE, 0);
+        step(&mut w, 0, 0);
+        let home = head(&w).is_some_and(|h| h.head_state() == Head::Home);
+        card.line(
+            "right pressed while the head is out calls it home",
+            format!("home {home}"),
+            home,
+        );
+    }
+    {
+        // The shrike: a plant between them, and he is reeled into it.
+        let mut w = hooked();
+        if let Mechanic::Blood(g) = &mut w.players[0].mechanic {
+            g.plants[0] = Some(sim::class::Structure::planted(at(-1.0, 8.0)));
+        }
+        let mut pinned = false;
+        for f in 0..120u32 {
+            step(
+                &mut w,
+                if f < t::reel_full() as u32 + 2 {
+                    keys::HAND
+                } else {
+                    0
+                },
+                0,
+            );
+            pinned |= matches!(w.players[1].action, Action::Held { .. })
+                && w.players[1].held_by == sim::state::NAILED;
+        }
+        card.line(
+            "reeled into one of her plants, he is impaled on it",
+            format!("pinned {pinned}"),
+            pinned,
+        );
+    }
+
+    // -- The Red Hand (round three) ---------------------------------------------
+    {
+        let mut w = with_foe(2.2);
+        let mut last = w.players[1].health;
+        let mut hits = Vec::new();
         for fr in 0..80u32 {
-            step(&mut w, if fr < hold() + 2 { keys::HAND } else { 0 }, 0);
-            highest = highest.max(f(w.players[1].pos.y));
-            if matches!(w.players[1].action, Action::HitStun { .. }) && highest > 0.0 {
+            step(
+                &mut w,
+                if matches!(fr, 0 | 16 | 32) {
+                    keys::HAND
+                } else {
+                    0
+                },
+                0,
+            );
+            if w.players[1].health != last {
+                hits.push(last - w.players[1].health);
+                last = w.players[1].health;
+            }
+        }
+        let rising = hits.len() == 3 && hits[0] < hits[1] && hits[1] < hits[2];
+        card.line(
+            "three taps are three blows, each bigger than the last",
+            format!("{hits:?}"),
+            rising,
+        );
+    }
+    let claw_at = |held: u32| {
+        let mut w = with_foe(40.0);
+        let from = w.players[0].pos;
+        run(&mut w, held, keys::HAND, -2000);
+        for _ in 0..30 {
+            step(&mut w, 0, -2000);
+            if let Some(c) = w
+                .effects
+                .iter()
+                .flatten()
+                .find(|e| e.kind == EffectKind::Claw)
+            {
+                return (flat(from, c.pos), f(c.reach));
+            }
+        }
+        (0.0, 0.0)
+    };
+    {
+        let (near, small) = claw_at(t::hold_from() as u32 + 8);
+        let (far, big) = claw_at(t::hold_from() as u32 + 45);
+        card.line(
+            "held, the claw lands further out and bigger the longer the hold",
+            format!("{near:.1} m wide {small:.1} -> {far:.1} m wide {big:.1}"),
+            far > near + 3.0 && big > small,
+        );
+    }
+    {
+        let mut w = with_foe(3.0);
+        let his = w.players[1].health;
+        run(&mut w, t::hold_from() as u32 + 70, keys::HAND, -2000);
+        run(&mut w, 30, 0, -2000);
+        card.line(
+            "held too long, the claw lands past a fighter 3 m off",
+            format!("dealt {}", his - w.players[1].health),
+            w.players[1].health == his,
+        );
+    }
+    {
+        let mut slowed = false;
+        for held in 0..40u32 {
+            let mut w = with_foe(5.0);
+            let his = w.players[1].health;
+            run(&mut w, t::hold_from() as u32 + held, keys::HAND, -2500);
+            for _ in 0..20 {
+                step(&mut w, 0, -2500);
+            }
+            if w.players[1].health < his {
+                slowed = w.players[1].slowed > 0;
                 break;
             }
         }
-        run(&mut w, 10, 0, 0);
-        let dealt = his - w.players[1].health;
         card.line(
-            "Seize lifts them over her and slams them, 100 or more",
-            format!("lifted {highest:.1} m, {dealt} dealt"),
-            highest > 1.0 && dealt >= 100,
+            "the charged claw slows what it hits",
+            format!("slowed {slowed}"),
+            slowed,
+        );
+    }
+    {
+        // A plant raked by the hand is fed.
+        let mut w = with_foe(40.0);
+        if let Mechanic::Blood(g) = &mut w.players[0].mechanic {
+            g.plants[0] = Some(sim::class::Structure::planted(at(-4.4, 8.0)));
+        }
+        let before = match w.players[0].mechanic {
+            Mechanic::Blood(g) => f(g.plants[0].map_or(Fx::ZERO, |s| s.scale)),
+            _ => 0.0,
+        };
+        step(&mut w, keys::HAND, 0);
+        run(&mut w, 20, 0, 0);
+        let after = match w.players[0].mechanic {
+            Mechanic::Blood(g) => f(g.plants[0].map_or(Fx::ZERO, |s| s.scale)),
+            _ => 0.0,
+        };
+        card.line(
+            "raking one of her plants feeds it",
+            format!("size {before:.2} -> {after:.2} of a stone"),
+            after > before,
+        );
+    }
+    {
+        let leap = |held: u32| {
+            let mut w = with_foe(40.0);
+            let from = w.players[0].pos;
+            let mut top = 0.0f32;
+            for fr in 0..120u32 {
+                let bits = if fr < 2 {
+                    Input::SPACE | keys::HAND
+                } else if fr < 2 + held {
+                    keys::HAND
+                } else {
+                    0
+                };
+                step(&mut w, bits, 0);
+                top = top.max(f(w.players[0].pos.y));
+            }
+            (flat(from, w.players[0].pos), top)
+        };
+        let (tap_far, tap_high) = leap(0);
+        let (full_far, full_high) = leap(t::leap_hold() as u32 + 4);
+        card.line(
+            "space and left held leaps further and higher than tapped",
+            format!("tapped {tap_far:.1} m on, {tap_high:.1} m up; held {full_far:.1} m on, {full_high:.1} m up"),
+            full_far > tap_far + 2.0 && full_high > tap_high,
+        );
+        let mut w = with_foe(5.0);
+        let his = w.players[1].health;
+        for fr in 0..80u32 {
+            let bits = if fr < 2 {
+                Input::SPACE | keys::HAND
+            } else if fr < 2 + t::leap_hold() as u32 {
+                keys::HAND
+            } else {
+                0
+            };
+            step(&mut w, bits, 0);
+        }
+        card.line(
+            "the claw rides the leap and hits a fighter in her path",
+            format!("dealt {}", his - w.players[1].health),
+            w.players[1].health < his,
         );
     }
 

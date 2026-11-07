@@ -414,7 +414,7 @@ fn seize_slams_with_no_plant_near_and_throws_onto_one() {
     let mut w = mage_and(1.4);
     let foe = w.players[1].health;
     seize(&mut w);
-    let slam = sim::moves::get(Class::BloodMage, b::SLAM);
+    let slam = sim::moves::get(Class::BloodMage, b::RIP);
     assert!(
         foe - w.players[1].health >= slam.damage,
         "slammed: {}",

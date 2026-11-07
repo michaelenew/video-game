@@ -926,6 +926,22 @@ pub struct Garden {
     /// The next blow of a Sweep or Rend string, pressed while this one was
     /// still out -- kept for its recovery rather than dropped (2026-11-06).
     pub strung_early: bool,
+    /// Frames into the zip: it gives up past `ZIP_LIMIT`.
+    pub zip_for: u16,
+    /// Frames left click has been held while the head is out (2026-11-07):
+    /// a tap pulls her to it, held to `tuning::reel_full` reels them in, and
+    /// let go between rips it out. `u16::MAX` once spent on this press.
+    pub chain_held: u16,
+    /// Right click asked for the head home.
+    pub recall: bool,
+    /// Left click let go in time to rip the head out of who it holds.
+    pub rip: bool,
+    /// Who she is reeling in, one more than their index; nought for nobody.
+    pub reeling: u8,
+    /// Frames before her plants impale anybody again.
+    pub shrike_rest: u16,
+    /// What the Rising rend was held for, read on its first active frame.
+    pub leap_held: u16,
 }
 
 impl Garden {
@@ -940,6 +956,13 @@ impl Garden {
         seized: 0,
         seize_left: 0,
         strung_early: false,
+        zip_for: 0,
+        chain_held: 0,
+        recall: false,
+        rip: false,
+        reeling: 0,
+        shrike_rest: 0,
+        leap_held: 0,
     };
 }
 

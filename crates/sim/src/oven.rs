@@ -1403,6 +1403,29 @@ scalars! {
     ZipQueue, "Blood mage", "Zip, a press while the head flies waits for its bite", Flag, 0, 1;
     SeizeLift, "Blood mage", "Seize, holds them up for", Frames, 1, 60;
     SeizeLiftHeight, "Blood mage", "Seize, lifts them this high (m)", Fixed, 0, fx(4,1);
+    // **The scythe's head is a physical thing** (2026-11-07, from play: "it
+    // feels like a magic skillshot"). Appended: `tuned::SCALARS` is read by
+    // this enum's own discriminant.
+    CastGravity, "Blood mage", "Cast, the head falls at (m/s2)", Fixed, 0, fx(80,1);
+    ReelAccel, "Blood mage", "Cast, reeled home, speeds up at (m/s2)", Fixed, fx(1,1), fx(400,1);
+    ZipPull, "Blood mage", "Zip, the chain pulls her at (m/s2)", Fixed, fx(1,1), fx(400,1);
+    ZipStart, "Blood mage", "Zip, the first tug (m/s)", Fixed, 0, fx(30,1);
+    // **Left click on the chain, the shrike, and the Red Hand's charge**
+    // (2026-11-07, the owner's answers). Appended.
+    ReelFull, "Blood mage", "Chain, left held this long reels them in", Frames, 1, 120;
+    ChainReel, "Blood mage", "Chain, reels them in at (m/s)", Fixed, fx(1,1), fx(60,1);
+    ImpaleFor, "Blood mage", "Shrike, impaled on a plant for", Frames, 1, 240;
+    ShrikeSpeed, "Blood mage", "Shrike, knocked into a plant this fast impales (m/s)", Fixed, 0, fx(30,1);
+    ClawSlow, "Blood mage", "Red claw, slows what it hits to (x)", Fixed, 0, fx(1,1);
+    ClawGrows, "Blood mage", "Red claw, at full reach it is this much bigger (x)", Fixed, fx(1,1), fx(5,1);
+    LeapFurther, "Blood mage", "Rising rend, held to its end leaps on at (m/s)", Fixed, 0, fx(40,1);
+    LeapHigher, "Blood mage", "Rising rend, held to its end lifts this much more (x)", Fixed, fx(1,1), fx(3,1);
+    LeapHold, "Blood mage", "Rising rend, the longest hold", Frames, 1, 120;
+    FeedGrows, "Blood mage", "A plant fed by her claw grows by (x a stone)", Fixed, 0, fx(1,1);
+    FeedMost, "Blood mage", "A plant is fed to at most (x a stone)", Fixed, fx(1,1), fx(4,1);
+    RendSecond, "Blood mage", "Rend, the second of a string reaches (x)", Fixed, fx(1,1), fx(3,1);
+    RendThirdReach, "Blood mage", "Rend, the third of a string reaches (x)", Fixed, fx(1,1), fx(3,1);
+    RendThirdLaunch, "Blood mage", "Rend, the third of a string launches (m/s)", Fixed, 0, fx(30,1);
 }
 
 // ---------------------------------------------------------------------------

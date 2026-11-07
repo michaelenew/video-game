@@ -5500,3 +5500,95 @@ pub fn seize_lift() -> u16 {
 pub fn seize_lift_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SeizeLiftHeight).max(0))
 }
+
+/// How fast the scythe's head falls once thrown: it is a weight on a chain.
+pub fn cast_gravity() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastGravity).max(0))
+}
+
+/// How fast the head picks up speed reeled home, up to `cast_drag`.
+pub fn reel_accel() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReelAccel).max(1))
+}
+
+/// How hard the chain pulls her along it in a zip, up to `zip_speed`.
+pub fn zip_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipPull).max(1))
+}
+
+/// The tug that starts a zip: the speed she has along the chain at once.
+pub fn zip_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ZipStart).max(0))
+}
+
+// Left click on the chain, the shrike, and the Red Hand (2026-11-07).
+
+/// See the Oven's `ReelFull`.
+pub fn reel_full() -> u16 {
+    oven::scalar(Scalar::ReelFull).clamp(1, u16::MAX as i32) as u16
+}
+
+/// See the Oven's `ChainReel`.
+pub fn chain_reel() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChainReel).max(0))
+}
+
+/// See the Oven's `ImpaleFor`.
+pub fn impale_for() -> u16 {
+    oven::scalar(Scalar::ImpaleFor).clamp(1, u16::MAX as i32) as u16
+}
+
+/// See the Oven's `ShrikeSpeed`.
+pub fn shrike_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShrikeSpeed).max(0))
+}
+
+/// See the Oven's `ClawSlow`.
+pub fn claw_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ClawSlow).max(0))
+}
+
+/// See the Oven's `ClawGrows`.
+pub fn claw_grows() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ClawGrows).max(0))
+}
+
+/// See the Oven's `LeapFurther`.
+pub fn leap_further() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapFurther).max(0))
+}
+
+/// See the Oven's `LeapHigher`.
+pub fn leap_higher() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapHigher).max(0))
+}
+
+/// See the Oven's `LeapHold`.
+pub fn leap_hold() -> u16 {
+    oven::scalar(Scalar::LeapHold).clamp(1, u16::MAX as i32) as u16
+}
+
+/// See the Oven's `FeedGrows`.
+pub fn feed_grows() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FeedGrows).max(0))
+}
+
+/// See the Oven's `FeedMost`.
+pub fn feed_most() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FeedMost).max(0))
+}
+
+/// See the Oven's `RendSecond`.
+pub fn rend_second() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RendSecond).max(0))
+}
+
+/// See the Oven's `RendThirdReach`.
+pub fn rend_third_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RendThirdReach).max(0))
+}
+
+/// See the Oven's `RendThirdLaunch`.
+pub fn rend_third_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RendThirdLaunch).max(0))
+}
