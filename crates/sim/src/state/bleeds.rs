@@ -482,8 +482,13 @@ impl World {
             effect.set_head(Head::Creature(slot));
             return;
         }
-        // The world on the way: a wall, a stone, a critter, the floor.
-        let stones = stones::gather(&self.players);
+        // The world on the way: a wall, a stone, a critter, the floor -- but
+        // not her own plants (2026-11-07): her chain passes through her
+        // garden, so a fighter on the far side of one can be reeled into it.
+        let mut stones = stones::gather(&self.players);
+        for slot in 0..MAX_STRUCTURES {
+            stones[owner * MAX_STRUCTURES + slot] = None;
+        }
         let seen = self.players;
         let effects = self.effects;
         let terrain = self.terrain();
@@ -1289,14 +1294,16 @@ impl World {
                 g.reeling = 0;
             }
         });
-        // The chain lets go of them.
-        for e in self.effects.iter_mut().flatten() {
-            if e.kind == EffectKind::ScytheHead
-                && e.owner == owner as u8
-                && e.head_state() == Head::Fighter(v)
-            {
-                e.dir = V3::ZERO;
-                e.set_head(Head::Home);
+        // The chain lets go of them, and the head is back on her haft -- not
+        // reeled home through the plant they hang on, which would reap it out
+        // from under them.
+        for slot in self.effects.iter_mut() {
+            if slot.is_some_and(|e| {
+                e.kind == EffectKind::ScytheHead
+                    && e.owner == owner as u8
+                    && e.head_state() == Head::Fighter(v)
+            }) {
+                *slot = None;
             }
         }
         if dealt > 0 {

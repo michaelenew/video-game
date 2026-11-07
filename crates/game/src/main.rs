@@ -7154,7 +7154,14 @@ fn scythe_head_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece
                 (3.0 * far * slack / 8.0).sqrt().min(far * 0.6).min(2.5)
                     + if holding { 0.0 } else { (far * 0.02).min(0.3) }
             };
-            let at = |t: f32| hand + along * t - Vec3::Y * sag * 4.0 * t * (1.0 - t);
+            // Never through the floor: a slack chain lies on it. Her feet are
+            // about a forearm under her hand, and the head on the floor is on
+            // it, so the floor is the lower of the two.
+            let floor = head.y.min(hand.y - 1.1) + 0.04;
+            let at = |t: f32| {
+                let p = hand + along * t - Vec3::Y * sag * 4.0 * t * (1.0 - t);
+                Vec3::new(p.x, p.y.max(floor), p.z)
+            };
             let (a, b) = (at(k / n), at((k + 1.0) / n));
             // Alternate links turned a quarter, the way a chain lies.
             let ahead = if part % 2 == 0 {
