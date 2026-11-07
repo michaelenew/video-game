@@ -10378,3 +10378,17 @@ a smaller turn and a linear ease.
 **Verdict** open -- to be played. To feel for: whether the arc makes grabbing a moving fighter
 harder than the line did; whether the zip's pull feels mechanical; whether the shrike's 5 m/s
 is too easy to trigger off any knockback; the Red claw's 54-frame charge.
+
+**The movement search, re-run for her after round three** (her fixture lines replaced; the
+search's zip moved to a tap of left, since right click now calls the head home). Widest gap,
+whole kit, in metres, before the physical head -> after:
+
+| rise | -8 | -4 | -2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 30 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| before | 34.7 | 33.1 | 29.9 | 33.8 | 28.0 | 62.1 | 50.0 | 56.1 | 43.3 | 14.8 | 45.3 | 40.7 | 33.9 | 58.2 | - | 18.0 |
+| after | 34.7 | 39.0 | 34.9 | 65.6 | 30.7 | 29.2 | 42.4 | 35.5 | 36.5 | 14.8 | 44.8 | 18.2 | 29.3 | 27.2 | 31.2 | - |
+
+Level and downhill she reaches further; on some climbs (+2, +10, +16) much less. A search is
+a lower bound, so some of the drop may be routes it did not find again, but a weighted head
+that falls is a real cost on a high lip: **a trade the owner should judge in play** -- the
+head's fall (`Cast, the head falls at`, 28 m/s²) is the knob that buys it back.
