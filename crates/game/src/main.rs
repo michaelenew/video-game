@@ -2235,6 +2235,11 @@ const EFFECT_PARTS: usize = {
         most
     };
     let most = if VINE_PARTS > most { VINE_PARTS } else { most };
+    let most = if SPRAY_PARTS > most {
+        SPRAY_PARTS
+    } else {
+        most
+    };
     let most = if 2 + CHAIN_LINKS > most {
         2 + CHAIN_LINKS
     } else {
@@ -6512,20 +6517,11 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // floor from the middle to the front, barbs standing off them, over
         // a faint dark wash -- see `vine_piece`.
         EffectKind::Vines if part < VINE_PARTS => Some(vine_piece(effect, at, part)),
-        // A reaped plant's thorns (2026-11-04): balls of blood flung out
-        // along the cone, the far ones the widest.
-        EffectKind::Cascade if part < sim::effects::TETHER_BEADS => {
-            let t = (part as f32 + 0.5) / sim::effects::TETHER_BEADS as f32;
-            let life = effect.life.max(1) as f32;
-            let out = (effect.age as f32 / life * 2.0).min(1.0);
-            let reach = effect.reach.to_f32_for_render();
-            let dir = fx3(effect.dir).normalize_or_zero();
-            Some(floating_in(
-                Skin::Blood,
-                at + dir * reach * t * out + Vec3::Y * 1.0,
-                0.2 + reach * 0.12 * t,
-            ))
-        }
+        // **A reaped plant** (2026-11-04; drawn as what it is, 2026-11-07,
+        // from play: "the red bubble cone isn't capturing the move"): the
+        // plant breaking apart and its thorns flung out along the cone --
+        // `thorn_spray`.
+        EffectKind::Cascade => thorn_spray(effect, part),
         EffectKind::JudgementField if part == 0 => Some(standing(
             Shape::Column,
             Skin::Light,
@@ -7098,6 +7094,112 @@ fn claw_marks(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
     );
     rake.skin = Skin::Heart;
     Some(rake)
+}
+
+/// The thorns a reaped plant flings.
+const SPRAY_THORNS: usize = 18;
+/// Its stem and branches, breaking: `plant_piece`'s wood.
+const SPRAY_WOOD: usize = STEM + 2 * BRANCHES;
+/// Everything a reaped plant is drawn in: the thorns, the wood, a burst a
+/// blossom.
+const SPRAY_PARTS: usize = SPRAY_THORNS + SPRAY_WOOD + BRANCHES;
+
+/// A fixed scatter for piece `k` of something: nought to one.
+fn scatter(k: usize, salt: f32) -> f32 {
+    ((k as f32 * 12.9898 + salt * 78.233).sin() * 43_758.547)
+        .fract()
+        .abs()
+}
+
+/// **A reaped plant, breaking** (`EffectKind::Cascade`, 2026-11-07). `pos` is
+/// its foot, `dir` the way the blade was going, `reach` how far its thorns
+/// fly, `power` its scale and `banked` which plant it was (the seed its
+/// shape was grown from, `plant_piece`). Over `tuning::thorns_for`:
+///
+/// - **the thorns** -- the plant's own, torn off its stem -- flung point first
+///   out along the cone the blow struck, each its own way inside it, arriving
+///   at its reach in the first half and stuck there for the rest, fading;
+/// - **the stem and branches** as they stood, burst outward along the blade's
+///   way, tumbling and falling;
+/// - **the blossoms** bursting, a puff of blood each, gone in a third of it.
+fn thorn_spray(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    if part >= SPRAY_PARTS {
+        return None;
+    }
+    let total = sim::tuning::thorns_for().max(1) as f32;
+    let t = (effect.age as f32 / total).clamp(0.0, 1.0);
+    let foot = fx3(effect.pos);
+    let scale = effect.power.to_f32_for_render().max(0.2);
+    let radius = sim::tuning::structure_radius().to_f32_for_render() * scale;
+    let tall = sim::tuning::structure_height().to_f32_for_render() * scale;
+    let seed = effect.banked as f32;
+    let along = {
+        let d = fx3(effect.dir);
+        Vec3::new(d.x, 0.0, d.z).normalize_or(Vec3::X)
+    };
+    let across = along.cross(Vec3::Y);
+    let seconds = effect.age as f32 / 60.0;
+    if part < SPRAY_THORNS {
+        let k = part;
+        // Its own way inside the cone, a little up.
+        let spread = (scatter(k, 1.0) - 0.5) * 1.5;
+        let rise = 0.08 + 0.25 * scatter(k, 2.0);
+        let way = (along + across * spread + Vec3::Y * rise).normalize();
+        let from = foot + Vec3::Y * tall * (0.2 + 0.7 * scatter(k, 3.0));
+        let reach = effect.reach.to_f32_for_render() * (0.55 + 0.45 * scatter(k, 4.0));
+        let flown = (t / 0.45).min(1.0);
+        let flown = 1.0 - (1.0 - flown) * (1.0 - flown);
+        let tip =
+            from + way * reach * flown - Vec3::Y * (2.0 * seconds * seconds).min(from.y - foot.y);
+        let fade = if t > 0.7 { 1.0 - (t - 0.7) / 0.3 } else { 1.0 };
+        let long = (0.5 + 0.25 * scatter(k, 5.0)) * scale.sqrt() * fade;
+        if long < 0.02 {
+            return None;
+        }
+        let mut thorn = limb(Shape::Spike, tip - way * long, tip, long * 0.22, Vec3::Y);
+        thorn.skin = Skin::Blood;
+        return Some(thorn);
+    }
+    let k = part - SPRAY_THORNS;
+    if k < SPRAY_WOOD {
+        if t > 0.75 {
+            return None;
+        }
+        let (from, to, thick) = plant_piece(foot, radius, tall, seed, k)?;
+        let mid = (from + to) * 0.5;
+        let out = Vec3::new(mid.x - foot.x, 0.0, mid.z - foot.z).normalize_or(along);
+        let throw = (out * 0.6 + along * 0.8) * (3.0 + 3.0 * scatter(k, 6.0))
+            + Vec3::Y * (2.5 + 2.5 * scatter(k, 7.0));
+        let fall = Vec3::Y * 9.0 * seconds * seconds;
+        let moved = (mid + throw * seconds - fall).max(Vec3::new(f32::MIN, foot.y, f32::MIN));
+        let spin = Quat::from_axis_angle(
+            out.cross(Vec3::Y).normalize_or(Vec3::X),
+            seconds * (6.0 + 6.0 * scatter(k, 8.0)),
+        );
+        let half = spin * ((to - from) * 0.5);
+        let shrink = if t > 0.5 { 1.0 - (t - 0.5) / 0.25 } else { 1.0 };
+        let mut wood = limb(
+            Shape::Limb,
+            moved - half * shrink,
+            moved + half * shrink,
+            thick * shrink.max(0.05),
+            along,
+        );
+        wood.skin = Skin::Vines;
+        return Some(wood);
+    }
+    let k = k - SPRAY_WOOD;
+    if t > 0.35 {
+        return None;
+    }
+    let blossom = STEM + 2 * BRANCHES + THORNS + k;
+    let (_, at, size) = plant_piece(foot, radius, tall, seed, blossom)?;
+    let burst = t / 0.35;
+    Some(floating_in(
+        Skin::Heart,
+        at,
+        (size * (1.0 + 3.0 * burst) * (1.0 - burst)).max(0.0),
+    ))
 }
 
 /// How many links the Cast's chain is drawn in, hand to head.

@@ -1426,6 +1426,7 @@ scalars! {
     RendSecond, "Blood mage", "Rend, the second of a string reaches (x)", Fixed, fx(1,1), fx(3,1);
     RendThirdReach, "Blood mage", "Rend, the third of a string reaches (x)", Fixed, fx(1,1), fx(3,1);
     RendThirdLaunch, "Blood mage", "Rend, the third of a string launches (m/s)", Fixed, 0, fx(30,1);
+    ThornsFor, "Blood mage", "Reaped thorns, the plant breaking and its thorns fly for", Frames, 1, 120;
 }
 
 // ---------------------------------------------------------------------------

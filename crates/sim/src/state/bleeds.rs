@@ -1466,7 +1466,9 @@ impl World {
             dir,
             reach,
         );
-        thorns.life = t::spell_flash();
+        // Drawn as the plant breaking and its thorns flying (`game::thorn_spray`),
+        // which needs its size: `power` is the plant's scale.
+        thorns.life = t::thorns_for();
         let share = Fx::ratio(damage, m.damage.max(1));
         let half = Fx::ratio(1, 2);
         let mid = stone.at.add(dir.scale(reach.mul(half))).add(V3::new(
@@ -1477,6 +1479,9 @@ impl World {
         self.gore_each(&mut thorns, 0, mid, reach.mul(half), share);
         self.gore_critters(&mut thorns, mid, reach.mul(half), share);
         thorns.forget_hits();
+        thorns.power = stone.scale;
+        // Which plant it was, so the drawing breaks the plant that stood.
+        thorns.banked = (owner * MAX_STRUCTURES + slot) as i32;
         spawn_effect(&mut self.effects, thorns);
         if paid > 0 {
             self.players[owner].absorb(paid);

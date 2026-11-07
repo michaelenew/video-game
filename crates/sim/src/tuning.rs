@@ -5592,3 +5592,9 @@ pub fn rend_third_reach() -> Fx {
 pub fn rend_third_launch() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::RendThirdLaunch).max(0))
 }
+
+/// How long a reaped plant's breaking and its thorns' flight are drawn: the
+/// blow was struck the frame it was reaped (`World::reap_the_plant`).
+pub fn thorns_for() -> u16 {
+    oven::scalar(Scalar::ThornsFor).clamp(1, u16::MAX as i32) as u16
+}
