@@ -334,6 +334,8 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             }
             // The Reaping hits nothing, so there is no volume to draw.
             EffectKind::Reaping => {}
+            // The Red claw's marks hit nothing: the claw struck as it landed.
+            EffectKind::Claw => {}
             // The Blood nova and the Nail: the spheres they hit with.
             EffectKind::Nova => {
                 gizmos.sphere(

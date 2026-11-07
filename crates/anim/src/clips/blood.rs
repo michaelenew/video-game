@@ -125,7 +125,8 @@ use view::skeleton::Joint;
 pub fn clips() -> Vec<Recipe> {
     vec![
         rend(),
-        seize(),
+        claw(),
+        throw(),
         black_spike(),
         sweep(),
         summon(),
@@ -2079,42 +2080,166 @@ fn claw_through() -> Pose {
     )
 }
 
-/// **Seize**: the red hand shot out to catch them at the chest, then
-/// heaved up over her head with them in it, and brought down -- the body
-/// folding after it -- into the floor in front of her. The catch is on the
-/// active frames; the lift runs `tuning::seize_lift` frames; the slam lands
-/// at its end (`sim::state::bleeds`), well inside the recovery.
-fn seize() -> Recipe {
+/// **The Red claw** (2026-11-07): held, the red hand is drawn far back and
+/// low behind her left hip, crouched and coiled -- frame nought is held for
+/// as long as the button is, so it is the pose that says "charging"; let go,
+/// it is flung forward and down with a step in, and the claw tears out
+/// across the floor ahead (`sim::state::World::claw_lands`).
+fn claw() -> Recipe {
     let clip = Clip::BloodSpecial;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
     let end = clip.length() - 1;
-    let lift = sim::tuning::seize_lift();
-    let reach = (contact * 3 / 5).max(1);
-    let top = (contact + lift.saturating_sub(4))
-        .min(end.saturating_sub(6))
-        .max(recover);
-    let slam = (contact + lift).min(end.saturating_sub(4)).max(top + 1);
-    let home = end.saturating_sub(1).max(slam + 1);
-
+    let through = (recover + 2).min(end.saturating_sub(4));
+    let home = end.saturating_sub(1).max(through + 1);
     Recipe {
         clip,
-        looseness: Looseness::HEAVY,
-        notes: "Out to the catch, the hand open at the height of a chest and \
-                a step in; then the heave -- the hand climbs over her head, \
-                the chest opening and the knees driving up under it -- and \
-                the slam, the hand driven down in front and the whole body \
-                folding after it, knees deep. The slam is keyed on the frame \
-                the simulation brings them down."
+        looseness: Looseness::MARTIAL,
+        notes: "Frame nought is the charge, held: the hand far back and low \
+                behind the hip, the chest turned away, crouched. On release \
+                the hand is flung forward and down across the line with a \
+                step in, and carried on low past the right knee."
             .into(),
         keys: vec![
-            Key::eased(0, ready(), Ease::OUT),
-            Key::eased(reach, hand_out(), Ease::SMOOTH),
-            Key::eased(contact, hand_caught(), Ease::LINEAR),
-            Key::eased(top, hand_overhead(), Ease::OUT),
-            Key::eased(slam, hand_slammed(), Ease::STRIKE),
+            Key::eased(0, claw_coiled(), Ease::OUT),
+            Key::eased(contact, claw_flung(), Ease::STRIKE),
+            Key::eased(through, claw_spent(), Ease::OUT),
             Key::eased(home, ready(), Ease::SMOOTH),
         ],
     }
+}
+
+fn claw_coiled() -> Pose {
+    footing(
+        ready()
+            .hips(0.010, -0.170, -0.060)
+            .root(8.0, 0.0, 26.0)
+            .spine(14.0, 0.0, 18.0)
+            .chest(8.0, 0.0, 20.0)
+            .head(-8.0, 0.0, -36.0)
+            .reach_l([-0.46, 0.80, -0.40])
+            .wrist_l(30.0, 0.0, 0.0)
+            .reach_r([0.32, 0.84, 0.06]),
+        0.0,
+        0.0,
+    )
+}
+
+fn claw_flung() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        ready()
+            .hips(0.000, -0.180, 0.170)
+            .root(22.0, 0.0, -10.0)
+            .spine(18.0, 0.0, -12.0)
+            .chest(12.0, 0.0, -18.0)
+            .head(-14.0, 0.0, 16.0)
+            .reach_l([0.12, 1.00, 0.86])
+            .wrist_l(-10.0, 0.0, 0.0)
+            .reach_r([0.34, 0.80, -0.04]),
+        [l[0], l[1], l[2] + 0.32],
+        r,
+    )
+}
+
+fn claw_spent() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        ready()
+            .hips(0.000, -0.190, 0.150)
+            .root(26.0, 0.0, -18.0)
+            .spine(20.0, 0.0, -14.0)
+            .chest(12.0, 0.0, -20.0)
+            .head(-12.0, 0.0, 22.0)
+            .reach_l([0.38, 0.56, 0.62])
+            .wrist_l(-24.0, 0.0, 0.0)
+            .reach_r([0.36, 0.80, -0.08]),
+        [l[0], l[1], l[2] + 0.32],
+        r,
+    )
+}
+
+/// **The Cast thrown** (2026-11-07, from play: "it needs to throw the actual
+/// scythe head", "the animations and timing need work"): both hands on the
+/// haft, swung back over the right shoulder and cast forward like a rod --
+/// the head leaves its end on the active frames -- and the haft follows
+/// through forward and low while the chain pays out.
+fn throw() -> Recipe {
+    let clip = Clip::BloodThrow;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let follow = (recover + 3).min(end.saturating_sub(3));
+    let home = end.saturating_sub(1).max(follow + 1);
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "Wound back over the right shoulder, the chest turned away and \
+                the weight back; cast forward and over, the hands finishing \
+                high and out in front as the head leaves; followed through \
+                forward and low."
+            .into(),
+        keys: vec![
+            Key::eased(0, cast_wound(), Ease::OUT),
+            Key::eased(contact, cast_loosed(), Ease::STRIKE),
+            Key::eased(follow, cast_followed(), Ease::OUT),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+fn cast_wound() -> Pose {
+    footing(
+        gripping(
+            ready()
+                .hips(0.010, -0.090, -0.060)
+                .root(-6.0, 0.0, -22.0)
+                .spine(-6.0, 0.0, -18.0)
+                .chest(-4.0, 0.0, -18.0)
+                .head(-6.0, 0.0, 30.0),
+            [0.30, 1.50, -0.30],
+            [0.08, 1.22, -0.12],
+            -20.0,
+        ),
+        0.0,
+        0.0,
+    )
+}
+
+fn cast_loosed() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        gripping(
+            ready()
+                .hips(0.000, -0.120, 0.120)
+                .root(14.0, 0.0, 4.0)
+                .spine(12.0, 0.0, 4.0)
+                .chest(8.0, 0.0, 6.0)
+                .head(-10.0, 0.0, -4.0),
+            [0.10, 1.42, 0.62],
+            [-0.06, 1.18, 0.36],
+            10.0,
+        ),
+        [l[0], l[1], l[2] + 0.22],
+        r,
+    )
+}
+
+fn cast_followed() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        gripping(
+            ready()
+                .hips(0.000, -0.130, 0.110)
+                .root(18.0, 0.0, 6.0)
+                .spine(14.0, 0.0, 4.0)
+                .chest(8.0, 0.0, 6.0)
+                .head(-12.0, 0.0, -4.0),
+            [0.06, 1.04, 0.68],
+            [-0.10, 0.94, 0.44],
+            16.0,
+        ),
+        [l[0], l[1], l[2] + 0.22],
+        r,
+    )
 }
 
 fn hand_out() -> Pose {
