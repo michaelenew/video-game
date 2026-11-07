@@ -99,24 +99,14 @@ fn thrall(w: &mut World, pos: V3, essence: i32) {
 }
 
 /// **Where the crosshair meets the floor** at `pitch`, as she stands in
-/// [`mage`]: where a spike aimed there rises. Found the way a player finds it
-/// -- the scythe's head cast there bites the floor under the crosshair -- since
-/// a spike on bare ground (2026-11-04) raises nothing to see.
+/// [`mage`]: where a spike aimed there rises. Read off the spike's own aim
+/// on its press (`Player::aim_at`). It was found by casting the scythe's head
+/// there until 2026-11-07, when the head became a weight that flies through
+/// the crosshair's point and falls on past it.
 fn crosshair_floor(pitch: i16) -> V3 {
     let mut w = mage();
-    for _ in 0..t::hold_from() as u32 + 2 {
-        step_looking(&mut w, keys::SCYTHE, pitch);
-    }
-    for _ in 0..80 {
-        step_looking(&mut w, 0, pitch);
-        if let Some(e) = effects_of(&w, EffectKind::ScytheHead)
-            .into_iter()
-            .find(|e| e.head_state() == sim::effects::Head::World)
-        {
-            return e.home;
-        }
-    }
-    panic!("the head never bit the floor at {pitch}");
+    step_looking(&mut w, keys::SPIKES, pitch);
+    w.players[0].aim_at()
 }
 
 /// A settled stain of hers where the crosshair meets the floor at `pitch`.

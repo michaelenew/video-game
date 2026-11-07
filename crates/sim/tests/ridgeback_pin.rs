@@ -222,7 +222,7 @@ const PINNED: [(Class, u64); 6] = [
     // The Blood mage's alone again 2026-11-07, deliberately: round three --
     // the head a weight on a chain, the chain on her left hand, the Red
     // claw, the charge-jump (feel-log.md, 2026-11-07).
-    (Class::BloodMage, 0xc38fc0c92b8170fc),
+    (Class::BloodMage, 0xdd650b316ff519f9),
     // The Dual mage moved again 2026-11-04, deliberately: her kit is new --
     // both clicks at once annihilate, the holds are the storm and the lance,
     // middle click is the chain, and nothing she moves with reads a bar
