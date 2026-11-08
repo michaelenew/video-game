@@ -229,13 +229,29 @@ pub fn roll_of(p: &sim::state::Player, travel: [f32; 2]) -> Rolled {
             yaw: t.yaw,
         };
     }
-    if p.class != sim::Class::ShadowReaver {
-        return upright;
-    }
     let ease = |t: f32| {
         let t = t.clamp(0.0, 1.0);
         t * t * (3.0 - 2.0 * t)
     };
+    // **The Dual mage's storm is a flip in** (2026-11-08, from play: "I need
+    // the animation to convey flipping through the air nimbly"): one turn
+    // over the last `STORM_FLIP` frames of the leap, so she comes out of it
+    // upright as the lightning comes down where she lands. A leap shorter
+    // than that starts part of the way round.
+    if p.class == sim::Class::DualMage {
+        const STORM_FLIP: f32 = 16.0;
+        let Some(left) = sim::dual::storm_flight(p) else {
+            return upright;
+        };
+        let through = 1.0 - (left as f32 / STORM_FLIP);
+        return Rolled {
+            over: Quat::from_x(ease(through) * TAU),
+            ..upright
+        };
+    }
+    if p.class != sim::Class::ShadowReaver {
+        return upright;
+    }
     let mut flip = 0.0;
     if let Some(through) = sim::shadow::flip_through(p) {
         flip = ease(through.to_f32_for_render()) * TAU;

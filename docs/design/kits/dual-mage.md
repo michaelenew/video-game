@@ -31,6 +31,31 @@ meaningless without it.
 > is the design and the answer to "what is missing from the controls". §"Her hands" below is
 > what was built; where it differs from §"Her spellbook", it wins.
 
+## The third play, 2026-11-08
+
+From the owner after twenty minutes against the Ridgeback (a replay). Where this differs from the
+sections below, this wins.
+
+- **`Q` and `E`: she is gone on the press.** Each still needs its bar full and spends it, and is
+  still aimed at her own feet; she dashes out the moment it is pressed -- the way she holds, or
+  back from the way she faces -- at `Q and E, she dashes out on the press at` (18 m/s), rising at
+  `Q and E, and rises at` (6), on the floor or in the air. The strike comes down on the spot she
+  left as its startup ends (the Abyss 12 frames, Judgement 14), 4-5 m behind her. Judgement 200,
+  the Abyss 8 a tick: 180 and 206 on a dummy, 459 as a pair, against 19 an auto.
+- **The hop after an auto is a push.** `auto, hop speed` (12 m/s) the way she holds, kept if she
+  was going faster that way, up to the hop's lift -- and the air keeps it, as it keeps a jump.
+  Holding a direction, the recovery after the strike is `auto, recovery after a hop`.
+- **The annihilation is a way out.** The same small blast at every bar, costing nothing (the grand
+  one is gone); it throws her back from the way she faces, or the way she holds, mostly along
+  (18 m/s) and a little up (9), and off anything she is riding. The clicks keep her in; this
+  takes her out.
+- **The storm leaps at 24 m/s** and is drawn as a flip over the last part of the leap.
+- **She slips past bodies** through any move of her own and while untouchable (`dual::slips_past`):
+  a creature does not stop her and fighters are not set apart from her. On her feet she slides
+  along a creature's flank instead of stopping dead.
+- **`E` counts while held**, as `Q` and the clicks do, so a press in a recovery comes out when she
+  is free. `Q` on a creature's back is the same key as on the floor.
+
 ## The second play, 2026-11-06
 
 From the owner after playing the 2026-11-04 kit. Where this differs from the section below, this

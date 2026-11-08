@@ -5516,3 +5516,14 @@ pub fn auto_hops_at() -> u16 {
 pub fn yank_lands() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::YankLands)).max(Fx::ZERO)
 }
+
+/// How fast she dashes out of a major on the press: the strike is coming
+/// down where she stood (2026-11-08).
+pub fn major_dash() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorDash)).max(Fx::ZERO)
+}
+
+/// How fast she rises as she dashes out of a major.
+pub fn major_dash_up() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorDashUp)).max(Fx::ZERO)
+}

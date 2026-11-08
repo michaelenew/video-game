@@ -833,13 +833,17 @@ fn a_move_never_snaps_you_to_its_speed() {
         let mut settled = None;
         let window = m.step.raw().signum().unsigned_abs() as usize * (t::step_lead() as usize + 1);
         for _ in 0..8 + window {
+            let was_grounded = w.players[0].grounded;
             w.advance([Input::aimed(Input::W, LOOKING), Input::default()]);
             // Read *after* the advance: the countdown runs before the movement
             // does, so the action standing at the end of a frame is the one that
             // chose that frame's velocity.
-            // A haul drives the body too: the Dual mage's hop, which since
-            // 2026-11-06 she takes as her strike passes her, inside it.
-            let driving = stepping(&w, &m) || w.players[0].haul > 0;
+            // A haul drives the body too, and so does the Dual mage's hop,
+            // which she takes as her strike passes her, inside it -- a push
+            // off the floor since 2026-11-08, on the frame she leaves it.
+            let hopped =
+                class == sim::class::Class::DualMage && was_grounded && !w.players[0].grounded;
+            let driving = stepping(&w, &m) || w.players[0].haul > 0 || hopped;
             let next = flat_speed(&w);
             if !driving {
                 assert!(

@@ -1103,24 +1103,27 @@ fn the_bars_never_move_on_their_own_and_burn_her_only_past_a_third_apart() {
 }
 
 #[test]
-fn b3_a_judgement_is_at_most_a_fifth_of_a_health_bar() {
-    // Toned down since a full bar is five strikes away (2026-11-06).
+fn b3_a_judgement_is_at_most_a_quarter_of_a_health_bar() {
+    // B3's own quarter (`docs/design/dual-mage.md`). It was a fifth for two
+    // days from 2026-11-06; on 2026-11-08 the owner found the majors "not
+    // even close to worth it" against her faster moves, and it is back.
     let bar = sim::state::max_health();
     let dealt = dealt_from(E, 100);
     assert!(
-        dealt > 0 && dealt * 5 <= bar,
+        dealt > 0 && dealt * 4 <= bar,
         "a Judgement took {dealt} of {bar}"
     );
 }
 
 #[test]
-fn the_majors_land_where_she_stands_and_she_dashes_out() {
+fn the_majors_land_where_she_stands_and_she_is_gone_on_the_press() {
     for bits in [Q, E] {
         let mut w = mage();
         w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
         w.players[0].mechanic = meter_at(100, 100, Force::Dark);
-        // In the open: she lunges back from the way she faces.
-        w.players[0].pos = V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO);
+        // In the open: she dashes back from the way she faces, on the press
+        // (2026-11-08). Not at (6, 0, 0), which is inside a box.
+        w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(8));
         let stood = w.players[0].pos;
         step(&mut w, 1, bits);
         assert!(
@@ -1129,10 +1132,25 @@ fn the_majors_land_where_she_stands_and_she_dashes_out() {
             w.players[0].aim_path,
             stood
         );
-        step(&mut w, 80, 0);
+        // Clear of where it comes down by the time it does, and free to act
+        // again inside forty-five frames.
+        let m = sim::moves::get(
+            Class::DualMage,
+            if bits == Q {
+                sim::moves::dual::ABYSS
+            } else {
+                sim::moves::dual::JUDGEMENT
+            },
+        );
+        step(&mut w, m.startup as u32, 0);
         assert!(
-            w.players[0].pos.sub(stood).len().raw() > Fx::from_int(2).raw(),
-            "{bits:#x}: she stayed in it"
+            w.players[0].pos.sub(stood).len().raw() > Fx::from_int(3).raw(),
+            "{bits:#x}: she was still in it when it came down"
+        );
+        step(&mut w, 45 - m.startup as u32, 0);
+        assert!(
+            w.players[0].action.actionable(),
+            "{bits:#x}: still in it at 45 frames"
         );
     }
 }

@@ -894,15 +894,15 @@ fn both_clicks_at_once_annihilate_where_she_stood_as_she_springs_clear() {
     let (mine, theirs) = (w.players[0].health, w.players[1].health);
     step(&mut w, keys::DARK | keys::LIGHT);
     assert_eq!(doing(&w), Some(d::ANNIHILATION));
-    let mut top = Fx::ZERO;
-    for _ in 0..40 {
-        step(&mut w, 0);
-        top = top.max(w.players[0].pos.y);
-    }
+    // **Away, not up** (2026-11-08, from play: "it needs to be a disengage
+    // move"): back from the way she faces, holding nothing.
+    let stood = w.players[0].pos;
+    run(&mut w, 40, 0);
+    let away = w.players[0].pos.sub(stood);
     assert!(
-        top.raw() > metres(3.0).raw(),
-        "the spring rose {} m",
-        as_f(top)
+        away.x.raw() < metres(-4.0).raw(),
+        "the spring took her {:?} from where she stood",
+        away
     );
     assert!(
         w.players[1].health < theirs,
@@ -933,27 +933,26 @@ fn the_other_click_while_one_is_deciding_is_the_same_chord() {
     }
 }
 
-/// How high one spring takes her, after `springs` already this airtime.
-fn spring_rise(springs: u8) -> Fx {
+/// How far along one spring takes her in its wind-up and the next eighteen
+/// frames, after `springs` already this airtime.
+fn spring_reach(springs: u8) -> Fx {
     let mut w = alone();
     aloft(&mut w, 6.0);
     w.players[0].vel = V3::ZERO;
     if let Mechanic::Meter { springs: s, .. } = &mut w.players[0].mechanic {
         *s = springs;
     }
-    let from = w.players[0].pos.y;
+    let from = w.players[0].pos;
     step(&mut w, keys::DARK | keys::LIGHT);
-    let mut top = from;
-    for _ in 0..40 {
+    for _ in 0..24 {
         step(&mut w, 0);
-        top = top.max(w.players[0].pos.y);
     }
-    top.sub(from)
+    w.players[0].pos.sub(from).flat_len()
 }
 
 #[test]
 fn each_spring_in_one_airtime_is_worth_less_than_the_last() {
-    let (one, two, three) = (spring_rise(0), spring_rise(1), spring_rise(2));
+    let (one, two, three) = (spring_reach(0), spring_reach(1), spring_reach(2));
     assert!(
         one.raw() > two.raw() && two.raw() > three.raw(),
         "{} {} {}",
@@ -962,8 +961,8 @@ fn each_spring_in_one_airtime_is_worth_less_than_the_last() {
         as_f(three)
     );
     assert!(
-        one.raw() > metres(2.5).raw(),
-        "the first spring rose {} m",
+        one.raw() > metres(3.0).raw(),
+        "the first spring carried her {} m",
         as_f(one)
     );
 }
@@ -1319,21 +1318,29 @@ fn annihilate_from(dark: i32, light: i32) -> (i32, (i32, i32)) {
 }
 
 #[test]
-fn both_bars_full_make_the_annihilation_grand_and_it_spends_them() {
+fn the_annihilation_is_the_same_blast_at_every_bar_and_spends_nothing() {
+    // **A way out, not a payoff** (2026-11-08, from play): the grand one
+    // that spent both full bars out-hit the two majors they are for.
     let (plain, plain_left) = annihilate_from(60, 60);
-    let (grand, grand_left) = annihilate_from(100, 100);
-    assert!(grand > plain * 2, "grand {grand} against plain {plain}");
-    // Spent to nothing, and its own hit is the first step of the next climb.
+    let (full, full_left) = annihilate_from(100, 100);
+    assert_eq!(full, plain, "full bars made it {full} against {plain}");
     let step_ = t::meter_auto_push();
-    assert_eq!(
-        grand_left,
-        (step_, step_),
-        "the grand one left {grand_left:?}"
-    );
+    assert_eq!(full_left, (100, 100), "full bars were spent: {full_left:?}");
     assert_eq!(
         plain_left,
         (60 + step_, 60 + step_),
-        "short of full it cost {plain_left:?}"
+        "it cost {plain_left:?}"
+    );
+    // And the majors, which the bars are for, are worth more than it.
+    let mut w = facing(1.0);
+    set_bars(&mut w, 100, 100);
+    let before = w.players[1].health;
+    step(&mut w, Input::MECHANIC);
+    run(&mut w, 120, 0);
+    let judgement = before - w.players[1].health;
+    assert!(
+        judgement > plain * 2,
+        "a Judgement {judgement} against an annihilation {plain}"
     );
 }
 
@@ -1464,7 +1471,10 @@ fn she_hops_as_her_strike_passes_her_not_after_it_lands() {
     let mut hopped_while_active = false;
     for _ in 0..20 {
         step(&mut w, Input::D);
-        if matches!(w.players[0].action, Action::Active { .. }) && w.players[0].haul > 0 {
+        // A push since 2026-11-08: going her way at the hop's speed.
+        if matches!(w.players[0].action, Action::Active { .. })
+            && w.players[0].vel.flat_len().raw() >= t::auto_hop_speed().mul(Fx::ratio(9, 10)).raw()
+        {
             hopped_while_active = true;
         }
     }

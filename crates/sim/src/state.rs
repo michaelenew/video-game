@@ -4027,9 +4027,8 @@ impl World {
                     moves::dual::LANCE => self.lunge_clear(i, input),
                     // **The majors come down on her** (2026-11-06, from the
                     // owner): the black sun and the columns land where she
-                    // stands (a reach of nought), and she dashes out of them
-                    // as the lance's lunge does.
-                    moves::dual::ABYSS => self.lunge_clear(i, input),
+                    // stood (a reach of nought), and she is already gone --
+                    // she dashed out on the press (`dash_out_of_the_major`).
                     moves::dual::YANK => self.yank(i),
                     // The Equinox, which has no button: the jump as high as
                     // her lower bar is full (its blink went with Phase,
@@ -4053,10 +4052,7 @@ impl World {
                         };
                         self.write_sigil(i, at, radius, p.thrown_at);
                     }
-                    moves::dual::JUDGEMENT => {
-                        self.bring_down_the_columns(i);
-                        self.lunge_clear(i, input);
-                    }
+                    moves::dual::JUDGEMENT => self.bring_down_the_columns(i),
                     _ => {}
                 }
             }
@@ -7458,7 +7454,7 @@ fn step_player(
     // The previous frame's state lives on the fighter rather than in a
     // renderer-side "just pressed", because rollback re-runs these frames: the
     // edge has to be recomputed from the snapshot, not remembered outside it.
-    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
+    let pressed_mechanic = e_counts(p, input);
     p.mechanic_held = input.has(Input::MECHANIC);
     // The jump button's press edge. **The ground jump is buffered off it,
     // not off the hold** (the owner, 2026-11-03, from play: "if you contact
@@ -7577,7 +7573,7 @@ fn step_player(
     shadow::swing_out_of_the_carry(p, input);
     // The Dual mage's hop out of a finished auto, before the countdown so the
     // recovery it shortens is the one counted down this frame.
-    hop_after_the_auto(p, input, scene);
+    hop_after_the_auto(p, input);
     dash_down_the_flurry(p, scene);
 
     // A channel resolves **instead of** the countdown, because it is the one
@@ -8319,9 +8315,13 @@ fn step_player(
     p.vel = r.vel;
     p.grounded = r.grounded;
     cling_to_the_wall(p, wall_normal, scene.arena);
-    // Every creature there is, in slot order, until one of them has you.
+    // Every creature there is, in slot order, until one of them has you --
+    // unless she is slipping past them (`dual::slips_past`).
     for (slot, beast) in herd.iter().enumerate() {
         if let Some(beast) = beast {
+            if dual::slips_past(p) {
+                break;
+            }
             meet_the_creature(p, slot, beast);
             if p.aboard() {
                 break;
@@ -9219,6 +9219,17 @@ fn keyed_side_b(p: &Player) -> Option<u8> {
 ///
 /// Split the same way `clicked_move` and `moves::binding` are: what the kit
 /// declares lives in `moves`, and what your feet are doing is read here.
+/// **Does `E` ask for its move this frame?** On its press, for every class
+/// whose `E` is a change of state that a held button would fire again and
+/// again. The Dual mage's `E` is a major that needs a full bar and empties
+/// it, so it cannot fire twice; for her it counts while held, as `Q` and the
+/// clicks do, and a press made during a recovery or a stagger comes out the
+/// moment she is free rather than being lost (2026-11-08, from a replay: "I
+/// randomly can't use certain moves").
+fn e_counts(p: &Player, input: Input) -> bool {
+    input.has(Input::MECHANIC) && (!p.mechanic_held || p.class == Class::DualMage)
+}
+
 fn keyed_move(p: &Player) -> Option<u8> {
     // **The strong push**, since 2026-10-09: Cataclysm, from the floor and
     // the air alike. Raise went to the earth click and Landfall with it.
@@ -9514,28 +9525,46 @@ fn bank_the_flurry_jump(p: &mut Player) {
     }
 }
 
-/// **The hop after an auto** (2026-10-12, the second pass): on the frame one
-/// of her wings finishes, if she is holding a direction she hops that way --
-/// `auto, hop` along the floor and `dual::hop_lift` up, as far as the arena
-/// lets her (`aim::hop_to`) -- and what is left of the recovery is the hop and
-/// `auto, recovery after a hop`. Holding nothing, she stands and recovers in
-/// full. Kalista's step: a flurry of hits is a flurry of hops, and the hops
+/// **Out of a major, on the press** ([`begin_move`]): the way she holds,
+/// or straight back from the way she faces holding nothing, at `Q and E, she
+/// dashes out on the press at`, and up at `Q and E, and rises at`.
+fn dash_out_of_the_major(p: &mut Player, input: Input) {
+    let (ax, az) = input.move_axis();
+    let held = move_dir(input.aim_turns(), ax, az);
+    let along = if held == V3::ZERO {
+        V3::new(p.facing.x.neg(), Fx::ZERO, p.facing.z.neg()).normalized()
+    } else {
+        held
+    };
+    let carry = along.scale(t::major_dash());
+    p.haul = 0;
+    p.air_stall = 0;
+    p.vel = V3::new(carry.x, p.vel.y.max(t::major_dash_up()), carry.z);
+    p.grounded = false;
+}
+
+/// **The hop after an auto** (2026-10-12, the second pass; a push since
+/// 2026-11-08): as her strike passes her, if she is holding a direction she
+/// hops that way -- `auto, hop speed` along and up to `dual::hop_lift` -- and
+/// what is left of the recovery is `auto, recovery after a hop`. Holding
+/// nothing, she stands and recovers in full. Kalista's step: a flurry of hits is a flurry of hops, and the hops
 /// are where her mobility lives. A no-op for everybody else.
-fn hop_after_the_auto(p: &mut Player, input: Input, scene: &Scene) {
+fn hop_after_the_auto(p: &mut Player, input: Input) {
     let Action::Active { kind, left } = p.action else {
         return;
     };
     if p.class != Class::DualMage || !moves::dual::is_an_auto(kind) || p.aboard() {
         return;
     }
-    // **The strike is done and she is still on her way** (2026-11-06): what
-    // is left of the recovery is the rest of the hop and `auto, recovery
-    // after a hop`.
+    // **The strike is done and she is already gone** (2026-11-08): holding
+    // a direction, what is left of the recovery is `auto, recovery after a
+    // hop`, and the hop's speed is still under her.
+    let (ax, az) = input.move_axis();
     if left == 0 {
-        if p.haul > 0 {
+        if ax != 0 || az != 0 {
             p.action = Action::Recovery {
                 kind,
-                left: p.haul.saturating_add(t::auto_hop_recovery()),
+                left: t::auto_hop_recovery(),
             };
         }
         return;
@@ -9549,7 +9578,6 @@ fn hop_after_the_auto(p: &mut Player, input: Input, scene: &Scene) {
     if left != m.active.saturating_sub(t::auto_hops_at()).max(1) {
         return;
     }
-    let (ax, az) = input.move_axis();
     if ax == 0 && az == 0 {
         return;
     }
@@ -9562,11 +9590,21 @@ fn hop_after_the_auto(p: &mut Player, input: Input, scene: &Scene) {
         lift = lift.add(t::auto_air_jump());
         dual::spend_air_hop(p);
     }
-    let to = aim::hop_to(p.pos, dir, t::auto_hop(), lift, scene);
-    let far = to.sub(p.pos).len();
-    let speed = t::auto_hop_speed();
-    let frames = far.div(speed.mul(DT)).to_int().clamp(1, 120) as u16 + 1;
-    begin_haul(p, to, speed, frames + 1);
+    // **A push, not a haul** (2026-11-08, from play: "the momentum you get
+    // from the auto ... you end up at a total standstill, especially in the
+    // air you're just a sitting duck"): it used to carry her to a point and
+    // stop her dead there. Now it is a velocity -- `auto, hop speed` the way
+    // she holds, kept if she was already going faster that way, and the
+    // rise that reaches `lift` -- and the air keeps it, as it keeps a jump.
+    let fall = t::gravity().abs().mul(p.class.mobility().gravity);
+    let up = crate::math::sqrt(fall.mul(lift.add(lift)));
+    let along = p.vel.x.mul(dir.x).add(p.vel.z.mul(dir.z));
+    let carry = dir.scale(t::auto_hop_speed().max(along));
+    p.haul = 0;
+    // The auto's hang is over: it would bleed the rise away.
+    p.air_stall = 0;
+    p.vel = V3::new(carry.x, p.vel.y.max(up), carry.z);
+    p.grounded = false;
 }
 
 /// Which of the two forces she is holding right now.
@@ -11054,6 +11092,17 @@ fn begin_move(
         return Action::Channel { kind, held: 0 };
     }
     lock_aim(p, who, kind, input, scene);
+    // **The majors: she is gone on the press** (2026-11-08, from play: "q
+    // and e don't feel like they give her mobility at all ... I just die if
+    // I try to cast those"). The strike was aimed where she stands as the
+    // button went down (a reach of nought, locked above) and comes down
+    // there when its startup is spent; she dashes out of it now, the way
+    // she holds or back from the way she faces, rising -- on the floor and
+    // in the air alike. It used to be the startup stood still and the dash
+    // came on the first active frame.
+    if p.class == Class::DualMage && moves::dual::is_the_finisher(kind) {
+        dash_out_of_the_major(p, input);
+    }
     // **Gallows** (2026-10-18): a drive up, `tuning::gallows_drive` long,
     // through its wind-up and its cut -- at an angle when the crosshair is
     // level or low, exactly at it when it is higher (`aim::rise_dir`). From
@@ -13159,6 +13208,11 @@ fn separate_bodies(players: &mut [Player; MAX_PLAYERS], present: usize) {
     let min = t::body_radius().add(t::body_radius());
     for a in 0..players.len() {
         for b in a + 1..players.len() {
+            // A Dual mage slipping past (`dual::slips_past`) is set apart
+            // from nobody; everybody else still is from each other.
+            if dual::slips_past(&players[a]) || dual::slips_past(&players[b]) {
+                continue;
+            }
             let delta = players[b].pos.sub(players[a].pos);
             let dist = delta.flat_len();
             if dist.raw() == 0 || dist.raw() >= min.raw() {
@@ -16797,7 +16851,7 @@ fn step_rider(
     p.grounded = true;
     p.vel = V3::ZERO;
 
-    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
+    let pressed_mechanic = e_counts(p, input);
     p.mechanic_held = input.has(Input::MECHANIC);
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -17017,11 +17071,18 @@ fn rider_acts(
         p.action = match countdown(p, want_guard, input) {
             Some(next) => next,
             None => {
-                if input.has(Input::SPECIAL)
-                    && p.class != Class::Champion
-                    && p.can_throw(SLOT_SPECIAL, out)
+                // `Q` is the same key on the back as on the floor
+                // (`keyed_q`): the Dual mage's Abyss and the Blood mage's
+                // Coagulate, not whatever sits in slot two -- which for her
+                // is Judgement, on the other bar, so `Q` aboard with a full
+                // dark bar did nothing (2026-11-08, from a replay).
+                if let Some(kind) = input
+                    .has(Input::SPECIAL)
+                    .then(|| keyed_q(p))
+                    .flatten()
+                    .filter(|k| p.can_throw(*k, out))
                 {
-                    begin_move(p, who, SLOT_SPECIAL, input, scene, false)
+                    begin_move(p, who, kind, input, scene, false)
                 } else if pressed_mechanic {
                     match keyed_move(p).filter(|slot| p.can_throw(*slot, out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, false),
@@ -17074,9 +17135,24 @@ fn meet_the_creature(p: &mut Player, slot: usize, beast: &Monster) {
     let radius = t::body_radius();
     let contact = beast.resolve(p.pos, radius, t::body_height());
     if contact.shoved {
-        // Walked into the animal. Solid is solid.
-        p.vel.x = Fx::ZERO;
-        p.vel.z = Fx::ZERO;
+        // Walked into the animal. Solid is solid -- for the Dual mage only
+        // the part of her speed going into it (2026-11-08, from play: "she
+        // needs to get stuck a lot less"): she slides along its flank rather
+        // than stopping dead against it.
+        let out = V3::new(
+            contact.pos.x.sub(p.pos.x),
+            Fx::ZERO,
+            contact.pos.z.sub(p.pos.z),
+        );
+        if p.class == Class::DualMage && out.flat_len().raw() > 0 {
+            let n = out.normalized();
+            let into = p.vel.x.mul(n.x).add(p.vel.z.mul(n.z)).min(Fx::ZERO);
+            p.vel.x = p.vel.x.sub(n.x.mul(into));
+            p.vel.z = p.vel.z.sub(n.z.mul(into));
+        } else {
+            p.vel.x = Fx::ZERO;
+            p.vel.z = Fx::ZERO;
+        }
     }
     p.pos = contact.pos;
     if p.vel.y.raw() > 0 {
@@ -17196,7 +17272,7 @@ fn step_critter_rider(
     p.grounded = true;
     p.vel = V3::ZERO;
 
-    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
+    let pressed_mechanic = e_counts(p, input);
     p.mechanic_held = input.has(Input::MECHANIC);
     let look = V3::from_turns(input.aim_turns());
     if p.action.actionable() || p.action.stunned() || p.action.channelling().is_some() {
@@ -19136,19 +19212,12 @@ impl World {
     fn annihilate(&mut self, i: usize, input: Input) {
         let p = self.players[i];
         let m = moves::get(p.class, moves::dual::ANNIHILATION);
-        // **Both bars full: the grand annihilation** (2026-11-04, from play).
-        // What she built is what goes off -- bigger, worth far more -- and
-        // both bars go with it. Short of full it is the ordinary one, and
-        // costs nothing.
-        let grand = dual::brimming(&p);
-        let (radius, power) = if grand {
-            (m.radius.mul(t::grand_size()), t::grand_power())
-        } else {
-            (m.radius, p.thrown_at)
-        };
-        if grand {
-            dual::spend_both(&mut self.players[i]);
-        }
+        // **A way out, not a payoff** (2026-11-08, from play: "it needs to be
+        // a disengage move, where l and r click keep her engaged"): the
+        // grand one that spent both bars is gone -- it out-hit the two majors
+        // the bars are for, and was spammed off the Ridgeback's back. It is
+        // the same small blast at every bar and costs nothing.
+        let (radius, power) = (m.radius, p.thrown_at);
         // At her feet: a burst reaches as a column standing on its point, so
         // from her waist it would pass over anything knee-high.
         let mut blast = Effect::cast(
@@ -19165,6 +19234,9 @@ impl World {
         spawn_effect(&mut self.effects, blast);
         let (ax, az) = input.move_axis();
         let along = move_dir(input.aim_turns(), ax, az);
+        // Off whatever she was standing on: a creature's back is not where
+        // a disengage leaves her.
+        self.players[i].mount = monster::NO_MOUNT;
         dual::spring(&mut self.players[i], along);
     }
 

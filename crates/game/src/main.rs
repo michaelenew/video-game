@@ -3232,6 +3232,10 @@ fn setup(
                     MeshMaterial3d(material.clone()),
                     Transform::default(),
                     Visibility::Hidden,
+                    // Light through a feather, not a shadow of one: six
+                    // blended quads in every shadow cascade cost the shadow
+                    // pass what they cost the main one.
+                    bevy::pbr::NotShadowCaster,
                     WingSpanMesh {
                         owner,
                         force,
@@ -4025,10 +4029,22 @@ fn orb_out(p: &sim::state::Player) -> bool {
 fn place_wingspans(
     sim: Res<Sim>,
     time: Res<Time>,
+    inside: Res<InsideOwnHead>,
     mut meshes: Query<(&mut WingSpanMesh, &mut Transform, &mut Visibility)>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    let me = sim.local_player();
     for (mut tag, mut tf, mut vis) in meshes.iter_mut() {
+        // **Not one's own, with the camera pressed into her back**
+        // (2026-11-08, from the owner: "performance is much worse"): six
+        // blended, double-sided wings a few centimetres from the lens fill
+        // the screen two and three times over, and the transparent pass
+        // cost as much as the whole opaque one. Her body is faded there
+        // (`fade_own_body`); the wings go at the same point.
+        if tag.owner == me && inside.0 > OWN_WINGS_GO {
+            *vis = Visibility::Hidden;
+            continue;
+        }
         // The bars are read off the current snapshot -- they are the meter,
         // and a meter is not a thing to blend -- and the body they hang off is
         // read off the blended frame, which is where the body is drawn.
@@ -4074,6 +4090,10 @@ fn place_wingspans(
         tf.scale = Vec3::new(unfold.max(0.01) * wing.length, wing.length, 1.0);
     }
 }
+
+/// How far into her own head the camera may come before one's own wings are
+/// hidden (`InsideOwnHead`, nought to one).
+const OWN_WINGS_GO: f32 = 0.15;
 
 /// Put each channelling fighter's aim marker where their aim currently lands.
 ///

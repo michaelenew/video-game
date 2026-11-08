@@ -1406,6 +1406,8 @@ scalars! {
     YankSpeed,            "Dual mage", "Chain, a second tap yanks them at (m/s)",            Fixed, 0, fx(60,1);
     AutoHopsAt,           "Dual mage", "Auto, she hops as it passes her, active frame",      Frames, 0, 30;
     YankLands,            "Dual mage", "Chain, the yank drags them this far in front of her (m)", Fixed, 0, fx(6,1);
+    MajorDash,            "Dual mage", "Q and E, she dashes out on the press at (m/s)",      Fixed, 0, fx(40,1);
+    MajorDashUp,          "Dual mage", "Q and E, and rises at (m/s)",                        Fixed, 0, fx(20,1);
 }
 
 // ---------------------------------------------------------------------------
