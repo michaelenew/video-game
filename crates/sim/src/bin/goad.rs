@@ -127,6 +127,8 @@ impl Script {
             veil: 0,
             warded: false,
             primed: 0,
+            chained: 0,
+            chain_out: 0,
         };
         match self {
             // Level at the first tier, with the carried bar at the far edge

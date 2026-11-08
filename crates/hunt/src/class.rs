@@ -676,10 +676,17 @@ impl Hands {
         let far = flat(at.sub(me.pos)).flat_len();
         for kind in [moves::dual::JUDGEMENT, moves::dual::ABYSS] {
             let m = moves::get(me.class, kind);
-            let reach = sim::state::live_reach(me, &m);
+            // Since 2026-11-06 a major comes down where she stands (a reach
+            // of nought) and needs its bar full: thrown in close, paid for.
+            let reach = sim::state::live_reach(me, &m).max(Fx::from_int(4));
             if window >= (m.startup + m.active) as i32 + SPARE
                 && far.raw() < reach.raw()
-                && keeps(me, kind)
+                && sim::dual::affords(me, kind)
+                // A full bar spent leaves her a bar apart until the other
+                // major follows it -- the pair, which is the explosion.
+                && (keeps(me, kind)
+                    || sim::dual::affords(me, moves::dual::JUDGEMENT)
+                        && sim::dual::affords(me, moves::dual::ABYSS))
                 && self.ready(w, me, kind)
                 && let Some(b) = self.button(me, kind)
             {

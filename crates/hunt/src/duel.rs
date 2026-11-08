@@ -460,6 +460,7 @@ impl Kit {
 /// Press one button on a fresh fighter and see which move starts.
 fn probe(class: Class, bits: u16) -> Option<u8> {
     let mut w = World::with_classes([class; DUEL]);
+    full_bars(&mut w);
     for frame in 0..4 {
         let mut wire = [Input::default(); DUEL];
         if frame == 1 {
@@ -471,6 +472,17 @@ fn probe(class: Class, bits: u16) -> Option<u8> {
         }
     }
     None
+}
+
+/// The Dual mage's bars full, as a player finds them on the dummy once she
+/// has struck it five times: since 2026-11-06 her two majors need a full bar
+/// and start nothing on an empty one, so a button learned or measured on
+/// empty bars would look like no button at all.
+fn full_bars(w: &mut World) {
+    if let sim::class::Mechanic::Meter { dark, light, .. } = &mut w.players[0].mechanic {
+        *dark = Fx::from_int(sim::tuning::major_needs());
+        *light = Fx::from_int(sim::tuning::major_needs());
+    }
 }
 
 /// The distances [`Kit::measure`] tries each move at: from inside a swing to the far side of most thrown things.
@@ -493,6 +505,7 @@ fn try_on(class: Class, bits: u16, aimed: Kind, at: Fx) -> (Option<u8>, i32) {
     let mut w = World::with_classes([class, Class::Champion]);
     let line = flat(w.players[1].pos.sub(w.players[0].pos)).normalized();
     w.players[1].pos = w.players[0].pos.add(line.scale(at));
+    full_bars(&mut w);
     let full = w.players[1].health;
     // The Dual mage's clicks are taps: held, they are her long holds.
     let press = if class == Class::DualMage {

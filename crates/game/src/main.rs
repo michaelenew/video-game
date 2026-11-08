@@ -3331,6 +3331,10 @@ fn setup(
                     MeshMaterial3d(material.clone()),
                     Transform::default(),
                     Visibility::Hidden,
+                    // Light through a feather, not a shadow of one: six
+                    // blended quads in every shadow cascade cost the shadow
+                    // pass what they cost the main one.
+                    bevy::pbr::NotShadowCaster,
                     WingSpanMesh {
                         owner,
                         force,
@@ -4270,10 +4274,22 @@ fn orb_out(p: &sim::state::Player) -> bool {
 fn place_wingspans(
     sim: Res<Sim>,
     time: Res<Time>,
+    inside: Res<InsideOwnHead>,
     mut meshes: Query<(&mut WingSpanMesh, &mut Transform, &mut Visibility)>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    let me = sim.local_player();
     for (mut tag, mut tf, mut vis) in meshes.iter_mut() {
+        // **Not one's own, with the camera pressed into her back**
+        // (2026-11-08, from the owner: "performance is much worse"): six
+        // blended, double-sided wings a few centimetres from the lens fill
+        // the screen two and three times over, and the transparent pass
+        // cost as much as the whole opaque one. Her body is faded there
+        // (`fade_own_body`); the wings go at the same point.
+        if tag.owner == me && inside.0 > OWN_WINGS_GO {
+            *vis = Visibility::Hidden;
+            continue;
+        }
         // The bars are read off the current snapshot -- they are the meter,
         // and a meter is not a thing to blend -- and the body they hang off is
         // read off the blended frame, which is where the body is drawn.
@@ -4319,6 +4335,10 @@ fn place_wingspans(
         tf.scale = Vec3::new(unfold.max(0.01) * wing.length, wing.length, 1.0);
     }
 }
+
+/// How far into her own head the camera may come before one's own wings are
+/// hidden (`InsideOwnHead`, nought to one).
+const OWN_WINGS_GO: f32 = 0.15;
 
 /// Put each channelling fighter's aim marker where their aim currently lands.
 ///
@@ -4843,6 +4863,21 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         }
         return None;
     }
+    // **The chain, still out** (2026-11-06): from her hand to whoever it
+    // bound, with its seal on them, for as long as a second tap would yank
+    // them -- drawn whenever she is not winding up or throwing something
+    // else.
+    if let sim::class::Mechanic::Meter {
+        chained, chain_out, ..
+    } = p.mechanic
+        && chain_out > 0
+        && chained != 0
+        && !matches!(p.action, Action::Startup { .. } | Action::Active { .. })
+        && let Some(v) = (0..w.players.len()).find(|v| chained & (1 << v) != 0)
+    {
+        let them = fx3(w.players[v].pos) + Vec3::Y * height * 0.5;
+        return chain_piece(waist, them, w.frame as f32, part);
+    }
     let (kind, startup, left) = match p.action {
         // **The auto's ball** (2026-10-13): gathering at her shoulder
         // through the wind-up, then flying its curve with a trail behind it.
@@ -5045,25 +5080,13 @@ fn spell_piece(w: &World, owner: usize, part: usize) -> Option<Piece> {
         // **The chain** (2026-11-04): both forces linked, flung from behind
         // her through where she stood, down the line the hit test uses -- a
         // dark strand and a light one wound round each other.
+        // **The chain** (2026-11-06, from the owner: "more clearly a chain,
+        // and keep the circular seal motif"): links, each a ring turned a
+        // quarter from the last, dark and light in turn, down the line the hit
+        // test uses, and a seal turning at its head.
         d::CHAIN => {
             let v = volume?;
-            let (from, to) = (fx3(v.from), fx3(v.to));
-            let along = (to - from).normalize_or(Vec3::X);
-            let across = along.cross(Vec3::Y).normalize_or(Vec3::Z);
-            let up = across.cross(along);
-            const LINKS: usize = 14;
-            (part < LINKS).then(|| {
-                let k = part as f32 / (LINKS - 1) as f32;
-                let twist = k * 9.0 + w.frame as f32 * 0.4;
-                let off = (across * twist.cos() + up * twist.sin()) * 0.18;
-                let skin = if part % 2 == 0 {
-                    Skin::Dark
-                } else {
-                    Skin::Light
-                };
-                let sign = if part % 2 == 0 { 1.0 } else { -1.0 };
-                floating_in(skin, from.lerp(to, k) + off * sign, 0.16)
-            })
+            chain_piece(fx3(v.from), fx3(v.to), w.frame as f32, part)
         }
         // **Annihilation's wind-up** (2026-11-04): the two beings lunging at
         // her from either shoulder, closing on her middle; she is gone the
@@ -9698,5 +9721,43 @@ mod rehearsing {
         assert!(rehearsal(3, &w).has(sim::moves::elementalist::keys::EARTH));
         assert!(!rehearsal(8, &w).has(SimInput::SPACE));
         assert!(rehearsal(9, &w).has(SimInput::SPACE));
+    }
+}
+
+/// **A chain of her two forces**, from `from` to `to`: up to
+/// `CHAIN_LINKS` rings down the line, each turned a quarter from the last
+/// and dark and light in turn, so it reads as links and not as beads; and at
+/// its head a seal -- two rings and a disc, turning -- the circle she binds
+/// with. Parts past what it needs are `None`.
+fn chain_piece(from: Vec3, to: Vec3, frame: f32, part: usize) -> Option<Piece> {
+    const CHAIN_LINKS: usize = 28;
+    let line = to - from;
+    let len = line.length().max(0.01);
+    let along = line / len;
+    let across = along.cross(Vec3::Y).normalize_or(Vec3::Z);
+    let up = across.cross(along).normalize_or(Vec3::Y);
+    let n = ((len / 0.32) as usize).clamp(2, CHAIN_LINKS);
+    if part < n {
+        let k = (part as f32 + 0.5) / n as f32;
+        let normal = if part % 2 == 0 { across } else { up };
+        let skin = if part % 2 == 0 {
+            Skin::Dark
+        } else {
+            Skin::Light
+        };
+        let r = (len / n as f32 * 0.62).clamp(0.08, 0.2);
+        let mut link = hoop(skin, from.lerp(to, k), normal, r);
+        // A link is longer than it is wide.
+        link.scale = Vec3::new(r, r, r * 1.6);
+        link.turn = Quat::from_mat3(&Mat3::from_cols(normal.cross(along), normal, along));
+        return Some(link);
+    }
+    let spin = frame * 0.12;
+    let face = along;
+    match part - n {
+        0 => Some(hoop(Skin::Dark, to, face, 0.55)),
+        1 => Some(hoop(Skin::Light, to, face, 0.42)),
+        2 => Some(plate(Skin::Sun, to, face, 0.22 + 0.04 * spin.sin(), 0.03)),
+        _ => None,
     }
 }

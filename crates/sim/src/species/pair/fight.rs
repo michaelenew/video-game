@@ -363,8 +363,15 @@ pub fn aimed(m: &Monster, den: &Den) -> V3 {
     )
 }
 
-fn word_of(p: V3) -> u32 {
-    lore::halves(lore::to_cm(p.x), lore::to_cm(p.z))
+/// **A point to a word, rounded in its den's frame** -- `in_den` the other
+/// way round. Rounded where the world is, `to_cm`'s rounding down came out a
+/// centimetre different once the world had moved into another place's
+/// coordinates (`tests/valley.rs`, the perch, 2026-11-08); rounded from the
+/// den's origin and then moved by whole centimetres, it is the same word in
+/// every frame. Exactly `to_cm` at home.
+fn word_of(p: V3, den: &Den) -> u32 {
+    let at = |v: Fx, off: Fx| lore::moved_cm(lore::to_cm(v.sub(off)), lore::cm_of(off));
+    lore::halves(at(p.x, den.off.x), at(p.z, den.off.z))
 }
 
 /// The leap this cat is in, if it is in one.
@@ -653,7 +660,7 @@ pub fn frame(w: &mut World) {
         let Some(m) = m.filter(|_| cats[s]) else {
             continue;
         };
-        lore.set_word(word::of(s, word::POS), word_of(m.pos));
+        lore.set_word(word::of(s, word::POS), word_of(m.pos, &ground.den));
         // **A window is remembered until the gap after it has run**
         // (2026-10-13): forgotten the frame it closed, the partner could
         // commit a move landing a few frames after a hit that had just
@@ -894,8 +901,13 @@ fn perch_spots(
     ground: &crate::arena::Terrain,
     field: &crate::stones::Field,
 ) {
+    // None, and nowhere: a perch left standing in the word with no top was
+    // in whatever frame it was written in, and `shift` (rightly) moves only
+    // a perch there is -- so two worlds framed apart kept different stale
+    // words for the same nothing (`tests/valley.rs`, 2026-11-08).
     for s in 0..MAX_MONSTERS {
         lore.set_word(word::of(s, word::PERCH_TOP), 0);
+        lore.set_word(word::of(s, word::PERCH_AT), 0);
     }
     let wide = Knob::PerchWidth.fx();
     let highest = Knob::PerchHighest.fx();
@@ -948,7 +960,7 @@ fn perch_spots(
             );
         }
         if let Some((at, top, _)) = best {
-            lore.set_word(word::of(s, word::PERCH_AT), word_of(at));
+            lore.set_word(word::of(s, word::PERCH_AT), word_of(at, &ground.den));
             // Over its den's floor plane: a top is a top whatever frame the
             // world is in, and zero stays none.
             lore.set_int(
@@ -1314,7 +1326,7 @@ fn fly(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones::F
         // In its den's frame, so a change of frame mid-leap moves nothing:
         // the word is the same wherever the world is.
         let off = ground.den.off;
-        m.own[body::LEAP_FROM] = word_of(m.pos.sub(off)) as i32;
+        m.own[body::LEAP_FROM] = word_of(m.pos.sub(off), &Den::of(ground.den.arena)) as i32;
         set_upper(m, lore::to_cm(m.pos.y.sub(off.y)) as i32);
         let to = flat(aimed(m, &ground.den).sub(m.pos));
         if to.flat_len().raw() > 0 {

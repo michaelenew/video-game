@@ -300,7 +300,7 @@ scalars! {
     // every knob after it somebody else's baked value. The palette groups by
     // family rather than by position, so these still show up next to the three
     // wing knobs above.
-    OrbBack,           "Dual mage", "Orb, starts behind her (m)",            Fixed,  0,        fx(1,1);
+    OrbBack,           "Dual mage", "Orb, starts behind her (m)",            Fixed,  0,        fx(4,1);
     OrbSweetRadius,    "Dual mage", "Orb, sweet spot radius (m)",            Fixed,  fx(1,20), fx(2,1);
     ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
     LotusUncurl,       "Reaver",    "Lotus, turn coming home (turns)",       Fixed,  0,        fx(1,2);
@@ -1344,7 +1344,7 @@ scalars! {
     LanceLunge,           "Dual mage", "Lance, she lunges clear at (m/s)",                   Fixed, 0, fx(40,1);
     LanceLungeUp,         "Dual mage", "Lance, and rises at (m/s)",                          Fixed, 0, fx(30,1);
     StormDash,            "Dual mage", "Storm, she dashes in and out at (m/s)",              Fixed, fx(5,1), fx(120,1);
-    StormOut,             "Dual mage", "Storm, out the way she holds this far (m)",          Fixed, 0, fx(16,1);
+    StormOut,             "Dual mage", "Storm, carries through at (m/s)",                    Fixed, 0, fx(40,1);
     WaveRise,             "Dual mage", "Ascension, the wave rises (a second)",               Fixed, 0, fx(200,1);
     WaveVent,             "Dual mage", "Ascension, a move she throws pushes the wave back",  Int, 0, 100;
     WaveBreaks,           "Dual mage", "Ascension, the wave breaks at",                      Int, 0, 100;
@@ -1433,6 +1433,19 @@ scalars! {
     CastQuickest, "Blood mage", "Cast, the throw takes at least", Frames, 1, 30;
     ZipBodyRise, "Blood mage", "Zip, onto a body she keeps at most this rise (m/s)", Fixed, 0, fx(20,1);
     ReelNear, "Blood mage", "Chain, a fighter reeled in this near is let go (m)", Fixed, fx(1,2), fx(6,1);
+    // **The second round of play** (2026-11-06): a major needs a full bar;
+    // the storm leaps in and carries through; the chain stays out and a
+    // second tap yanks; a strike's hop is as it passes her. Appended:
+    // `tuned::SCALARS` is read by this enum's own discriminant.
+    MajorNeeds,           "Dual mage", "A major needs its bar at",                           Int, 0, 100;
+    StormRise,            "Dual mage", "Storm, carries through rising at most (m/s)",        Fixed, 0, fx(30,1);
+    StormAir,             "Dual mage", "Storm, in the air she goes this far (m)",            Fixed, 0, fx(20,1);
+    ChainOut,             "Dual mage", "Chain, stays out for",                               Frames, 0, 240;
+    YankSpeed,            "Dual mage", "Chain, a second tap yanks them at (m/s)",            Fixed, 0, fx(60,1);
+    AutoHopsAt,           "Dual mage", "Auto, she hops as it passes her, active frame",      Frames, 0, 30;
+    YankLands,            "Dual mage", "Chain, the yank drags them this far in front of her (m)", Fixed, 0, fx(6,1);
+    MajorDash,            "Dual mage", "Q and E, she dashes out on the press at (m/s)",      Fixed, 0, fx(40,1);
+    MajorDashUp,          "Dual mage", "Q and E, and rises at (m/s)",                        Fixed, 0, fx(20,1);
 }
 
 // ---------------------------------------------------------------------------

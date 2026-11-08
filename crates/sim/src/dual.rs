@@ -174,11 +174,17 @@ pub fn step(p: &mut Player) -> bool {
     if let Mechanic::Meter {
         veil: v,
         primed: pr,
+        chained,
+        chain_out,
         ..
     } = &mut p.mechanic
     {
         *v = veil.saturating_sub(1);
         *pr = primed.saturating_sub(1);
+        *chain_out = chain_out.saturating_sub(1);
+        if *chain_out == 0 {
+            *chained = 0;
+        }
     }
 
     if ascending > 0 {
@@ -198,6 +204,26 @@ pub fn step(p: &mut Player) -> bool {
             end_ascension(p);
         }
         return false;
+    }
+
+    // **The burn is back, 2026-11-06** (the owner: "we keep the health burn
+    // if she's ever more than 1/3 out of balance"): past `band` apart she
+    // burns, faster the further -- and nothing else moves: no drift, no calm.
+    if let Some((dark, light)) = bars(p) {
+        let excess = dark.sub(light).abs().sub(Fx::from_int(t::meter_band()));
+        if excess.raw() > 0 {
+            let Mechanic::Meter { singe, .. } = p.mechanic else {
+                return false;
+            };
+            let singe = singe.add(t::burn_gain().mul(excess).min(t::burn_cap()).mul(DT));
+            let owed = singe.to_int();
+            if owed > 0 && p.health > 1 {
+                p.health = (p.health - owed).max(1);
+            }
+            if let Mechanic::Meter { singe: s, .. } = &mut p.mechanic {
+                *s = singe.sub(Fx::from_int(owed.max(0)));
+            }
+        }
     }
 
     // **Nothing moves the bars on its own since 2026-11-04** (the owner,
@@ -351,18 +377,29 @@ pub fn take_prime(p: &mut Player) -> bool {
     }
 }
 
+/// **Can she pay for it?** (2026-11-06, from the owner): the storm and the
+/// lance need `a big hold spends of its bar` of their own -- a third -- and
+/// a major needs its bar at `a major needs its bar at` (full). Everything
+/// else is free. True for anybody else.
+pub fn affords(p: &Player, kind: u8) -> bool {
+    use crate::moves::dual as d;
+    let Some((dark, light)) = bars(p) else {
+        return true;
+    };
+    let has = |bar: Fx, need: i32| bar.raw() >= Fx::from_int(need).raw();
+    match kind {
+        d::STORM => has(dark, t::lance_spends()),
+        d::LANCE => has(light, t::lance_spends()),
+        d::ABYSS => has(dark, t::major_needs()),
+        d::JUDGEMENT => has(light, t::major_needs()),
+        _ => true,
+    }
+}
+
 /// Is she brimming -- both bars at the top together, so the next
 /// annihilation is the grand one?
 pub fn brimming(p: &Player) -> bool {
     tier_of_bar(lower(p)) == Tier::Wings
-}
-
-/// Both bars spent: the grand annihilation took them.
-pub fn spend_both(p: &mut Player) {
-    if let Mechanic::Meter { dark, light, .. } = &mut p.mechanic {
-        *dark = Fx::ZERO;
-        *light = Fx::ZERO;
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -400,18 +437,11 @@ pub fn depth_at(p: &Player, kind: Option<u8>) -> Fx {
     // **Only the majors read a bar since 2026-11-04**: everything else hits
     // the same at any bar -- the bars are what she builds toward her
     // finishers, not a tax on everything between them.
-    let _ = colour;
-    let bar = match kind {
-        Some(kind) if crate::moves::dual::is_the_finisher(kind) => {
-            match crate::moves::dual::force(kind) {
-                Some(Force::Dark) => dark,
-                _ => light,
-            }
-        }
-        _ => return Fx::ONE,
-    };
-    let out = bar.div(top()).clamp(Fx::ZERO, Fx::ONE);
-    crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
+    // **And since 2026-11-06 not even the majors** (the owner: "the bars
+    // don't add a damage multiplier, just how much energy she has to
+    // vent"): a major needs a full bar and is always the same major.
+    let _ = (colour, dark, light, kind);
+    Fx::ONE
 }
 
 // ---------------------------------------------------------------------------
@@ -441,6 +471,16 @@ pub fn spring(p: &mut Player, along: crate::math::V3) {
     for _ in 0..springs {
         worth = worth.mul(t::spring_falloff());
     }
+    // **Away, always** (2026-11-08, from play: "it needs to be a
+    // disengage move ... right now I can just hop on the ridgeback's back
+    // and spam it"): the way she holds, or straight back from the way she
+    // faces holding nothing -- never straight up, which landed her where she
+    // started. Mostly along, a little up.
+    let along = if along == crate::math::V3::ZERO {
+        crate::math::V3::new(p.facing.x.neg(), Fx::ZERO, p.facing.z.neg()).normalized()
+    } else {
+        along
+    };
     let up = t::spring_lift().mul(worth);
     let carry = along.scale(t::spring_along().mul(worth));
     p.vel = crate::math::V3::new(carry.x, p.vel.y.max(Fx::ZERO).max(up), carry.z);
@@ -728,6 +768,35 @@ pub fn veil_for(p: &mut Player, frames: u8) {
 /// Is she inside a Veil right now? Read by `state::Player::untouchable`.
 pub fn veiled(p: &Player) -> bool {
     matches!(p.mechanic, Mechanic::Meter { veil, .. } if veil > 0)
+}
+
+/// **How many frames are left of the storm's leap in**, while she is on it:
+/// what the renderer turns her over by (`view::interp::roll_of`). `None` on
+/// the floor, or doing anything else.
+pub fn storm_flight(p: &Player) -> Option<u16> {
+    let leaping = matches!(
+        p.action,
+        crate::state::Action::Recovery {
+            kind: crate::moves::dual::STORM,
+            ..
+        }
+    );
+    match p.mechanic {
+        Mechanic::Meter { storm, .. } if leaping && storm > 0 => Some(storm),
+        _ => None,
+    }
+}
+
+/// **Does she slip past bodies this frame?** (2026-11-08, from play: "I
+/// keep getting stuck in the ridgeback. Seems like some of my moves let me
+/// pass through while others (the lclick hold) don't.") Through any move of
+/// her own -- wind-up, strike and recovery, a hold deciding -- and while she
+/// is untouchable: a creature does not stop her, and fighters are not set
+/// apart from her. On her feet and free she is as solid as anybody, and
+/// slides along a creature's flank rather than stopping against it
+/// (`meet_the_creature`). Nobody else slips.
+pub fn slips_past(p: &Player) -> bool {
+    p.class == crate::Class::DualMage && (p.action.attack_kind().is_some() || veiled(p))
 }
 
 /// Is she standing in her own sigil this frame?

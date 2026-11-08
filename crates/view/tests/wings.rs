@@ -31,6 +31,8 @@ fn mage_with(dark: i32, light: i32, ascending: u16) -> World {
         veil: 0,
         warded: false,
         primed: 0,
+        chained: 0,
+        chain_out: 0,
     };
     w
 }

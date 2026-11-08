@@ -196,21 +196,28 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
             );
         }
     }
+    // The pools' middle, weighted by size, **taken from where it last saw
+    // them**: an average of the pools' own positions rounds differently in
+    // every frame of reference, so a creature whose world moved into the
+    // next place's coordinates walked somewhere a few millimetres off
+    // (`tests/valley.rs`, 2026-11-06). Offsets from a point both frames
+    // agree on round the same everywhere.
     let reach = Knob::TarReach.fx();
+    let from = m.brain.seen;
     let mut sum = V3::ZERO;
     let mut weight = Fx::ZERO;
     for h in mind.ground.floor.iter() {
-        if h.kind != TAR || math::wide_flat_dist(h.a, m.brain.seen).raw() > reach.raw() {
+        if h.kind != TAR || math::wide_flat_dist(h.a, from).raw() > reach.raw() {
             continue;
         }
         let w = h.radius;
-        sum = sum.add(h.a.scale(w));
+        sum = sum.add(h.a.sub(from).scale(w));
         weight = weight.add(w);
     }
     if weight.raw() <= 0 {
         return None;
     }
-    Some(sum.scale(Fx::ONE.div(weight)))
+    Some(from.add(sum.scale(Fx::ONE.div(weight))))
 }
 
 /// As a move commits: a flop fleeing fire leaps away from it, and every

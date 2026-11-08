@@ -398,11 +398,20 @@ fn the_dual_mages_hop_and_hold_are_ticked() {
     use Look::Dummy as D;
     let hop: Script = &[(L | W, 2, D), (W, 40, D)];
     assert_eq!(run(Class::DualMage, 1, 2, 6, hop), 1, "a hop");
-    let hold: Script = &[(L, 20, D), (0, 90, D)];
-    assert!(run(Class::DualMage, 1, 3, 6, hold) >= 1, "Chain lightning");
+    // The storm costs a third of the dark bar (2026-11-06): two strikes on
+    // the dummy first fill it.
+    let hold: Script = &[
+        (L, 1, D),
+        (0, 40, D),
+        (L, 1, D),
+        (0, 40, D),
+        (L, 20, D),
+        (0, 90, D),
+    ];
+    assert!(run(Class::DualMage, 1, 3, 6, hold) >= 1, "the storm");
     assert_eq!(
         run(Class::DualMage, 1, 0, 6, hold),
-        0,
+        2,
         "a hold is not a tap"
     );
 }

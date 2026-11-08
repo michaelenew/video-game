@@ -23,11 +23,13 @@ pub static TUTORIAL: Tutorial = Tutorial {
     plays: "Left click is Dark and right click is Light: a quick strike she steps off, and a \
             hop the way you hold. Hold a click for the big one -- right after a strike lands, \
             it comes out fast. Both at once and the two collide where she was standing as she \
-            springs clear. Every hit she lands fills a bar; the big holds spend a little of \
-            theirs, Q and E all of one, and both full makes the next annihilation the grand one.",
+            is thrown clear -- her way out. Every hit she lands fills a fifth of a bar; a big \
+            hold costs a third of its bar, and Q and E need a full one: she is gone on the press \
+            and it comes down where she stood. Let the two bars drift more than a third apart \
+            and she burns.",
     wins: "She wins by staying just out of reach -- in close enough that the strikes she dodges \
-           land on them -- and building both bars to a grand annihilation, or spending one on a \
-           major.",
+           land on them -- and spending full bars on her majors, the Abyss and then Judgement \
+           on the same spot.",
     rooms: &ROOMS,
 };
 
@@ -69,13 +71,19 @@ fn dark(s: &Seen) -> bool {
 fn air_dark(s: &Seen) -> bool {
     s.began_aloft(DARK_AUTO)
 }
-/// A hop off an auto: carried the way she holds, as its strike ends.
+/// A hop off an auto: pushed the way she holds, as its strike passes her
+/// (2026-11-06) -- a push since 2026-11-08, not a haul.
 fn hop(s: &Seen) -> bool {
-    s.was().haul == 0
-        && s.now().haul > 0
+    // Faster than she walks: only the push gets her there.
+    let fast = crate::tuning::move_speed().raw();
+    s.was().vel.flat_len().raw() <= fast
+        && s.now().vel.flat_len().raw() > fast
         && matches!(
             s.now().action,
-            Action::Recovery {
+            Action::Active {
+                kind: DARK_AUTO | LIGHT_AUTO,
+                ..
+            } | Action::Recovery {
                 kind: DARK_AUTO | LIGHT_AUTO,
                 ..
             }
@@ -92,6 +100,9 @@ fn lance(s: &Seen) -> bool {
 }
 fn chain(s: &Seen) -> bool {
     s.began(CHAIN)
+}
+fn yank(s: &Seen) -> bool {
+    s.began(YANK)
 }
 fn ride(s: &Seen) -> bool {
     s.began(FLURRY_DASH)
@@ -129,9 +140,10 @@ fn air_hop(s: &Seen) -> bool {
 fn second_spring(s: &Seen) -> bool {
     !s.now().grounded && both(s).is_some_and(|(was, now)| was.springs == 1 && now.springs == 2)
 }
-/// The grand annihilation: thrown with both bars full.
-fn grand(s: &Seen) -> bool {
-    s.began(ANNIHILATION) && crate::dual::brimming(s.was())
+/// Judgement thrown with the Dark bar already spent: the Abyss first, then
+/// Judgement -- the pair the bars are for.
+fn both_majors(s: &Seen) -> bool {
+    s.began(JUDGEMENT) && crate::dual::bar(s.was(), crate::class::Force::Dark).raw() == 0
 }
 /// A hold thrown primed: a strike landed a moment ago.
 fn primed(s: &Seen) -> bool {
@@ -173,10 +185,10 @@ pub const ROOMS: [Room; 10] = [
         advanced: false,
         intro: "Tapped, left click is a dark strike from behind her, at her: she steps off it \
                 and it flies on into whatever she faces. Hold a direction as you tap and she hops \
-                that way. Held a moment, the storm: she dashes to the crosshair, the lightning \
-                aimed at her comes down there as she dashes out -- back where she was, or the \
-                way you hold -- and it leaps to whoever is near. It spends a little of your \
-                Dark bar.",
+                that way, as it passes her. Held a moment, the storm: she leaps to the crosshair \
+                (in the air, straight toward it, up as well), the lightning aimed at her comes \
+                down there and leaps to whoever is near, and she flips on through -- or the \
+                way you hold. It costs a third of your Dark bar.",
         tasks: &[
             Task {
                 what: "Dark strike, on the floor",
@@ -198,7 +210,7 @@ pub const ROOMS: [Room; 10] = [
             },
             Task {
                 what: "Hold: the storm",
-                keys: "Hold left click, crosshair on the dummy",
+                keys: "Land two dark strikes, then hold left click at the dummy",
                 check: storm,
                 lands: false,
             },
@@ -212,8 +224,8 @@ pub const ROOMS: [Room; 10] = [
         intro: "Tapped, right click is the same strike in light; one that lands fills your Light \
                 bar. \
                 Held, the lance: a great beam from behind her, through where she stood, to the \
-                crosshair -- and she lunges clear of it, back, or the way you hold. It spends a \
-                little of your Light bar.",
+                crosshair -- and she lunges clear of it, back, or the way you hold. It costs a \
+                third of your Light bar.",
         tasks: &[
             Task {
                 what: "Light strike",
@@ -223,7 +235,7 @@ pub const ROOMS: [Room; 10] = [
             },
             Task {
                 what: "Hold: the lance",
-                keys: "Hold right click, crosshair on the dummy",
+                keys: "Land two light strikes, then hold right click at the dummy",
                 check: lance,
                 lands: true,
             },
@@ -235,14 +247,21 @@ pub const ROOMS: [Room; 10] = [
         title: "Middle click: the chain",
         advanced: false,
         intro: "Middle click flings both forces, linked, at her. Tapped, she lets the chain \
-                fly by and it binds the first body it meets. Held, she catches its tail and is \
-                dragged down the line to where it lands, through whoever is on it.",
+                fly by and it binds the first body it meets -- tap again while it is still on \
+                them and it yanks them to her. Held, she catches its tail and is dragged down the \
+                line toward the crosshair, through whoever is on it.",
         tasks: &[
             Task {
                 what: "The chain",
                 keys: "Tap middle click, crosshair on the dummy",
                 check: chain,
                 lands: true,
+            },
+            Task {
+                what: "Yank",
+                keys: "Tap middle click at the dummy, then tap it again",
+                check: yank,
+                lands: false,
             },
             Task {
                 what: "Hold: ride the chain",
@@ -257,12 +276,13 @@ pub const ROOMS: [Room; 10] = [
     Room {
         title: "Both clicks, and the keys",
         advanced: false,
-        intro: "Press left and right together and both beings lunge at her at once: she \
-                springs clear -- up, or the way you hold -- and they annihilate where she was \
-                standing. Close to the dummy, the blast is on them; in the air, it is her way \
-                up. Q and E are her majors, and each spends a whole bar: Q, the Abyss, spends \
-                Dark; E, Judgement, spends Light. They grow with the bar they spend. Her \
-                movement never does.",
+        intro: "Press left and right together and both beings lunge at her at once: she is \
+                thrown clear -- back, or the way you hold, and off anything she is riding -- and \
+                they annihilate where she was standing. It is her way out, not her damage. Q and \
+                E are her majors: each needs a full bar and spends it -- Q, the Abyss, Dark; E, \
+                Judgement, Light. She is gone the moment you press, back or the way you hold, on \
+                the floor or in the air, and it comes down where she stood -- so press it close. \
+                The Abyss and then Judgement on the same spot is the big one.",
         tasks: &[
             Task {
                 what: "Annihilation beside the dummy",
@@ -271,20 +291,20 @@ pub const ROOMS: [Room; 10] = [
                 lands: true,
             },
             Task {
-                what: "In the air: spring higher",
+                what: "In the air: spring away",
                 keys: "Space, then left and right click together",
                 check: air_annihilation,
                 lands: false,
             },
             Task {
                 what: "Abyss",
-                keys: "Q at the dummy",
+                keys: "Five dark strikes on the dummy, then Q beside it",
                 check: abyss,
                 lands: false,
             },
             Task {
                 what: "Judgement",
-                keys: "E at the dummy",
+                keys: "Five light strikes on the dummy, then E beside it",
                 check: judgement,
                 lands: false,
             },
@@ -319,8 +339,8 @@ pub const ROOMS: [Room; 10] = [
     Room {
         title: "Advanced: spend a bar",
         advanced: true,
-        intro: "The majors spend their own bar, and are worth what they spend. Let one get \
-                ahead -- three hits of one hand -- then spend it.",
+        intro: "A major needs its bar full and spends all of it. Fill one -- five hits of one \
+                hand -- and spend it before the two drift a third apart and start to burn you.",
         tasks: &[Task {
             what: "Spend the bar that is ahead",
             keys: "Dark ahead: Q. Light ahead: E",
@@ -354,12 +374,12 @@ pub const ROOMS: [Room; 10] = [
         bay: Bay::Shelf(250),
     },
     Room {
-        title: "Advanced: springs, and the grand annihilation",
+        title: "Advanced: springs, and both majors",
         advanced: true,
-        intro: "Each spring in one jump goes less high than the last, and every hit you land \
-                gives one back -- so she stays up for as long as she keeps hitting. Fill both \
-                bars to the top and the next annihilation is the grand one: far bigger, and it \
-                spends them both.",
+        intro: "Each spring in one jump carries her less far than the last, and every hit you \
+                land gives one back -- so she stays up for as long as she keeps hitting. Fill \
+                both bars to the top, then the Abyss and Judgement on the same spot: the \
+                biggest thing she does.",
         tasks: &[
             Task {
                 what: "Two springs in one jump",
@@ -368,9 +388,9 @@ pub const ROOMS: [Room; 10] = [
                 lands: false,
             },
             Task {
-                what: "The grand annihilation",
-                keys: "Both bars full, then left and right together",
-                check: grand,
+                what: "The Abyss, then Judgement",
+                keys: "Both bars full, then Q and E beside the dummy",
+                check: both_majors,
                 lands: true,
             },
         ],

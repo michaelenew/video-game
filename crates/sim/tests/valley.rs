@@ -600,9 +600,12 @@ fn a_change_of_frame_changes_nothing() {
             w.advance([script(f), script(f + 45)]);
             moved.advance([script(f), script(f + 45)]);
         }
+        // Back to whichever place the fight never moved is in: the Bank,
+        // unless the script walked it out (the Dual mage does since her
+        // majors and hops carry her, 2026-11-08).
         assert_eq!(
             moved.arena,
-            ArenaId::BANK,
+            w.arena,
             "{}: the frame did not come back",
             class.name()
         );

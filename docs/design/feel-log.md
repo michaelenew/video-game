@@ -213,6 +213,73 @@ The play scripts are in the dated entries for that day.
 
 ## Entries
 
+### 2026-11-08 — the Dual mage's third play: Q and E on the press, a hop that carries, a way out
+
+**Changed** Everything in [kits/dual-mage.md](kits/dual-mage.md) §"The third play". `Q` and `E`
+dash her out on the press (`Q and E, she dashes out on the press at` 18 m/s, rising 6), from the
+floor and the air, and the strike comes down where she stood once its startup is spent: Judgement
+14/5/14 and 200, the Abyss 12/8/12 and 8 a tick, no hang, repeat lockout 100%. Measured on a dummy
+a metre off: the Abyss 180, Judgement 206, the pair 459, against 19 an auto and 80 an
+annihilation; she is 4-5 m clear as it lands and free at 34 and 43 frames. The hop after an auto
+is a push (`auto, hop speed` 12, from a 22 m/s haul that stopped her dead), kept by the air. The
+annihilation is never grand and costs nothing; it throws her back from the way she faces (or the
+way she holds), 18 along and 9 up (from 10 and 20), and off a mount. The storm leaps at 24 (from
+14; it was 45) and is drawn as a flip (`view::interp::roll_of`, the last 16 frames of the leap).
+She slips past bodies in any move of her own or while untouchable, and slides along a creature's
+flank on her feet rather than stopping. `E` counts while held for her; `Q` on a creature's back is
+`keyed_q` for everybody. Her own wings are hidden with the camera in her back.
+**Why** The owner, from a twenty-minute replay against the Ridgeback: "q and e don't do anything
+even at full charge"; "holding lclick sometimes does nothing"; the storm "slow and clunky ... I
+need the animation to convey flipping through the air nimbly"; "the momentum you get from the auto
+... you end up at a total standstill, especially in the air"; "I need to be able to use q and e in
+the air"; the explosion "needs to be a disengage move ... right now I can just hop on the
+ridgeback's back and spam it"; "q and e don't feel like they give her mobility at all, and the
+damage isn't even close to worth it"; "I keep getting stuck in the ridgeback"; "performance is
+much worse on this thread".
+**What the replay said** (`hunt --bin replay`, a frame trace): the bars did fill -- from the
+Flurry dash and the annihilation mostly -- but 164 annihilations, every one at full bars the
+grand one, spent both each time. `Q` aboard the Ridgeback threw slot two, which for her is
+Judgement on the *light* bar, so `Q` with a full dark bar did nothing there. `E` was read on its
+press only, so a press in a recovery or a stagger was lost. The left holds that "did nothing" were
+the other click pressed within the hold's ten frames: the chord, an annihilation.
+**Performance** Her simulation is not it: 18 µs a frame against the Ridgeback, no allocation. Her
+six blended, double-sided wings were never hidden with the camera pressed into her back, and on a
+software rasteriser filled the screen 2.7 times, the transparent pass as dear as the opaque one.
+They go now at `InsideOwnHead` 0.15 and cast no shadow. The Riverside's frames (~0.2 ms, to 0.9)
+are the critter pack and the land's relief, any class: not touched here.
+**On the way** Two valley frame tests: the Pair kept a stale perch word when it had no perch,
+which the frame shift (rightly) does not move -- cleared now -- and writes its points rounded in
+its den's frame. A test that assumed every class stays in the Bank for three seconds now asks
+whether the moved world came back to where the unmoved one is. B3 is back to its quarter.
+**Not yet** The flip is the renderer's turn over a clip borrowed from Phase; nobody has looked at
+it in motion. Ascension is still dormant.
+
+### 2026-11-06 — the Dual mage's second play: the storm leaps, the chain yanks, the bars are energy
+
+**Changed** Everything in [kits/dual-mage.md](kits/dual-mage.md) §"The second play": the storm
+leaps in (an arc on the floor, straight toward the crosshair in the air, 14 m/s) and carries
+through rather than dashing back; the chain ride aims at the crosshair, not the floor; the chain
+lasts 10 active frames and stays out 60 on whoever it bound, a second tap the yank; the strikes
+start 2 m behind her and she hops as they pass, her clip a goad and a sway; the bars are energy
+(nothing reads them, 20 a hit, the big holds a third, a major a full bar), the burn back past a
+third apart; `Q` and `E` at her feet with a lunge out, weaker and longer.
+**Why** The owner, after playing: the lightning "over-tuned on the mobility ... a jump and maybe a
+flip in, then back out, and it needs to be slower"; "in the air it go a fixed distance toward
+where the cursor is pointing"; "carry through by default, not dash back"; middle click "forces me
+to the ground when I want to use it to go upwards or laterally in the air"; "tap then tap again
+while the chain is still out should yank"; the autos "still read like the 'kalista' version";
+the bars "hard to build up ... it feels bad to cash in"; "maybe 5 autos to max bars"; `Q`/`E`
+"dash-moves ... she has to get close"; "lightning and lance should each consume a full third of
+the bar"; "we keep the health burn if she's ever more than 1/3 out of balance".
+**On the way** A reach of nought on the floor aim ran to the first terrain however far (55 m in
+a test): `aim::grounded_path` now reads it as her own feet. Six knobs went in mid-list at first
+and shifted every knob after them by six, the Blood mage's included; moved to the end, and the
+Blood mage's values checked against main. A held click she could not pay for first threw
+nothing at all; the hold now opens whatever her bar, and asks when it is full -- so the chord
+still works. A feel rule (`a_move_never_snaps_you_to_its_speed`) now excuses a haul as driving
+the body, since the hop is inside the strike. The flip in the storm's leap is not drawn yet.
+**Verdict** open -- unplayed.
+
 ### 2026-11-04 — the Dual mage's bars build to her finishers; strikes prime the holds
 
 **Changed** A bar fills on a landed hit (6), never on a press; the lance spends 20 of her light;

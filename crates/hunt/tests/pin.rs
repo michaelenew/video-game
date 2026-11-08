@@ -132,7 +132,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // The Dual mage moved 2026-11-04, deliberately: her new kit (exploration
     // 0037), and the bot's way up in the air is the spring out of an
     // annihilation where it was a second jump on a tier.
-    (Class::DualMage, 2_222, 0x61ff4a68f8830bbf),
+    // Moved 2026-11-08: Q and E on the press, the hop a push, the
+    // annihilation a disengage, slipping past bodies.
+    (Class::DualMage, 2_222, 0xe68f402b7b25e0c8),
     // Added 2026-10-01 with the class layer, so that what it does with the
     // shadow, the fire and the pools is pinned as the plan's moves are.
     // Moved 2026-10-09, deliberately: her clicks in the air and off the
@@ -151,7 +153,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved 2026-10-18, deliberately: her QoL pass (a bigger, longer
     // pillar, pushes that act on the whole line, a sliding Fissure, burning
     // wind, a higher Updraft). Nobody else's moved.
-    (Class::Elementalist, 59, 0xa0f5a3542e63ca17),
+    // And 2026-11-08: `Q` on a creature's back is her weak push, as on the
+    // floor (`keyed_q`), not slot two.
+    (Class::Elementalist, 59, 0x7331ab1f350b13ad),
     // Moved 2026-10-09, deliberately: her buttons moved on to three clicks
     // (the class layer presses her scythe and her Grasp through the buttons
     // it learns), and creatures bleed. See feel-log.md. Again the same day

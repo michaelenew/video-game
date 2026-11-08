@@ -5250,8 +5250,8 @@ pub fn storm_dash() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StormDash)).max(Fx::ONE)
 }
 
-/// How far the storm's dash out goes the way she holds. Holding nothing she
-/// goes back where she came from, however far that was.
+/// How fast the storm's carry-through sends her on: the way she holds, or the
+/// way she came, holding nothing (2026-11-06; it dashed her back out before).
 pub fn storm_out() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StormOut)).max(Fx::ZERO)
 }
@@ -5628,4 +5628,54 @@ pub fn zip_body_rise() -> Fx {
 /// How near her a fighter reeled in on the chain is let go, staggered.
 pub fn reel_near() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ReelNear).max(0))
+}
+
+/// What a major needs of its own bar before it can be thrown: the energy it
+/// vents. Full, by default.
+pub fn major_needs() -> i32 {
+    oven::scalar(Scalar::MajorNeeds).clamp(0, 100)
+}
+
+/// The fastest the storm's carry-through sends her upward: it keeps the
+/// way she came, but never more lift than this.
+pub fn storm_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StormRise)).max(Fx::ZERO)
+}
+
+/// How far the storm takes her in the air: straight toward the crosshair,
+/// up as well as along.
+pub fn storm_air() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StormAir)).max(Fx::ZERO)
+}
+
+/// How long the chain stays out on whoever it bound: a second tap in this
+/// time yanks them to her.
+pub fn chain_out() -> u16 {
+    oven::scalar(Scalar::ChainOut).clamp(0, 240) as u16
+}
+
+/// How fast the yank drags them to her.
+pub fn yank_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::YankSpeed)).max(Fx::ONE)
+}
+
+/// The active frame of a strike on which she hops: as it passes her.
+pub fn auto_hops_at() -> u16 {
+    oven::scalar(Scalar::AutoHopsAt).clamp(0, 30) as u16
+}
+
+/// How far in front of her the yank drags them to.
+pub fn yank_lands() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::YankLands)).max(Fx::ZERO)
+}
+
+/// How fast she dashes out of a major on the press: the strike is coming
+/// down where she stood (2026-11-08).
+pub fn major_dash() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorDash)).max(Fx::ZERO)
+}
+
+/// How fast she rises as she dashes out of a major.
+pub fn major_dash_up() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MajorDashUp)).max(Fx::ZERO)
 }

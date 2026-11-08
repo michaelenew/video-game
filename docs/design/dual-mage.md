@@ -19,6 +19,18 @@ holding them level — and she gets what neither could give her alone: wings.
 The verb is **goad**. This is a containment story, not a channelling story: the human is not a
 conduit, they are a vessel under load, and the load is two things that want to be apart.
 
+> **2026-11-08, after the third play: no grand annihilation.** Both clicks together cost nothing
+> at any bar and are her way out; the two majors are what full bars are for, and she is gone on
+> their press. See [kits/dual-mage.md](kits/dual-mage.md) §"The third play".
+
+> **The bars again, 2026-11-06, after the second play: energy, not power.** Nothing reads a
+> bar. Five landed strikes fill one (20 a hit); the storm and the lance cost a third of their
+> own and cannot be thrown without it; a major needs its bar full and spends it; both full is
+> the grand annihilation. The burn is back past a third apart; nothing else moves the bars. The
+> owner: "The bars don't add a damage multiplier, just how much energy she has to vent"; "we
+> keep the health burn if she's ever more than 1/3 out of balance"; Ascension "not yet sure" --
+> dormant. See [kits/dual-mage.md](kits/dual-mage.md) §"The second play".
+
 > **The bars rebuilt, 2026-11-04, after the first play: they build to her finishers.** The
 > owner: the bars "feel like a chore rather than a part of the class. You're more effective by
 > spamming balanced abilities at the ground until you nearly ascend"; "I wonder if the bars are

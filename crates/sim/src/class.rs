@@ -222,6 +222,8 @@ impl Class {
                 veil: 0,
                 warded: false,
                 primed: 0,
+                chained: 0,
+                chain_out: 0,
             },
         }
     }
@@ -1141,6 +1143,10 @@ pub enum Mechanic {
         /// of hers just landed. The strike is the way into the big spells.
         /// See `crate::dual::prime`.
         primed: u8,
+        /// **The chain, still out** (2026-11-06): which fighters it bound, a
+        /// bit a seat, and the frames left in which a second tap yanks them.
+        chained: u8,
+        chain_out: u8,
         /// Standing in one of her own sigils this frame, so a wound is cut by
         /// `sigil, wards her by`. Set by the world, which knows where the
         /// sigils are, once a frame; read by `state::Player::wound`.

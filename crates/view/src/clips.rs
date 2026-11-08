@@ -463,8 +463,10 @@ clips! {
         "Dark auto, left arm: a straight punch that opens into a wing behind the fist.";
     DualLightLance,"dual_light_lance",Moves, "dual", Length::Move(Class::DualMage, 1), false,
         "Light lance: the right arm cocked high and thrown through, a long line aimed past them to burst behind.";
-    DualSpecial,   "dual_special",    Moves, "dual", Length::Move(Class::DualMage, 2), false,
-        "Judgement: the finisher. Squared up, both forces at once, and as big as the bar lets it be.";
+    // Timed to the lance since 2026-11-08: Judgement became a dash out on
+    // the press, fourteen frames in, which this clip's arc cannot fit.
+    DualSpecial,   "dual_special",    Moves, "dual", Length::Move(Class::DualMage, 16), false,
+        "The raised special: squared up, both forces at once -- the lance's wind-up.";
     DualSweep,     "dual_sweep",      Moves, "dual", Length::Move(Class::DualMage, 3), false,
         "Sweep: both arms thrown across the whole front at once, round past both shoulders. Close, wide, and it moves people.";
     DualLight,     "dual_light",      Moves, "dual", Length::Move(Class::DualMage, 4), false,

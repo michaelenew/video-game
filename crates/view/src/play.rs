@@ -779,7 +779,9 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         // are the clips she has, by what each move does with her arms.
         (Class::DualMage, 0) => Clip::DualDark,
         (Class::DualMage, 1) => Clip::DualSpecial,
-        (Class::DualMage, 2) => Clip::DualSpecial,
+        // Judgement is a dash out on the press since 2026-11-08: the sweep's
+        // heave, as the Abyss is, not the verdict over her head.
+        (Class::DualMage, 2) => Clip::DualSweep,
         (Class::DualMage, 3) => Clip::DualSweep,
         (Class::DualMage, 4) => Clip::DualLight,
         (Class::DualMage, 5) => Clip::DualDark,
@@ -797,7 +799,10 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         // The long holds (2026-10-12): the cloud and the disk are raised over
         // her head, so both are the raised special; the flurry is the whole
         // body thrown down a line, the sweep's heave.
-        (Class::DualMage, 15) => Clip::DualSpecial,
+        // The storm since 2026-11-08 is a leap and a flip in: arms drawn in
+        // and pushed through, Phase's carry, while `interp::roll_of` turns
+        // her over.
+        (Class::DualMage, 15) => Clip::DualPhase,
         (Class::DualMage, 16) => Clip::DualSpecial,
         (Class::DualMage, 17) => Clip::DualSweep,
         (Class::DualMage, _) => Clip::DualSpecial,
