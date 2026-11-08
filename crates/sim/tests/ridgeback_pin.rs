@@ -219,10 +219,11 @@ const PINNED: [(Class, u64); 6] = [
     (Class::Champion, 0x306e4c7fc94aa235),
     (Class::Bulwark, 0x0514478fd7c7f116),
     (Class::ShadowReaver, 0xc0d87b3b2be42fd0),
-    // The Blood mage's alone again 2026-11-07, deliberately: round three --
+    // The Blood mage's alone again 2026-11-08, deliberately: a held click is
+    // the held move and never the tap first (from play). Before that, round three --
     // the head a weight on a chain, the chain on her left hand, the Red
     // claw, the charge-jump (feel-log.md, 2026-11-07).
-    (Class::BloodMage, 0xdd650b316ff519f9),
+    (Class::BloodMage, 0xcac00fb9ca318464),
     // The Dual mage moved again 2026-11-04, deliberately: her kit is new --
     // both clicks at once annihilate, the holds are the storm and the lance,
     // middle click is the chain, and nothing she moves with reads a bar

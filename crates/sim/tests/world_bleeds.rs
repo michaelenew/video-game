@@ -410,7 +410,8 @@ fn the_sweep_through_a_plant_reaps_it_into_a_cone() {
 fn the_sweep_bleeds_the_floor_and_the_spike_raises_it() {
     let mut w = mage_and(30.0);
     step2(&mut w, keys::SCYTHE, 0, 0);
-    run(&mut w, 30, 0, 0);
+    // Since 2026-11-08 a tap begins as the button comes up, a frame on.
+    run(&mut w, 32, 0, 0);
     // Two: the floor the Sweep cut, and what the Sweep cost her, a stain at
     // the blade's end as every cost is.
     let cut: Vec<Effect> = pools(&w)
@@ -747,4 +748,51 @@ fn the_charge_jump_leaps_further_for_the_hold_and_the_claw_rides_it() {
         step2(&mut w, bits, 0, 0);
     }
     assert!(w.players[1].health < his, "it hit him on the way");
+}
+
+// ---------------------------------------------------------------------------
+// From play, 2026-11-08: one or the other, and a held button does not repeat
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_held_click_is_the_held_move_and_never_the_tap_first_nor_again() {
+    // "Both l and r click, when holding, the short version comes out then
+    // the long one. That's not right, it's one or the other."
+    for (click, tap) in [(keys::HAND, b::REND), (keys::SCYTHE, b::SWEEP)] {
+        let mut w = mage_and(30.0);
+        for _ in 0..t::hold_from() as u32 + 30 {
+            step2(&mut w, click, 0, 0);
+            assert!(
+                !matches!(
+                    w.players[0].action,
+                    Action::Startup { kind, .. } | Action::Active { kind, .. } | Action::Recovery { kind, .. }
+                        if kind == tap
+                ),
+                "held, {:?} wound up the tap first",
+                w.players[0].action
+            );
+        }
+    }
+    // "just holding [the click] while aiming up shoots the scythe head, then
+    // it disappears, then shoots, over and over."
+    let mut w = mage_and(30.0);
+    let mut throws = 0;
+    let mut had = false;
+    for _ in 0..300 {
+        step2(&mut w, keys::SCYTHE, 3000, 0);
+        let out = head(&w).is_some_and(|h| h.age <= 1 && h.head_state() == Head::Flying);
+        if out && !had {
+            throws += 1;
+        }
+        had = out;
+    }
+    assert_eq!(throws, 1, "held five seconds, it threw once");
+    // And a tap is still the tap.
+    let mut w = mage_and(30.0);
+    step2(&mut w, keys::SCYTHE, 0, 0);
+    run(&mut w, 12, 0, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Active { kind, .. } | Action::Recovery { kind, .. } if kind == b::SWEEP),
+        "a tap swept"
+    );
 }

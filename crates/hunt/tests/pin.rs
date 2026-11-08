@@ -188,7 +188,9 @@ const PINNED: [(Class, u32, u64); 7] = [
     // Moved again 2026-11-06, deliberately: her kit rebuilt from play -- the
     // free scythe and hand, the spike anywhere, the queued zip, Seize's lift
     // (feel-log.md, 2026-11-06).
-    (Class::BloodMage, 83, 0xfb5cbd4df151b200),
+    // Moved again 2026-11-08, deliberately: a held click is the held move,
+    // never the tap first, and does not repeat (feel-log.md, 2026-11-07).
+    (Class::BloodMage, 83, 0x4dcde50257abd8e6),
 ];
 
 #[test]
