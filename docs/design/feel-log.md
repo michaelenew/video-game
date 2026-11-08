@@ -10392,3 +10392,19 @@ Level and downhill she reaches further; on some climbs (+2, +10, +16) much less.
 a lower bound, so some of the drop may be routes it did not find again, but a weighted head
 that falls is a real cost on a high lip: **a trade the owner should judge in play** -- the
 head's fall (`Cast, the head falls at`, 28 m/s²) is the knob that buys it back.
+
+## 2026-11-08 — Blood mage: a held click is one move, and does not repeat
+
+From play: "Both l and r click, when holding, the short version comes out then the long one.
+That's not right, it's one or the other" -- held, Rend and the Sweep wound up and then became
+the Red claw and the Cast -- and the click held through a Cast threw it again every forty
+frames, the new head replacing the old, which is also what made the zip seem to vanish. The
+press now opens a hold that is neither yet, the Dual mage's rule: let go inside
+`hold_from` and the tap begins, its wind-up shortened by the frames held; held to it, only the
+held move. A held move's button is spent until it comes up (`Garden::held_spent`). Held by
+`tests/world_bleeds.rs` (`a_held_click_is_the_held_move_and_never_the_tap_first_nor_again`).
+
+Her movement-search lines re-recorded. Whole kit, by lane, against 11-07's: 34.7/45.6,
+39.0/51.4, 34.9/61.2, 65.6/39.1, 30.7/42.1, 29.2/23.5, 42.4/34.6, 35.5/31.9, 36.5/31.8,
+14.8/19.8, 44.8/25.0, 18.2/51.0, 29.3/13.2, 27.2/24.1, 31.2/33.2 -- as much search noise as
+anything (the search is random and a lower bound), so read nothing into one lane.
