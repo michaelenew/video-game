@@ -68,3 +68,29 @@ every summary written after implementing something says, in so many words,
 and in [level-design.md](level-design.md) and
 [monster-design.md](monster-design.md), with a phrase each on how -- and
 names any it set aside, and on whose instruction.
+
+**D7 · A kit is held to what was promised, and played before it is
+handed over** (proposed 2026-11-06, after the Blood mage's slice 1 was
+handed over on green tests and was "nothing like what we talked about").
+Unless otherwise instructed, a new class kit or a change to one:
+
+- **Promises before code.** Every sentence of the agreed design that says
+  what a move does -- what it costs, how far, how high, how fast, what it
+  does when pressed early or held -- becomes one line of a promise card
+  with the number it must meet, written before the code by whoever agreed
+  the design with the owner. The Blood mage's is
+  `cargo run --release -p sim --example kitcheck`.
+- **Tests from the promise, played the way a player plays.** The second
+  press early, the button held through the move, a string mashed, a move
+  out of the air -- not let go, waited and pressed again once the move is
+  ready for it. A test written by the same hand as the code, from the code,
+  is not evidence the promise was kept.
+- **The play check is never set aside by the builder.** Every new or
+  changed move is filmed from the fighter's own camera at its wind-up, its
+  contact and what it leaves behind (`SHOT_PRESS`, `SHOT_FRAME`), and the
+  pictures are looked at. A move with nothing on screen is not done.
+- **Delegated work is checked, not relayed.** Whoever hands work to the
+  owner runs the promise card and looks at the film themselves; the
+  builder's report is a claim.
+- **The report pastes the card**, every line kept or missed, beside the
+  pictures.

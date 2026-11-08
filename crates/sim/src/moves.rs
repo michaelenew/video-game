@@ -673,7 +673,7 @@ const NAMES: [&[&str]; 6] = [
     &[
         "Cast",
         "Rend",
-        "Seize",
+        "Red claw",
         "Black spike",
         "Sweep",
         "Heart",
@@ -683,8 +683,8 @@ const NAMES: [&[&str]; 6] = [
         "Coagulate",
         "Rising reap",
         "Plant lash",
-        "Seize, slammed",
-        "Seize, impaled",
+        "Rip",
+        "Impaled",
     ],
     // Dual mage -- her spellbook (2026-10-12). Left is dark, cast on *them*:
     // curses. Right is light, cast on *the ground*: sigils. Middle is
@@ -1308,13 +1308,16 @@ pub mod blood {
     /// Left click, tapped -- on the floor and in the air: **Rend**. The Red
     /// Hand's claws, fast and short, strung to three. Was the Thorn lash.
     pub const REND: u8 = 1;
-    /// Left click held past the Champion's window: **Seize**. A grab that
-    /// feeds them to her garden: thrown onto a plant near them, or slammed
-    /// into the floor. Was the Bramble.
-    pub const SEIZE: u8 = 2;
+    /// Left click held past the Champion's window: **the Red claw**
+    /// (2026-11-07). A charge: the longer it is held, the further out along
+    /// the floor toward the crosshair the claw lands and the bigger it is --
+    /// held too long, it lands past them -- and what it rakes is slowed. Was
+    /// Seize, and the Bramble before that; the grab went to the chain.
+    pub const CLAW: u8 = 2;
     /// Middle click: **the Black spike**, raised out of a pool of hers under
-    /// the crosshair -- and nothing on bare ground. It launches what is over
-    /// it, her too, and stands as a plant.
+    /// the crosshair -- on bare ground, out of her own blood, which costs her
+    /// what a pool would have paid. It launches what is over it, her too, and
+    /// stands as a plant.
     pub const BLACK_SPIKE: u8 = 3;
     /// Right click, tapped: **the Sweep**. The scythe across her front; tapped
     /// again inside its recovery, a string of up to three, the second coming
@@ -1328,7 +1331,7 @@ pub mod blood {
     /// Thornfall.
     pub const RISING_REND: u8 = 6;
     /// Space and middle click: **the Rising spike**, raised out of a pool at
-    /// her own feet, launching her. Nothing without one. Was the Upheaval.
+    /// her own feet -- or her own blood -- launching her. Was the Upheaval.
     pub const RISING_SPIKE: u8 = 7;
     /// **The thorns of a reaped plant**: no button. The scythe through a
     /// plant breaks it into a cone of thorns along the blade; this row is
@@ -1343,11 +1346,13 @@ pub mod blood {
     /// **A plant's lash**: no button. What one of her standing plants does on
     /// its own to an enemy near it. Was the Black vines.
     pub const LASH: u8 = 11;
-    /// **Seize, slammed**: no button. The grab's ending with no plant near:
-    /// into the floor, which bleeds in a ring round them. Was the cascade.
-    pub const SLAM: u8 = 12;
-    /// **Seize, impaled**: no button. The grab's ending with a plant near:
-    /// thrown onto it, and it drinks. Was the Harvest.
+    /// **The rip** (2026-11-07): no button of its own. Left click let go
+    /// part-way through its hold, with the scythe's head in a fighter: it is
+    /// torn out of them. Was Seize's slam, and the cascade before that.
+    pub const RIP: u8 = 12;
+    /// **The shrike** (2026-11-07): no button. A body reeled or knocked into
+    /// one of her plants is impaled on it; this row is the blow. Was Seize's
+    /// impaling, and the Harvest before that.
     pub const IMPALE: u8 = 13;
 
     pub const COUNT: usize = 14;
@@ -1372,7 +1377,7 @@ pub mod blood {
     /// Which click throws this move -- what holds its hold open.
     pub const fn click_of(kind: u8) -> u16 {
         match kind {
-            REND | SEIZE | RISING_REND => keys::HAND,
+            REND | CLAW | RISING_REND => keys::HAND,
             BLACK_SPIKE | RISING_SPIKE => keys::SPIKES,
             _ => keys::SCYTHE,
         }
@@ -1394,8 +1399,11 @@ pub mod blood {
     /// longer: Rend becomes Seize, the Sweep the Cast.
     pub const fn held_into(kind: u8) -> Option<u8> {
         match kind {
-            REND => Some(SEIZE),
+            REND => Some(CLAW),
             SWEEP => Some(CAST),
+            // **The charge-jump** (2026-11-07): the Rising rend held is
+            // itself, further and higher for the hold.
+            RISING_REND => Some(RISING_REND),
             _ => None,
         }
     }
@@ -1412,11 +1420,11 @@ pub mod blood {
     /// never paid for and never locked out, and their frames are only the
     /// lengths of the clips drawn for the rows before them (`view::clips`).
     pub const fn thrown(kind: u8) -> bool {
-        !matches!(kind, THORNS | LASH | SLAM | IMPALE)
+        !matches!(kind, THORNS | LASH | RIP | IMPALE)
     }
 
-    /// Is this a spike, which needs a pool to raise -- and with none comes
-    /// out as nothing at all?
+    /// Is this a spike, which raises a pool -- and on bare ground, her own
+    /// blood, paid for in full (2026-11-06)?
     pub const fn raises_a_pool(kind: u8) -> bool {
         matches!(kind, BLACK_SPIKE | RISING_SPIKE)
     }
@@ -1847,8 +1855,8 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             9 => "Q",
             10 => "Space+RMB",
             11 => "a plant",
-            12 => "Seize, floor",
-            _ => "Seize, plant",
+            12 => "LMB, head in them",
+            _ => "a plant, shrike",
         },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
@@ -2038,7 +2046,7 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // spike is its disc where the pool was, and the Cast is its head.
         Class::BloodMage => match kind {
             blood::BLACK_SPIKE => Shape::Cylinder,
-            blood::SWEEP | blood::RISING_REAP | blood::REND | blood::RISING_REND | blood::SEIZE => {
+            blood::SWEEP | blood::RISING_REAP | blood::REND | blood::RISING_REND => {
                 Shape::Swing(Plane::Flat)
             }
             _ => Shape::None,

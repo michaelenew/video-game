@@ -10377,3 +10377,101 @@ startup reads as committed or as slow; whether the leash is felt, since it holds
 other's last position and only stops the one walking away; whether the zip's carry and banked
 jump make her a mover worth a course; whether Seize's unblockable grab is the brawler's answer
 or a panic button; whether a plant's lash at 2 m is cover or clutter.
+
+## 2026-11-06 — Blood mage: the world bleeds, rebuilt from play
+
+**The owner played slice 1**: "Very little of what you built is anything like what we talked
+about." The tether erratic and barely drawn, the zip "a few inches", the jump scythe low,
+everything still costing health when 0038 said only growing would, the spike dead off a pool,
+plants small and gone in two seconds, the claw invisible and the grab a light tap. Every one of
+those was measured in the simulation before it was fixed, by playing her the way a player does --
+the second press early, the button held -- and the measurements are in
+[kits/blood-mage.md](kits/blood-mage.md) §"From play, 2026-11-06". The short of it: the zip
+dropped a press made before the head bit, and the Sweep's step under the hold was the "few
+inches"; the head came home along the floor; the Rising reap's lift of 11 m/s peaked at 1.4 m;
+every row still had a cost; the eruption that raised a plant drank its own pool, so a bare-ground
+spike would have refunded itself; and the Red Hand had no trail because the renderer skipped every
+swing of hers to leave the scythe's alone.
+
+**Changed**: the scythe and the Red Hand free, the spike paying what its pool lacks and its plant
+holding that as grey that does not fade; the spike anywhere; a queued zip, stopping beside a body
+and carrying on past the world; the head home along its chain; the Rising reap at 23 m/s (6.2 m),
+the Rising rend at 16 (3.0 m), the spike under her at 21 (7.5 m); plants ×1.3 a stone for 15 s
+with thorns drawn; Rend 42/63/119 at 2.6 m with a new clip and claw streaks; Seize lifting them
+1.6 m for 18 frames and then bringing them down for 110 (140 onto a plant) with a new clip.
+**Tried and changed the same day**: the string's third claw at ×1.8 with Rend at 48 came to 278
+over three claws on her ground (48, 72, 158) -- the ground's ×1.5 stacked on it; ×1.5 at 42 is
+224. Her own spike's launch at 24 m/s threw her 9 m; 21 is 7.5.
+
+**The movement search, re-run for her** (her fixture lines replaced). Widest gap off the
+runway, shared blocks / whole kit, in metres, by rise, against 11-04's:
+
+| rise | -8 | -4 | -2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 30 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 11-04 | 23.9/25.3 | 21.7/21.8 | 19.7/21.8 | 17.5/17.5 | 15.2/30.5 | 17.6/17.9 | 15.6/17.4 | 13.2/49.7 | 11.2/39.3 | 9.1/10.1 | -/36.3 | -/- | -/- | -/11.1 | -/19.0 | -/- |
+| 11-06 | 32.1/34.7 | 28.4/33.1 | 27.0/29.9 | 25.7/33.8 | 24.8/28.0 | 26.3/62.1 | 22.6/50.0 | 21.9/56.1 | 15.0/43.3 | 14.8/14.8 | 18.1/45.3 | 14.7/40.7 | 12.5/33.9 | -/58.2 | -/- | -/18.0 |
+
+The lane numbers in the fixture are these rises in order. The shared blocks gained a third
+everywhere -- the Rising rend and Rising reap are real takeoffs now -- and the whole kit reaches
++10 and +12 for the first time. +20 lost its line (19.0 m) and +30 gained one (18.0 m): a search
+is a lower bound, and this one did not find the old route again.
+
+**Process**: slice 1 was handed over on green tests the builder wrote from its own code -- the
+zip test let go of the button, waited, and pressed again, which nobody playing does -- and with
+the play check (D3) set aside on the builder's own call. `cargo run --release -p sim --example
+kitcheck` now plays her against every promise and prints the table; D7 in
+[delivery.md](delivery.md) is the rule that came out of it.
+
+**Verdict** open -- to be played. To feel for: whether the queued zip ever takes her somewhere
+she did not mean to go; whether a free scythe and a free hand make the plant's price the only
+decision, as meant; whether Rend's string is too much from a class with a heal.
+
+## 2026-11-07 — Blood mage: round three, the owner's tweaks
+
+"This is better. A few tweaks." The asks, the owner's answers to three questions (the grab onto
+the chain; the claw feeds plants; the charge-jump), and what was built are in
+[kits/blood-mage.md](kits/blood-mage.md) §"Round three". The promises were written first, as a
+card in exploration 0038 and as lines of `kitcheck`, and every one was measured before
+handing over.
+
+**Tried and changed the same day.** The charge-jump at ×1.6 lift went 7.6 m up and over a
+fighter in its path -- "go further" was the ask, not higher; ×1.1 lift and 22 m/s along is
+18 m on and 3.6 m up, and it hits what it meets. The chain first claimed the whole frame while
+left was held, which froze the Cast on its first active frame and threw the head again every
+frame: it claims the buttons now and never the frame. Found by filming it, not by the tests.
+The throw and claw clips first broke the motion ceiling (a hand 0.39 and 0.42 m in a frame):
+a smaller turn and a linear ease.
+
+**Verdict** open -- to be played. To feel for: whether the arc makes grabbing a moving fighter
+harder than the line did; whether the zip's pull feels mechanical; whether the shrike's 5 m/s
+is too easy to trigger off any knockback; the Red claw's 54-frame charge.
+
+**The movement search, re-run for her after round three** (her fixture lines replaced; the
+search's zip moved to a tap of left, since right click now calls the head home). Widest gap,
+whole kit, in metres, before the physical head -> after:
+
+| rise | -8 | -4 | -2 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 30 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| before | 34.7 | 33.1 | 29.9 | 33.8 | 28.0 | 62.1 | 50.0 | 56.1 | 43.3 | 14.8 | 45.3 | 40.7 | 33.9 | 58.2 | - | 18.0 |
+| after | 34.7 | 39.0 | 34.9 | 65.6 | 30.7 | 29.2 | 42.4 | 35.5 | 36.5 | 14.8 | 44.8 | 18.2 | 29.3 | 27.2 | 31.2 | - |
+
+Level and downhill she reaches further; on some climbs (+2, +10, +16) much less. A search is
+a lower bound, so some of the drop may be routes it did not find again, but a weighted head
+that falls is a real cost on a high lip: **a trade the owner should judge in play** -- the
+head's fall (`Cast, the head falls at`, 28 m/s²) is the knob that buys it back.
+
+## 2026-11-08 — Blood mage: a held click is one move, and does not repeat
+
+From play: "Both l and r click, when holding, the short version comes out then the long one.
+That's not right, it's one or the other" -- held, Rend and the Sweep wound up and then became
+the Red claw and the Cast -- and the click held through a Cast threw it again every forty
+frames, the new head replacing the old, which is also what made the zip seem to vanish. The
+press now opens a hold that is neither yet, the Dual mage's rule: let go inside
+`hold_from` and the tap begins, its wind-up shortened by the frames held; held to it, only the
+held move. A held move's button is spent until it comes up (`Garden::held_spent`). Held by
+`tests/world_bleeds.rs` (`a_held_click_is_the_held_move_and_never_the_tap_first_nor_again`).
+
+Her movement-search lines re-recorded. Whole kit, by lane, against 11-07's: 34.7/45.6,
+39.0/51.4, 34.9/61.2, 65.6/39.1, 30.7/42.1, 29.2/23.5, 42.4/34.6, 35.5/31.9, 36.5/31.8,
+14.8/19.8, 44.8/25.0, 18.2/51.0, 29.3/13.2, 27.2/24.1, 31.2/33.2 -- as much search noise as
+anything (the search is random and a lower bound), so read nothing into one lane.

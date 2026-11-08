@@ -72,9 +72,11 @@ fn every_hit_she_lands_spills_a_pool_under_the_target() {
     assert_eq!(made.len(), 1, "one hit made {} pools", made.len());
     let pool = made[0];
     assert_eq!(pool.owner, 0);
+    // Under him when it spilled; since 2026-11-06 Rend shoves him on a little
+    // past it (2.5 of knockback), so within a stride.
     let under = pool.pos.sub(w.players[1].pos).flat_len();
     assert!(
-        under.raw() < Fx::ratio(1, 2).raw(),
+        under.raw() < Fx::ONE.raw(),
         "the pool is {} m from the fighter it came out of",
         under.to_f32_for_render()
     );
@@ -197,13 +199,12 @@ fn past_the_cap_her_oldest_stain_makes_way() {
 }
 
 #[test]
-fn every_cost_she_pays_is_a_stain_but_the_spikes() {
-    // Since 2026-10-13 nothing she spends is lost: what a press costs lands
-    // where she aimed it as a stain like any other, hers to take back
-    // (docs/design/exploration/0016_blood_mage_thralls_and_the_well.md).
-    // **Except the Black spike** (2026-10-19), which leaves no stain at all:
-    // a spike on one spot no longer lays the stain the next one sets off --
-    // and on bare ground (2026-11-04) it costs nothing, since nothing rises.
+fn her_swings_cost_nothing_and_a_spike_pays_in_blood_its_plant_holds() {
+    // Since 2026-11-06 (from play: "everything still costs health even though
+    // we said it shouldn't"), the scythe and the Red Hand are free and leave
+    // no stain of a cost. The spike on bare ground is paid in her own blood,
+    // which lands there and rises into the plant: no stain is left, and the
+    // plant holds it as grey (0038, "a plant is made of her blood").
     for (button, airborne) in [
         (keys::SCYTHE, false),
         (keys::HAND, true),
@@ -217,24 +218,23 @@ fn every_cost_she_pays_is_a_stain_but_the_spikes() {
         }
         looking(&mut w, 2, button, -2000, 0);
         run(&mut w, 70, 0, 0);
-        assert!(
-            w.players[0].grey > 0,
-            "fixture: {button:#x} cost her nothing"
-        );
-        assert!(
-            !pools(&w).is_empty(),
-            "{button:#x}: what it cost is not on the floor"
-        );
+        assert_eq!(w.players[0].health, t::max_health(), "{button:#x} cost her");
+        assert_eq!(w.players[0].grey, 0, "{button:#x} opened grey");
     }
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
     looking(&mut w, 2, keys::SPIKES, -2000, 0);
     run(&mut w, 70, 0, 0);
-    assert_eq!(
-        w.players[0].grey, 0,
-        "on bare ground the spike costs nothing"
+    assert!(
+        w.players[0].grey > 0,
+        "on bare ground the spike is paid for"
     );
-    assert!(pools(&w).is_empty(), "and leaves nothing");
+    let held = match w.players[0].mechanic {
+        sim::class::Mechanic::Blood(g) => g.paid.iter().map(|&v| v as i32).sum::<i32>(),
+        _ => 0,
+    };
+    assert_eq!(held, w.players[0].grey, "and its plant holds what it cost");
+    assert!(pools(&w).is_empty(), "and no stain is left of it");
 }
 
 #[test]

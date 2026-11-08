@@ -125,8 +125,15 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
         !w.players[1].grounded || w.players[1].vel.y.raw() > 0 || spike.launch.raw() == 0,
         "the eruption did not launch"
     );
-    let got = w.players[0].health - (before - paid);
-    assert!(got >= 300 - 8, "the eruption drank {got} of a pool of 300");
+    // **The plant drinks it, not her** (2026-11-06): the pool a spike rises
+    // out of goes into the plant that stands there, worth what it held when it
+    // is reaped. What she gets back is what she paid, on the reap.
+    let _ = (before, paid);
+    let held = match w.players[0].mechanic {
+        sim::class::Mechanic::Blood(g) => g.blood.iter().map(|&b| b as i32).max().unwrap_or(0),
+        _ => 0,
+    };
+    assert!(held >= 300 - 8, "the plant holds {held} of a pool of 300");
     // The pool is spent, whatever the hit spilled since.
     assert!(
         pools(&w).iter().all(|p| p.pool_volume() < 300 - 100),
@@ -193,9 +200,11 @@ fn an_eruption_sets_off_every_pool_it_covers() {
     // Nothing is left on the floor: the spike leaves no stain of its own
     // (2026-10-19).
     assert!(pools(&w).is_empty(), "a pool survived the chain");
+    // The pool under the spike went into its plant (2026-11-06); the two it
+    // set off were drunk.
     assert!(
-        w.players[0].health - before > 600 - 20,
-        "the chain drank only {} of 700 across three pools",
+        w.players[0].health - before > 400 - 20,
+        "the chain drank only {} of the 400 in the two pools it set off",
         w.players[0].health - before
     );
 }

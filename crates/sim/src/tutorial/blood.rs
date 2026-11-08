@@ -13,13 +13,15 @@ pub static TUTORIAL: Tutorial = Tutorial {
     class: Class::BloodMage,
     arena: ArenaId::HALL_BLOOD,
     what: "Whatever the Blood mage cuts bleeds -- a fighter, a creature, the floor -- and where \
-           blood falls something grows. Every spell costs her own health, and the blood spilled \
-           stays on the floor as pools and a dark ground that belongs to her.",
+           blood falls something grows. Her scythe and her red hand are free; what she grows \
+           costs her own health, and the plant holds it until she reaps it back.",
     plays: "The scythe sows: its bite and its sweep leave pools. The spike grows: it raises a \
-            pool, and only a pool, into a thorned plant that launches and lashes. The scythe \
-            reaps: through a plant it throws the thorns and gives back what you paid.",
-    wins: "She wins by fighting inside her patch: cast the head, raise the pool its bite left, \
-           zip in, rend or seize, and reap the plants, so every drop spilled feeds what grows.",
+            pool into a thorned plant that launches and lashes -- a pool pays toward it, and on \
+            bare ground she pays it all. The scythe reaps: through a plant it throws the thorns \
+            and gives back what you paid.",
+    wins: "She wins by fighting inside her patch: cast the head, zip in or reel them in, rend \
+           them into her plants' thorns, and reap the plants, so every drop spilled feeds what \
+           grows.",
     rooms: &ROOMS,
 };
 
@@ -44,8 +46,8 @@ fn rend(s: &Seen) -> bool {
 fn third_rend(s: &Seen) -> bool {
     s.out(REND) && s.now().string & 0x7F == 2
 }
-fn seize(s: &Seen) -> bool {
-    s.began(SEIZE)
+fn claw(s: &Seen) -> bool {
+    s.began(CLAW)
 }
 fn air_rend(s: &Seen) -> bool {
     s.out(REND) && !s.now().grounded
@@ -149,10 +151,12 @@ pub const ROOMS: [Room; 11] = [
     Room {
         title: "Left click: the Red Hand",
         advanced: false,
-        intro: "Her other hand, gloved in her own blood. Tapped, left click rends -- the fastest \
-                thing she has, for arm's length -- and tapped again strings up to three. Held, it \
-                seizes: a grab that throws them onto a plant of hers near them, or slams them \
-                into the floor, which bleeds in a ring round them.",
+        intro: "Her other hand, gloved in her own blood. Tapped, left click rends -- a raking \
+                claw at arm's length -- and tapped again strings up to three, the third the \
+                heaviest, knocking them up. Held, it charges the Red claw: the longer you hold, \
+                the further out along the floor it lands and the bigger it is -- hold too long \
+                and it lands past them -- and it slows what it rakes. Raking one of your plants \
+                feeds it.",
         tasks: &[
             Task {
                 what: "Rend",
@@ -161,9 +165,9 @@ pub const ROOMS: [Room; 11] = [
                 lands: true,
             },
             Task {
-                what: "Hold: Seize",
+                what: "Hold: the Red claw",
                 keys: "Hold left click, close to the dummy",
-                check: seize,
+                check: claw,
                 lands: false,
             },
             Task {
@@ -191,10 +195,11 @@ pub const ROOMS: [Room; 11] = [
     Room {
         title: "Middle click: the spike",
         advanced: false,
-        intro: "Middle click raises a pool of blood into a spike -- only a pool: on bare \
-                ground nothing happens. A small pool rises fast, a big one slow. It throws up \
-                whatever is over it, you too, and stands a while as a thorned plant that lashes \
-                anybody beside it. Cut the floor with the scythe first if there is no blood.",
+        intro: "Middle click raises the blood under the crosshair into a spike. A pool pays \
+                toward it; on bare ground you pay it all in your own blood, and the plant holds \
+                it as grey until you reap it back. A small pool rises fast, a big one slow. It \
+                throws up whatever is over it, you too, and stands as a thorned plant that \
+                lashes anybody beside it.",
         tasks: &[
             Task {
                 what: "Black spike on a pool",
@@ -210,7 +215,7 @@ pub const ROOMS: [Room; 11] = [
             },
             Task {
                 what: "Takeoff: Rising spike",
-                keys: "Standing on a pool, Space + middle click together",
+                keys: "Space + middle click together",
                 check: rising_spike,
                 lands: false,
             },
@@ -223,9 +228,11 @@ pub const ROOMS: [Room; 11] = [
         advanced: false,
         intro: "Tapped, right click sweeps the scythe -- longer and harder the more grey you \
                 carry -- and tapped again strings up to three; on the floor it cuts the floor, \
-                which bleeds. Held, it casts the head out on its chain: it bites what it meets, \
-                and a fighter it bites is leashed to you. Press right click again while it holds \
-                to zip to it.",
+                which bleeds. Held, it throws the head out on its chain: it arcs and falls, \
+                and bites what it meets; a fighter it bites is leashed to you. Then left click \
+                is the chain: tap it to be pulled to the head, hold it to reel them in -- into \
+                a plant of yours and they are impaled -- or let go part way to rip it out of \
+                them. Right click calls it home.",
         tasks: &[
             Task {
                 what: "Sweep",
@@ -247,7 +254,7 @@ pub const ROOMS: [Room; 11] = [
             },
             Task {
                 what: "Zip",
-                keys: "While the head holds, right click again",
+                keys: "While the head is out, tap left click",
                 check: zip,
                 lands: false,
             },

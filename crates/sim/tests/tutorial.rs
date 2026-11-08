@@ -419,10 +419,10 @@ fn the_dual_mages_hop_and_hold_are_ticked() {
 #[test]
 fn the_blood_mages_holds_are_ticked() {
     use Look::Dummy as D;
-    let seize: Script = &[(L, 40, D), (0, 30, D)];
-    assert_eq!(run(Class::BloodMage, 1, 1, 6, seize), 1, "Seize");
+    let claw: Script = &[(L, 40, D), (0, 30, D)];
+    assert_eq!(run(Class::BloodMage, 1, 1, 6, claw), 1, "the Red claw");
     assert_eq!(
-        run(Class::BloodMage, 1, 0, 6, seize),
+        run(Class::BloodMage, 1, 0, 6, claw),
         0,
         "a hold is not a rend"
     );

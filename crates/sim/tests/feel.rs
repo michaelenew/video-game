@@ -56,7 +56,18 @@ fn committed_moves_are_more_punishable_than_pokes() {
     for class in ALL_CLASSES {
         let table = moves::table(class);
         let poke = &table[0];
-        let committed = table.iter().max_by_key(|m| m.damage).unwrap();
+        // A button's moves: the Blood mage's rows that no button throws --
+        // a plant's lash, the reaped thorns, the rip and the impaling -- are
+        // what a thing she made, or a grab she already landed, does.
+        let committed = table
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| {
+                class != sim::class::Class::BloodMage || moves::blood::thrown(*k as u8)
+            })
+            .map(|(_, m)| m)
+            .max_by_key(|m| m.damage)
+            .unwrap();
         assert!(
             committed.on_block() < poke.on_block(),
             "{}: {} ({:+} on block) is not more punishable than the poke {} ({:+})",
@@ -441,14 +452,18 @@ fn best_case(m: &Move) -> i32 {
             // The Reaping, 2026-10-19: the picture of a full tally cashed,
             // placed by the world on the blow that cashed it. It hits
             // nobody; the blow is the move's own.
-            | EffectKind::Reaping,
+            | EffectKind::Reaping
+            // The Red claw's marks, 2026-11-07: the claw struck once as it
+            // landed, for its row (`World::claw_lands`); the marks hit
+            // nobody.
+            | EffectKind::Claw,
         )
         | None => m.damage * swings,
     }
 }
 
 #[test]
-fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
+fn the_blood_mage_pays_to_grow_and_nobody_else_pays_for_anything() {
     // The class is its economy: health out on the press, health back on the
     // hit. Both halves on every one of her abilities, and on nobody else's --
     // a second class quietly acquiring a health cost would mean the mechanic
@@ -460,7 +475,7 @@ fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
     // looks like a balance choice rather than a bug.
     //
     // **What she throws** (2026-11-04): the four rows no button throws --
-    // her plants' lash and reaped thorns, Seize's two endings -- are what a
+    // her plants' lash and reaped thorns, the rip and the impaling -- are what a
     // thing she made does, never pressed and never paid for.
     for class in ALL_CLASSES {
         let blood = class == sim::class::Class::BloodMage;
@@ -468,9 +483,22 @@ fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
             if blood && !moves::blood::thrown(kind as u8) {
                 continue;
             }
+            // **What she pays for is what she grows** (2026-11-06, from
+            // play: "everything still costs health even though we said it
+            // shouldn't"): the spike's plant holds what it cost, and `Q` and
+            // `E` keep theirs until they are redesigned. The scythe and the
+            // Red Hand are free.
+            let pays = blood
+                && matches!(
+                    kind as u8,
+                    moves::blood::BLACK_SPIKE
+                        | moves::blood::RISING_SPIKE
+                        | moves::blood::COAGULATE
+                        | moves::blood::HEART
+                );
             assert_eq!(
                 m.cost > 0,
-                blood,
+                pays,
                 "{} {}: health cost {} does not match the class mechanic",
                 class.name(),
                 m.name,
@@ -1451,7 +1479,9 @@ fn every_class_has_a_move_that_carries_the_body() {
                 }
                 let mut w = bitten.expect("the head bit the floor eight metres out");
                 let start = w.players[0].pos;
-                step(&mut w, scythe, 0);
+                // The zip is a tap of left since 2026-11-07, thrown as it
+                // comes up.
+                step(&mut w, sim::moves::blood::keys::HAND, 0);
                 for _ in 0..t::dodge_frames() as u32 {
                     step(&mut w, 0, 0);
                 }

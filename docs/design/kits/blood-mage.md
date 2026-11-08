@@ -1,5 +1,5 @@
 ---
-status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18), the spike as a finisher (2026-10-19), played once; the world bleeds, slice 1 (2026-11-04), unplayed
+status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18), the spike as a finisher (2026-10-19), played once; the world bleeds, slice 1 (2026-11-04), played and rebuilt from play (2026-11-06), round three (2026-11-07)
 decided: 2026-09-09
 revised: 2026-09-23
 revised: 2026-10-12
@@ -63,6 +63,80 @@ she has left herself, and a floor that is hers.
 > aerials did not make sense. §"The world bleeds" below is what is in the game now; **where
 > anything after it disagrees, it wins.** The direction is
 > [../exploration/0038_blood_mage_the_world_bleeds.md](../exploration/0038_blood_mage_the_world_bleeds.md).
+
+## Round three, 2026-11-07 — the owner's tweaks; wins over everything below
+
+"This is better. A few tweaks." The promises are the card in
+[exploration/0038](../exploration/0038_blood_mage_the_world_bleeds.md) §"Round three", every line
+measured by `cargo run --release -p sim --example kitcheck` and held by `tests/world_bleeds.rs`
+§"Round three".
+
+- **The scythe's head is a weight on a chain** (`state::bleeds`, `throw_the_head`,
+  `fly_the_head`). Thrown at the speed that carries it through the crosshair's point under
+  `Cast, the head falls at` (28 m/s²) -- so aimed at someone it still meets them -- and then it
+  falls; at the chain's length it is held and swings; it bites what it meets or lands on the
+  floor. Called home it is reeled, from rest to `Cast, drags home at` by `Cast, reeled home,
+  speeds up at` (120 m/s²). The zip is a pull: a tug (`Zip, the first tug`, 10 m/s) and then
+  `Zip, the chain pulls her at` (110 m/s²) to `Zip, hauls her at`, under gravity, her momentum
+  hers. Drawn: the haft without its blade while the head is out, the blade tumbling in flight in
+  the scythe's iron, the chain hanging by its slack (a shallow rope's dip, √(3·D·(L−D)/8)).
+  A new throw clip (`blood_throw`).
+- **The chain in her left hand** (`chain_in_hand`, `tend_the_chains`): with the head out, left
+  tapped is the zip, held to `Chain, left held this long reels them in` (36 f) reels a fighter
+  in (the grab's own drag, `drag_the_held`), let go between rips it out (the `Rip` row: 70, a
+  bleed, a stagger). Right click calls it home. The chain claims the buttons, never the frame.
+- **The shrike** (`the_shrike`, `impale`): a body reeled into one of her plants, or knocked into
+  one at `Shrike, knocked into a plant this fast impales` (5 m/s), is pinned on its thorns for
+  `Shrike, impaled on a plant for` (45 f), bleeding, for the `Impaled` row (60) and a quarter of
+  what the plant holds; the plant drinks.
+- **The Red claw** (left held; Seize's row, retuned): a channel of 54 frames that walks the claw
+  out along the floor toward the crosshair from 3 m to 13 m; on release it rakes there
+  (`claw_lands`) -- up to `Red claw, at full reach it is this much bigger` (×2.2) wider and half
+  again as hard -- and slows to `Red claw, slows what it hits to` (×0.5). Held to its end it fires
+  itself, at 13 m: held too long, it lands past them. Its marks are `EffectKind::Claw`; a new
+  clip, crouched and coiled while held.
+- **Rend's string** (`rend_grows`, `blood_blow`): the second reaches ×1.15 and hits ×1.15, the
+  third reaches ×1.35 and hits ×1.5 and launches at `Rend, the third of a string launches`
+  (9 m/s): 42 / 72 / 121 on a dummy on her ground.
+- **The hand feeds her plants** (`feed_with_the_hand`, `feed_the_plant`): Rend, the Rising rend
+  or the Red claw through one grows it by `A plant fed by her claw grows by` (+0.25 of a stone,
+  to ×2.2) and starts its life over; a bigger plant lashes further and harder.
+- **The charge-jump** (the Rising rend held): crouched to `Rising rend, the longest hold`
+  (30 f), then a leap of `Rising rend, held to its end leaps on at` (22 m/s) forward and
+  ×1.1 the lift, with the claw out in front for its 20 active frames: tapped, 3 m up and nowhere;
+  held, 18 m on and 3.6 m up.
+- **Plants are drawn grown** (`game::plant_piece`): a leaning, twisting stem, four branches,
+  twelve thorns, a blood blossom a branch, three roots; the column is the collision and is not
+  drawn.
+- **A reaped plant breaks** (`game::thorn_spray`, from the owner: "the red bubble cone isn't
+  capturing the move"): its stem and branches, drawn as they stood, burst outward along the
+  blade's way, tumbling and falling; its blossoms pop; eighteen of its thorns fly point first
+  out along the cone and stick where they land, fading, over `Reaped thorns, the plant breaking
+  and its thorns fly for` (30 f). Drawing only: the blow is unchanged.
+- **Fixed**: the Rising reap or a Sweep thrown standing on a plant no longer reaps it.
+
+## From play, 2026-11-06 — what changed, and it wins over slice 1 below
+
+The owner played slice 1: "Very little of what you built is anything like what we talked about."
+What was wrong, measured before it was fixed (a probe in the simulation, frame by frame), and
+what it is now. `cargo run --release -p sim --example kitcheck` measures every line of this
+against the promise and prints the table; the tests are `tests/world_bleeds.rs` §"From play".
+
+| Reported | Measured | Now |
+| --- | --- | --- |
+| "it pulls the mage a few inches towards it on hold (instead of a full retraction)" | holding right ran the Sweep's startup first, and its 0.4 m step moved her; a second press while the head was still leaving her hand -- or flying -- was dropped, so the zip never came | the Sweep has no step; **a second press any time after the head is thrown is kept** (`Garden::zip_queued`, knob `Zip, a press while the head flies waits for its bite`) and **the zip starts the frame it bites**: 11.2 m of 11.2 m |
+| "straight line in the air, then teleport to ground, then drag back" | a head coming home was dropped to the floor under it and dragged along it | **it comes home along its chain**, straight back to her hand, in the air too (lowest 1.3 m from a head thrown up), reaping what the line passes |
+| the head took long to leave | 28 frames from the press | Cast startup 12 → 4: **20 frames** (the hold window is 12 of them) |
+| "the visuals aren't there" | a ball and ten dark beads over sixteen metres | a glowing crescent blade and **26 links, end to end**, sagging in flight and taut while it holds (`game::scythe_head_piece`) |
+| a zip onto a fighter | she kept 75% of the speed and flew 3.5 m past him | **onto a body she stops beside it** (1.0 m off, inside Rend's 2.6 m); onto the world she keeps 75% |
+| "The jump scythe needs to bring her a lot higher" | the Rising reap lifted at 11 m/s: **1.4 m**, under half a jump (2.9 m) | 23 m/s: **6.2 m**. The Rising rend 10 → 16 m/s (3.0 m, a jump) |
+| "Everything still costs health even though we said it shouldn't" | every row of hers cost 1–2% | **the scythe and the Red Hand are free**; only the spike costs (5%), and only what the pool under it lacks (0038 §"The heal stays a refund": "a plant is made of her blood") |
+| the middle click "does nothing at all unless there's a blood pool nearby" | bare ground: no spike, no cost | **on bare ground she pays the whole price in her own blood**, which lands there and rises; it rises as a fighter's pool does (16 f) |
+| plants "little cylinders [that] last about 2 seconds max" | ×0.6 a stone (1.1 m tall), 120 frames | ×1.3 a stone (2.3 m tall), **15 s**, drawn with a crown spike and a spiral of thorns (`game::PlantThorn`) |
+| launching her upward was impossible -- she drinks the pool by stepping on it | the Rising spike needed a pool at her feet | **the Rising spike raises the blood at her own feet, pool or not**: 7.5 m |
+| a plant's own eruption | drank its pool -- on bare ground, gave her the price straight back | a spike raising a plant **does not drink**: the plant holds the blood, worth at least the row (60); **what it holds stays grey on her bar and does not fade** while it stands; reaped, it comes back |
+| "The lclick tap does nothing so far as I can tell" | 25 damage at 1.6 m, the Thorn lash's flick of the wrist, and **no trail drawn at all** -- every Blood mage swing was left out of the trails because the scythe draws its own | **42 / 63 / 119** for the string (224 at a dummy on her ground), 2.6 m and a 0.9 m step in, a new clip (`anim` `rend`: the claw drawn high behind the shoulder and raked across with the body behind it), **three crimson claw streaks** (`game::swing`); a press made while a blow is still out is kept for the next (`Garden::strung_early`) |
+| "The lclick hold does a tiny bit of damage and the animation doesn't communicate what's happening" | 40 on a slam, delivered on the frame of the catch, with the Bramble's casting clip | **caught, lifted 1.6 m over her head for 18 frames, then brought down** onto a plant (140 + its blood) or the floor (110), with a 14-frame freeze (`World::carry_the_seized`), and a new clip (`anim` `seize`: the catch, the heave overhead, the slam with the body folding after it) |
 
 ## The world bleeds — slice 1, built 2026-11-04
 

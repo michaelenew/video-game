@@ -99,24 +99,14 @@ fn thrall(w: &mut World, pos: V3, essence: i32) {
 }
 
 /// **Where the crosshair meets the floor** at `pitch`, as she stands in
-/// [`mage`]: where a spike aimed there rises. Found the way a player finds it
-/// -- the scythe's head cast there bites the floor under the crosshair -- since
-/// a spike on bare ground (2026-11-04) raises nothing to see.
+/// [`mage`]: where a spike aimed there rises. Read off the spike's own aim
+/// on its press (`Player::aim_at`). It was found by casting the scythe's head
+/// there until 2026-11-07, when the head became a weight that flies through
+/// the crosshair's point and falls on past it.
 fn crosshair_floor(pitch: i16) -> V3 {
     let mut w = mage();
-    for _ in 0..t::hold_from() as u32 + 2 {
-        step_looking(&mut w, keys::SCYTHE, pitch);
-    }
-    for _ in 0..80 {
-        step_looking(&mut w, 0, pitch);
-        if let Some(e) = effects_of(&w, EffectKind::ScytheHead)
-            .into_iter()
-            .find(|e| e.head_state() == sim::effects::Head::World)
-        {
-            return e.home;
-        }
-    }
-    panic!("the head never bit the floor at {pitch}");
+    step_looking(&mut w, keys::SPIKES, pitch);
+    w.players[0].aim_at()
 }
 
 /// A settled stain of hers where the crosshair meets the floor at `pitch`.
@@ -655,7 +645,8 @@ fn the_meter_fills_with_the_damage_she_deals() {
 #[test]
 fn her_own_costs_fill_nothing() {
     let mut w = mage();
-    step_looking(&mut w, keys::HAND, -2500);
+    // The spike: since 2026-11-06 the one press of hers that costs.
+    step_looking(&mut w, keys::SPIKES, -2500);
     run(&mut w, 60, 0);
     assert!(w.players[0].grey > 0, "fixture: it cost her");
     assert_eq!(w.players[0].heart_meter, 0, "a miss deals nothing");
@@ -771,11 +762,15 @@ fn an_eruption_is_worth_the_blood_in_its_stain() {
         run_looking(&mut w, 30, -3500);
         full - w.players[1].health
     };
+    // Since 2026-11-06 a spike raising a plant is worth at least its row,
+    // however little blood it rose out of: a footprint still grows a plant.
+    let row = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).damage;
     for volume in [50, 200] {
+        let worth = volume.max(row);
         let got = dealt(volume);
         assert!(
-            got <= volume && got >= volume - 2 * t::pool_drain(),
-            "a stain of {volume} erupted for {got}"
+            got <= worth && got >= worth - 2 * t::pool_drain(),
+            "a stain of {volume} erupted for {got}, worth {worth}"
         );
     }
 }

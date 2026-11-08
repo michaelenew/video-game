@@ -914,6 +914,40 @@ pub struct Garden {
     pub zipping: bool,
     /// A jump pressed near the zip's end, thrown on arrival.
     pub zip_jump: bool,
+    /// Right click pressed again while the head was still flying: the zip
+    /// starts the frame it bites (2026-11-06).
+    pub zip_queued: bool,
+    /// The zip is onto a body -- a fighter or a creature -- and stops her
+    /// beside it, rather than carrying its speed on past (2026-11-06).
+    pub zip_to_body: bool,
+    /// Who her Seize is holding up, one more than their index; nought for
+    /// nobody (2026-11-06).
+    pub seized: u8,
+    /// Frames before she brings them down.
+    pub seize_left: u16,
+    /// The next blow of a Sweep or Rend string, pressed while this one was
+    /// still out -- kept for its recovery rather than dropped (2026-11-06).
+    pub strung_early: bool,
+    /// Frames into the zip: it gives up past `ZIP_LIMIT`.
+    pub zip_for: u16,
+    /// Frames left click has been held while the head is out (2026-11-07):
+    /// a tap pulls her to it, held to `tuning::reel_full` reels them in, and
+    /// let go between rips it out. `u16::MAX` once spent on this press.
+    pub chain_held: u16,
+    /// Right click asked for the head home.
+    pub recall: bool,
+    /// Left click let go in time to rip the head out of who it holds.
+    pub rip: bool,
+    /// Who she is reeling in, one more than their index; nought for nobody.
+    pub reeling: u8,
+    /// Frames before her plants impale anybody again.
+    pub shrike_rest: u16,
+    /// What the Rising rend was held for, read on its first active frame.
+    pub leap_held: u16,
+    /// Buttons whose held move has begun (2026-11-08): kept from her moves
+    /// until they come up, so a button held through a Cast or a Red claw does
+    /// not throw it again and again.
+    pub held_spent: u16,
 }
 
 impl Garden {
@@ -923,6 +957,19 @@ impl Garden {
         paid: [0; MAX_STRUCTURES],
         zipping: false,
         zip_jump: false,
+        zip_queued: false,
+        zip_to_body: false,
+        seized: 0,
+        seize_left: 0,
+        strung_early: false,
+        zip_for: 0,
+        chain_held: 0,
+        recall: false,
+        rip: false,
+        reeling: 0,
+        shrike_rest: 0,
+        leap_held: 0,
+        held_spent: 0,
     };
 }
 

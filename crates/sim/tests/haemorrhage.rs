@@ -125,15 +125,10 @@ fn bolt_the_dummy(w: &mut World, away: i32) -> i32 {
 fn the_cast_bites_and_opens_a_bleed() {
     let m = sim::moves::get(Class::BloodMage, b::CAST);
     let mut w = mage();
-    let paid = w.players[0].cost_of(m.cost);
     let dealt = bolt_the_dummy(&mut w, 4);
-    assert!(paid > 0, "the cast is free");
-    assert!(
-        w.players[0].health <= t::max_health() - paid,
-        "the cast cost nothing: {} of {}",
-        w.players[0].health,
-        t::max_health()
-    );
+    // Free since 2026-11-06: the scythe costs her nothing.
+    assert_eq!(m.cost, 0, "the Cast costs her");
+    assert_eq!(w.players[0].health, t::max_health(), "the Cast cost her");
     assert_eq!(
         dealt, m.damage,
         "the bolt dealt {dealt} against a row of {}",

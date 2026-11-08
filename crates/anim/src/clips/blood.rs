@@ -124,8 +124,9 @@ use view::skeleton::Joint;
 
 pub fn clips() -> Vec<Recipe> {
     vec![
-        haemorrhage(),
-        hemoplague(),
+        rend(),
+        claw(),
+        throw(),
         black_spike(),
         sweep(),
         summon(),
@@ -252,116 +253,6 @@ fn gripping(pose: Pose, lead: V3, rear: V3, cock: f32) -> Pose {
 // ---------------------------------------------------------------------------
 // Haemorrhage
 // ---------------------------------------------------------------------------
-
-/// The bolt: one hand drawn in to the chest and thrust out flat, palm forward.
-///
-/// A tapped left click, on the floor and in the air: a bolt that opens a
-/// bleed. Twelve frames of startup is under the reaction threshold, so it owes
-/// the opponent a shape rather than a telegraph -- and the shape is the hand
-/// coming **in** before it goes out, to the chest with the palm turned
-/// forward, then thrust out level.
-///
-/// The thrust is LINEAR across its eight frames for the reason the sweep's
-/// crossing is: a shaped ease would put half the reach of an arm into one
-/// frame. The arm finishes straight and open -- the bolt is in the air and
-/// the hand has nothing in it -- and the recovery is the class's usual bill.
-///
-/// Held past its startup, the click becomes the Hemoplague, whose clip
-/// takes over from this one's wind-up. The scythe stays standing under the
-/// other hand throughout: this is a spell, not a swing.
-fn haemorrhage() -> Recipe {
-    let clip = Clip::BloodCommitted;
-    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
-    let end = clip.length() - 1;
-    let gather = (contact * 2 / 5).max(2);
-    let paid = recover + (end - recover) / 3;
-    let home = end.saturating_sub(3);
-
-    Recipe {
-        clip,
-        looseness: Looseness::MARTIAL,
-        notes: "Twelve frames in, three out, eighteen back. The gather is \
-                SMOOTH because it is small and has room; the thrust is LINEAR \
-                because eight frames is not enough room to shape a straight \
-                arm's worth of travel. The hand finishes open and forward, \
-                claiming nothing at the body -- the bolt is the threat and it \
-                has left -- and the recovery draws it back to the ribs."
-            .into(),
-        keys: vec![
-            Key::eased(0, ready(), Ease::OUT),
-            Key::eased(gather, drawn_in(), Ease::SMOOTH),
-            Key::eased(contact, loosed(), Ease::LINEAR),
-            Key::eased(recover, emptied(), Ease::OUT),
-            Key::eased(paid, spent(), Ease::SMOOTH),
-            Key::eased(home, ready(), Ease::SMOOTH),
-        ],
-    }
-}
-
-/// The gather, a few frames in: the casting hand drawn in against the chest,
-/// palm turned forward, the elbow folded and the chest turned a little away
-/// behind it. The head stays on the line.
-fn drawn_in() -> Pose {
-    footing(
-        ready()
-            .hips(0.010, -0.088, -0.016)
-            .root(6.0, 0.0, -16.0)
-            .spine(12.0, 0.0, -8.0)
-            .chest(8.0, 0.0, -12.0)
-            .head(-10.0, 0.0, 16.0)
-            .shoulder_l(20.0, 30.0, -34.0)
-            .forearm_l(118.0, 24.0)
-            .wrist_l(-30.0, 10.0, 0.0)
-            .shoulder_r(-8.0, 10.0, -24.0)
-            .forearm_r(112.0, -18.0)
-            .wrist_r(-20.0, -8.0, 0.0),
-        0.0,
-        0.006,
-    )
-}
-
-/// The thrust, on the frame the bolt leaves: the arm straight out in front at
-/// chest height, the hand open with the palm forward, the chest turned in
-/// behind it and the weight on the front foot.
-fn loosed() -> Pose {
-    footing(
-        ready()
-            .hips(-0.010, -0.100, 0.044)
-            .root(8.0, 0.0, 2.0)
-            .spine(12.0, 0.0, 10.0)
-            .chest(8.0, 0.0, 18.0)
-            .head(-6.0, 0.0, -4.0)
-            .shoulder_l(66.0, 8.0, 2.0)
-            .forearm_l(10.0, -4.0)
-            .wrist_l(20.0, -10.0, 0.0)
-            .shoulder_r(-6.0, 12.0, -22.0)
-            .forearm_r(108.0, -16.0)
-            .wrist_r(-18.0, -8.0, 0.0),
-        0.0,
-        0.016,
-    )
-}
-
-/// The Haemorrhage's first recovery frame: the casting arm has come down out
-/// of the thrust and the hand is still open. Nothing has closed yet.
-fn emptied() -> Pose {
-    footing(
-        ready()
-            .hips(-0.004, -0.120, 0.020)
-            .root(9.0, 0.0, -8.0)
-            .spine(18.0, 0.0, 6.0)
-            .chest(11.0, 0.0, 9.0)
-            .head(-14.0, 0.0, 2.0)
-            .shoulder_l(26.0, 16.0, -14.0)
-            .forearm_l(64.0, 16.0)
-            .wrist_l(-14.0, -6.0, 0.0)
-            .shoulder_r(-8.0, 11.0, -22.0)
-            .forearm_r(112.0, -16.0)
-            .wrist_r(-18.0, -8.0, 0.0),
-        0.0,
-        0.010,
-    )
-}
 
 // ---------------------------------------------------------------------------
 // Rising reap
@@ -872,58 +763,6 @@ fn aloft(pose: Pose, tuck: f32) -> Pose {
 // Hemoplague
 // ---------------------------------------------------------------------------
 
-/// Left click held: a cloud on the floor where she aimed, growing for as long
-/// as she holds.
-///
-/// **Frame zero is the hold** (see the module notes): both hands lifted out
-/// in front and spread wide, palms down over the floor ahead, as though
-/// holding something down that is trying to rise. A hand over a thing is
-/// what the cloud is -- she is not throwing it, she is keeping it there -- and
-/// the silhouette is the widest standing shape she has, two arms forward and
-/// apart, which nothing else in the kit is.
-///
-/// The startup, which only plays if the move is ever thrown without the hold,
-/// lifts the hands to the chest and presses them back down on contact; the
-/// first recovery frame is the hold again, so the cut from the channel to the
-/// recovery lands on the pose it left.
-fn hemoplague() -> Recipe {
-    let clip = Clip::BloodSpecial;
-    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
-    let end = clip.length() - 1;
-    let welling = (contact * 2 / 5).max(2);
-    let lifted = contact.saturating_sub(1).max(welling + 1);
-    let paid = recover + (end - recover) / 3;
-    let home = end.saturating_sub(3);
-
-    Recipe {
-        clip,
-        looseness: Looseness::MARTIAL,
-        notes: "Frame zero is held for as long as the button is, so it is the \
-                pose that has to say Hemoplague: both hands out and wide, palms \
-                down over the floor a few metres ahead, knees soft, head down \
-                at the spot. On release the clip cuts to its first recovery \
-                frame, which is the same pose pressed a shade lower, and the \
-                recovery lets the hands come in to the ribs, the chest closing \
-                over them, before `ready`. The startup is a lift to the chest \
-                and a press back down, so the move thrown untapped would still \
-                read as the same pair of hands holding something down."
-            .into(),
-        keys: vec![
-            Key::eased(0, spread_over(), Ease::SMOOTH),
-            Key::eased(
-                welling,
-                spread_over().blend(&welling_up(), 0.7),
-                Ease::SMOOTH,
-            ),
-            Key::eased(lifted, welling_up(), Ease::LINEAR),
-            Key::eased(contact, pressed_over(), Ease::STRIKE),
-            Key::eased(recover, spread_over_low(), Ease::OUT),
-            Key::eased(paid, spent(), Ease::SMOOTH),
-            Key::eased(home, ready(), Ease::SMOOTH),
-        ],
-    }
-}
-
 /// The hold: both hands forward and spread, palms down over the floor ahead.
 fn spread_over() -> Pose {
     footing(
@@ -938,64 +777,6 @@ fn spread_over() -> Pose {
             [0.44, 1.00, 0.62],
         )
         .wrists(-6.0, 0.0, 0.0),
-        0.0,
-        0.008,
-    )
-}
-
-/// The first recovery frame: the hold, pressed a shade lower.
-fn spread_over_low() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.000, -0.128, 0.012)
-                .root(7.0, 0.0, -4.0)
-                .spine(16.0, 0.0, 3.0)
-                .chest(7.0, 0.0, 3.0)
-                .head(8.0, 0.0, 2.0),
-            [-0.50, 0.95, 0.64],
-            [0.44, 0.95, 0.62],
-        )
-        .wrists(-4.0, 0.0, 0.0),
-        0.0,
-        0.008,
-    )
-}
-
-/// The lift, at the end of the startup: hands drawn up to the chest, palms
-/// still down, the body taller.
-fn welling_up() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.000, -0.060, -0.010)
-                .root(2.0, 0.0, -4.0)
-                .spine(4.0, 0.0, 3.0)
-                .chest(0.0, 0.0, 3.0)
-                .head(-4.0, 0.0, 2.0),
-            [-0.30, 1.28, 0.34],
-            [0.26, 1.28, 0.32],
-        )
-        .wrists(10.0, 0.0, 0.0),
-        0.0,
-        0.012,
-    )
-}
-
-/// Contact: pressed down and out, lower than the hold.
-fn pressed_over() -> Pose {
-    footing(
-        hands(
-            ready()
-                .hips(0.000, -0.146, 0.016)
-                .root(9.0, 0.0, -4.0)
-                .spine(18.0, 0.0, 3.0)
-                .chest(8.0, 0.0, 3.0)
-                .head(10.0, 0.0, 2.0),
-            [-0.50, 0.90, 0.64],
-            [0.44, 0.90, 0.62],
-        )
-        .wrists(-10.0, 0.0, 0.0),
         0.0,
         0.008,
     )
@@ -2201,5 +1982,262 @@ fn reeled() -> Pose {
         .wrists(0.0, 0.0, 0.0),
         0.0,
         0.006,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// The Red Hand (2026-11-06)
+// ---------------------------------------------------------------------------
+
+/// **Rend**: her other hand, gloved in her own blood clotted hard, raked
+/// across the front from high behind her shoulder to low past her right hip,
+/// with the whole body behind it -- a step in with the left foot, the hips
+/// driving through, the chest turning a quarter. From play: a melee blow for
+/// a mage has to be BIG, and the old clip was the Thorn lash's flick of the
+/// wrist. The scythe stays down in the right hand, out of the way.
+fn rend() -> Recipe {
+    let clip = Clip::BloodCommitted;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let coil = (contact * 2 / 5).max(2);
+    let through = recover.saturating_sub(1).max(contact + 1);
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "The claw drawn back high behind the left shoulder, the chest \
+                turned away from the line, the weight back; then a step in \
+                and the hand raked across and down through the line, the \
+                chest turning through it, finishing low past the right hip. \
+                The rake is LINEAR from the coil to contact, so the hand \
+                crosses at the rate the streaks are laid."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(coil, claw_drawn(), Ease::SMOOTH),
+            Key::eased(contact, claw_raking(), Ease::LINEAR),
+            Key::eased(through, claw_through(), Ease::OUT),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The claw drawn: left hand high and back over the shoulder, fingers
+/// curled, the chest turned away, the weight on the rear foot.
+fn claw_drawn() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        ready()
+            .hips(0.010, -0.110, -0.050)
+            .root(-4.0, 0.0, 22.0)
+            .spine(-4.0, 0.0, 16.0)
+            .chest(-6.0, 0.0, 20.0)
+            .head(-6.0, 0.0, -34.0)
+            .reach_l([-0.48, 1.80, -0.14])
+            .wrist_l(30.0, 0.0, 0.0)
+            .reach_r([0.30, 0.84, 0.10]),
+        l,
+        r,
+    )
+}
+
+/// Raking: the step in landed, the hips through, the hand at full stretch
+/// across the front at the height of a chest.
+fn claw_raking() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        ready()
+            .hips(0.000, -0.150, 0.150)
+            .root(16.0, 0.0, -8.0)
+            .spine(14.0, 0.0, -10.0)
+            .chest(10.0, 0.0, -16.0)
+            .head(-12.0, 0.0, 14.0)
+            .reach_l([0.10, 1.18, 0.78])
+            .wrist_l(-10.0, 0.0, 0.0)
+            .reach_r([0.34, 0.80, -0.05]),
+        [l[0], l[1], l[2] + 0.30],
+        r,
+    )
+}
+
+/// Through: the hand carried on past the right hip, low, the chest turned
+/// all the way, the body still down in the step.
+fn claw_through() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        ready()
+            .hips(0.000, -0.160, 0.140)
+            .root(20.0, 0.0, -20.0)
+            .spine(16.0, 0.0, -14.0)
+            .chest(12.0, 0.0, -20.0)
+            .head(-14.0, 0.0, 24.0)
+            .reach_l([0.42, 0.66, 0.42])
+            .wrist_l(-24.0, 0.0, 0.0)
+            .reach_r([0.36, 0.82, -0.10]),
+        [l[0], l[1], l[2] + 0.30],
+        r,
+    )
+}
+
+/// **The Red claw** (2026-11-07): held, the red hand is drawn far back and
+/// low behind her left hip, crouched and coiled -- frame nought is held for
+/// as long as the button is, so it is the pose that says "charging"; let go,
+/// it is flung forward and down with a step in, and the claw tears out
+/// across the floor ahead (`sim::state::World::claw_lands`).
+fn claw() -> Recipe {
+    let clip = Clip::BloodSpecial;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let through = (recover + 2).min(end.saturating_sub(4));
+    let home = end.saturating_sub(1).max(through + 1);
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "Frame nought is the charge, held: the hand far back and low \
+                behind the hip, the chest turned away, crouched. On release \
+                the hand is flung forward and down across the line with a \
+                step in, and carried on low past the right knee."
+            .into(),
+        keys: vec![
+            Key::eased(0, claw_coiled(), Ease::OUT),
+            Key::eased(contact, claw_flung(), Ease::LINEAR),
+            Key::eased(through, claw_spent(), Ease::OUT),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+fn claw_coiled() -> Pose {
+    footing(
+        ready()
+            .hips(0.010, -0.170, -0.060)
+            .root(8.0, 0.0, 16.0)
+            .spine(14.0, 0.0, 12.0)
+            .chest(8.0, 0.0, 12.0)
+            .head(-8.0, 0.0, -36.0)
+            .reach_l([-0.46, 0.80, -0.40])
+            .wrist_l(30.0, 0.0, 0.0)
+            .reach_r([0.32, 0.84, 0.06]),
+        0.0,
+        0.0,
+    )
+}
+
+fn claw_flung() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        ready()
+            .hips(0.000, -0.180, 0.170)
+            .root(22.0, 0.0, -4.0)
+            .spine(18.0, 0.0, -12.0)
+            .chest(12.0, 0.0, -18.0)
+            .head(-14.0, 0.0, 16.0)
+            .reach_l([0.12, 1.00, 0.86])
+            .wrist_l(-10.0, 0.0, 0.0)
+            .reach_r([0.34, 0.80, -0.04]),
+        [l[0], l[1], l[2] + 0.32],
+        r,
+    )
+}
+
+fn claw_spent() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        ready()
+            .hips(0.000, -0.190, 0.150)
+            .root(26.0, 0.0, -18.0)
+            .spine(20.0, 0.0, -14.0)
+            .chest(12.0, 0.0, -20.0)
+            .head(-12.0, 0.0, 22.0)
+            .reach_l([0.38, 0.56, 0.62])
+            .wrist_l(-24.0, 0.0, 0.0)
+            .reach_r([0.36, 0.80, -0.08]),
+        [l[0], l[1], l[2] + 0.32],
+        r,
+    )
+}
+
+/// **The Cast thrown** (2026-11-07, from play: "it needs to throw the actual
+/// scythe head", "the animations and timing need work"): both hands on the
+/// haft, swung back over the right shoulder and cast forward like a rod --
+/// the head leaves its end on the active frames -- and the haft follows
+/// through forward and low while the chain pays out.
+fn throw() -> Recipe {
+    let clip = Clip::BloodThrow;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let follow = (recover + 3).min(end.saturating_sub(3));
+    let home = end.saturating_sub(1).max(follow + 1);
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "Wound back over the right shoulder, the chest turned away and \
+                the weight back; cast forward and over, the hands finishing \
+                high and out in front as the head leaves; followed through \
+                forward and low."
+            .into(),
+        keys: vec![
+            Key::eased(0, cast_wound(), Ease::OUT),
+            Key::eased(contact, cast_loosed(), Ease::LINEAR),
+            Key::eased(follow, cast_followed(), Ease::OUT),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+fn cast_wound() -> Pose {
+    footing(
+        gripping(
+            ready()
+                .hips(0.010, -0.090, -0.060)
+                .root(-6.0, 0.0, -14.0)
+                .spine(-6.0, 0.0, -12.0)
+                .chest(-4.0, 0.0, -12.0)
+                .head(-6.0, 0.0, 30.0),
+            [0.26, 1.48, -0.16],
+            [0.06, 1.20, -0.04],
+            -20.0,
+        ),
+        0.0,
+        0.0,
+    )
+}
+
+fn cast_loosed() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        gripping(
+            ready()
+                .hips(0.000, -0.120, 0.120)
+                .root(14.0, 0.0, 4.0)
+                .spine(12.0, 0.0, 4.0)
+                .chest(8.0, 0.0, 6.0)
+                .head(-10.0, 0.0, -4.0),
+            [0.10, 1.42, 0.62],
+            [-0.06, 1.18, 0.36],
+            10.0,
+        ),
+        [l[0], l[1], l[2] + 0.22],
+        r,
+    )
+}
+
+fn cast_followed() -> Pose {
+    let (l, r) = ankles();
+    stand(
+        gripping(
+            ready()
+                .hips(0.000, -0.130, 0.110)
+                .root(18.0, 0.0, 6.0)
+                .spine(14.0, 0.0, 4.0)
+                .chest(8.0, 0.0, 6.0)
+                .head(-12.0, 0.0, -4.0),
+            [0.06, 1.04, 0.68],
+            [-0.10, 0.94, 0.44],
+            16.0,
+        ),
+        [l[0], l[1], l[2] + 0.22],
+        r,
     )
 }

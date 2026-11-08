@@ -4,7 +4,8 @@
 //! head reaps her stains on its way home; the zip goes to the head and a jump
 //! banked near its end fires on arrival; the spike does nothing on bare
 //! ground; her own spike launches her; a plant stands, is solid and lashes;
-//! the Sweep through a plant reaps it into a cone; Seize throws onto a plant
+//! the Sweep through a plant reaps it into a cone; the chain and the Red
+//! Hand of round three (2026-11-07) below that; Seize, cut that day, threw onto a plant
 //! or slams; and the Sweep bleeds the floor.
 
 use sim::class::{Class, Garden, Mechanic, Structure};
@@ -205,16 +206,19 @@ fn the_zip_goes_to_the_head_and_a_banked_jump_fires_on_arrival() {
     assert!(flat_apart(from, to) > 3.0, "the head is out in the world");
     let zip = |jump: bool| {
         let mut w = bit.clone();
-        // Let go of the scythe, then press it again.
+        // Let go of the scythe, then tap left: the zip (2026-11-07).
         run(&mut w, 2, 0, 0);
-        step2(&mut w, keys::SCYTHE, 0, 0);
-        assert!(garden(&w).zipping, "the second press is the zip");
+        step2(&mut w, keys::HAND, 0, 0);
+        step2(&mut w, 0, 0, 0);
+        assert!(garden(&w).zipping, "a tap of left is the zip");
         let mut arrived = None;
-        let mut held = keys::SCYTHE;
+        let mut held = 0;
         for _ in 0..90 {
-            let near = w.players[0].haul > 0
+            // Near the end of the pull, at the speed she is going (a pull
+            // since 2026-11-07, not a haul).
+            let near = garden(&w).zipping
                 && flat_apart(w.players[0].pos, w.players[0].haul_to)
-                    < as_f(t::zip_speed()) / 60.0 * 3.0;
+                    < as_f(w.players[0].vel.len()) / 60.0 * 3.0;
             let space = if jump && near { Input::SPACE } else { 0 };
             step2(&mut w, held | space, 0, 0);
             held = 0;
@@ -245,25 +249,68 @@ fn the_zip_goes_to_the_head_and_a_banked_jump_fires_on_arrival() {
 }
 
 #[test]
-fn the_spike_does_nothing_on_bare_ground() {
+fn the_spike_on_bare_ground_is_her_own_blood_and_the_plant_holds_it() {
+    // From play, 2026-11-06: "it does nothing at all unless there's a blood
+    // pool nearby". On bare ground she pays the whole price in her own blood,
+    // the plant holds it as grey that does not fade, and reaping the plant
+    // gives it back.
     let mut w = mage_and(30.0);
     let health = w.players[0].health;
-    for pitch in [-2000, -4000] {
-        step2(&mut w, keys::SPIKES, pitch, 0);
-        assert!(
-            !matches!(w.players[0].action, Action::Startup { kind, .. } if kind == b::BLACK_SPIKE),
-            "nothing came out"
-        );
-        run(&mut w, 30, 0, pitch);
-    }
-    assert_eq!(w.players[0].health, health, "and it cost nothing");
-    assert_eq!(plants(&w), 0);
-    assert!(
-        !w.effects
-            .iter()
-            .flatten()
-            .any(|e| e.kind == EffectKind::BlackSpike)
+    step2(&mut w, keys::SPIKES, -3000, 0);
+    run(&mut w, 40, 0, -3000);
+    assert_eq!(plants(&w), 1, "a plant stands on bare ground");
+    let price = health - w.players[0].health;
+    assert!(price > 0, "and she paid for it");
+    assert_eq!(w.players[0].grey, price, "as grey");
+    run(&mut w, 400, 0, -3000);
+    assert_eq!(plants(&w), 1, "it is still standing, seven seconds on");
+    assert_eq!(
+        w.players[0].grey, price,
+        "and what it holds has not faded off her bar"
     );
+    // Walk to it and sweep through it: reaped, she drinks it back.
+    let plant = garden(&w).plants[0].unwrap().at;
+    w.players[0].pos = at(as_f(plant.x) - 2.0, 0.0, as_f(plant.z));
+    step2(&mut w, keys::SCYTHE, 0, 0);
+    run(&mut w, 20, 0, 0);
+    assert_eq!(plants(&w), 0, "reaped");
+    assert_eq!(w.players[0].health, health, "and her blood came back");
+}
+
+#[test]
+fn a_pool_pays_toward_the_spike_and_she_pays_what_it_lacks() {
+    let price_over = |volume: i32| {
+        let mut w = mage_and(30.0);
+        let health = w.players[0].health;
+        if volume > 0 {
+            stain(&mut w, at(-1.0, 0.0, 8.0), volume);
+        }
+        let pitch = aim_onto(&w, at(-1.0, 0.0, 8.0));
+        step2(&mut w, keys::SPIKES, pitch, 0);
+        health - w.players[0].health
+    };
+    let full = price_over(0);
+    assert!(full > 0);
+    assert_eq!(
+        price_over(full / 2),
+        full - full / 2,
+        "half a pool, half the price"
+    );
+    assert_eq!(price_over(full * 3), 0, "a big pool pays it all");
+}
+
+/// The pitch that puts her crosshair's floor point nearest `spot`.
+fn aim_onto(w: &World, spot: V3) -> i16 {
+    let mut best = (f32::MAX, 0i16);
+    for pitch in (500..7000).step_by(100).map(|p| -(p as i16)) {
+        let mut trial = w.clone();
+        step2(&mut trial, keys::SPIKES, pitch, 0);
+        let far = flat_apart(trial.players[0].aim_at(), spot);
+        if far < best.0 {
+            best = (far, pitch);
+        }
+    }
+    best.1
 }
 
 #[test]
@@ -295,16 +342,12 @@ fn a_spike_rises_slower_out_of_more_blood() {
     let rise = |volume: i32| {
         let mut w = mage_and(30.0);
         stain(&mut w, at(-1.0, 0.0, 8.0), volume);
-        for pitch in [-1500, -2000, -2500, -3000, -3500, -4000, -1000] {
-            let mut trial = w.clone();
-            step2(&mut trial, keys::SPIKES, pitch, 0);
-            if let Action::Startup { kind, left } = trial.players[0].action
-                && kind == b::BLACK_SPIKE
-            {
-                return left;
-            }
+        let pitch = aim_onto(&w, at(-1.0, 0.0, 8.0));
+        step2(&mut w, keys::SPIKES, pitch, 0);
+        match w.players[0].action {
+            Action::Startup { kind, left } if kind == b::BLACK_SPIKE => left,
+            other => panic!("no spike: {other:?}"),
         }
-        panic!("no pitch found the pool");
     };
     let (small, body, big) = (rise(10), rise(t::pool_full()), rise(600));
     assert!(small < body && body < big, "{small} {body} {big}");
@@ -364,48 +407,11 @@ fn the_sweep_through_a_plant_reaps_it_into_a_cone() {
 }
 
 #[test]
-fn seize_slams_with_no_plant_near_and_throws_onto_one() {
-    let seize = |w: &mut World| {
-        for _ in 0..40 {
-            step2(w, keys::HAND, 0, 0);
-        }
-        run(w, 30, 0, 0);
-    };
-    // No plant: slammed, and the floor bleeds in a ring round him.
-    let mut w = mage_and(1.4);
-    let foe = w.players[1].health;
-    seize(&mut w);
-    let slam = sim::moves::get(Class::BloodMage, b::SLAM);
-    assert!(
-        foe - w.players[1].health >= slam.damage,
-        "slammed: {}",
-        foe - w.players[1].health
-    );
-    let ring = pools(&w)
-        .iter()
-        .filter(|p| flat_apart(p.pos, w.players[1].pos) > 0.5)
-        .count();
-    assert!(ring >= 2, "a ring of blood round him: {ring}");
-
-    // A plant beside him: thrown onto it, worth what it holds, and it drinks.
-    let mut w = mage_and(1.4);
-    plant_at(&mut w, at(-3.0, 0.0, 10.0), 30, 0);
-    let foe = w.players[1].health;
-    seize(&mut w);
-    let impale = sim::moves::get(Class::BloodMage, b::IMPALE);
-    assert!(
-        foe - w.players[1].health >= impale.damage + 30,
-        "impaled: {}",
-        foe - w.players[1].health
-    );
-    assert!(garden(&w).blood[0] > 30, "and the plant drank");
-}
-
-#[test]
 fn the_sweep_bleeds_the_floor_and_the_spike_raises_it() {
     let mut w = mage_and(30.0);
     step2(&mut w, keys::SCYTHE, 0, 0);
-    run(&mut w, 30, 0, 0);
+    // Since 2026-11-08 a tap begins as the button comes up, a frame on.
+    run(&mut w, 32, 0, 0);
     // Two: the floor the Sweep cut, and what the Sweep cost her, a stain at
     // the blade's end as every cost is.
     let cut: Vec<Effect> = pools(&w)
@@ -433,4 +439,360 @@ fn the_sweep_bleeds_the_floor_and_the_spike_raises_it() {
         }
     }
     assert!(raised, "the spike raised the floor's blood");
+}
+
+// ---------------------------------------------------------------------------
+// From play, 2026-11-06
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_press_while_the_head_flies_is_kept_and_zips_when_it_bites() {
+    // "it pulls the mage a few inches towards it": a press a beat early was
+    // dropped, and the next one threw a fresh Sweep.
+    let w = mage_and(30.0);
+    let mut w = w;
+    let hold = t::hold_from() as u32 + 2;
+    run(&mut w, hold, keys::SCYTHE, -3000);
+    let from = w.players[0].pos;
+    // Pressed again at once -- before the head has bitten anything.
+    step2(&mut w, 0, -3000, 0);
+    step2(&mut w, keys::HAND, -3000, 0);
+    let mut bit = None;
+    for _ in 0..90 {
+        step2(&mut w, 0, -3000, 0);
+        if let Some(h) = head(&w).filter(|h| h.head_state() != Head::Flying) {
+            bit.get_or_insert(h.home);
+        }
+    }
+    let bit = bit.expect("the head bit the floor");
+    let gone = flat_apart(from, w.players[0].pos);
+    let out = flat_apart(from, bit);
+    assert!(out > 5.0, "the head went out: {out}");
+    assert!(
+        gone > out - 2.0,
+        "and the early press took her all the way to it: {gone} of {out}"
+    );
+}
+
+#[test]
+fn a_zip_onto_a_fighter_stops_her_beside_him() {
+    let mut w = mage_and(8.0);
+    let hold = t::hold_from() as u32 + 2;
+    run(&mut w, hold, keys::SCYTHE, 0);
+    step2(&mut w, 0, 0, 0);
+    step2(&mut w, keys::HAND, 0, 0);
+    run(&mut w, 60, 0, 0);
+    let gap = flat_apart(w.players[0].pos, w.players[1].pos);
+    let reach = as_f(sim::moves::get(Class::BloodMage, b::REND).reach);
+    assert!(
+        gap < reach,
+        "she arrived inside the Red Hand's reach of him and stayed: {gap} m"
+    );
+}
+
+#[test]
+fn the_rising_reap_takes_her_far_higher_than_a_jump() {
+    let top = |bits: u16| {
+        let mut w = mage_and(30.0);
+        let mut top = Fx::ZERO;
+        for f in 0..90 {
+            step2(&mut w, if f < 12 { bits } else { 0 }, 0, 0);
+            top = top.max(w.players[0].pos.y);
+        }
+        as_f(top)
+    };
+    let (jump, reap) = (top(Input::SPACE), top(Input::SPACE | keys::SCYTHE));
+    assert!(
+        reap > jump * 2.0,
+        "the Rising reap {reap} m against a jump {jump} m"
+    );
+}
+
+#[test]
+fn taking_off_from_a_plant_never_reaps_it() {
+    // From play, 2026-11-07: "jumping off a tree that spawned from a blood pool
+    // causes it to explode into thorns" -- a Rising reap or a Sweep thrown
+    // standing on a plant cut down through the plant under her feet.
+    for bits in [Input::SPACE, Input::SPACE | keys::SCYTHE, keys::SCYTHE] {
+        let mut w = mage_and(30.0);
+        let mut f = 0;
+        loop {
+            step2(
+                &mut w,
+                if f < 3 {
+                    Input::SPACE | keys::SPIKES
+                } else {
+                    0
+                },
+                0,
+                0,
+            );
+            f += 1;
+            if (f > 20 && w.players[0].grounded) || f > 400 {
+                break;
+            }
+        }
+        assert_eq!(plants(&w), 1, "fixture: she is standing on her plant");
+        run(&mut w, 3, bits, 0);
+        run(&mut w, 40, 0, 0);
+        assert_eq!(plants(&w), 1, "{bits:#x} off its top reaped it");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Round three, 2026-11-07: the owner's tweaks (exploration 0038, the promise
+// card). `cargo run --release -p sim --example kitcheck` measures the same.
+// ---------------------------------------------------------------------------
+
+/// The head in a fighter 10 m off.
+fn hooked() -> World {
+    for pitch in (-1500..1500).step_by(150) {
+        let mut w = mage_and(10.0);
+        run(
+            &mut w,
+            t::hold_from() as u32 + 2,
+            keys::SCYTHE,
+            pitch as i16,
+        );
+        for _ in 0..40 {
+            step2(&mut w, 0, pitch as i16, 0);
+            if head(&w).is_some_and(|h| matches!(h.head_state(), Head::Fighter(_))) {
+                return w;
+            }
+        }
+    }
+    panic!("no throw bit the fighter");
+}
+
+#[test]
+fn the_head_is_a_weight_thrown_on_a_chain() {
+    // Thrown level at nothing, it rises, falls, and lands on the floor.
+    let mut w = mage_and(60.0);
+    run(&mut w, t::hold_from() as u32 + 2, keys::SCYTHE, 0);
+    let (mut fell, mut was, mut landed) = (false, 0.0f32, None);
+    for _ in 0..120 {
+        step2(&mut w, 0, 0, 0);
+        if let Some(h) = head(&w) {
+            let y = as_f(h.home.y);
+            fell |= h.head_state() == Head::Flying && y < was;
+            was = y;
+            if h.head_state() == Head::World {
+                landed.get_or_insert(y);
+            }
+        }
+    }
+    assert!(fell, "it fell");
+    assert!(
+        landed.is_some_and(|y| y < 0.3),
+        "and landed on the floor: {landed:?}"
+    );
+    // And aimed at a fighter, it still meets him.
+    let _ = hooked();
+}
+
+#[test]
+fn left_on_the_chain_pulls_her_reels_him_or_rips_it_out_and_right_calls_it_home() {
+    let mut w = hooked();
+    step2(&mut w, keys::HAND, 0, 0);
+    run(&mut w, 40, 0, 0);
+    assert!(
+        flat_apart(w.players[0].pos, w.players[1].pos) < 2.6,
+        "a tap pulled her to him"
+    );
+
+    let mut w = hooked();
+    run(&mut w, t::reel_full() as u32 + 2, keys::HAND, 0);
+    run(&mut w, 90, 0, 0);
+    assert!(
+        flat_apart(w.players[0].pos, w.players[1].pos) < 2.5,
+        "held, she reeled him in"
+    );
+
+    let mut w = hooked();
+    let his = w.players[1].health;
+    run(&mut w, t::hold_from() as u32 + 4, keys::HAND, 0);
+    step2(&mut w, 0, 0, 0);
+    assert!(
+        w.players[1].health < his,
+        "let go early, it ripped out of him"
+    );
+    assert!(w.players[1].bleeding > 0);
+
+    let mut w = hooked();
+    step2(&mut w, keys::SCYTHE, 0, 0);
+    step2(&mut w, 0, 0, 0);
+    assert!(
+        head(&w).is_some_and(|h| h.head_state() == Head::Home),
+        "right called it home"
+    );
+}
+
+#[test]
+fn the_shrike_impales_a_body_reeled_into_her_plant() {
+    let mut w = hooked();
+    plant_at(&mut w, at(-1.0, 0.0, 8.0), 0, 0);
+    let mut pinned = false;
+    for f in 0..120u32 {
+        step2(
+            &mut w,
+            if f < t::reel_full() as u32 + 2 {
+                keys::HAND
+            } else {
+                0
+            },
+            0,
+            0,
+        );
+        pinned |= matches!(w.players[1].action, Action::Held { .. })
+            && w.players[1].held_by == sim::state::NAILED;
+    }
+    assert!(pinned, "he was impaled on the plant between them");
+}
+
+#[test]
+fn the_red_claw_lands_further_and_bigger_for_the_hold_and_slows() {
+    let claw_at = |held: u32| {
+        let mut w = mage_and(40.0);
+        let from = w.players[0].pos;
+        run(&mut w, held, keys::HAND, -2000);
+        for _ in 0..30 {
+            step2(&mut w, 0, -2000, 0);
+            if let Some(c) = w
+                .effects
+                .iter()
+                .flatten()
+                .find(|e| e.kind == EffectKind::Claw)
+            {
+                return (flat_apart(from, c.pos), as_f(c.reach));
+            }
+        }
+        panic!("no claw came out");
+    };
+    let (near, small) = claw_at(t::hold_from() as u32 + 8);
+    let (far, big) = claw_at(t::hold_from() as u32 + 45);
+    assert!(
+        far > near + 3.0 && big > small,
+        "{near} {small} -> {far} {big}"
+    );
+    // Held too long, it lands past a fighter 3 m off.
+    let mut w = mage_and(3.0);
+    let his = w.players[1].health;
+    run(&mut w, t::hold_from() as u32 + 70, keys::HAND, -2000);
+    run(&mut w, 30, 0, -2000);
+    assert_eq!(w.players[1].health, his, "over-held, it missed him");
+}
+
+#[test]
+fn rend_strung_is_three_blows_each_bigger_and_the_hand_feeds_a_plant() {
+    let mut w = mage_and(2.2);
+    let (mut last, mut hits) = (w.players[1].health, Vec::new());
+    for f in 0..80u32 {
+        step2(
+            &mut w,
+            if matches!(f, 0 | 16 | 32) {
+                keys::HAND
+            } else {
+                0
+            },
+            0,
+            0,
+        );
+        if w.players[1].health != last {
+            hits.push(last - w.players[1].health);
+            last = w.players[1].health;
+        }
+    }
+    assert!(
+        hits.len() == 3 && hits[0] < hits[1] && hits[1] < hits[2],
+        "{hits:?}"
+    );
+    let mut w = mage_and(40.0);
+    plant_at(&mut w, at(-4.4, 0.0, 8.0), 0, 0);
+    let before = garden(&w).plants[0].unwrap().scale;
+    step2(&mut w, keys::HAND, 0, 0);
+    run(&mut w, 20, 0, 0);
+    assert!(
+        garden(&w).plants[0].unwrap().scale.raw() > before.raw(),
+        "fed"
+    );
+}
+
+#[test]
+fn the_charge_jump_leaps_further_for_the_hold_and_the_claw_rides_it() {
+    let leap = |held: u32| {
+        let mut w = mage_and(40.0);
+        let from = w.players[0].pos;
+        for f in 0..120u32 {
+            let bits = if f < 2 {
+                Input::SPACE | keys::HAND
+            } else if f < 2 + held {
+                keys::HAND
+            } else {
+                0
+            };
+            step2(&mut w, bits, 0, 0);
+        }
+        flat_apart(from, w.players[0].pos)
+    };
+    assert!(leap(t::leap_hold() as u32 + 4) > leap(0) + 2.0);
+    let mut w = mage_and(5.0);
+    let his = w.players[1].health;
+    for f in 0..80u32 {
+        let bits = if f < 2 {
+            Input::SPACE | keys::HAND
+        } else if f < 2 + t::leap_hold() as u32 {
+            keys::HAND
+        } else {
+            0
+        };
+        step2(&mut w, bits, 0, 0);
+    }
+    assert!(w.players[1].health < his, "it hit him on the way");
+}
+
+// ---------------------------------------------------------------------------
+// From play, 2026-11-08: one or the other, and a held button does not repeat
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_held_click_is_the_held_move_and_never_the_tap_first_nor_again() {
+    // "Both l and r click, when holding, the short version comes out then
+    // the long one. That's not right, it's one or the other."
+    for (click, tap) in [(keys::HAND, b::REND), (keys::SCYTHE, b::SWEEP)] {
+        let mut w = mage_and(30.0);
+        for _ in 0..t::hold_from() as u32 + 30 {
+            step2(&mut w, click, 0, 0);
+            assert!(
+                !matches!(
+                    w.players[0].action,
+                    Action::Startup { kind, .. } | Action::Active { kind, .. } | Action::Recovery { kind, .. }
+                        if kind == tap
+                ),
+                "held, {:?} wound up the tap first",
+                w.players[0].action
+            );
+        }
+    }
+    // "just holding [the click] while aiming up shoots the scythe head, then
+    // it disappears, then shoots, over and over."
+    let mut w = mage_and(30.0);
+    let mut throws = 0;
+    let mut had = false;
+    for _ in 0..300 {
+        step2(&mut w, keys::SCYTHE, 3000, 0);
+        let out = head(&w).is_some_and(|h| h.age <= 1 && h.head_state() == Head::Flying);
+        if out && !had {
+            throws += 1;
+        }
+        had = out;
+    }
+    assert_eq!(throws, 1, "held five seconds, it threw once");
+    // And a tap is still the tap.
+    let mut w = mage_and(30.0);
+    step2(&mut w, keys::SCYTHE, 0, 0);
+    run(&mut w, 12, 0, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Active { kind, .. } | Action::Recovery { kind, .. } if kind == b::SWEEP),
+        "a tap swept"
+    );
 }

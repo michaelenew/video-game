@@ -422,9 +422,9 @@ clips! {
     // itself is not in any clip -- `crate::scythe` hangs the blade off the
     // grip when the Rising reap has the hands on a haft.
     BloodCommitted, "blood_committed", Moves, "blood", Length::Move(Class::BloodMage, 1), false,
-        "Haemorrhage: one hand drawn in to the chest and thrust out flat, palm forward. The bolt leaves on the thrust.";
+        "Rend: the red hand drawn high behind the shoulder and raked across and down with a step in.";
     BloodSpecial, "blood_special", Moves, "blood", Length::Move(Class::BloodMage, 2), false,
-        "Hemoplague: both hands lifted and spread palm-down over the floor ahead, the cloud welling up under them as she holds.";
+        "Red claw: the red hand drawn far back and low while she holds, then flung forward and down, the claw tearing out across the floor ahead.";
     BloodMechanic, "blood_mechanic", Moves, "blood", Length::Move(Class::BloodMage, 3), false,
         "Black spike: a downward stabbing gesture that plants something in the ground.";
     BloodSweep, "blood_sweep", Moves, "blood", Length::Move(Class::BloodMage, 10), false,
@@ -443,6 +443,8 @@ clips! {
         "Black vines: both fists driven down into the floor and wrenched apart, the vines tearing outward.";
     BloodCascade, "blood_cascade", Moves, "blood", Length::Move(Class::BloodMage, 12), false,
         "Crimson cascade: a heavy two-handed stab into the floor and the body thrown back as the eruptions roll out.";
+    BloodThrow, "blood_throw", Moves, "blood", Length::Move(Class::BloodMage, 0), false,
+        "The Cast: the haft swung back over the right shoulder and cast forward like a rod, the head flying off its end on the chain.";
 
     // -- The Dual mage: two autos, two Lances, Judgement, Sweep -------------
     //
