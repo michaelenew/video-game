@@ -6856,6 +6856,10 @@ fn may_hold(p: &Player) -> bool {
 /// and its hold begun.
 fn into_the_field(p: &mut Player, kind: u8) -> Action {
     let field = moves::blood::held_into(kind).unwrap_or(kind);
+    // The button is spent until it comes up (`Garden::held_spent`).
+    if let Mechanic::Blood(g) = &mut p.mechanic {
+        g.held_spent |= moves::blood::click_of(kind);
+    }
     pay(p, moves::get(p.class, field).cost);
     Action::Channel {
         kind: field,
@@ -9009,6 +9013,7 @@ fn blood_move(p: &Player, input: Input) -> Option<u8> {
             if g.recall {
                 bits &= !keys::SCYTHE;
             }
+            bits &= !g.held_spent;
             Input { bits, ..input }
         }
         _ => input,
@@ -11059,6 +11064,17 @@ fn begin_move(
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
     }
+    // **The Blood mage's tap or hold, never both** (2026-11-08, from play:
+    // "when holding, the short version comes out then the long one. That's
+    // not right, it's one or the other"): the press opens a hold that is
+    // neither yet, as the Dual mage's does. Let go inside the Champion's
+    // window and the tap begins, its wind-up shortened by the frames already
+    // held; held to it, the held move -- and nothing of the tap. See
+    // `step_channel`.
+    if p.class == Class::BloodMage && moves::blood::held_into(kind).is_some_and(|h| h != kind) {
+        aim_channel(p, who, kind, 0, input, scene);
+        return Action::Channel { kind, held: 0 };
+    }
     // The Air ball's hold is before the move too, and the press is where the
     // ball goes: on the floor under the crosshair, asked of `crate::aim` the
     // way Raise asks it. The world raises the ball there on this frame, and
@@ -11201,12 +11217,21 @@ fn step_channel(
     }
     if p.class == Class::BloodMage && moves::blood::held_into(kind).is_some() {
         if !input.has(moves::blood::click_of(kind)) {
-            return Action::Active {
-                kind,
-                left: m.active,
+            // The tap, from here: what is left of its wind-up after the
+            // frames it was held.
+            return if held >= m.startup {
+                Action::Active {
+                    kind,
+                    left: m.active,
+                }
+            } else {
+                Action::Startup {
+                    kind,
+                    left: m.startup - held,
+                }
             };
         }
-        if m.startup + held + 1 >= t::hold_from() {
+        if held + 1 >= t::hold_from() {
             return into_the_field(p, kind);
         }
         return Action::Channel {
@@ -12284,6 +12309,10 @@ fn swim_or_surface(p: &mut Player, input: Input) {
 fn string_the_sweep(p: &mut Player, input: Input, pressed_hand: bool) -> bool {
     if p.class != Class::BloodMage {
         return false;
+    }
+    // A held move's button is spent until it comes up (2026-11-08).
+    if let Mechanic::Blood(g) = &mut p.mechanic {
+        g.held_spent &= input.bits;
     }
     let click = moves::blood::keys::SCYTHE;
     let pressed = input.has(click) && !p.right_held;

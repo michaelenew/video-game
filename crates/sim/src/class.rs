@@ -942,6 +942,10 @@ pub struct Garden {
     pub shrike_rest: u16,
     /// What the Rising rend was held for, read on its first active frame.
     pub leap_held: u16,
+    /// Buttons whose held move has begun (2026-11-08): kept from her moves
+    /// until they come up, so a button held through a Cast or a Red claw does
+    /// not throw it again and again.
+    pub held_spent: u16,
 }
 
 impl Garden {
@@ -963,6 +967,7 @@ impl Garden {
         reeling: 0,
         shrike_rest: 0,
         leap_held: 0,
+        held_spent: 0,
     };
 }
 
