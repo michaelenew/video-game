@@ -1,5 +1,5 @@
 ---
-status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18), the spike as a finisher (2026-10-19), played once; the world bleeds, slice 1 (2026-11-04), played and rebuilt from play (2026-11-06), round three (2026-11-07)
+status: built — v1, then on three clicks (2026-10-09), the blaster (2026-10-12), thralls and the Well (2026-10-13), then her territory (2026-10-18), the spike as a finisher (2026-10-19), played once; the world bleeds, slice 1 (2026-11-04), played and rebuilt from play (2026-11-06), round three (2026-11-07), four fixes from play (2026-11-10)
 decided: 2026-09-09
 revised: 2026-09-23
 revised: 2026-10-12
@@ -64,6 +64,25 @@ she has left herself, and a floor that is hers.
 > anything after it disagrees, it wins.** The direction is
 > [../exploration/0038_blood_mage_the_world_bleeds.md](../exploration/0038_blood_mage_the_world_bleeds.md).
 
+## From play, 2026-11-10 — four fixes; wins over everything below
+
+The owner's four reports and what each is now; the measurements are in
+[feel-log.md](../feel-log.md) §2026-11-10, the tests `tests/world_bleeds.rs`.
+
+- **The chain is the right click** ("it's rclick that controls the scythe"). With the head
+  out, right **tapped** is the zip; **held** to `Chain, right held this long reels it in` (36 f)
+  reels in what is on the chain -- a fighter to her, her to a creature, and the head home from
+  the floor, a wall or the air; **let go between**, with the head in a fighter, it rips out.
+  Only a fresh press takes the chain. **Left is the Red Hand** while the head is out. The tap
+  that called the head home is gone (it was a Sweep with no blade one frame later).
+- **A tap stays a tap.** A press landing on the last frame of Rend's or the Sweep's wind-up
+  used to turn it back into a hold, so spamming left restarted Rend forever and it never hit.
+  Only the charge-jump still waits at the top of its wind-up.
+- **The Black spike needs a pool.** On bare ground the middle click throws nothing and costs
+  nothing. The **Rising spike** still raises her own blood at her feet, pool or not.
+- **A Heart stands clear of walls**: aimed at a tree trunk it is pushed off the face as a
+  fighter would be, rather than hanging inside the trunk.
+
 ## Round three, 2026-11-07 — the owner's tweaks; wins over everything below
 
 "This is better. A few tweaks." The promises are the card in
@@ -82,7 +101,7 @@ measured by `cargo run --release -p sim --example kitcheck` and held by `tests/w
   the scythe's iron, the chain hanging by its slack (a shallow rope's dip, √(3·D·(L−D)/8)).
   A new throw clip (`blood_throw`).
 - **The chain in her left hand** (`chain_in_hand`, `tend_the_chains`): with the head out, left
-  tapped is the zip, held to `Chain, left held this long reels them in` (36 f) reels a fighter
+  tapped is the zip, held to `Chain, left held this long reels them in` (36 f; right since 2026-11-10, see above) reels a fighter
   in (the grab's own drag, `drag_the_held`), let go between rips it out (the `Rip` row: 70, a
   bleed, a stagger). Right click calls it home. The chain claims the buttons, never the frame.
 - **The shrike** (`the_shrike`, `impale`): a body reeled into one of her plants, or knocked into

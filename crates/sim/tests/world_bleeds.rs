@@ -206,11 +206,11 @@ fn the_zip_goes_to_the_head_and_a_banked_jump_fires_on_arrival() {
     assert!(flat_apart(from, to) > 3.0, "the head is out in the world");
     let zip = |jump: bool| {
         let mut w = bit.clone();
-        // Let go of the scythe, then tap left: the zip (2026-11-07).
+        // Let go of the scythe, then tap it again: the zip (2026-11-10).
         run(&mut w, 2, 0, 0);
-        step2(&mut w, keys::HAND, 0, 0);
+        step2(&mut w, keys::SCYTHE, 0, 0);
         step2(&mut w, 0, 0, 0);
-        assert!(garden(&w).zipping, "a tap of left is the zip");
+        assert!(garden(&w).zipping, "a tap of right is the zip");
         let mut arrived = None;
         let mut held = 0;
         for _ in 0..90 {
@@ -249,14 +249,34 @@ fn the_zip_goes_to_the_head_and_a_banked_jump_fires_on_arrival() {
 }
 
 #[test]
-fn the_spike_on_bare_ground_is_her_own_blood_and_the_plant_holds_it() {
-    // From play, 2026-11-06: "it does nothing at all unless there's a blood
-    // pool nearby". On bare ground she pays the whole price in her own blood,
-    // the plant holds it as grey that does not fade, and reaping the plant
-    // gives it back.
+fn the_spike_on_bare_ground_throws_nothing() {
+    // From play, 2026-11-10: "The best move is still to spam middle click
+    // which we need to change. Middle click should only happen when there's
+    // a bloodstain on the ground." (It raised her own blood there from
+    // 2026-11-06.)
     let mut w = mage_and(30.0);
     let health = w.players[0].health;
-    step2(&mut w, keys::SPIKES, -3000, 0);
+    for f in 0..120u32 {
+        step2(&mut w, if f % 4 < 2 { keys::SPIKES } else { 0 }, -3000, 0);
+        assert!(
+            w.players[0].action.attack_kind().is_none(),
+            "a press on bare ground threw {:?}",
+            w.players[0].action
+        );
+    }
+    assert_eq!(plants(&w), 0, "no plant");
+    assert_eq!(w.players[0].health, health, "and it cost nothing");
+}
+
+#[test]
+fn the_rising_spike_on_bare_ground_is_her_own_blood_and_the_plant_holds_it() {
+    // From play, 2026-11-06: on bare ground the Rising spike pays the whole
+    // price in her own blood -- her way up -- the plant holds it as grey that
+    // does not fade, and reaping the plant gives it back.
+    let mut w = mage_and(30.0);
+    let health = w.players[0].health;
+    step2(&mut w, Input::SPACE, 0, 0);
+    step2(&mut w, Input::SPACE | keys::SPIKES, 0, 0);
     run(&mut w, 40, 0, -3000);
     assert_eq!(plants(&w), 1, "a plant stands on bare ground");
     let price = health - w.players[0].health;
@@ -289,8 +309,11 @@ fn a_pool_pays_toward_the_spike_and_she_pays_what_it_lacks() {
         step2(&mut w, keys::SPIKES, pitch, 0);
         health - w.players[0].health
     };
-    let full = price_over(0);
-    assert!(full > 0);
+    // The whole price, less the one drop of the smallest pool: on bare
+    // ground the spike throws nothing (2026-11-10).
+    assert_eq!(price_over(0), 0, "bare ground: nothing, and free");
+    let full = price_over(1) + 1;
+    assert!(full > 1);
     assert_eq!(
         price_over(full / 2),
         full - full / 2,
@@ -299,13 +322,28 @@ fn a_pool_pays_toward_the_spike_and_she_pays_what_it_lacks() {
     assert_eq!(price_over(full * 3), 0, "a big pool pays it all");
 }
 
-/// The pitch that puts her crosshair's floor point nearest `spot`.
+/// The pitch that puts her crosshair's floor point nearest `spot`: asked of
+/// the spike's own line (`aim::grounded_path`), since a press on bare ground
+/// throws nothing (2026-11-10) and so aims nothing.
 fn aim_onto(w: &World, spot: V3) -> i16 {
+    let stones = sim::stones::gather(&w.players);
+    let players = w.players;
+    let effects = w.effects;
+    let terrain = w.terrain();
+    let scene = sim::aim::Scene {
+        stones: &stones,
+        players: &players,
+        effects: &effects,
+        quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
+        arena: &terrain,
+    };
+    let reach = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).reach;
     let mut best = (f32::MAX, 0i16);
-    for pitch in (500..7000).step_by(100).map(|p| -(p as i16)) {
-        let mut trial = w.clone();
-        step2(&mut trial, keys::SPIKES, pitch, 0);
-        let far = flat_apart(trial.players[0].aim_at(), spot);
+    for pitch in (500..14000).step_by(100).map(|p| -(p as i16)) {
+        let look = Input::looking_at(keys::SPIKES, LOOK_RIGHT, pitch);
+        let to = sim::aim::grounded_path(0, look, reach, &scene).to;
+        let far = flat_apart(to, spot);
         if far < best.0 {
             best = (far, pitch);
         }
@@ -427,9 +465,11 @@ fn the_sweep_bleeds_the_floor_and_the_spike_raises_it() {
         flat_apart(cut[0].pos, w.players[0].pos) > 0.5,
         "in front of her"
     );
-    // And it is a pool to raise.
+    // And it is a pool to raise -- the crosshair on it (on bare ground the
+    // spike throws nothing since 2026-11-10, so the aim has to find it).
     let mut raised = false;
-    for pitch in [-2000, -3000, -4000, -5000, -6000, -1500] {
+    let onto = aim_onto(&w, cut[0].pos);
+    for pitch in [onto, onto - 300, onto + 300, onto - 600, onto + 600] {
         let mut trial = w.clone();
         step2(&mut trial, keys::SPIKES, pitch, 0);
         run(&mut trial, 40, 0, pitch);
@@ -456,7 +496,7 @@ fn a_press_while_the_head_flies_is_kept_and_zips_when_it_bites() {
     let from = w.players[0].pos;
     // Pressed again at once -- before the head has bitten anything.
     step2(&mut w, 0, -3000, 0);
-    step2(&mut w, keys::HAND, -3000, 0);
+    step2(&mut w, keys::SCYTHE, -3000, 0);
     let mut bit = None;
     for _ in 0..90 {
         step2(&mut w, 0, -3000, 0);
@@ -480,7 +520,7 @@ fn a_zip_onto_a_fighter_stops_her_beside_him() {
     let hold = t::hold_from() as u32 + 2;
     run(&mut w, hold, keys::SCYTHE, 0);
     step2(&mut w, 0, 0, 0);
-    step2(&mut w, keys::HAND, 0, 0);
+    step2(&mut w, keys::SCYTHE, 0, 0);
     run(&mut w, 60, 0, 0);
     let gap = flat_apart(w.players[0].pos, w.players[1].pos);
     let reach = as_f(sim::moves::get(Class::BloodMage, b::REND).reach);
@@ -591,9 +631,14 @@ fn the_head_is_a_weight_thrown_on_a_chain() {
 }
 
 #[test]
-fn left_on_the_chain_pulls_her_reels_him_or_rips_it_out_and_right_calls_it_home() {
+fn right_on_the_chain_pulls_her_reels_in_or_rips_it_out() {
+    // From play, 2026-11-10: "When I rclick to send out the scythe head, I
+    // then have to lclick to zip to it. That's backwards, it's rclick that
+    // controls the scythe, and rclick does nothing while it's out."
     let mut w = hooked();
-    step2(&mut w, keys::HAND, 0, 0);
+    step2(&mut w, keys::SCYTHE, 0, 0);
+    step2(&mut w, 0, 0, 0);
+    assert!(garden(&w).zipping, "a tap of right is the zip");
     run(&mut w, 40, 0, 0);
     assert!(
         flat_apart(w.players[0].pos, w.players[1].pos) < 2.6,
@@ -601,7 +646,7 @@ fn left_on_the_chain_pulls_her_reels_him_or_rips_it_out_and_right_calls_it_home(
     );
 
     let mut w = hooked();
-    run(&mut w, t::reel_full() as u32 + 2, keys::HAND, 0);
+    run(&mut w, t::reel_full() as u32 + 2, keys::SCYTHE, 0);
     run(&mut w, 90, 0, 0);
     assert!(
         flat_apart(w.players[0].pos, w.players[1].pos) < 2.5,
@@ -610,7 +655,7 @@ fn left_on_the_chain_pulls_her_reels_him_or_rips_it_out_and_right_calls_it_home(
 
     let mut w = hooked();
     let his = w.players[1].health;
-    run(&mut w, t::hold_from() as u32 + 4, keys::HAND, 0);
+    run(&mut w, t::hold_from() as u32 + 4, keys::SCYTHE, 0);
     step2(&mut w, 0, 0, 0);
     assert!(
         w.players[1].health < his,
@@ -618,12 +663,38 @@ fn left_on_the_chain_pulls_her_reels_him_or_rips_it_out_and_right_calls_it_home(
     );
     assert!(w.players[1].bleeding > 0);
 
-    let mut w = hooked();
-    step2(&mut w, keys::SCYTHE, 0, 0);
-    step2(&mut w, 0, 0, 0);
+    // In the world, held, the chain brings the head home -- and no press on
+    // the chain swings the bladeless scythe.
+    let mut w = cast_until(&mage_and(30.0), |h| h == Head::World);
+    run(&mut w, 2, 0, 0);
+    for _ in 0..t::reel_full() as u32 + 4 {
+        step2(&mut w, keys::SCYTHE, 0, 0);
+        assert!(
+            !matches!(w.players[0].action, Action::Channel { kind, .. } | Action::Startup { kind, .. } if kind == b::SWEEP),
+            "the chain's press threw a Sweep"
+        );
+    }
     assert!(
         head(&w).is_some_and(|h| h.head_state() == Head::Home),
-        "right called it home"
+        "held, the chain reeled the head home"
+    );
+    assert!(!garden(&w).zipping, "and did not zip her");
+
+    // And the left hand is the Red Hand while the head is out.
+    let mut w = hooked();
+    while w.players[0].action != Action::Free {
+        step2(&mut w, 0, 0, 0);
+    }
+    assert!(
+        head(&w).is_some_and(|h| h.is_a_head_holding()),
+        "fixture: still in him"
+    );
+    step2(&mut w, keys::HAND, 0, 0);
+    run(&mut w, 2, 0, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Startup { kind, .. } | Action::Active { kind, .. } if kind == b::REND),
+        "left with the head out is Rend: {:?}",
+        w.players[0].action
     );
 }
 
@@ -636,7 +707,7 @@ fn the_shrike_impales_a_body_reeled_into_her_plant() {
         step2(
             &mut w,
             if f < t::reel_full() as u32 + 2 {
-                keys::HAND
+                keys::SCYTHE
             } else {
                 0
             },

@@ -10475,3 +10475,48 @@ Her movement-search lines re-recorded. Whole kit, by lane, against 11-07's: 34.7
 39.0/51.4, 34.9/61.2, 65.6/39.1, 30.7/42.1, 29.2/23.5, 42.4/34.6, 35.5/31.9, 36.5/31.8,
 14.8/19.8, 44.8/25.0, 18.2/51.0, 29.3/13.2, 27.2/24.1, 31.2/33.2 -- as much search noise as
 anything (the search is random and a lower bound), so read nothing into one lane.
+
+## 2026-11-10 — Blood mage: the chain on right, Rend that finishes, the spike needs a pool, the Heart off the trunk
+
+Four reports from play, each measured in the simulation before it was changed.
+
+**"When I rclick to send out the scythe head, I then have to lclick to zip to it. That's
+backwards, it's rclick that controls the scythe, and rclick does nothing while it's out."**
+Measured: right while the head was out did call it home, but the head is reeled from rest, so
+for most of a second nothing seemed to happen -- and the same press, one frame on, swung a
+Sweep with the bladeless haft. **The chain is right click now** (`bleeds::chain_in_hand`):
+tapped, the zip; held to `reel_full` (36 f), a fighter is reeled in, a creature hauls her to
+it, and with the head anywhere else (the floor, a wall, the air) it is reeled home; let go in
+between with the head in a fighter, it rips out. Only a fresh press takes the chain, so the
+button still down from the throw is not one. The left hand is the Red Hand while the head is
+out -- leash them, then rend them. The explicit "call it home" tap is gone: the head comes home
+on its own after `cast_holds_world`, a held right brings it early.
+
+**"Spamming lclick also causes some crazy animation cancel and doesn't finish the move."**
+Measured: tapping left every four frames for ninety frames dealt **nothing**. The old rule
+from 2026-10-14 -- a click still down at the top of a tap's wind-up becomes the hold -- was left
+in `countdown` when 2026-11-08 moved the decision to the press. A spammed press landed on
+Rend's last wind-up frame and sent it back into the hold, over and over; the blow never came
+out. The rule now holds only for the charge-jump (the one move whose hold is itself). Spammed,
+Rend is the string of three, whole, its third recovery played out, and then the next string:
+327 to a Bulwark in the same ninety frames. Same for the Sweep.
+
+**"The best move is still to spam middle click ... Middle click should only happen when
+there's a bloodstain on the ground. It's just too strong otherwise."** The Black spike on bare
+ground throws nothing and costs nothing (`bleeds::spike_rise`), undoing 2026-11-06's "on bare
+ground she pays it all". Her own ways to make a pool are unchanged -- the Sweep cuts the floor
+(look down at the cut: it is a metre in front of her), the head bites the world, every hit
+spills. **The Rising spike (space + middle) still raises her own blood on bare ground** -- it is
+her way up and the owner asked for it on 11-06; it is a takeoff, once a jump. If it becomes the
+new spam, it goes the same way.
+
+**"E doesn't seem to work if I cast it near a tree."** Measured in the valley: the heart was
+planted, but aimed at a trunk the crosshair's floor is the foot of the trunk's face, and a
+heart there hung half inside the tree with its thralls born in the trunk. It now stands where a
+fighter could (`Terrain::resolve`), half a metre off the face. (Her plants never blocked it.)
+
+Tests: `tests/world_bleeds.rs` (`right_on_the_chain_pulls_her_reels_in_or_rips_it_out`,
+`the_spike_on_bare_ground_throws_nothing`, the Rising spike's bare-ground test), the cost tests
+in `effects.rs`, `grey.rs`, `essence.rs` and `territory.rs` moved onto the Rising spike, and
+the kitcheck card. Her movement-search lines and her Ridgeback and hunt pins re-recorded.
+**Verdict:** unplayed.

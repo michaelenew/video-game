@@ -9,9 +9,9 @@
 //!   in what it meets. A fighter it bites is bled, slowed and **leashed**; the
 //!   world it bites bleeds a pool. Left alone it wrenches free and drags home
 //!   along the floor, drinking her stains and reaping her plants on its line.
-//! - **The zip** (right pressed again while it holds): she is hauled to the
-//!   head, keeps a share of the speed, and a jump pressed near the end fires
-//!   on arrival.
+//! - **The zip** (right tapped again while it is out, 2026-11-10): she is
+//!   pulled to the head, keeps a share of the speed, and a jump pressed near
+//!   the end fires on arrival. Right held reels in what is on the chain.
 //! - **The spike from a pool, and the plant it leaves** (`class::Garden`):
 //!   only a pool rises; what it raises launches what is over it -- her too --
 //!   and stands, solid, lashing an enemy beside it.
@@ -103,15 +103,22 @@ pub(super) fn rise_of(volume: i32) -> u16 {
 }
 
 /// **What a spike press raises** (2026-11-06): the pool of hers under the
-/// crosshair -- or at her own feet, for the Rising spike -- and, on bare
-/// ground, **her own blood**: the price is the row's cost, and a pool pays
-/// what it holds toward it, so she pays only what the pool lacks (0038 §"The
-/// heal stays a refund"). The press always raises something.
+/// crosshair -- or at her own feet, for the Rising spike. The price is the
+/// row's cost, and a pool pays what it holds toward it, so she pays only
+/// what the pool lacks (0038 §"The heal stays a refund").
+///
+/// **The middle click needs a pool** (2026-11-10, from play: "The best move
+/// is still to spam middle click ... Middle click should only happen when
+/// there's a bloodstain on the ground. It's just too strong otherwise"):
+/// with no pool of hers under the crosshair the press throws nothing and
+/// costs nothing -- `None`. **The Rising spike still raises her own blood**
+/// on bare ground (2026-11-06): it is her way up, a takeoff once a jump.
 ///
 /// `Some(None)` is a move that is not a spike; `Some(Some((frames,
 /// volume)))` is a spike: how long it takes to rise -- its startup, in
 /// place of its row's -- and how much blood the pool already holds toward
-/// the price. Bare ground rises as a fighter's pool does.
+/// the price. Bare ground, for the Rising spike, rises as a fighter's pool
+/// does.
 pub(super) fn spike_rise(
     p: &Player,
     who: usize,
@@ -135,7 +142,8 @@ pub(super) fn spike_rise(
             let volume = scene.effects[slot].map_or(0, |e| e.pool_volume());
             (rise_of(volume), volume)
         }
-        None => (t::spike_rise_body().max(1), 0),
+        None if kind == moves::blood::RISING_SPIKE => (t::spike_rise_body().max(1), 0),
+        None => return None,
     }))
 }
 
@@ -151,18 +159,26 @@ pub(super) fn the_pool_pays(p: &mut Player, volume: i32) {
     p.paid -= back as u16;
 }
 
-/// **The chain in her hand** (2026-11-07, the owner's answers): while her
-/// scythe's head is out -- or on its way out of her hand -- **left click is
-/// the chain** and right click calls it home.
+/// **The chain is the right click** (2026-11-10, from play: "When I rclick
+/// to send out the scythe head, I then have to lclick to zip to it. That's
+/// backwards, it's rclick that controls the scythe, and rclick does nothing
+/// while it's out"). While her scythe's head is out -- or on its way out of
+/// her hand -- **right click is the chain**, and the left hand is free for
+/// the Red Hand. A press counts only from a fresh press: the button still
+/// down from the throw itself is not one.
 ///
-/// - **Left tapped** (let go inside `tuning::hold_from`): the zip, to whatever
-///   the head bit -- kept and started the frame it bites if it is still
-///   flying (`Garden::zip_queued`).
-/// - **Left held to `tuning::reel_full`**: with the head in a fighter, she
-///   reels them in (`World::tend_the_zips`); with it in the world, the zip.
-/// - **Left let go in between, with the head in a fighter**: it rips out of
-///   them -- a hit, a bleed, a stagger -- and comes home.
-/// - **Right pressed**: the head is called home now.
+/// - **Right tapped** (let go inside `tuning::hold_from`): the zip, to
+///   whatever the head bit -- kept and started the frame it bites if it is
+///   still flying (`Garden::zip_queued`).
+/// - **Right held to `tuning::reel_full`**: the chain reeled in. With the
+///   head in a fighter, they come to her (`World::tend_the_chains`); in a
+///   creature, the heavier body wins and she goes to it (the zip); anywhere
+///   else -- the floor, a wall, the air -- the head comes home.
+/// - **Right let go in between, with the head in a fighter**: it rips out
+///   of them -- a hit, a bleed, a stagger -- and comes home. In between
+///   with it anywhere else, the zip, as a tap.
+///
+/// Was (2026-11-07): left was the chain and right called the head home.
 ///
 /// Returns whether the press was the chain's, so it throws nothing else.
 pub(super) fn chain_in_hand(
@@ -175,6 +191,7 @@ pub(super) fn chain_in_hand(
     if p.class != Class::BloodMage || p.health <= 0 {
         return false;
     }
+    let chain = moves::blood::keys::SCYTHE;
     let head = scene
         .effects
         .iter()
@@ -188,21 +205,17 @@ pub(super) fn chain_in_hand(
         return false;
     };
     if !out || g.zipping {
-        if g.chain_held != 0 && !input.has(moves::blood::keys::HAND) {
+        if g.chain_held != 0 && !input.has(chain) {
             tend(p, |g| g.chain_held = 0);
         }
         return false;
     }
-    if pressed_right {
-        tend(p, |g| {
-            g.recall = true;
-            g.chain_held = 0;
-            g.zip_queued = false;
-        });
-        return false;
-    }
     let in_a_fighter = head.is_some_and(|h| matches!(h.head_state(), Head::Fighter(_)));
-    if input.has(moves::blood::keys::HAND) {
+    if input.has(chain) {
+        // Only a fresh press takes hold of the chain.
+        if g.chain_held == 0 && !pressed_right {
+            return false;
+        }
         if g.chain_held == u16::MAX {
             return false;
         }
@@ -212,7 +225,11 @@ pub(super) fn chain_in_hand(
             tend(p, |g| g.chain_held = u16::MAX);
             match head.map(|h| h.head_state()) {
                 Some(Head::Fighter(v)) => tend(p, |g| g.reeling = v as u8 + 1),
-                _ => return zip_now_or_later(p, head),
+                Some(Head::Creature(_)) => return zip_now_or_later(p, head),
+                _ => tend(p, |g| {
+                    g.recall = true;
+                    g.zip_queued = false;
+                }),
             }
         }
         return false;
@@ -1118,9 +1135,11 @@ impl World {
     /// blow -- **her too**, at `tuning::spike_launches_her`: her way up. With
     /// no pool there (it drained while it rose), nothing.
     pub(super) fn raise_from_the_pool(&mut self, i: usize, kind: u8, at: V3, reach: Fx) {
-        // **Bare ground: her own blood** (2026-11-06). What she paid lands as
-        // a pool on the floor there, and that pool rises.
-        if self.pool_touching(i as u8, at, reach).is_none() {
+        // **Bare ground: her own blood** (2026-11-06), for the Rising spike
+        // only since 2026-11-10 (`spike_rise`). What she paid lands as a pool
+        // on the floor there, and that pool rises. A Black spike whose pool
+        // drained while it rose raises nothing.
+        if kind == moves::blood::RISING_SPIKE && self.pool_touching(i as u8, at, reach).is_none() {
             let paid = self.players[i].paid as i32;
             let lift = V3::new(at.x, at.y.add(t::body_height()), at.z);
             let floor = self.terrain().ground_under(lift);

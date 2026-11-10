@@ -202,9 +202,10 @@ fn past_the_cap_her_oldest_stain_makes_way() {
 fn her_swings_cost_nothing_and_a_spike_pays_in_blood_its_plant_holds() {
     // Since 2026-11-06 (from play: "everything still costs health even though
     // we said it shouldn't"), the scythe and the Red Hand are free and leave
-    // no stain of a cost. The spike on bare ground is paid in her own blood,
-    // which lands there and rises into the plant: no stain is left, and the
-    // plant holds it as grey (0038, "a plant is made of her blood").
+    // no stain of a cost. The Rising spike on bare ground is paid in her own
+    // blood, which lands there and rises into the plant: no stain is left,
+    // and the plant holds it as grey (0038, "a plant is made of her blood").
+    // (The Black spike on bare ground throws nothing since 2026-11-10.)
     for (button, airborne) in [
         (keys::SCYTHE, false),
         (keys::HAND, true),
@@ -223,7 +224,7 @@ fn her_swings_cost_nothing_and_a_spike_pays_in_blood_its_plant_holds() {
     }
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(-18), Fx::ZERO, Fx::ZERO);
-    looking(&mut w, 2, keys::SPIKES, -2000, 0);
+    looking(&mut w, 2, Input::SPACE | keys::SPIKES, -2000, 0);
     run(&mut w, 70, 0, 0);
     assert!(
         w.players[0].grey > 0,

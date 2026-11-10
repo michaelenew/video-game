@@ -53,7 +53,7 @@ fn red_plus_grey_plus_gone_is_the_bar_and_gone_only_grows_by_the_fade() {
         (keys::SCYTHE, 30u32),
         (keys::HAND, 60),
         (keys::HAND, 30),
-        (keys::SPIKES, 70),
+        (Input::SPACE | keys::SPIKES, 70),
         (keys::SCYTHE, 30),
     ];
     for (button, then) in script {
@@ -97,8 +97,10 @@ fn a_cast_at_full_health_opens_grey_by_its_cost() {
     // plant, and `Q` and `E` until they are redesigned -- costs: the scythe and
     // the Red Hand are free).
     for (slot, button, airborne) in [
-        (b::BLACK_SPIKE, keys::SPIKES, true),
-        (b::BLACK_SPIKE, keys::SPIKES, false),
+        // The Rising spike: since 2026-11-10 the Black spike on bare ground
+        // throws nothing, and the Rising spike is the one paid in her blood.
+        (b::RISING_SPIKE, Input::SPACE | keys::SPIKES, true),
+        (b::RISING_SPIKE, Input::SPACE | keys::SPIKES, false),
         (b::COAGULATE, keys::GATHER, false),
         (b::HEART, keys::PLANT, false),
     ] {
@@ -178,11 +180,13 @@ fn a_committed_casts_worth_of_grey_survives_one_exchange() {
     // startup, active and recovery, and a dodge on the end of it. Faster and
     // the blade never gets long enough to matter. (Its plant holds it as
     // long as it stands, which is longer.)
-    let cast = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    // The Rising spike since 2026-11-10: on bare ground the Black spike
+    // throws nothing.
+    let cast = sim::moves::get(Class::BloodMage, b::RISING_SPIKE);
     let exchange = cast.whiff_cost() as u32 + t::dodge_frames() as u32;
     let mut w = mage();
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    run(&mut w, 2, keys::SPIKES, 0);
+    run(&mut w, 2, Input::SPACE | keys::SPIKES, 0);
     let opened = w.players[0].grey;
     assert!(
         opened >= w.players[0].cost_of(cast.cost),
@@ -242,12 +246,13 @@ fn a_cast_costs_a_share_of_what_she_has_so_the_wounded_pay_less() {
     // cast opens a big wound, which is how she gets reach quickly, and at low
     // health it opens a small one, so getting back into the fight never costs
     // the fight. And never the last point.
-    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    // The Rising spike, paid in her blood on bare ground (2026-11-10).
+    let spike = sim::moves::get(Class::BloodMage, b::RISING_SPIKE);
     let at = |health: i32| {
         let mut w = mage();
         w.players[0].health = health;
         w.players[0].grey = 0;
-        run(&mut w, 2, keys::SPIKES, 0);
+        run(&mut w, 2, Input::SPACE | keys::SPIKES, 0);
         health - w.players[0].health
     };
     let full = at(t::max_health());

@@ -99,14 +99,29 @@ fn thrall(w: &mut World, pos: V3, essence: i32) {
 }
 
 /// **Where the crosshair meets the floor** at `pitch`, as she stands in
-/// [`mage`]: where a spike aimed there rises. Read off the spike's own aim
-/// on its press (`Player::aim_at`). It was found by casting the scythe's head
-/// there until 2026-11-07, when the head became a weight that flies through
-/// the crosshair's point and falls on past it.
+/// [`mage`]: where a spike aimed there rises. Asked of the spike's own line
+/// (`aim::grounded_path`). It was found by casting the scythe's head there
+/// until 2026-11-07, when the head became a weight that flies through the
+/// crosshair's point and falls on past it, and by pressing the spike until
+/// 2026-11-10, when a spike on bare ground stopped throwing anything (and so
+/// aiming anything).
 fn crosshair_floor(pitch: i16) -> V3 {
-    let mut w = mage();
-    step_looking(&mut w, keys::SPIKES, pitch);
-    w.players[0].aim_at()
+    let w = mage();
+    let stones = sim::stones::gather(&w.players);
+    let players = w.players;
+    let effects = w.effects;
+    let terrain = w.terrain();
+    let scene = sim::aim::Scene {
+        stones: &stones,
+        players: &players,
+        effects: &effects,
+        quarry: &w.monsters,
+        critters: &sim::critter::Critters::NONE,
+        arena: &terrain,
+    };
+    let reach = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE).reach;
+    let look = Input::looking_at(keys::SPIKES, LOOK_RIGHT, pitch);
+    sim::aim::grounded_path(0, look, reach, &scene).to
 }
 
 /// A settled stain of hers where the crosshair meets the floor at `pitch`.
@@ -645,8 +660,9 @@ fn the_meter_fills_with_the_damage_she_deals() {
 #[test]
 fn her_own_costs_fill_nothing() {
     let mut w = mage();
-    // The spike: since 2026-11-06 the one press of hers that costs.
-    step_looking(&mut w, keys::SPIKES, -2500);
+    // The spike: since 2026-11-06 the one press of hers that costs -- the
+    // Rising spike, on bare ground since 2026-11-10.
+    step_looking(&mut w, Input::SPACE | keys::SPIKES, -2500);
     run(&mut w, 60, 0);
     assert!(w.players[0].grey > 0, "fixture: it cost her");
     assert_eq!(w.players[0].heart_meter, 0, "a miss deals nothing");

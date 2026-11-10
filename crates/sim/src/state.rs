@@ -7274,9 +7274,18 @@ fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
         // Command winds up in a frame, and a tap that had to come up inside
         // it was hardly a tap. A wind-up shorter than the window waits at
         // its top for the press to decide (`step_channel`).
+        //
+        // **Only the charge-jump, since 2026-11-10**: a click whose tap and
+        // hold are two moves is decided before the tap's wind-up begins
+        // (`begin_move`, 2026-11-08), so the wind-up it begins is the tap's
+        // and nothing turns it back into a hold. This arm used to: spamming
+        // left, the next press landed on Rend's last wind-up frame and sent
+        // it back to the hold, over and over, and the blow never came out
+        // (from play, 2026-11-10: "some crazy animation cancel and doesn't
+        // finish the move").
         Action::Startup { kind, left: 0 }
             if p.class == Class::BloodMage
-                && moves::blood::held_into(kind).is_some()
+                && moves::blood::held_into(kind) == Some(kind)
                 && input.has(moves::blood::click_of(kind)) =>
         {
             if moves::get(p.class, kind).startup + 1 < t::hold_from() {
@@ -9031,16 +9040,13 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
 fn blood_move(p: &Player, input: Input) -> Option<u8> {
     use moves::blood as b;
     use moves::blood::keys;
-    // **The chain has her left hand, and right click asked for it home**
-    // (2026-11-07): those buttons are not her moves while it does
+    // **The chain is the right click** (2026-11-10): held on it, or asking
+    // for the head home, that button is not her move
     // (`bleeds::chain_in_hand`).
     let input = match p.mechanic {
         Mechanic::Blood(g) => {
             let mut bits = input.bits;
-            if g.chain_held > 0 {
-                bits &= !keys::HAND;
-            }
-            if g.recall {
+            if g.chain_held > 0 || g.recall {
                 bits &= !keys::SCYTHE;
             }
             bits &= !g.held_spent;
@@ -18537,9 +18543,16 @@ impl World {
     /// never less than `heart_least`, and that is the blood blows take off it
     /// and thralls are made of. What she paid goes into it rather than onto
     /// the floor as a stain. Past `hearts_most` her oldest gives way.
+    ///
+    /// **It stands where a body could** (2026-11-10, from play: "E doesn't
+    /// seem to work if I cast it near a tree"): aimed at a trunk or a wall,
+    /// the crosshair's floor is at the foot of its face, and a heart there
+    /// hung half inside the trunk, with its thralls born in it. It is pushed
+    /// out of the ground's solids as a fighter would be.
     fn plant_a_heart(&mut self, i: usize) {
         let p = self.players[i];
         let at = self.floor_at_aim(i);
+        let at = self.terrain().resolve(at, V3::ZERO, true).pos;
         let paid = p.paid as i32;
         self.players[i].paid = 0;
         self.players[i].heart_meter = 0;

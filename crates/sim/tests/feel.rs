@@ -1479,9 +1479,9 @@ fn every_class_has_a_move_that_carries_the_body() {
                 }
                 let mut w = bitten.expect("the head bit the floor eight metres out");
                 let start = w.players[0].pos;
-                // The zip is a tap of left since 2026-11-07, thrown as it
-                // comes up.
-                step(&mut w, sim::moves::blood::keys::HAND, 0);
+                // The zip is a tap of right since 2026-11-10 (left from
+                // 2026-11-07), thrown as it comes up.
+                step(&mut w, sim::moves::blood::keys::SCYTHE, 0);
                 for _ in 0..t::dodge_frames() as u32 {
                     step(&mut w, 0, 0);
                 }

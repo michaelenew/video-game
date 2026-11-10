@@ -1412,7 +1412,7 @@ scalars! {
     ZipStart, "Blood mage", "Zip, the first tug (m/s)", Fixed, 0, fx(30,1);
     // **Left click on the chain, the shrike, and the Red Hand's charge**
     // (2026-11-07, the owner's answers). Appended.
-    ReelFull, "Blood mage", "Chain, left held this long reels them in", Frames, 1, 120;
+    ReelFull, "Blood mage", "Chain, right held this long reels it in", Frames, 1, 120;
     ChainReel, "Blood mage", "Chain, reels them in at (m/s)", Fixed, fx(1,1), fx(60,1);
     ImpaleFor, "Blood mage", "Shrike, impaled on a plant for", Frames, 1, 240;
     ShrikeSpeed, "Blood mage", "Shrike, knocked into a plant this fast impales (m/s)", Fixed, 0, fx(30,1);

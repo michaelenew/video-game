@@ -930,13 +930,14 @@ pub struct Garden {
     pub strung_early: bool,
     /// Frames into the zip: it gives up past `ZIP_LIMIT`.
     pub zip_for: u16,
-    /// Frames left click has been held while the head is out (2026-11-07):
-    /// a tap pulls her to it, held to `tuning::reel_full` reels them in, and
-    /// let go between rips it out. `u16::MAX` once spent on this press.
+    /// Frames right click has been held, from a fresh press, while the head
+    /// is out (left until 2026-11-10): a tap pulls her to it, held to
+    /// `tuning::reel_full` reels in what is on the chain, and let go between
+    /// rips it out of a fighter. `u16::MAX` once spent on this press.
     pub chain_held: u16,
-    /// Right click asked for the head home.
+    /// Right click, held, reeled the head home.
     pub recall: bool,
-    /// Left click let go in time to rip the head out of who it holds.
+    /// Right click let go in time to rip the head out of who it holds.
     pub rip: bool,
     /// Who she is reeling in, one more than their index; nought for nobody.
     pub reeling: u8,

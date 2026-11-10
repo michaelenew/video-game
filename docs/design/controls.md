@@ -1249,13 +1249,12 @@ actually lives.
 > | --- | --- | --- |
 > | `L` tapped | **Rend** -- strung to three, each bigger: a rake, a backhand, a heavy two-handed rake that knocks them up (2026-11-07). Through one of her plants, it feeds it | the same |
 > | `L` held past the window | **Red claw** -- a charge: further out along the floor toward the crosshair and bigger for the hold, past them if held too long; slows (2026-11-07; Seize went to the chain) | the same |
-> | `L` while the head is out | **The chain**: tapped, the zip to the head; held to its end, a fighter it holds is reeled in; let go between, it rips out of them | the same |
-> | `R` while the head is out | the head is **called home**, reeled | the same |
-> | `M` | **Black spike** -- raises the blood under the crosshair; a pool pays toward its price, **on bare ground she pays it all**. Small pools rise fast, big slow; it launches what is over it, her too, and stands 15 s as a thorned plant | the same |
+> | `R` while the head is out | **The chain** (2026-11-10; on `L` from 2026-11-07): tapped, the zip to the head; held to its end, a fighter it holds is reeled in, and with it in the world the head is reeled home; let go between, it rips out of a fighter. `L` stays the Red Hand | the same |
+> | `M` | **Black spike** -- raises **a pool of hers** under the crosshair, and **on bare ground does nothing** (2026-11-10; she paid it all in her own blood from 2026-11-06); the pool pays toward its price. Small pools rise fast, big slow; it launches what is over it, her too, and stands 15 s as a thorned plant | the same |
 > | `R` tapped | **Sweep**, strung to three; on the floor it cuts the floor, which bleeds | **Sweep** |
 > | `R` held past the window | **Cast** -- the scythe's head itself thrown on its chain, on an arc through the crosshair, then falling; it bites a fighter (bleed, slow, leash), a creature or the world (a pool), or lands on the floor. Left alone it wrenches free and is reeled home, drinking her stains and reaping her plants. **The shrike**: a body reeled or knocked into one of her plants is impaled on it | the same |
-> | the zip (`L` tapped, the head out) | pulled along the chain, speeding up, under gravity, the moment it bites. Onto a body she stops beside it; onto the world she carries on, and a jump near its end fires on arrival | the same |
-> | space + `L` / `M` / `R` | **Rising rend**, a charge-jump: held, she leaps further (to ~18 m) with the claw out in front of her / **Rising spike** (the blood at her feet raised under her, ~7.5 m) / **Rising reap** (~6 m; cuts the floor she leaves) | once a jump |
+> | the zip (`R` tapped, the head out) | pulled along the chain, speeding up, under gravity, the moment it bites. Onto a body she stops beside it; onto the world she carries on, and a jump near its end fires on arrival | the same |
+> | space + `L` / `M` / `R` | **Rising rend**, a charge-jump: held, she leaps further (to ~18 m) with the claw out in front of her / **Rising spike** (the blood at her feet raised under her, ~7.5 m; on bare ground, her own) / **Rising reap** (~6 m; cuts the floor she leaves) | once a jump |
 > | `Q` / `E` | **Coagulate** / **a Heart** | |
 > | `shift` | on her ground, **the swim**; otherwise an ordinary dodge. The teleport to a stain is cut | |
 >

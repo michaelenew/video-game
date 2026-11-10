@@ -16,8 +16,8 @@ pub static TUTORIAL: Tutorial = Tutorial {
            blood falls something grows. Her scythe and her red hand are free; what she grows \
            costs her own health, and the plant holds it until she reaps it back.",
     plays: "The scythe sows: its bite and its sweep leave pools. The spike grows: it raises a \
-            pool into a thorned plant that launches and lashes -- a pool pays toward it, and on \
-            bare ground she pays it all. The scythe reaps: through a plant it throws the thorns \
+            pool into a thorned plant that launches and lashes -- a pool pays toward it, and with \
+            no pool there is nothing to raise. The scythe reaps: through a plant it throws the thorns \
             and gives back what you paid.",
     wins: "She wins by fighting inside her patch: cast the head, zip in or reel them in, rend \
            them into her plants' thorns, and reap the plants, so every drop spilled feeds what \
@@ -195,11 +195,12 @@ pub const ROOMS: [Room; 11] = [
     Room {
         title: "Middle click: the spike",
         advanced: false,
-        intro: "Middle click raises the blood under the crosshair into a spike. A pool pays \
-                toward it; on bare ground you pay it all in your own blood, and the plant holds \
-                it as grey until you reap it back. A small pool rises fast, a big one slow. It \
-                throws up whatever is over it, you too, and stands as a thorned plant that \
-                lashes anybody beside it.",
+        intro: "Middle click raises a pool of blood under the crosshair into a spike -- only a \
+                pool: on bare ground it does nothing. The pool pays toward it, and what it \
+                lacks you pay in your own blood, which the plant holds as grey until you reap \
+                it back. A small pool rises fast, a big one slow. It throws up whatever is over \
+                it, you too, and stands as a thorned plant that lashes anybody beside it. Space \
+                and middle click raises the blood at your own feet, pool or not.",
         tasks: &[
             Task {
                 what: "Black spike on a pool",
@@ -229,10 +230,10 @@ pub const ROOMS: [Room; 11] = [
         intro: "Tapped, right click sweeps the scythe -- longer and harder the more grey you \
                 carry -- and tapped again strings up to three; on the floor it cuts the floor, \
                 which bleeds. Held, it throws the head out on its chain: it arcs and falls, \
-                and bites what it meets; a fighter it bites is leashed to you. Then left click \
+                and bites what it meets; a fighter it bites is leashed to you. Then right click \
                 is the chain: tap it to be pulled to the head, hold it to reel them in -- into \
                 a plant of yours and they are impaled -- or let go part way to rip it out of \
-                them. Right click calls it home.",
+                them. Held with the head in the floor or a wall, it reels the head home.",
         tasks: &[
             Task {
                 what: "Sweep",
@@ -254,7 +255,7 @@ pub const ROOMS: [Room; 11] = [
             },
             Task {
                 what: "Zip",
-                keys: "While the head is out, tap left click",
+                keys: "While the head is out, tap right click",
                 check: zip,
                 lands: false,
             },

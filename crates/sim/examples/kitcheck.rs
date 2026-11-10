@@ -120,13 +120,26 @@ fn main() {
 
     // -- The spike and the plant -------------------------------------------
     {
+        // 2026-11-10, from play: middle click only where there is a pool.
         let mut w = with_foe(30.0);
         let hp = w.players[0].health;
-        step(&mut w, keys::SPIKES, -3000);
+        run(&mut w, 2, keys::SPIKES, -3000);
+        run(&mut w, 40, 0, -3000);
+        card.line(
+            "a Black spike on bare ground throws nothing and costs nothing",
+            format!("{} plant(s), paid {}", plants(&w), hp - w.players[0].health),
+            plants(&w) == 0 && w.players[0].health == hp,
+        );
+    }
+    {
+        let mut w = with_foe(30.0);
+        let hp = w.players[0].health;
+        step(&mut w, Input::SPACE, -3000);
+        step(&mut w, Input::SPACE | keys::SPIKES, -3000);
         run(&mut w, 40, 0, -3000);
         let price = hp - w.players[0].health;
         card.line(
-            "a spike on bare ground raises a plant, paid in her blood",
+            "a Rising spike on bare ground raises a plant, paid in her blood",
             format!("{} plant(s), paid {price}", plants(&w)),
             plants(&w) == 1 && price > 0,
         );
@@ -148,6 +161,14 @@ fn main() {
         let mut best = 0;
         for pitch in (2000..7000).step_by(250).map(|p| -(p as i16)) {
             let mut w = with_foe(8.0);
+            // A stain of hers under him: the spike raises only a pool
+            // (2026-11-10).
+            let mut stain =
+                sim::effects::Effect::pool(0, Class::BloodMage, b::CAST, w.players[1].pos, 30);
+            stain.age = t::stain_settles() + 1;
+            if let Some(slot) = w.effects.iter_mut().find(|s| s.is_none()) {
+                *slot = Some(stain);
+            }
             let his = w.players[1].health;
             step(&mut w, keys::SPIKES, pitch);
             run(&mut w, 25, 0, pitch);
@@ -209,8 +230,8 @@ fn main() {
         run(&mut w, hold(), keys::SCYTHE, -3000);
         step(&mut w, 0, -3000);
         run(&mut w, pressed, 0, -3000);
-        // The zip is a tap of left since 2026-11-07.
-        step(&mut w, keys::HAND, -3000);
+        // The zip is a tap of right since 2026-11-10 (left from 2026-11-07).
+        step(&mut w, keys::SCYTHE, -3000);
         let mut bit = None;
         for _ in 0..90 {
             step(&mut w, 0, -3000);
@@ -221,7 +242,7 @@ fn main() {
         let out = bit.map_or(0.0, |b| flat(from, b));
         let gone = flat(from, w.players[0].pos);
         card.line(
-            &format!("a tap of left {when} zips her all the way"),
+            &format!("a tap of right {when} zips her all the way"),
             format!("{gone:.1} m of {out:.1} m"),
             out > 3.0 && gone >= out - 2.0,
         );
@@ -230,7 +251,7 @@ fn main() {
         let mut w = with_foe(8.0);
         run(&mut w, hold(), keys::SCYTHE, 0);
         step(&mut w, 0, 0);
-        step(&mut w, keys::HAND, 0);
+        step(&mut w, keys::SCYTHE, 0);
         run(&mut w, 60, 0, 0);
         let gap = flat(w.players[0].pos, w.players[1].pos);
         let reach = f(sim::moves::get(Class::BloodMage, b::REND).reach);
@@ -315,7 +336,7 @@ fn main() {
         let mut w = with_foe(30.0);
         run(&mut w, hold(), keys::SCYTHE, -2500);
         step(&mut w, 0, -2500);
-        step(&mut w, keys::HAND, -2500);
+        step(&mut w, keys::SCYTHE, -2500);
         let mut speeds = Vec::new();
         for _ in 0..90 {
             step(&mut w, 0, -2500);
@@ -350,7 +371,7 @@ fn main() {
             dealt >= 150,
         );
     }
-    // -- The chain in her left hand (round three) ------------------------------
+    // -- The chain on the right click (round three; right since 2026-11-10) ----
     // The head in a fighter 10 m off, thrown level.
     let hooked = || {
         for pitch in (-1500..1500).step_by(150) {
@@ -367,23 +388,23 @@ fn main() {
     };
     {
         let mut w = hooked();
-        step(&mut w, keys::HAND, 0);
+        step(&mut w, keys::SCYTHE, 0);
         step(&mut w, 0, 0);
         run(&mut w, 40, 0, 0);
         let gap = flat(w.players[0].pos, w.players[1].pos);
         card.line(
-            "a tap of left pulls her to what the head bit",
+            "a tap of right pulls her to what the head bit",
             format!("{gap:.1} m from him after"),
             gap < 2.6,
         );
     }
     {
         let mut w = hooked();
-        run(&mut w, t::reel_full() as u32 + 2, keys::HAND, 0);
+        run(&mut w, t::reel_full() as u32 + 2, keys::SCYTHE, 0);
         run(&mut w, 90, 0, 0);
         let gap = flat(w.players[0].pos, w.players[1].pos);
         card.line(
-            "left held to its end reels him in to her",
+            "right held to its end reels him in to her",
             format!("{gap:.1} m from her after, from 10 m"),
             gap < 2.5,
         );
@@ -391,7 +412,7 @@ fn main() {
     {
         let mut w = hooked();
         let his = w.players[1].health;
-        run(&mut w, t::hold_from() as u32 + 4, keys::HAND, 0);
+        run(&mut w, t::hold_from() as u32 + 4, keys::SCYTHE, 0);
         step(&mut w, 0, 0);
         let staggered = matches!(
             w.players[1].action,
@@ -401,7 +422,7 @@ fn main() {
         let home = head(&w).is_none_or(|h| h.head_state() == Head::Home);
         let dealt = his - w.players[1].health;
         card.line(
-            "left let go early, the head rips out: hit, bleed, stagger",
+            "right let go early, the head rips out: hit, bleed, stagger",
             format!(
                 "{dealt} dealt, staggered {staggered}, bleeding {}, head home {home}",
                 w.players[1].bleeding > 0
@@ -410,12 +431,19 @@ fn main() {
         );
     }
     {
-        let mut w = hooked();
-        step(&mut w, keys::SCYTHE, 0);
-        step(&mut w, 0, 0);
+        // The head in the floor, and right held: it is reeled home.
+        let mut w = with_foe(60.0);
+        run(&mut w, hold(), keys::SCYTHE, 0);
+        for _ in 0..120 {
+            step(&mut w, 0, 0);
+            if head(&w).is_some_and(|h| h.head_state() == Head::World) {
+                break;
+            }
+        }
+        run(&mut w, t::reel_full() as u32 + 2, keys::SCYTHE, 0);
         let home = head(&w).is_some_and(|h| h.head_state() == Head::Home);
         card.line(
-            "right pressed while the head is out calls it home",
+            "right held with the head in the floor reels it home",
             format!("home {home}"),
             home,
         );
@@ -431,7 +459,7 @@ fn main() {
             step(
                 &mut w,
                 if f < t::reel_full() as u32 + 2 {
-                    keys::HAND
+                    keys::SCYTHE
                 } else {
                     0
                 },

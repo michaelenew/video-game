@@ -604,8 +604,10 @@ fn casting_costs_the_blood_mage_health() {
     // and the Red Hand are free (`tests/feel.rs`,
     // `the_blood_mage_pays_to_grow_and_nobody_else_pays_for_anything`).
     for (slot, button, airborne) in [
-        (b::BLACK_SPIKE, keys::SPIKES, false),
-        (b::BLACK_SPIKE, keys::SPIKES, true),
+        // The Rising spike: since 2026-11-10 the Black spike on bare ground
+        // throws nothing, and the Rising spike is the one paid in her blood.
+        (b::RISING_SPIKE, Input::SPACE | keys::SPIKES, false),
+        (b::RISING_SPIKE, Input::SPACE | keys::SPIKES, true),
         (b::HEART, keys::PLANT, false),
         (b::COAGULATE, keys::GATHER, false),
     ] {
